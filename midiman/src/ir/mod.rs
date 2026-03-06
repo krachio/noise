@@ -22,6 +22,9 @@ pub enum IrNode {
     Early { offset: [i64; 2], child: Box<IrNode> },
     Late { offset: [i64; 2], child: Box<IrNode> },
     Rev { child: Box<IrNode> },
+    Every { n: u32, transform: Box<IrNode>, child: Box<IrNode> },
+    Euclid { pulses: u32, steps: u32, rotation: u32, child: Box<IrNode> },
+    Degrade { prob: f64, seed: u64, child: Box<IrNode> },
 }
 
 /// Error from IR validation or compilation.
@@ -30,6 +33,9 @@ pub enum IrError {
     ZeroDenominator,
     NonPositiveFactor,
     EmptyChildren { op: &'static str },
+    InvalidEuclid { msg: String },
+    InvalidDegrade { msg: String },
+    InvalidEvery { msg: String },
 }
 
 impl std::fmt::Display for IrError {
@@ -38,6 +44,9 @@ impl std::fmt::Display for IrError {
             Self::ZeroDenominator => write!(f, "time value has zero denominator"),
             Self::NonPositiveFactor => write!(f, "fast/slow factor must be positive"),
             Self::EmptyChildren { op } => write!(f, "{op} requires at least one child"),
+            Self::InvalidEuclid { msg } => write!(f, "euclid: {msg}"),
+            Self::InvalidDegrade { msg } => write!(f, "degrade: {msg}"),
+            Self::InvalidEvery { msg } => write!(f, "every: {msg}"),
         }
     }
 }

@@ -18,6 +18,18 @@ pub fn query(pattern: &CompiledPattern, node_idx: usize, arc: Arc) -> Vec<Event<
         PatternNode::Early { offset, child } => query_early(pattern, *offset, *child, arc),
         PatternNode::Late { offset, child } => query_late(pattern, *offset, *child, arc),
         PatternNode::Rev { child } => query_rev(pattern, *child, arc),
+        PatternNode::Every { n, transform, child } => {
+            query_every(pattern, *n, *transform, *child, arc)
+        }
+        PatternNode::Euclid {
+            pulses,
+            steps,
+            rotation,
+            child,
+        } => query_euclid(pattern, *pulses, *steps, *rotation, *child, arc),
+        PatternNode::Degrade { prob, seed, child } => {
+            query_degrade(pattern, *prob, *seed, *child, arc)
+        }
     }
 }
 
@@ -216,6 +228,152 @@ fn query_rev(
     }
 
     events
+}
+
+/// Every: apply a transform node every Nth cycle, otherwise use child directly.
+/// On cycle C, if C % n == 0, query the transform node; otherwise query child.
+fn query_every(
+    pattern: &CompiledPattern,
+    n: u32,
+    transform: usize,
+    child: usize,
+    arc: Arc,
+) -> Vec<Event<Value>> {
+    let mut events = Vec::new();
+    for sub_arc in arc.split_cycles() {
+        let cycle = sub_arc.start.floor();
+        #[expect(clippy::cast_sign_loss)]
+        let cycle_mod = (cycle as u64) % u64::from(n);
+        if cycle_mod == 0 {
+            events.extend(query(pattern, transform, sub_arc));
+        } else {
+            events.extend(query(pattern, child, sub_arc));
+        }
+    }
+    events
+}
+
+/// Euclidean rhythm: distribute `pulses` evenly across `steps` positions.
+/// Uses the Bjorklund algorithm. Positions with a hit use `child`; others are silent.
+/// Implemented as a Cat of `steps` slots where hit positions contain `child`
+/// and non-hit positions are silent.
+fn query_euclid(
+    pattern: &CompiledPattern,
+    pulses: u32,
+    steps: u32,
+    rotation: u32,
+    child: usize,
+    arc: Arc,
+) -> Vec<Event<Value>> {
+    if steps == 0 {
+        return vec![];
+    }
+    let hits = bjorklund(pulses, steps, rotation);
+    let n = Time::whole(i64::from(steps));
+    let mut events = Vec::new();
+
+    for sub_arc in arc.split_cycles() {
+        let cycle = Time::whole(sub_arc.start.floor());
+
+        for (i, &is_hit) in hits.iter().enumerate() {
+            if !is_hit {
+                continue;
+            }
+            let i_time = Time::whole(i as i64);
+            let slot_start = cycle + i_time / n;
+            let slot_end = cycle + (i_time + Time::one()) / n;
+
+            let sect_start = if sub_arc.start > slot_start {
+                sub_arc.start
+            } else {
+                slot_start
+            };
+            let sect_end = if sub_arc.end < slot_end {
+                sub_arc.end
+            } else {
+                slot_end
+            };
+
+            if sect_start >= sect_end {
+                continue;
+            }
+
+            let local_start = cycle + (sect_start - slot_start) * n;
+            let local_end = cycle + (sect_end - slot_start) * n;
+            let local_arc = Arc::new(local_start, local_end);
+
+            for mut event in query(pattern, child, local_arc) {
+                event.part = Arc::new(
+                    slot_start + (event.part.start - cycle) / n,
+                    slot_start + (event.part.end - cycle) / n,
+                );
+                if let Some(whole) = event.whole {
+                    event.whole = Some(Arc::new(
+                        slot_start + (whole.start - cycle) / n,
+                        slot_start + (whole.end - cycle) / n,
+                    ));
+                }
+                events.push(event);
+            }
+        }
+    }
+
+    events
+}
+
+/// Bjorklund algorithm: distribute `pulses` evenly across `steps`.
+/// Returns a Vec<bool> of length `steps` where true = hit.
+fn bjorklund(pulses: u32, steps: u32, rotation: u32) -> Vec<bool> {
+    if steps == 0 {
+        return vec![];
+    }
+    let pulses = pulses.min(steps);
+    let mut pattern = vec![false; steps as usize];
+    for i in 0..pulses {
+        // Spread pulses evenly using integer arithmetic
+        let pos = (i as usize * steps as usize) / pulses as usize;
+        pattern[pos] = true;
+    }
+    // Apply rotation
+    if rotation > 0 {
+        let rot = (rotation % steps) as usize;
+        pattern.rotate_left(rot);
+    }
+    pattern
+}
+
+/// Degrade: randomly drop events based on probability and seed.
+/// Uses a simple hash of (seed, cycle, onset) for deterministic randomness.
+fn query_degrade(
+    pattern: &CompiledPattern,
+    prob: f64,
+    seed: u64,
+    child: usize,
+    arc: Arc,
+) -> Vec<Event<Value>> {
+    let events = query(pattern, child, arc);
+    events
+        .into_iter()
+        .filter(|event| {
+            let onset_hash = match event.whole {
+                Some(w) => {
+                    let num = w.start.num as u64;
+                    let den = w.start.den;
+                    hash_combine(seed, hash_combine(num, den))
+                }
+                None => hash_combine(seed, 0),
+            };
+            let rand_val = (onset_hash % 10000) as f64 / 10000.0;
+            rand_val >= prob
+        })
+        .collect()
+}
+
+/// Simple deterministic hash combine for degrade randomness.
+fn hash_combine(a: u64, b: u64) -> u64 {
+    a.wrapping_mul(6_364_136_223_846_793_005)
+        .wrapping_add(b)
+        .wrapping_mul(1_442_695_040_888_963_407)
 }
 
 #[cfg(test)]
@@ -590,5 +748,214 @@ mod tests {
 
         let events = query(&pat, pat.root, cycle_0());
         assert!(events.is_empty());
+    }
+
+    // -- Every --
+
+    #[test]
+    fn every_applies_transform_on_nth_cycle() {
+        // every 2 (fast 2) $ atom note(60)
+        // Cycle 0 (0 % 2 == 0): use transform (fast 2) -> 2 events
+        // Cycle 1 (1 % 2 != 0): use child (atom) -> 1 event
+        let mut pat = CompiledPattern {
+            nodes: vec![PatternNode::Atom { value: note(60) }],
+            root: 0,
+        };
+        let fast_child = pat.push(PatternNode::Fast {
+            factor: Time::whole(2),
+            child: 0,
+        });
+        let every_idx = pat.push(PatternNode::Every {
+            n: 2,
+            transform: fast_child,
+            child: 0,
+        });
+        pat.root = every_idx;
+
+        let events_c0 = query(&pat, pat.root, Arc::cycle(0));
+        assert_eq!(events_c0.len(), 2, "cycle 0 should use transform (fast 2)");
+
+        let events_c1 = query(&pat, pat.root, Arc::cycle(1));
+        assert_eq!(events_c1.len(), 1, "cycle 1 should use child (atom)");
+
+        let events_c2 = query(&pat, pat.root, Arc::cycle(2));
+        assert_eq!(events_c2.len(), 2, "cycle 2 should use transform again");
+    }
+
+    // -- Euclid --
+
+    #[test]
+    fn euclid_3_8_produces_three_hits() {
+        // euclid(3, 8) $ atom note(60) -> 3 hits across 8 slots
+        let mut pat = CompiledPattern {
+            nodes: vec![PatternNode::Atom { value: note(60) }],
+            root: 0,
+        };
+        let euclid_idx = pat.push(PatternNode::Euclid {
+            pulses: 3,
+            steps: 8,
+            rotation: 0,
+            child: 0,
+        });
+        pat.root = euclid_idx;
+
+        let events = query(&pat, pat.root, cycle_0());
+        assert_eq!(events.len(), 3);
+    }
+
+    #[test]
+    fn euclid_4_4_fills_all_slots() {
+        let mut pat = CompiledPattern {
+            nodes: vec![PatternNode::Atom { value: note(60) }],
+            root: 0,
+        };
+        let euclid_idx = pat.push(PatternNode::Euclid {
+            pulses: 4,
+            steps: 4,
+            rotation: 0,
+            child: 0,
+        });
+        pat.root = euclid_idx;
+
+        let events = query(&pat, pat.root, cycle_0());
+        assert_eq!(events.len(), 4);
+    }
+
+    #[test]
+    fn euclid_0_steps_returns_empty() {
+        let mut pat = CompiledPattern {
+            nodes: vec![PatternNode::Atom { value: note(60) }],
+            root: 0,
+        };
+        let euclid_idx = pat.push(PatternNode::Euclid {
+            pulses: 3,
+            steps: 0,
+            rotation: 0,
+            child: 0,
+        });
+        pat.root = euclid_idx;
+
+        let events = query(&pat, pat.root, cycle_0());
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn euclid_with_rotation_shifts_hits() {
+        let mut pat = CompiledPattern {
+            nodes: vec![PatternNode::Atom { value: note(60) }],
+            root: 0,
+        };
+        // euclid(1, 4, 0) -> hit at slot 0
+        let e1 = pat.push(PatternNode::Euclid {
+            pulses: 1,
+            steps: 4,
+            rotation: 0,
+            child: 0,
+        });
+        // euclid(1, 4, 1) -> hit at slot 1 (rotated)
+        let e2 = pat.push(PatternNode::Euclid {
+            pulses: 1,
+            steps: 4,
+            rotation: 1,
+            child: 0,
+        });
+
+        let events_no_rot = query(&pat, e1, cycle_0());
+        let events_rot = query(&pat, e2, cycle_0());
+
+        assert_eq!(events_no_rot.len(), 1);
+        assert_eq!(events_rot.len(), 1);
+        // Different onset positions
+        assert_ne!(events_no_rot[0].part.start, events_rot[0].part.start);
+    }
+
+    // -- Degrade --
+
+    #[test]
+    fn degrade_zero_prob_keeps_all_events() {
+        let mut pat = CompiledPattern {
+            nodes: vec![
+                PatternNode::Atom { value: note(60) },
+                PatternNode::Atom { value: note(64) },
+            ],
+            root: 0,
+        };
+        let cat_idx = pat.push(PatternNode::Cat {
+            children: smallvec![0, 1],
+        });
+        let degrade_idx = pat.push(PatternNode::Degrade {
+            prob: 0.0,
+            seed: 42,
+            child: cat_idx,
+        });
+        pat.root = degrade_idx;
+
+        let events = query(&pat, pat.root, cycle_0());
+        assert_eq!(events.len(), 2);
+    }
+
+    #[test]
+    fn degrade_one_prob_drops_all_events() {
+        let mut pat = CompiledPattern {
+            nodes: vec![PatternNode::Atom { value: note(60) }],
+            root: 0,
+        };
+        let degrade_idx = pat.push(PatternNode::Degrade {
+            prob: 1.0,
+            seed: 42,
+            child: 0,
+        });
+        pat.root = degrade_idx;
+
+        let events = query(&pat, pat.root, cycle_0());
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn degrade_is_deterministic_with_same_seed() {
+        let mut pat = CompiledPattern {
+            nodes: vec![
+                PatternNode::Atom { value: note(60) },
+                PatternNode::Atom { value: note(62) },
+                PatternNode::Atom { value: note(64) },
+                PatternNode::Atom { value: note(67) },
+            ],
+            root: 0,
+        };
+        let cat_idx = pat.push(PatternNode::Cat {
+            children: smallvec![0, 1, 2, 3],
+        });
+        let degrade_idx = pat.push(PatternNode::Degrade {
+            prob: 0.5,
+            seed: 123,
+            child: cat_idx,
+        });
+        pat.root = degrade_idx;
+
+        let events1 = query(&pat, pat.root, cycle_0());
+        let events2 = query(&pat, pat.root, cycle_0());
+        // Same seed, same query -> same results
+        assert_eq!(events1.len(), events2.len());
+        for (e1, e2) in events1.iter().zip(events2.iter()) {
+            assert_eq!(e1.value, e2.value);
+        }
+    }
+
+    // -- Bjorklund --
+
+    #[test]
+    fn bjorklund_known_patterns() {
+        // E(3,8) = [1,0,0,1,0,0,1,0] (tresillo)
+        let p = super::bjorklund(3, 8, 0);
+        assert_eq!(p.iter().filter(|&&x| x).count(), 3);
+        assert_eq!(p.len(), 8);
+
+        // E(4,4) = [1,1,1,1]
+        let p = super::bjorklund(4, 4, 0);
+        assert_eq!(p, vec![true, true, true, true]);
+
+        // E(0,4) = [0,0,0,0]
+        let p = super::bjorklund(0, 4, 0);
+        assert_eq!(p, vec![false, false, false, false]);
     }
 }

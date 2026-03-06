@@ -42,6 +42,41 @@ pub fn validate(node: &IrNode) -> Result<(), IrError> {
             validate(child)
         }
         IrNode::Rev { child } => validate(child),
+        IrNode::Every { n, transform, child } => {
+            if *n == 0 {
+                return Err(IrError::InvalidEvery {
+                    msg: "n must be > 0".into(),
+                });
+            }
+            validate(transform)?;
+            validate(child)
+        }
+        IrNode::Euclid {
+            pulses,
+            steps,
+            child,
+            ..
+        } => {
+            if *steps == 0 {
+                return Err(IrError::InvalidEuclid {
+                    msg: "steps must be > 0".into(),
+                });
+            }
+            if *pulses > *steps {
+                return Err(IrError::InvalidEuclid {
+                    msg: "pulses must be <= steps".into(),
+                });
+            }
+            validate(child)
+        }
+        IrNode::Degrade { prob, child, .. } => {
+            if !(*prob >= 0.0 && *prob <= 1.0) {
+                return Err(IrError::InvalidDegrade {
+                    msg: "prob must be in [0, 1]".into(),
+                });
+            }
+            validate(child)
+        }
     }
 }
 

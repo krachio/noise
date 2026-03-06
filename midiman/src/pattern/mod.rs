@@ -25,6 +25,12 @@ pub enum PatternNode {
     Rev { child: usize },
     Cat { children: SmallVec<[usize; 8]> },
     Stack { children: SmallVec<[usize; 8]> },
+    /// Apply transform every Nth cycle, otherwise pass through child.
+    Every { n: u32, transform: usize, child: usize },
+    /// Euclidean rhythm: distribute `pulses` hits across `steps` slots.
+    Euclid { pulses: u32, steps: u32, rotation: u32, child: usize },
+    /// Randomly drop events with probability `prob`, seeded for reproducibility.
+    Degrade { prob: f64, seed: u64, child: usize },
 }
 
 impl CompiledPattern {

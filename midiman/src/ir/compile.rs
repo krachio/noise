@@ -74,6 +74,37 @@ fn compile_node(ir: &IrNode, pattern: &mut CompiledPattern) -> usize {
             let child_idx = compile_node(child, pattern);
             pattern.push(PatternNode::Rev { child: child_idx })
         }
+        IrNode::Every { n, transform, child } => {
+            let transform_idx = compile_node(transform, pattern);
+            let child_idx = compile_node(child, pattern);
+            pattern.push(PatternNode::Every {
+                n: *n,
+                transform: transform_idx,
+                child: child_idx,
+            })
+        }
+        IrNode::Euclid {
+            pulses,
+            steps,
+            rotation,
+            child,
+        } => {
+            let child_idx = compile_node(child, pattern);
+            pattern.push(PatternNode::Euclid {
+                pulses: *pulses,
+                steps: *steps,
+                rotation: *rotation,
+                child: child_idx,
+            })
+        }
+        IrNode::Degrade { prob, seed, child } => {
+            let child_idx = compile_node(child, pattern);
+            pattern.push(PatternNode::Degrade {
+                prob: *prob,
+                seed: *seed,
+                child: child_idx,
+            })
+        }
     }
 }
 
