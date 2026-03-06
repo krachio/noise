@@ -1,3 +1,4 @@
+pub mod compiler;
 pub mod node;
 
 use node::{DspNode, NodeId, ParamError};
