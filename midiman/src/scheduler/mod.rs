@@ -26,8 +26,11 @@ use hotswap::SwapSlot;
 /// A scheduled event with its wall-clock fire time.
 #[derive(Clone, Debug)]
 pub struct TimedEvent {
+    /// When this event should be dispatched to the output sink.
     pub fire_at: Instant,
+    /// The pattern event (value, whole arc, part arc).
     pub event: Event<Value>,
+    /// Name of the slot that produced this event (e.g. `"d1"`).
     pub slot_name: String,
 }
 
@@ -70,6 +73,7 @@ impl SchedulerHandle {
         }
     }
 
+    /// Returns `true` if the scheduler thread is still alive.
     pub fn is_running(&self) -> bool {
         self.thread
             .as_ref()

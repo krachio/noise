@@ -12,6 +12,7 @@ pub struct SwapSlot {
 }
 
 impl SwapSlot {
+    /// Create a new slot with an initial pattern.
     #[must_use]
     pub fn new(pattern: CompiledPattern) -> Self {
         Self {

@@ -13,17 +13,21 @@ use crate::time::Arc;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Value {
+    /// MIDI note-on (with duration for scheduling note-off).
     Note {
         channel: u8,
         note: u8,
         velocity: u8,
+        /// Duration in cycles (fractional).
         dur: f64,
     },
+    /// MIDI continuous controller message.
     Cc {
         channel: u8,
         controller: u8,
         value: u8,
     },
+    /// OSC message with address pattern and typed arguments.
     Osc {
         address: String,
         args: Vec<OscArg>,
@@ -33,8 +37,11 @@ pub enum Value {
 /// An argument in an OSC message.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum OscArg {
+    /// 64-bit float argument.
     Float(f64),
+    /// 32-bit integer argument.
     Int(i32),
+    /// UTF-8 string argument.
     Str(String),
 }
 
@@ -51,6 +58,7 @@ pub struct Event<V> {
 }
 
 impl<V> Event<V> {
+    /// Create an event with the given whole arc, part arc, and value.
     #[must_use]
     pub fn new(whole: Option<Arc>, part: Arc, value: V) -> Self {
         Self { whole, part, value }

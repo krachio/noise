@@ -26,6 +26,7 @@ pub struct Time {
 }
 
 impl Time {
+    /// Create a new rational time value, reduced to lowest terms.
     #[must_use]
     pub fn new(num: i64, den: u64) -> Self {
         assert!(den != 0, "Time denominator must be nonzero");
@@ -37,16 +38,19 @@ impl Time {
         }
     }
 
+    /// Create a whole-number time value (denominator = 1).
     #[must_use]
     pub fn whole(n: i64) -> Self {
         Self { num: n, den: 1 }
     }
 
+    /// The additive identity (0/1).
     #[must_use]
     pub fn zero() -> Self {
         Self { num: 0, den: 1 }
     }
 
+    /// The multiplicative identity (1/1), equal to one cycle.
     #[must_use]
     pub fn one() -> Self {
         Self { num: 1, den: 1 }
@@ -71,11 +75,13 @@ impl Time {
         self - Self::whole(floor)
     }
 
+    /// Returns true if the time value is exactly zero.
     #[must_use]
     pub fn is_zero(self) -> bool {
         self.num == 0
     }
 
+    /// Returns true if the time value is strictly positive.
     #[must_use]
     pub fn is_positive(self) -> bool {
         self.num > 0
@@ -188,6 +194,7 @@ pub struct Arc {
 }
 
 impl Arc {
+    /// Create a half-open arc `[start, end)`.
     #[must_use]
     pub fn new(start: Time, end: Time) -> Self {
         Self { start, end }
@@ -202,6 +209,7 @@ impl Arc {
         }
     }
 
+    /// Length of the arc (`end - start`).
     #[must_use]
     pub fn duration(self) -> Time {
         self.end - self.start

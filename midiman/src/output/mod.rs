@@ -11,13 +11,18 @@ use crate::scheduler::TimedEvent;
 
 /// Trait for dispatching timed events to an output backend.
 pub trait OutputSink: Send {
+    /// Send a single timed event to this output.
     fn send(&mut self, event: &TimedEvent) -> Result<(), OutputError>;
+    /// Human-readable identifier for this sink (e.g. port name or address).
     fn name(&self) -> &str;
 }
 
+/// Error from an output sink.
 #[derive(Debug)]
 pub enum OutputError {
+    /// A MIDI backend error.
     Midi(String),
+    /// An OSC backend error.
     Osc(String),
 }
 

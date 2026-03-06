@@ -29,10 +29,12 @@ pub struct IpcHandle {
 }
 
 impl IpcHandle {
+    /// Returns the path to the Unix domain socket.
     pub fn socket_path(&self) -> &Path {
         &self.socket_path
     }
 
+    /// Signal the IPC server to stop, join the thread, and remove the socket file.
     pub fn stop(mut self) {
         self.shutdown();
     }

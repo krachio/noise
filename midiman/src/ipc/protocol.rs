@@ -22,8 +22,11 @@ pub enum ClientMessage {
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "status")]
 pub enum ServerMessage {
+    /// Successful acknowledgement with a human-readable message.
     Ok { msg: String },
+    /// An error occurred; `msg` describes what went wrong.
     Error { msg: String },
+    /// Response to a `Ping`.
     Pong,
 }
 

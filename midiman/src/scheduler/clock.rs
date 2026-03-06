@@ -12,6 +12,7 @@ pub struct Clock {
 }
 
 impl Clock {
+    /// Create a clock starting from now.
     #[must_use]
     pub fn new(bpm: f64, beats_per_cycle: f64) -> Self {
         Self {
@@ -21,6 +22,7 @@ impl Clock {
         }
     }
 
+    /// Create a clock with an explicit start instant (useful for tests).
     #[must_use]
     pub fn with_start(bpm: f64, beats_per_cycle: f64, start: Instant) -> Self {
         Self {
@@ -54,11 +56,13 @@ impl Clock {
         cycle_f * self.cycle_duration_secs()
     }
 
+    /// Returns the current BPM.
     #[must_use]
     pub fn bpm(&self) -> f64 {
         self.bpm
     }
 
+    /// Update the BPM (takes effect on the next tick).
     pub fn set_bpm(&mut self, bpm: f64) {
         self.bpm = bpm;
     }

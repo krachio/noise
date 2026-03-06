@@ -14,6 +14,7 @@ pub struct OscSink {
 }
 
 impl OscSink {
+    /// Create a new OSC sink that sends packets to `target_addr` (e.g. `"127.0.0.1:57120"`).
     pub fn new(target_addr: &str) -> Result<Self, OutputError> {
         let socket = UdpSocket::bind("0.0.0.0:0")
             .map_err(|e| OutputError::Osc(format!("bind: {e}")))?;
