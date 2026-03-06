@@ -1,5 +1,9 @@
+pub mod control;
+pub mod engine;
 pub mod graph;
 pub mod ir;
 pub mod nodes;
+pub mod output;
+pub mod protocol;
 pub mod registry;
 pub mod swap;
