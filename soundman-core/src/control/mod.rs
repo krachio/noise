@@ -1,3 +1,5 @@
+pub mod osc;
+
 use crate::protocol::ClientMessage;
 
 pub trait ControlInput: Send {

@@ -1,8 +1,10 @@
+pub mod cpal_backend;
+
 use crate::engine::config::EngineConfig;
 
 pub type AudioCallback = Box<dyn FnMut(&mut [f32]) + Send>;
 
-pub trait AudioOutput: Send {
+pub trait AudioOutput {
     /// # Errors
     /// Returns an error string if the output device cannot be opened.
     fn start(
