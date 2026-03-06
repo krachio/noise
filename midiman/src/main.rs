@@ -60,12 +60,44 @@ fn main() {
 
     let mut note_offs: BinaryHeap<Reverse<PendingNoteOff>> = BinaryHeap::new();
 
+    // MIDI clock sync (24 ppqn), opt-in via env var
+    let midi_clock_enabled = std::env::var("MIDIMAN_MIDI_CLOCK").is_ok_and(|v| v == "1");
+    let mut next_clock_tick: Option<Instant> = None;
+    if midi_clock_enabled {
+        if let Some(sink) = midi_sink.as_mut() {
+            let _ = sink.send_clock_start();
+        }
+        next_clock_tick = Some(Instant::now());
+        eprintln!("  midi clock: enabled (24 ppqn)");
+    }
+
     while running.load(std::sync::atomic::Ordering::Relaxed) {
         // Drain due note-offs
         drain_note_offs(&mut note_offs, &mut midi_sink);
 
-        // Compute recv timeout: min of 100ms and time to next note-off
-        let timeout = next_timeout(&note_offs, Duration::from_millis(100));
+        // Send due MIDI clock ticks
+        if let Some(ref mut next_tick) = next_clock_tick {
+            let now = Instant::now();
+            while *next_tick <= now {
+                if let Some(sink) = midi_sink.as_mut() {
+                    let _ = sink.send_clock_tick();
+                }
+                let bpm = shared_bpm.get();
+                let tick_interval = Duration::from_secs_f64(60.0 / (bpm * 24.0));
+                *next_tick += tick_interval;
+            }
+        }
+
+        // Compute recv timeout: min of 100ms, time to next note-off, time to next clock tick
+        let mut timeout = next_timeout(&note_offs, Duration::from_millis(100));
+        if let Some(next_tick) = next_clock_tick {
+            let now = Instant::now();
+            if next_tick > now {
+                timeout = timeout.min(next_tick - now);
+            } else {
+                timeout = Duration::ZERO;
+            }
+        }
 
         match event_rx.recv_timeout(timeout) {
             Ok(timed_event) => {
@@ -100,6 +132,13 @@ fn main() {
 
     // Send all remaining note-offs before shutdown
     drain_all_note_offs(&mut note_offs, &mut midi_sink);
+
+    // Send MIDI clock stop
+    if midi_clock_enabled {
+        if let Some(sink) = midi_sink.as_mut() {
+            let _ = sink.send_clock_stop();
+        }
+    }
 
     eprintln!("\nmidiman shutting down...");
     ipc_handle.stop();

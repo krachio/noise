@@ -17,6 +17,18 @@ pub trait OutputSink: Send {
     fn send_note_off(&mut self, _channel: u8, _note: u8) -> Result<(), OutputError> {
         Ok(())
     }
+    /// Send a MIDI clock tick (0xF8).
+    fn send_clock_tick(&mut self) -> Result<(), OutputError> {
+        Ok(())
+    }
+    /// Send a MIDI clock start (0xFA).
+    fn send_clock_start(&mut self) -> Result<(), OutputError> {
+        Ok(())
+    }
+    /// Send a MIDI clock stop (0xFC).
+    fn send_clock_stop(&mut self) -> Result<(), OutputError> {
+        Ok(())
+    }
     /// Human-readable identifier for this sink (e.g. port name or address).
     fn name(&self) -> &str;
 }

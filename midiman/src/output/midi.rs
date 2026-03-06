@@ -71,6 +71,18 @@ impl OutputSink for MidiSink {
         self.send_bytes(&[status, note & 0x7F, 0])
     }
 
+    fn send_clock_tick(&mut self) -> Result<(), OutputError> {
+        self.send_bytes(&[0xF8])
+    }
+
+    fn send_clock_start(&mut self) -> Result<(), OutputError> {
+        self.send_bytes(&[0xFA])
+    }
+
+    fn send_clock_stop(&mut self) -> Result<(), OutputError> {
+        self.send_bytes(&[0xFC])
+    }
+
     fn send(&mut self, event: &TimedEvent) -> Result<(), OutputError> {
         match &event.event.value {
             Value::Note {
