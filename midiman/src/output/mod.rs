@@ -28,7 +28,11 @@ impl std::fmt::Display for OutputError {
 impl std::error::Error for OutputError {}
 
 /// Dispatch a timed event to the appropriate sink based on its value type.
-pub fn dispatch(event: &TimedEvent, midi_sink: Option<&mut dyn OutputSink>, osc_sink: Option<&mut dyn OutputSink>) -> Result<(), OutputError> {
+pub fn dispatch(
+    event: &TimedEvent,
+    midi_sink: &mut Option<Box<dyn OutputSink>>,
+    osc_sink: &mut Option<Box<dyn OutputSink>>,
+) -> Result<(), OutputError> {
     match &event.event.value {
         Value::Note { .. } | Value::Cc { .. } => {
             if let Some(sink) = midi_sink {
