@@ -11,3 +11,7 @@ missing_debug_implementations = "warn"
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
+
+[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
