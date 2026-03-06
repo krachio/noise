@@ -38,8 +38,8 @@ impl TestKernel {
             tick_interval_secs: 0.001,
         };
 
-        let (sched_handle, slots) = scheduler::start(config, HashMap::new(), event_tx);
-        let ipc_handle = ipc::start(socket_path.clone(), Arc::clone(&slots)).unwrap();
+        let (sched_handle, slots, shared_bpm) = scheduler::start(config, HashMap::new(), event_tx);
+        let ipc_handle = ipc::start(socket_path.clone(), Arc::clone(&slots), shared_bpm).unwrap();
 
         Self {
             socket_path,

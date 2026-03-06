@@ -20,7 +20,7 @@ use crate::event::{Event, Value};
 use crate::pattern::query;
 use crate::time::{self, Time};
 
-use clock::Clock;
+use clock::{Clock, SharedBpm};
 use hotswap::SwapSlot;
 
 /// A scheduled event with its wall-clock fire time.
@@ -84,13 +84,17 @@ impl SchedulerHandle {
 
 /// Start the scheduler on a dedicated thread.
 /// Accepts initial slots so patterns are ready before the first tick.
+/// Returns a handle, the shared slots map, and a `SharedBpm` for live tempo changes.
 pub fn start(
     config: SchedulerConfig,
     initial_slots: HashMap<String, Arc<SwapSlot>>,
     event_tx: Sender<TimedEvent>,
-) -> (SchedulerHandle, Slots) {
+) -> (SchedulerHandle, Slots, SharedBpm) {
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = Arc::clone(&stop);
+
+    let shared_bpm = SharedBpm::new(config.bpm);
+    let shared_bpm_clone = shared_bpm.clone();
 
     let slots: Slots = Arc::new(Mutex::new(initial_slots));
     let slots_clone = Arc::clone(&slots);
@@ -98,7 +102,7 @@ pub fn start(
     let thread = thread::Builder::new()
         .name("midiman-scheduler".into())
         .spawn(move || {
-            run_loop(config, stop_clone, slots_clone, event_tx);
+            run_loop(config, stop_clone, slots_clone, event_tx, shared_bpm_clone);
         })
         .expect("failed to spawn scheduler thread");
 
@@ -106,7 +110,7 @@ pub fn start(
         stop,
         thread: Some(thread),
     };
-    (handle, slots)
+    (handle, slots, shared_bpm)
 }
 
 fn run_loop(
@@ -114,17 +118,26 @@ fn run_loop(
     stop: Arc<AtomicBool>,
     slots: Slots,
     event_tx: Sender<TimedEvent>,
+    shared_bpm: SharedBpm,
 ) {
-    let clock = Clock::new(config.bpm, config.beats_per_cycle);
+    let mut clock = Clock::new(config.bpm, config.beats_per_cycle);
     let tick_dur = Duration::from_secs_f64(config.tick_interval_secs);
 
-    let cycle_dur_us = (clock.cycle_duration_secs() * 1_000_000.0) as i64;
+    let mut cycle_dur_us = (clock.cycle_duration_secs() * 1_000_000.0) as i64;
     let lookahead_us = (config.lookahead_secs * 1_000_000.0) as i64;
-    let lookahead_cycles = Time::new(lookahead_us, cycle_dur_us as u64);
+    let mut lookahead_cycles = Time::new(lookahead_us, cycle_dur_us as u64);
 
     let mut last_query_end = Time::zero();
 
     while !stop.load(Ordering::Relaxed) {
+        // Check for BPM changes
+        let new_bpm = shared_bpm.get();
+        if (new_bpm - clock.bpm()).abs() > f64::EPSILON {
+            clock.set_bpm(new_bpm);
+            cycle_dur_us = (clock.cycle_duration_secs() * 1_000_000.0) as i64;
+            lookahead_cycles = Time::new(lookahead_us, cycle_dur_us as u64);
+        }
+
         let now = Instant::now();
         let now_cycle = clock.instant_to_cycle(now);
         let query_end = now_cycle + lookahead_cycles;
@@ -192,7 +205,7 @@ mod tests {
     #[test]
     fn scheduler_starts_and_stops() {
         let (tx, _rx) = crossbeam_channel::unbounded();
-        let (handle, _slots) = start(fast_config(), HashMap::new(), tx);
+        let (handle, _slots, _bpm) = start(fast_config(), HashMap::new(), tx);
         assert!(handle.is_running());
         handle.stop();
     }
@@ -207,7 +220,7 @@ mod tests {
             Arc::new(SwapSlot::new(CompiledPattern::atom(note(60)))),
         );
 
-        let (handle, _slots) = start(fast_config(), initial, tx);
+        let (handle, _slots, _bpm) = start(fast_config(), initial, tx);
 
         // At 6000 BPM, one cycle = 40ms. Wait for a few cycles.
         thread::sleep(Duration::from_millis(100));
@@ -230,7 +243,7 @@ mod tests {
         let mut initial = HashMap::new();
         initial.insert("d1".into(), Arc::clone(&slot));
 
-        let (handle, _slots) = start(fast_config(), initial, tx);
+        let (handle, _slots, _bpm) = start(fast_config(), initial, tx);
 
         // Wait for some events with note 60
         thread::sleep(Duration::from_millis(60));
@@ -263,7 +276,7 @@ mod tests {
             Arc::new(SwapSlot::new(CompiledPattern::atom(note(64)))),
         );
 
-        let (handle, _slots) = start(fast_config(), initial, tx);
+        let (handle, _slots, _bpm) = start(fast_config(), initial, tx);
 
         thread::sleep(Duration::from_millis(100));
         handle.stop();

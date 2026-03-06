@@ -1,5 +1,7 @@
 //! BPM-based clock mapping between wall time and cycle time.
 
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use std::time::Instant;
 
 use crate::time::Time;
@@ -77,10 +79,50 @@ impl Clock {
     }
 }
 
+/// Lock-free shared BPM value, readable from the scheduler thread
+/// and writable from the IPC thread.
+#[derive(Clone)]
+pub struct SharedBpm(Arc<AtomicU64>);
+
+impl SharedBpm {
+    /// Create a new shared BPM with the given initial value.
+    #[must_use]
+    pub fn new(bpm: f64) -> Self {
+        Self(Arc::new(AtomicU64::new(bpm.to_bits())))
+    }
+
+    /// Read the current BPM.
+    #[must_use]
+    pub fn get(&self) -> f64 {
+        f64::from_bits(self.0.load(Ordering::Relaxed))
+    }
+
+    /// Set a new BPM value.
+    pub fn set(&self, bpm: f64) {
+        self.0.store(bpm.to_bits(), Ordering::Relaxed);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::time::Duration;
+
+    #[test]
+    fn shared_bpm_roundtrips() {
+        let bpm = SharedBpm::new(140.0);
+        assert!((bpm.get() - 140.0).abs() < f64::EPSILON);
+        bpm.set(95.5);
+        assert!((bpm.get() - 95.5).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn shared_bpm_special_values() {
+        let bpm = SharedBpm::new(0.0);
+        assert!((bpm.get()).abs() < f64::EPSILON);
+        bpm.set(999_999.999);
+        assert!((bpm.get() - 999_999.999).abs() < f64::EPSILON);
+    }
 
     #[test]
     fn cycle_duration_at_120_bpm() {

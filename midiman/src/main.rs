@@ -18,10 +18,10 @@ fn main() {
     let (event_tx, event_rx) = crossbeam_channel::unbounded();
 
     // Start scheduler with no initial slots (IPC will add them)
-    let (sched_handle, slots) = scheduler::start(config, HashMap::new(), event_tx);
+    let (sched_handle, slots, shared_bpm) = scheduler::start(config, HashMap::new(), event_tx);
 
     // Start IPC server
-    let ipc_handle = midiman::ipc::start(socket_path, Arc::clone(&slots))
+    let ipc_handle = midiman::ipc::start(socket_path, Arc::clone(&slots), shared_bpm)
         .expect("failed to start IPC server");
 
     eprintln!("midiman ready. listening on {}", ipc_handle.socket_path().display());
