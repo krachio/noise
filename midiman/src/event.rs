@@ -1,7 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 use crate::time::Arc;
 
 /// A control signal value produced by pattern evaluation.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "type")]
 pub enum Value {
     Note {
         channel: u8,
@@ -21,7 +24,7 @@ pub enum Value {
 }
 
 /// An argument in an OSC message.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub enum OscArg {
     Float(f64),
     Int(i32),
