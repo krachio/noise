@@ -4,19 +4,19 @@ description: Run type checker + tests + critical QA review of test quality
 user_invocable: true
 ---
 
-Read the Stack section of CLAUDE.md to determine the type checker and test runner for this project.
+Read `.bedrock/stack.yml` to determine the type checker and test runner for this project.
 
 Run the following checks sequentially. Stop and report on the first failure.
 
 ## 1. Type Checker
 
-Run the type checker specified in CLAUDE.md's Stack section.
+Run the type checker specified in `.bedrock/stack.yml`.
 
 If it reports any errors, stop and report them. Do not proceed.
 
 ## 2. Test Runner
 
-Run the test runner specified in CLAUDE.md's Stack section.
+Run the test runner specified in `.bedrock/stack.yml`.
 
 If any tests fail, stop and report them. Do not proceed.
 

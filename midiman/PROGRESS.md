@@ -14,8 +14,13 @@ All 6 phases of the architecture plan (`magical-discovering-eich.md`) are comple
 - **IPC server** (`ipc/`): Unix domain socket, newline-delimited JSON protocol (SetPattern, Hush, HushAll, SetBpm, Ping)
 - **Binary** (`main.rs`): Wires scheduler + IPC + output dispatch loop
 
+### Examples & test infrastructure
+- `examples/demo.rs`: Programmatic usage without IPC (Cat, Fast, Stack, Euclid, Degrade)
+- `examples/ipc_session.sh`: Shell IPC session via socat
+- `tests/helpers/mod.rs`: `TestKernel` wires scheduler+IPC for E2E tests
+
 ### Stats
-- 96 tests passing (94 unit + 2 integration)
+- 105 tests passing (94 unit + 11 integration)
 - Rust edition 2024, strict clippy, `unsafe_code = "forbid"`
 - Dependencies: arc-swap, crossbeam-channel, midir, rosc, serde, serde_json, smallvec, spin_sleep
 

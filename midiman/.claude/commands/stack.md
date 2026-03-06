@@ -1,6 +1,6 @@
 ---
 name: stack
-description: Configure project stack - fill in CLAUDE.md, set up tooling, initial commit
+description: Configure project stack - fill in .bedrock/stack.yml, set up tooling, initial commit
 user_invocable: true
 ---
 
@@ -14,9 +14,11 @@ Read `.claude/init-prompt`. It contains the project name and complete stack spec
 
 1. **Parse the init-prompt**: Extract project name, language, version, type checker, test runner, package manager. Do NOT prompt for clarification if the init-prompt provides all required fields.
 
-2. **Fill in CLAUDE.md**: Replace `<Project>` in the title with the project name. Fill in the Stack section with concrete values and commands (e.g., the exact commands `/qa` should run).
+2. **Fill in `.bedrock/stack.yml`**: Write concrete values and commands (e.g., the exact commands `/qa` should run).
 
-3. **Set up tooling**:
+3. **Fill in CLAUDE.md**: If it contains the `<Project>` placeholder, replace it with the project name. Do not modify CLAUDE.md otherwise.
+
+4. **Set up tooling**:
    - Initialize the package manager config if needed (e.g., `pyproject.toml`, `package.json`, `Cargo.toml`)
    - Configure the type checker for strict mode
    - Configure the test runner
@@ -25,12 +27,12 @@ Read `.claude/init-prompt`. It contains the project name and complete stack spec
    - Install dependencies
    - Install pre-commit hooks
 
-4. **Update PROGRESS.md** to reflect the configured state.
+5. **Update PROGRESS.md** to reflect the configured state.
 
-5. **Delete `.claude/init-prompt`**.
+6. **Delete `.claude/init-prompt`**.
 
-6. **Commit incrementally** following the iteration protocol:
-   - Commit 1: CLAUDE.md with filled-in stack
+7. **Commit incrementally** following the iteration protocol:
+   - Commit 1: .bedrock/stack.yml + CLAUDE.md project name
    - Commit 2: Package config + dependencies
    - Commit 3: Pre-commit config + hooks
    - Commit 4: Test scaffold
