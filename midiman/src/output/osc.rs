@@ -1,3 +1,5 @@
+//! OSC output sink via rosc + UDP.
+
 use std::net::UdpSocket;
 
 use rosc::{OscMessage, OscPacket, OscType, encoder};

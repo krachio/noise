@@ -23,6 +23,7 @@ pub struct CompiledPattern {
 }
 
 /// A single node in the pattern arena.
+#[allow(missing_docs)]
 #[derive(Clone, Debug)]
 pub enum PatternNode {
     /// A leaf node that produces a single event.

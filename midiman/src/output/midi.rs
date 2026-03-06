@@ -1,3 +1,5 @@
+//! MIDI output sink via midir.
+
 use midir::{MidiOutput, MidiOutputConnection};
 
 use crate::event::Value;

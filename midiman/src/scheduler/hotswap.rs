@@ -1,3 +1,5 @@
+//! Lock-free pattern hot-swap via `arc-swap`.
+
 use std::sync::Arc;
 
 use arc_swap::ArcSwap;

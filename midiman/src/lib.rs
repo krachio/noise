@@ -21,6 +21,8 @@
 //! - [`output`] — MIDI and OSC output sinks
 //! - [`ipc`] — Unix socket server for frontend communication
 
+#![warn(missing_docs)]
+
 pub mod event;
 pub mod ipc;
 pub mod ir;

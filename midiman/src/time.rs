@@ -19,6 +19,7 @@ fn gcd(mut a: u64, mut b: u64) -> u64 {
 
 /// Rational number representing a point or duration in cycle-time.
 /// Numerator is signed, denominator is always positive and nonzero.
+#[allow(missing_docs)]
 #[derive(Clone, Copy)]
 pub struct Time {
     pub num: i64,
@@ -187,6 +188,7 @@ impl fmt::Display for Time {
 }
 
 /// A half-open time interval `[start, end)` representing a span in cycle-time.
+#[allow(missing_docs)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Arc {
     pub start: Time,

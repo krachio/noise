@@ -1,8 +1,11 @@
+//! Wire protocol types for IPC messages.
+
 use serde::{Deserialize, Serialize};
 
 use crate::ir::IrNode;
 
 /// Message from client (Python frontend) to server (midiman kernel).
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "cmd")]
 pub enum ClientMessage {
@@ -19,6 +22,7 @@ pub enum ClientMessage {
 }
 
 /// Message from server to client.
+#[allow(missing_docs)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(tag = "status")]
 pub enum ServerMessage {

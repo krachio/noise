@@ -10,6 +10,7 @@ use serde::{Deserialize, Serialize};
 use crate::time::Arc;
 
 /// A control signal value produced by pattern evaluation.
+#[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type")]
 pub enum Value {
@@ -50,6 +51,7 @@ pub enum OscArg {
 /// `whole` is the arc of the "whole" event (its natural span in the pattern).
 /// `part` is the portion of the event that falls within the queried arc.
 /// When a pattern is time-shifted (fast/slow), `part` may be a subset of `whole`.
+#[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Event<V> {
     pub whole: Option<Arc>,

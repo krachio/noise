@@ -17,6 +17,7 @@ pub use validate::validate;
 
 /// IR node sent from the Python frontend.
 /// Tagged by "op" field in JSON for readable wire format.
+#[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "op")]
 pub enum IrNode {
@@ -47,6 +48,7 @@ pub enum IrNode {
 }
 
 /// Error from IR validation or compilation.
+#[allow(missing_docs)]
 #[derive(Clone, Debug, PartialEq)]
 pub enum IrError {
     /// A rational time value has a zero denominator.

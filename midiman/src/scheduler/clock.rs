@@ -1,3 +1,5 @@
+//! BPM-based clock mapping between wall time and cycle time.
+
 use std::time::Instant;
 
 use crate::time::Time;

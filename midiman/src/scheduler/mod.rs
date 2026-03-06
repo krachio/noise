@@ -35,6 +35,7 @@ pub struct TimedEvent {
 }
 
 /// Configuration for the scheduler.
+#[allow(missing_docs)]
 pub struct SchedulerConfig {
     pub bpm: f64,
     pub beats_per_cycle: f64,
