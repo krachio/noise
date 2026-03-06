@@ -1,0 +1,6 @@
+# Fill in with /stack or manually. /qa reads these to know what to run.
+language: rust
+type_checker: cargo clippy -- -D warnings
+test_runner: cargo test
+package_manager: cargo
+pre_commit_hooks: cargo clippy -- -D warnings && cargo test
