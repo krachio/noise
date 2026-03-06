@@ -8,7 +8,7 @@
 
 ## Stack
 
-- Language: Rust stable (edition 2021)
+- Language: Rust stable (edition 2024)
 - Type checker: `cargo check` (strict lints via Cargo.toml)
 - Test runner: `cargo test`
 - Package manager: Cargo
