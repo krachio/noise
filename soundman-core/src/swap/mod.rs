@@ -1,0 +1,318 @@
+pub mod command;
+
+use crate::graph::DspGraph;
+
+use command::Command;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SwapState {
+    Idle,
+    Crossfading { samples_remaining: usize },
+}
+
+pub struct GraphSwapper {
+    active: Option<Box<DspGraph>>,
+    retiring: Option<Box<DspGraph>>,
+    state: SwapState,
+    crossfade_samples: usize,
+    master_gain: f32,
+}
+
+impl GraphSwapper {
+    #[must_use]
+    pub const fn new(crossfade_samples: usize) -> Self {
+        Self {
+            active: None,
+            retiring: None,
+            state: SwapState::Idle,
+            crossfade_samples,
+            master_gain: 1.0,
+        }
+    }
+
+    pub fn drain_commands(&mut self, commands: impl Iterator<Item = Command>) {
+        for cmd in commands {
+            match cmd {
+                Command::SwapGraph(new_graph) => self.begin_swap(new_graph),
+                Command::SetParam { node_id, name, value } => {
+                    if let Some(graph) = &mut self.active {
+                        let _ = graph.set_param(&node_id, &name, value);
+                    }
+                }
+                Command::SetMasterGain(gain) => self.master_gain = gain,
+                Command::Shutdown => {}
+            }
+        }
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    pub fn process(&mut self, output: &mut [f32]) {
+        output.fill(0.0);
+
+        match self.state {
+            SwapState::Idle => {
+                if let Some(graph) = &mut self.active {
+                    graph.process(output);
+                }
+            }
+            SwapState::Crossfading { samples_remaining } => {
+                let fade_len = output.len().min(samples_remaining);
+
+                let mut old_buf = vec![0.0_f32; output.len()];
+                if let Some(old_graph) = &mut self.retiring {
+                    old_graph.process(&mut old_buf);
+                }
+
+                let mut new_buf = vec![0.0_f32; output.len()];
+                if let Some(new_graph) = &mut self.active {
+                    new_graph.process(&mut new_buf);
+                }
+
+                // Linear crossfade
+                let total = self.crossfade_samples as f32;
+                for i in 0..output.len() {
+                    let remaining_f = (samples_remaining as f32 - i as f32).max(0.0);
+                    let fade_out = remaining_f / total;
+                    let fade_in = 1.0 - fade_out;
+                    output[i] = old_buf[i].mul_add(fade_out, new_buf[i] * fade_in);
+                }
+
+                let new_remaining = samples_remaining.saturating_sub(fade_len);
+                if new_remaining == 0 {
+                    self.state = SwapState::Idle;
+                    self.retiring = None;
+                } else {
+                    self.state = SwapState::Crossfading {
+                        samples_remaining: new_remaining,
+                    };
+                }
+            }
+        }
+
+        // Apply master gain
+        #[allow(clippy::float_cmp)]
+        if self.master_gain != 1.0 {
+            for sample in output.iter_mut() {
+                *sample *= self.master_gain;
+            }
+        }
+    }
+
+    fn begin_swap(&mut self, new_graph: Box<DspGraph>) {
+        if self.active.is_some() {
+            self.retiring = self.active.take();
+            self.active = Some(new_graph);
+            self.state = SwapState::Crossfading {
+                samples_remaining: self.crossfade_samples,
+            };
+        } else {
+            self.active = Some(new_graph);
+        }
+    }
+
+    #[must_use]
+    pub const fn has_active_graph(&self) -> bool {
+        self.active.is_some()
+    }
+
+    #[must_use]
+    pub const fn is_crossfading(&self) -> bool {
+        matches!(self.state, SwapState::Crossfading { .. })
+    }
+}
+
+impl std::fmt::Debug for GraphSwapper {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("GraphSwapper")
+            .field("has_active", &self.active.is_some())
+            .field("has_retiring", &self.retiring.is_some())
+            .field("state", &self.state)
+            .field("crossfade_samples", &self.crossfade_samples)
+            .field("master_gain", &self.master_gain)
+            .finish()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::HashMap;
+
+    use super::*;
+    use crate::graph::compiler::compile;
+    use crate::ir::{ConnectionIr, GraphIr, NodeInstance};
+    use crate::nodes::dac::{dac_type_decl, DacFactory};
+    use crate::nodes::oscillator::{oscillator_type_decl, OscillatorFactory};
+    use crate::registry::NodeRegistry;
+
+    fn test_registry() -> NodeRegistry {
+        let mut registry = NodeRegistry::new();
+        registry
+            .register(oscillator_type_decl(), OscillatorFactory)
+            .unwrap();
+        registry.register(dac_type_decl(), DacFactory).unwrap();
+        registry
+    }
+
+    fn make_graph(registry: &NodeRegistry, freq: f32, block_size: usize) -> Box<DspGraph> {
+        let ir = GraphIr {
+            nodes: vec![
+                NodeInstance {
+                    id: "osc1".into(),
+                    type_id: "oscillator".into(),
+                    controls: HashMap::from([("freq".into(), freq)]),
+                },
+                NodeInstance {
+                    id: "out".into(),
+                    type_id: "dac".into(),
+                    controls: HashMap::new(),
+                },
+            ],
+            connections: vec![ConnectionIr {
+                from_node: "osc1".into(),
+                from_port: "out".into(),
+                to_node: "out".into(),
+                to_port: "in".into(),
+            }],
+            exposed_controls: HashMap::new(),
+        };
+        Box::new(compile(&ir, registry, 48000, block_size).unwrap())
+    }
+
+    #[test]
+    fn swapper_starts_silent() {
+        let mut swapper = GraphSwapper::new(480);
+        let mut output = vec![0.0_f32; 64];
+        swapper.process(&mut output);
+
+        #[allow(clippy::float_cmp)]
+        let all_zero = output.iter().all(|&s| s == 0.0);
+        assert!(all_zero);
+        assert!(!swapper.has_active_graph());
+    }
+
+    #[test]
+    fn swap_first_graph_no_crossfade() {
+        let registry = test_registry();
+        let graph = make_graph(&registry, 440.0, 64);
+
+        let mut swapper = GraphSwapper::new(480);
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(graph)));
+
+        assert!(swapper.has_active_graph());
+        assert!(!swapper.is_crossfading());
+
+        let mut output = vec![0.0_f32; 64];
+        swapper.process(&mut output);
+        let energy: f32 = output.iter().map(|s| s * s).sum();
+        assert!(energy > 0.0, "should produce audio after first graph load");
+    }
+
+    #[test]
+    fn swap_triggers_crossfade() {
+        let registry = test_registry();
+        let block_size = 64;
+        let crossfade_samples = 128; // 2 blocks
+
+        let graph1 = make_graph(&registry, 440.0, block_size);
+        let graph2 = make_graph(&registry, 880.0, block_size);
+
+        let mut swapper = GraphSwapper::new(crossfade_samples);
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(graph1)));
+
+        let mut buf = vec![0.0_f32; block_size];
+        swapper.process(&mut buf);
+
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(graph2)));
+        assert!(swapper.is_crossfading());
+
+        swapper.process(&mut buf);
+        assert!(swapper.is_crossfading(), "should still be crossfading after 1 block");
+
+        swapper.process(&mut buf);
+        assert!(!swapper.is_crossfading(), "should finish crossfade after 2 blocks");
+    }
+
+    #[test]
+    fn crossfade_no_discontinuity() {
+        let registry = test_registry();
+        let block_size = 64;
+        let crossfade_samples = 256;
+
+        let graph1 = make_graph(&registry, 440.0, block_size);
+        let graph2 = make_graph(&registry, 440.0, block_size);
+
+        let mut swapper = GraphSwapper::new(crossfade_samples);
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(graph1)));
+
+        let mut buf = vec![0.0_f32; block_size];
+        for _ in 0..4 {
+            swapper.process(&mut buf);
+        }
+        let last_sample_before = *buf.last().unwrap();
+
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(graph2)));
+        swapper.process(&mut buf);
+        let first_sample_after = buf[0];
+
+        let jump = (first_sample_after - last_sample_before).abs();
+        assert!(
+            jump < 0.5,
+            "discontinuity too large: {jump} (before={last_sample_before}, after={first_sample_after})"
+        );
+    }
+
+    #[test]
+    fn master_gain_applies() {
+        let registry = test_registry();
+        let block_size = 64;
+
+        let graph = make_graph(&registry, 440.0, block_size);
+        let mut swapper = GraphSwapper::new(480);
+        swapper.drain_commands(
+            [Command::SwapGraph(graph), Command::SetMasterGain(0.5)]
+                .into_iter(),
+        );
+
+        let mut output = vec![0.0_f32; block_size];
+        swapper.process(&mut output);
+
+        for &s in &output {
+            assert!(
+                (-0.51..=0.51).contains(&s),
+                "sample {s} exceeds master gain bound"
+            );
+        }
+    }
+
+    #[test]
+    fn set_param_forwarded_to_active_graph() {
+        let registry = test_registry();
+        let block_size = 256;
+
+        let graph = make_graph(&registry, 440.0, block_size);
+        let mut swapper = GraphSwapper::new(480);
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(graph)));
+
+        let mut buf1 = vec![0.0_f32; block_size];
+        swapper.process(&mut buf1);
+
+        swapper.drain_commands(std::iter::once(Command::SetParam {
+            node_id: "osc1".into(),
+            name: "freq".into(),
+            value: 880.0,
+        }));
+
+        let mut buf2 = vec![0.0_f32; block_size];
+        swapper.process(&mut buf2);
+
+        let count_crossings = |buf: &[f32]| -> usize {
+            buf.windows(2)
+                .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
+                .count()
+        };
+        assert!(
+            count_crossings(&buf2) > count_crossings(&buf1),
+            "880 Hz should have more crossings than 440 Hz"
+        );
+    }
+}
