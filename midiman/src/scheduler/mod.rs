@@ -102,6 +102,7 @@ pub fn start(
     let thread = thread::Builder::new()
         .name("midiman-scheduler".into())
         .spawn(move || {
+            crate::rt::set_realtime_priority();
             run_loop(config, stop_clone, slots_clone, event_tx, shared_bpm_clone);
         })
         .expect("failed to spawn scheduler thread");

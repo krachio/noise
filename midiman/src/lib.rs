@@ -28,5 +28,6 @@ pub mod ipc;
 pub mod ir;
 pub mod output;
 pub mod pattern;
+pub mod rt;
 pub mod scheduler;
 pub mod time;

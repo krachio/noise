@@ -49,6 +49,9 @@ fn main() {
 
     eprintln!("midiman ready. listening on {}", ipc_handle.socket_path().display());
 
+    // Raise main thread priority for output dispatch
+    midiman::rt::set_realtime_priority();
+
     // Output dispatch loop on main thread
     let mut midi_sink = try_connect_midi();
     let mut osc_sink = try_connect_osc();
