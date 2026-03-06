@@ -1,3 +1,10 @@
+//! Compiled pattern representation and query evaluator.
+//!
+//! Patterns are stored as a flat arena of [`PatternNode`]s indexed by `usize`.
+//! This avoids heap allocation and pointer chasing during evaluation.
+//! [`query()`] walks the arena recursively to produce events for a given
+//! time arc.
+
 mod query;
 
 use smallvec::SmallVec;

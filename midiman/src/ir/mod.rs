@@ -1,3 +1,10 @@
+//! Intermediate representation received from the frontend.
+//!
+//! [`IrNode`] is a serde-tagged enum matching the JSON wire format.
+//! [`validate()`] checks structural invariants (no zero denominators,
+//! no empty children) and [`compile()`] transforms an `IrNode` tree into
+//! an arena-indexed [`CompiledPattern`](crate::pattern::CompiledPattern).
+
 mod compile;
 mod validate;
 

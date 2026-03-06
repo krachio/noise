@@ -1,3 +1,9 @@
+//! Unix socket IPC server for frontend communication.
+//!
+//! Accepts newline-delimited JSON messages defined in [`protocol`].
+//! Each connection is handled sequentially on the IPC thread.
+//! Pattern compilation and slot insertion happen inline on message receipt.
+
 pub mod protocol;
 
 use std::io::{BufRead, BufReader, Write};

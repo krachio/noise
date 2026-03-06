@@ -1,3 +1,10 @@
+//! Real-time scheduler for pattern evaluation.
+//!
+//! The scheduler runs on a dedicated thread, querying all active pattern
+//! slots each tick and sending [`TimedEvent`]s to a channel for output
+//! dispatch. Pattern hot-swap is lock-free via [`hotswap::SwapSlot`]
+//! (backed by `arc-swap`).
+
 pub mod clock;
 pub mod hotswap;
 

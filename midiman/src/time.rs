@@ -1,3 +1,9 @@
+//! Rational time arithmetic for exact musical subdivision.
+//!
+//! All time values are represented as rationals (`i64`/`u64`) to avoid
+//! floating-point drift. [`Arc`] is a half-open interval `[start, end)`
+//! used for querying patterns over time ranges.
+
 use std::cmp::Ordering;
 use std::fmt;
 use std::ops::{Add, Div, Mul, Neg, Sub};

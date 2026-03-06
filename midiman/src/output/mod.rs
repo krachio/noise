@@ -1,3 +1,8 @@
+//! Output sinks for MIDI and OSC.
+//!
+//! Each sink implements [`OutputSink`]. The [`dispatch()`] function routes
+//! events by value type: `Note`/`Cc` to MIDI, `Osc` to OSC.
+
 pub mod midi;
 pub mod osc;
 

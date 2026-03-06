@@ -1,3 +1,10 @@
+//! Events produced by pattern evaluation.
+//!
+//! An [`Event`] carries a value (MIDI note, CC, or OSC message) along with
+//! two time arcs: `whole` (the event's natural span) and `part` (the portion
+//! that falls within the queried range). This whole/part model enables correct
+//! behavior under time-shifting combinators like `Fast` and `Slow`.
+
 use serde::{Deserialize, Serialize};
 
 use crate::time::Arc;
