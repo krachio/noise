@@ -13,6 +13,10 @@ use crate::scheduler::TimedEvent;
 pub trait OutputSink: Send {
     /// Send a single timed event to this output.
     fn send(&mut self, event: &TimedEvent) -> Result<(), OutputError>;
+    /// Send a MIDI note-off for the given channel and note.
+    fn send_note_off(&mut self, _channel: u8, _note: u8) -> Result<(), OutputError> {
+        Ok(())
+    }
     /// Human-readable identifier for this sink (e.g. port name or address).
     fn name(&self) -> &str;
 }

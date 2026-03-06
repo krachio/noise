@@ -1,10 +1,32 @@
-use std::collections::HashMap;
+use std::cmp::Reverse;
+use std::collections::{BinaryHeap, HashMap};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use midiman::event::Value;
 use midiman::output::{self, OutputSink};
 use midiman::scheduler::{self, SchedulerConfig};
+
+/// A pending note-off event to be fired at a specific wall-clock time.
+#[derive(Debug, Eq, PartialEq)]
+struct PendingNoteOff {
+    fire_at: Instant,
+    channel: u8,
+    note: u8,
+}
+
+impl Ord for PendingNoteOff {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.fire_at.cmp(&other.fire_at)
+    }
+}
+
+impl PartialOrd for PendingNoteOff {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
 
 fn main() {
     let socket_path = socket_path();
@@ -15,13 +37,14 @@ fn main() {
     eprintln!("  bpm: {}", config.bpm);
     eprintln!("  lookahead: {}ms", config.lookahead_secs * 1000.0);
 
+    let beats_per_cycle = config.beats_per_cycle;
     let (event_tx, event_rx) = crossbeam_channel::unbounded();
 
     // Start scheduler with no initial slots (IPC will add them)
     let (sched_handle, slots, shared_bpm) = scheduler::start(config, HashMap::new(), event_tx);
 
     // Start IPC server
-    let ipc_handle = midiman::ipc::start(socket_path, Arc::clone(&slots), shared_bpm)
+    let ipc_handle = midiman::ipc::start(socket_path, Arc::clone(&slots), shared_bpm.clone())
         .expect("failed to start IPC server");
 
     eprintln!("midiman ready. listening on {}", ipc_handle.socket_path().display());
@@ -35,13 +58,33 @@ fn main() {
     let running_clone = Arc::clone(&running);
     ctrlc_handler(running_clone);
 
+    let mut note_offs: BinaryHeap<Reverse<PendingNoteOff>> = BinaryHeap::new();
+
     while running.load(std::sync::atomic::Ordering::Relaxed) {
-        match event_rx.recv_timeout(Duration::from_millis(100)) {
+        // Drain due note-offs
+        drain_note_offs(&mut note_offs, &mut midi_sink);
+
+        // Compute recv timeout: min of 100ms and time to next note-off
+        let timeout = next_timeout(&note_offs, Duration::from_millis(100));
+
+        match event_rx.recv_timeout(timeout) {
             Ok(timed_event) => {
                 // Wait until fire time
                 let now = Instant::now();
                 if timed_event.fire_at > now {
                     spin_sleep::sleep(timed_event.fire_at - now);
+                }
+
+                // Schedule note-off if this is a Note event
+                if let Value::Note { channel, note, dur, .. } = &timed_event.event.value {
+                    let cycle_dur_secs = beats_per_cycle * 60.0 / shared_bpm.get();
+                    let note_off_at = timed_event.fire_at
+                        + Duration::from_secs_f64(dur * cycle_dur_secs);
+                    note_offs.push(Reverse(PendingNoteOff {
+                        fire_at: note_off_at,
+                        channel: *channel,
+                        note: *note,
+                    }));
                 }
 
                 let _ = output::dispatch(
@@ -55,9 +98,54 @@ fn main() {
         }
     }
 
+    // Send all remaining note-offs before shutdown
+    drain_all_note_offs(&mut note_offs, &mut midi_sink);
+
     eprintln!("\nmidiman shutting down...");
     ipc_handle.stop();
     sched_handle.stop();
+}
+
+fn drain_note_offs(
+    heap: &mut BinaryHeap<Reverse<PendingNoteOff>>,
+    midi_sink: &mut Option<Box<dyn OutputSink>>,
+) {
+    let now = Instant::now();
+    while let Some(Reverse(pending)) = heap.peek() {
+        if pending.fire_at > now {
+            break;
+        }
+        let pending = heap.pop().expect("just peeked").0;
+        if let Some(sink) = midi_sink.as_mut() {
+            let _ = sink.send_note_off(pending.channel, pending.note);
+        }
+    }
+}
+
+fn drain_all_note_offs(
+    heap: &mut BinaryHeap<Reverse<PendingNoteOff>>,
+    midi_sink: &mut Option<Box<dyn OutputSink>>,
+) {
+    while let Some(Reverse(pending)) = heap.pop() {
+        if let Some(sink) = midi_sink.as_mut() {
+            let _ = sink.send_note_off(pending.channel, pending.note);
+        }
+    }
+}
+
+fn next_timeout(
+    heap: &BinaryHeap<Reverse<PendingNoteOff>>,
+    default: Duration,
+) -> Duration {
+    if let Some(Reverse(pending)) = heap.peek() {
+        let now = Instant::now();
+        if pending.fire_at <= now {
+            return Duration::ZERO;
+        }
+        (pending.fire_at - now).min(default)
+    } else {
+        default
+    }
 }
 
 fn socket_path() -> PathBuf {

@@ -66,6 +66,11 @@ impl MidiSink {
 }
 
 impl OutputSink for MidiSink {
+    fn send_note_off(&mut self, channel: u8, note: u8) -> Result<(), OutputError> {
+        let status = 0x80 | (channel & 0x0F);
+        self.send_bytes(&[status, note & 0x7F, 0])
+    }
+
     fn send(&mut self, event: &TimedEvent) -> Result<(), OutputError> {
         match &event.event.value {
             Value::Note {
