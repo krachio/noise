@@ -1,5 +1,6 @@
 use std::net::UdpSocket;
 
+use log::{debug, trace, warn};
 use rosc::{OscMessage, OscPacket, OscType};
 
 use super::ControlInput;
@@ -21,10 +22,19 @@ impl OscControlInput {
         }
     }
 
+    #[allow(clippy::cast_possible_truncation)]
+    const fn osc_as_f32(arg: &OscType) -> Option<f32> {
+        match arg {
+            OscType::Float(f) => Some(*f),
+            OscType::Double(d) => Some(*d as f32),
+            _ => None,
+        }
+    }
+
     fn parse_osc_message(msg: &OscMessage) -> Option<ClientMessage> {
         let parts: Vec<&str> = msg.addr.split('/').collect();
-        // Expected: /soundman/<command> [args...]
         if parts.len() < 3 || parts[1] != "soundman" {
+            trace!("ignoring non-soundman OSC: {}", msg.addr);
             return None;
         }
 
@@ -34,9 +44,7 @@ impl OscControlInput {
                 let label = msg.args.first().and_then(|a| {
                     if let OscType::String(s) = a { Some(s.clone()) } else { None }
                 })?;
-                let value = msg.args.get(1).and_then(|a| {
-                    if let OscType::Float(f) = a { Some(*f) } else { None }
-                })?;
+                let value = msg.args.get(1).and_then(Self::osc_as_f32)?;
                 Some(ClientMessage::SetControl { label, value })
             }
             "load_graph" => {
@@ -49,14 +57,15 @@ impl OscControlInput {
             }
             "gain" => {
                 // /soundman/gain <float>
-                let gain = msg.args.first().and_then(|a| {
-                    if let OscType::Float(f) = a { Some(*f) } else { None }
-                })?;
+                let gain = msg.args.first().and_then(Self::osc_as_f32)?;
                 Some(ClientMessage::SetMasterGain { gain })
             }
             "ping" => Some(ClientMessage::Ping),
             "shutdown" => Some(ClientMessage::Shutdown),
-            _ => None,
+            unknown => {
+                warn!("unknown OSC command: /soundman/{unknown}");
+                None
+            }
         }
     }
 
@@ -93,10 +102,14 @@ impl ControlInput for OscControlInput {
 
         loop {
             match socket.recv_from(&mut self.buf) {
-                Ok((size, _addr)) => {
+                Ok((size, addr)) => {
                     if let Ok((_remaining, packet)) = rosc::decoder::decode_udp(&self.buf[..size])
                     {
-                        messages.extend(Self::decode_packet(&packet));
+                        let decoded = Self::decode_packet(&packet);
+                        for msg in &decoded {
+                            debug!("OSC from {addr}: {msg:?}");
+                        }
+                        messages.extend(decoded);
                     }
                 }
                 Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
@@ -140,6 +153,33 @@ mod tests {
             ClientMessage::SetControl { ref label, value }
             if label == "pitch" && (value - 880.0).abs() < f32::EPSILON
         ));
+    }
+
+    #[test]
+    fn parse_set_control_double() {
+        let msg = OscMessage {
+            addr: "/soundman/set".into(),
+            args: vec![
+                OscType::String("pitch".into()),
+                OscType::Double(440.0),
+            ],
+        };
+        let result = OscControlInput::parse_osc_message(&msg).unwrap();
+        assert!(matches!(
+            result,
+            ClientMessage::SetControl { ref label, value }
+            if label == "pitch" && (value - 440.0).abs() < f32::EPSILON
+        ));
+    }
+
+    #[test]
+    fn parse_gain_double() {
+        let msg = OscMessage {
+            addr: "/soundman/gain".into(),
+            args: vec![OscType::Double(0.75)],
+        };
+        let result = OscControlInput::parse_osc_message(&msg).unwrap();
+        assert!(matches!(result, ClientMessage::SetMasterGain { gain } if (gain - 0.75).abs() < f32::EPSILON));
     }
 
     #[test]

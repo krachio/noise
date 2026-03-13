@@ -1,10 +1,9 @@
 use std::collections::HashMap;
 
 use soundman::control::MockControlInput;
-use soundman::engine::AudioEngine;
+use soundman::engine::{self, EngineController, AudioProcessor};
 use soundman::engine::config::EngineConfig;
 use soundman::ir::{ConnectionIr, GraphIr, NodeInstance};
-use soundman::output::MockAudioOutput;
 use soundman::protocol::ClientMessage;
 
 fn osc_dac_graph(freq: f32) -> GraphIr {
@@ -31,6 +30,10 @@ fn osc_dac_graph(freq: f32) -> GraphIr {
     }
 }
 
+fn setup(config: &EngineConfig) -> (EngineController, AudioProcessor) {
+    engine::engine(config)
+}
+
 #[test]
 fn end_to_end_load_graph_produces_audio() {
     let config = EngineConfig {
@@ -38,13 +41,12 @@ fn end_to_end_load_graph_produces_audio() {
         channels: 1,
         ..Default::default()
     };
-    let mut engine = AudioEngine::new(config);
-    engine
-        .handle_message(ClientMessage::LoadGraph(osc_dac_graph(440.0)))
+    let (mut ctrl, mut proc) = setup(&config);
+    ctrl.handle_message(ClientMessage::LoadGraph(osc_dac_graph(440.0)))
         .unwrap();
 
     let mut output = vec![0.0_f32; 64];
-    engine.process_block(&mut output);
+    proc.process(&mut output);
 
     let energy: f32 = output.iter().map(|s| s * s).sum();
     assert!(energy > 0.0, "engine should produce audio after LoadGraph");
@@ -61,23 +63,21 @@ fn end_to_end_set_control_changes_frequency() {
         channels: 1,
         ..Default::default()
     };
-    let mut engine = AudioEngine::new(config);
-    engine
-        .handle_message(ClientMessage::LoadGraph(osc_dac_graph(440.0)))
+    let (mut ctrl, mut proc) = setup(&config);
+    ctrl.handle_message(ClientMessage::LoadGraph(osc_dac_graph(440.0)))
         .unwrap();
 
     let mut buf_440 = vec![0.0_f32; 256];
-    engine.process_block(&mut buf_440);
+    proc.process(&mut buf_440);
 
-    engine
-        .handle_message(ClientMessage::SetControl {
-            label: "pitch".into(),
-            value: 880.0,
-        })
-        .unwrap();
+    ctrl.handle_message(ClientMessage::SetControl {
+        label: "pitch".into(),
+        value: 880.0,
+    })
+    .unwrap();
 
     let mut buf_880 = vec![0.0_f32; 256];
-    engine.process_block(&mut buf_880);
+    proc.process(&mut buf_880);
 
     let count_crossings = |buf: &[f32]| -> usize {
         buf.windows(2)
@@ -98,28 +98,26 @@ fn end_to_end_hot_swap_no_glitch() {
         crossfade_ms: 10,
         ..Default::default()
     };
-    let mut engine = AudioEngine::new(config);
+    let (mut ctrl, mut proc) = setup(&config);
 
-    engine
-        .handle_message(ClientMessage::LoadGraph(osc_dac_graph(440.0)))
+    ctrl.handle_message(ClientMessage::LoadGraph(osc_dac_graph(440.0)))
         .unwrap();
 
     // Run several blocks to establish steady state
     let mut prev_last = 0.0_f32;
     for _ in 0..10 {
         let mut buf = vec![0.0_f32; 64];
-        engine.process_block(&mut buf);
+        proc.process(&mut buf);
         prev_last = *buf.last().unwrap();
     }
 
     // Hot-swap to different frequency
-    engine
-        .handle_message(ClientMessage::LoadGraph(osc_dac_graph(880.0)))
+    ctrl.handle_message(ClientMessage::LoadGraph(osc_dac_graph(880.0)))
         .unwrap();
 
     // Check that the crossfade doesn't introduce a glitch > 0.5
     let mut buf = vec![0.0_f32; 64];
-    engine.process_block(&mut buf);
+    proc.process(&mut buf);
 
     let jump = (buf[0] - prev_last).abs();
     assert!(
@@ -130,7 +128,7 @@ fn end_to_end_hot_swap_no_glitch() {
 
     // Continue processing through crossfade — all samples bounded
     for _ in 0..20 {
-        engine.process_block(&mut buf);
+        proc.process(&mut buf);
         for &s in &buf {
             assert!(
                 (-1.1..=1.1).contains(&s),
@@ -147,17 +145,15 @@ fn end_to_end_control_input_integration() {
         channels: 1,
         ..Default::default()
     };
-    let mut engine = AudioEngine::new(config);
-    let mut ctrl = MockControlInput::new();
+    let (mut ctrl, mut proc) = setup(&config);
+    let mut input = MockControlInput::new();
 
-    // Send graph via control input
-    ctrl.send(ClientMessage::LoadGraph(osc_dac_graph(440.0)));
-    engine.poll_control(&mut ctrl);
-
-    assert!(engine.has_active_graph());
+    input.send(ClientMessage::LoadGraph(osc_dac_graph(440.0)));
+    ctrl.poll_control(&mut input);
 
     let mut output = vec![0.0_f32; 64];
-    engine.process_block(&mut output);
+    proc.process(&mut output);
+    assert!(proc.has_active_graph());
 
     let energy: f32 = output.iter().map(|s| s * s).sum();
     assert!(energy > 0.0);
@@ -170,18 +166,26 @@ fn end_to_end_offline_rendering() {
         channels: 2,
         ..Default::default()
     };
-    let mut engine = AudioEngine::new(config);
-    engine
-        .handle_message(ClientMessage::LoadGraph(osc_dac_graph(440.0)))
+    let (mut ctrl, mut proc) = setup(&config);
+    ctrl.handle_message(ClientMessage::LoadGraph(osc_dac_graph(440.0)))
         .unwrap();
 
-    let mut mock = MockAudioOutput::new();
-    engine.run_offline(&mut mock, 10);
+    let mut blocks = Vec::new();
+    for _ in 0..10 {
+        let mut mono = vec![0.0_f32; config.block_size];
+        proc.process(&mut mono);
 
-    assert_eq!(mock.captured_blocks().len(), 10);
+        let mut interleaved = vec![0.0_f32; config.block_size * config.channels];
+        for (i, &sample) in mono.iter().enumerate() {
+            for ch in 0..config.channels {
+                interleaved[i * config.channels + ch] = sample;
+            }
+        }
+        blocks.push(interleaved);
+    }
 
-    // Each block: 128 samples * 2 channels = 256 floats
-    for block in mock.captured_blocks() {
+    assert_eq!(blocks.len(), 10);
+    for block in &blocks {
         assert_eq!(block.len(), 256);
         let energy: f32 = block.iter().map(|s| s * s).sum();
         assert!(energy > 0.0, "offline block should have audio");
@@ -209,11 +213,11 @@ fn end_to_end_graph_ir_from_json() {
         channels: 1,
         ..Default::default()
     };
-    let mut engine = AudioEngine::new(config);
-    engine.handle_message(msg).unwrap();
+    let (mut ctrl, mut proc) = setup(&config);
+    ctrl.handle_message(msg).unwrap();
 
     let mut output = vec![0.0_f32; 64];
-    engine.process_block(&mut output);
+    proc.process(&mut output);
     let energy: f32 = output.iter().map(|s| s * s).sum();
     assert!(energy > 0.0, "graph loaded from JSON should produce audio");
 }

@@ -1,9 +1,8 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
 
+use log::{error, info};
 use soundman::control::ControlInput;
 use soundman::control::osc::OscControlInput;
-use soundman::engine::AudioEngine;
 use soundman::engine::config::EngineConfig;
 use soundman::ir::{ConnectionIr, GraphIr, NodeInstance};
 use soundman::output::AudioOutput;
@@ -35,55 +34,70 @@ fn default_graph() -> GraphIr {
 }
 
 fn main() {
-    let config = EngineConfig::default();
-    let engine = Arc::new(Mutex::new(AudioEngine::new(config.clone())));
+    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+        .format_timestamp_millis()
+        .init();
+
+    let device = CpalBackend::query_device().expect("no audio device");
+    info!("audio device: {}Hz, {} ch", device.sample_rate, device.channels);
+
+    let config = EngineConfig {
+        sample_rate: device.sample_rate,
+        channels: device.channels,
+        ..Default::default()
+    };
+    let (mut controller, processor) = soundman::engine::engine(&config);
 
     // Load default graph
-    {
-        let mut eng = engine.lock().unwrap();
-        eng.handle_message(ClientMessage::LoadGraph(default_graph()))
-            .unwrap();
-    }
+    controller
+        .handle_message(ClientMessage::LoadGraph(default_graph()))
+        .unwrap();
 
-    // Start audio output
+    // Start audio output — processor moves into the audio callback, no mutex
     let mut backend = CpalBackend::new();
-    let engine_audio = Arc::clone(&engine);
     let block_size = config.block_size;
     let channels = config.channels;
 
+    let mut mono_buf = vec![0.0_f32; block_size];
+    let mut processor = processor;
+
     backend
         .start(&config, Box::new(move |data: &mut [f32]| {
-            let mono_len = data.len() / channels;
-            let actual_len = mono_len.min(block_size);
-            let mut mono_buf = vec![0.0_f32; actual_len];
+            let total_frames = data.len() / channels;
+            let mut frame_offset = 0;
 
-            engine_audio.lock().unwrap().process_block(&mut mono_buf);
+            while frame_offset < total_frames {
+                let chunk_frames = block_size.min(total_frames - frame_offset);
+                mono_buf[..chunk_frames].fill(0.0);
+                processor.process(&mut mono_buf[..chunk_frames]);
 
-            for (i, &sample) in mono_buf.iter().enumerate() {
-                for ch in 0..channels {
-                    if let Some(out) = data.get_mut(i * channels + ch) {
-                        *out = sample;
+                for i in 0..chunk_frames {
+                    for ch in 0..channels {
+                        data[(frame_offset + i) * channels + ch] = mono_buf[i];
                     }
                 }
+                frame_offset += chunk_frames;
             }
         }))
         .expect("failed to start audio output");
 
-    println!("soundman running — 440 Hz sine on default output");
-    println!("OSC control on 127.0.0.1:9000");
-    println!("  /soundman/set pitch <freq>");
-    println!("  /soundman/gain <0.0-1.0>");
-    println!("  /soundman/shutdown");
-    println!("Press Ctrl+C to stop");
+    info!("audio output started ({}Hz, {} ch, block={})", config.sample_rate, config.channels, config.block_size);
+
+    info!("soundman running — 440 Hz sine on default output");
+    info!("OSC control on 127.0.0.1:9000");
+    info!("  /soundman/set pitch <freq>");
+    info!("  /soundman/gain <0.0-1.0>");
+    info!("  /soundman/shutdown");
+    info!("set RUST_LOG=soundman=debug for verbose output");
 
     // Start OSC control input
     let mut osc = OscControlInput::new("127.0.0.1:9000");
     if let Err(e) = osc.start() {
-        eprintln!("failed to start OSC input: {e}");
+        error!("failed to start OSC input: {e}");
         return;
     }
 
-    // Main control loop
+    // Main control loop — controller stays on this thread
     loop {
         let messages = osc.poll();
         let mut should_shutdown = false;
@@ -92,8 +106,7 @@ fn main() {
             if matches!(msg, ClientMessage::Shutdown) {
                 should_shutdown = true;
             }
-            let mut eng = engine.lock().unwrap();
-            let _ = eng.handle_message(msg);
+            let _ = controller.handle_message(msg);
         }
 
         if should_shutdown {
@@ -105,5 +118,5 @@ fn main() {
 
     backend.stop();
     osc.stop();
-    println!("soundman stopped");
+    info!("soundman stopped");
 }

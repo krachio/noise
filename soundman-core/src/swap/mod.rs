@@ -16,17 +16,21 @@ pub struct GraphSwapper {
     state: SwapState,
     crossfade_samples: usize,
     master_gain: f32,
+    fade_buf_old: Vec<f32>,
+    fade_buf_new: Vec<f32>,
 }
 
 impl GraphSwapper {
     #[must_use]
-    pub const fn new(crossfade_samples: usize) -> Self {
+    pub fn new(crossfade_samples: usize, block_size: usize) -> Self {
         Self {
             active: None,
             retiring: None,
             state: SwapState::Idle,
             crossfade_samples,
             master_gain: 1.0,
+            fade_buf_old: vec![0.0; block_size],
+            fade_buf_new: vec![0.0; block_size],
         }
     }
 
@@ -57,24 +61,25 @@ impl GraphSwapper {
             }
             SwapState::Crossfading { samples_remaining } => {
                 let fade_len = output.len().min(samples_remaining);
+                let len = output.len();
 
-                let mut old_buf = vec![0.0_f32; output.len()];
+                self.fade_buf_old[..len].fill(0.0);
                 if let Some(old_graph) = &mut self.retiring {
-                    old_graph.process(&mut old_buf);
+                    old_graph.process(&mut self.fade_buf_old[..len]);
                 }
 
-                let mut new_buf = vec![0.0_f32; output.len()];
+                self.fade_buf_new[..len].fill(0.0);
                 if let Some(new_graph) = &mut self.active {
-                    new_graph.process(&mut new_buf);
+                    new_graph.process(&mut self.fade_buf_new[..len]);
                 }
 
                 // Linear crossfade
                 let total = self.crossfade_samples as f32;
-                for i in 0..output.len() {
+                for (i, sample) in output.iter_mut().enumerate() {
                     let remaining_f = (samples_remaining as f32 - i as f32).max(0.0);
                     let fade_out = remaining_f / total;
                     let fade_in = 1.0 - fade_out;
-                    output[i] = old_buf[i].mul_add(fade_out, new_buf[i] * fade_in);
+                    *sample = self.fade_buf_old[i].mul_add(fade_out, self.fade_buf_new[i] * fade_in);
                 }
 
                 let new_remaining = samples_remaining.saturating_sub(fade_len);
@@ -129,7 +134,7 @@ impl std::fmt::Debug for GraphSwapper {
             .field("state", &self.state)
             .field("crossfade_samples", &self.crossfade_samples)
             .field("master_gain", &self.master_gain)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
@@ -180,7 +185,7 @@ mod tests {
 
     #[test]
     fn swapper_starts_silent() {
-        let mut swapper = GraphSwapper::new(480);
+        let mut swapper = GraphSwapper::new(480, 64);
         let mut output = vec![0.0_f32; 64];
         swapper.process(&mut output);
 
@@ -195,7 +200,7 @@ mod tests {
         let registry = test_registry();
         let graph = make_graph(&registry, 440.0, 64);
 
-        let mut swapper = GraphSwapper::new(480);
+        let mut swapper = GraphSwapper::new(480, 64);
         swapper.drain_commands(std::iter::once(Command::SwapGraph(graph)));
 
         assert!(swapper.has_active_graph());
@@ -216,7 +221,7 @@ mod tests {
         let graph1 = make_graph(&registry, 440.0, block_size);
         let graph2 = make_graph(&registry, 880.0, block_size);
 
-        let mut swapper = GraphSwapper::new(crossfade_samples);
+        let mut swapper = GraphSwapper::new(crossfade_samples, block_size);
         swapper.drain_commands(std::iter::once(Command::SwapGraph(graph1)));
 
         let mut buf = vec![0.0_f32; block_size];
@@ -241,7 +246,7 @@ mod tests {
         let graph1 = make_graph(&registry, 440.0, block_size);
         let graph2 = make_graph(&registry, 440.0, block_size);
 
-        let mut swapper = GraphSwapper::new(crossfade_samples);
+        let mut swapper = GraphSwapper::new(crossfade_samples, block_size);
         swapper.drain_commands(std::iter::once(Command::SwapGraph(graph1)));
 
         let mut buf = vec![0.0_f32; block_size];
@@ -267,7 +272,7 @@ mod tests {
         let block_size = 64;
 
         let graph = make_graph(&registry, 440.0, block_size);
-        let mut swapper = GraphSwapper::new(480);
+        let mut swapper = GraphSwapper::new(480, block_size);
         swapper.drain_commands(
             [Command::SwapGraph(graph), Command::SetMasterGain(0.5)]
                 .into_iter(),
@@ -290,7 +295,7 @@ mod tests {
         let block_size = 256;
 
         let graph = make_graph(&registry, 440.0, block_size);
-        let mut swapper = GraphSwapper::new(480);
+        let mut swapper = GraphSwapper::new(480, block_size);
         swapper.drain_commands(std::iter::once(Command::SwapGraph(graph)));
 
         let mut buf1 = vec![0.0_f32; block_size];
