@@ -65,10 +65,18 @@ class Silence:
 class Cat:
     children: tuple[IrNode, ...]
 
+    def __post_init__(self) -> None:
+        if len(self.children) == 0:
+            raise ValueError("Cat requires at least one child")
+
 
 @dataclass(frozen=True)
 class Stack:
     children: tuple[IrNode, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.children) == 0:
+            raise ValueError("Stack requires at least one child")
 
 
 @dataclass(frozen=True)
@@ -76,11 +84,19 @@ class Fast:
     factor: tuple[int, int]
     child: IrNode
 
+    def __post_init__(self) -> None:
+        if self.factor[0] <= 0 or self.factor[1] <= 0:
+            raise ValueError("factor numerator and denominator must be positive")
+
 
 @dataclass(frozen=True)
 class Slow:
     factor: tuple[int, int]
     child: IrNode
+
+    def __post_init__(self) -> None:
+        if self.factor[0] <= 0 or self.factor[1] <= 0:
+            raise ValueError("factor numerator and denominator must be positive")
 
 
 @dataclass(frozen=True)
@@ -88,11 +104,19 @@ class Early:
     offset: tuple[int, int]
     child: IrNode
 
+    def __post_init__(self) -> None:
+        if self.offset[1] == 0:
+            raise ValueError("offset denominator must not be zero")
+
 
 @dataclass(frozen=True)
 class Late:
     offset: tuple[int, int]
     child: IrNode
+
+    def __post_init__(self) -> None:
+        if self.offset[1] == 0:
+            raise ValueError("offset denominator must not be zero")
 
 
 @dataclass(frozen=True)
@@ -106,6 +130,10 @@ class Every:
     transform: IrNode
     child: IrNode
 
+    def __post_init__(self) -> None:
+        if self.n <= 0:
+            raise ValueError("n must be > 0")
+
 
 @dataclass(frozen=True)
 class Euclid:
@@ -114,12 +142,22 @@ class Euclid:
     rotation: int
     child: IrNode
 
+    def __post_init__(self) -> None:
+        if self.steps <= 0:
+            raise ValueError("steps must be > 0")
+        if self.pulses > self.steps:
+            raise ValueError("pulses must be <= steps")
+
 
 @dataclass(frozen=True)
 class Degrade:
     prob: float
     seed: int
     child: IrNode
+
+    def __post_init__(self) -> None:
+        if self.prob < 0.0 or self.prob > 1.0:
+            raise ValueError("prob must be in [0.0, 1.0]")
 
 
 IrNode = (
