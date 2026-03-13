@@ -17,6 +17,33 @@ fn gcd(mut a: u64, mut b: u64) -> u64 {
     a
 }
 
+fn gcd128(mut a: u128, mut b: u128) -> u128 {
+    while b != 0 {
+        let t = b;
+        b = a % b;
+        a = t;
+    }
+    a
+}
+
+/// Compute `a * b_den + b * a_den` and `a_den * b_den` using i128,
+/// reduce, and return (num: i64, den: u64). Panics on final overflow.
+fn cross_add(a_num: i64, a_den: u64, b_num: i64, b_den: u64) -> (i64, u64) {
+    let num = a_num as i128 * b_den as i128 + b_num as i128 * a_den as i128;
+    let den = a_den as u128 * b_den as u128;
+    reduce128(num, den)
+}
+
+/// Reduce an i128/u128 rational and downcast to i64/u64.
+fn reduce128(num: i128, den: u128) -> (i64, u64) {
+    let abs_num = num.unsigned_abs();
+    let g = gcd128(abs_num, den);
+    let rn = (abs_num / g) as u64;
+    let rd = (den / g) as u64;
+    let sign = num.signum() as i64;
+    (sign * rn as i64, rd)
+}
+
 /// Rational number representing a point or duration in cycle-time.
 /// Numerator is signed, denominator is always positive and nonzero.
 #[allow(missing_docs)]
@@ -94,10 +121,8 @@ impl Time {
 impl Add for Time {
     type Output = Self;
     fn add(self, rhs: Self) -> Self {
-        Self::new(
-            self.num * rhs.den as i64 + rhs.num * self.den as i64,
-            self.den * rhs.den,
-        )
+        let (num, den) = cross_add(self.num, self.den, rhs.num, rhs.den);
+        Self { num, den }
     }
 }
 
@@ -112,17 +137,18 @@ impl Add for &Time {
 impl Sub for Time {
     type Output = Self;
     fn sub(self, rhs: Self) -> Self {
-        Self::new(
-            self.num * rhs.den as i64 - rhs.num * self.den as i64,
-            self.den * rhs.den,
-        )
+        let (num, den) = cross_add(self.num, self.den, -rhs.num, rhs.den);
+        Self { num, den }
     }
 }
 
 impl Mul for Time {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self {
-        Self::new(self.num * rhs.num, self.den * rhs.den)
+        let num = self.num as i128 * rhs.num as i128;
+        let den = self.den as u128 * rhs.den as u128;
+        let (n, d) = reduce128(num, den);
+        Self { num: n, den: d }
     }
 }
 
@@ -130,11 +156,11 @@ impl Div for Time {
     type Output = Self;
     fn div(self, rhs: Self) -> Self {
         assert!(!rhs.is_zero(), "division by zero");
-        let sign = if rhs.num < 0 { -1 } else { 1 };
-        Self::new(
-            sign * self.num * rhs.den as i64,
-            self.den * rhs.num.unsigned_abs(),
-        )
+        let num = self.num as i128 * rhs.den as i128;
+        let den = self.den as u128 * rhs.num.unsigned_abs() as u128;
+        let sign = if rhs.num < 0 { -1i128 } else { 1i128 };
+        let (n, d) = reduce128(sign * num, den);
+        Self { num: n, den: d }
     }
 }
 
@@ -150,8 +176,9 @@ impl Neg for Time {
 
 impl PartialEq for Time {
     fn eq(&self, other: &Self) -> bool {
-        // Cross-multiply to avoid overflow from normalization
-        self.num * other.den as i64 == other.num * self.den as i64
+        let lhs = self.num as i128 * other.den as i128;
+        let rhs = other.num as i128 * self.den as i128;
+        lhs == rhs
     }
 }
 
@@ -165,8 +192,8 @@ impl PartialOrd for Time {
 
 impl Ord for Time {
     fn cmp(&self, other: &Self) -> Ordering {
-        let lhs = self.num * other.den as i64;
-        let rhs = other.num * self.den as i64;
+        let lhs = self.num as i128 * other.den as i128;
+        let rhs = other.num as i128 * self.den as i128;
         lhs.cmp(&rhs)
     }
 }
@@ -446,5 +473,60 @@ mod tests {
         assert_eq!(splits[1], Arc::cycle(1));
         assert_eq!(splits[2].start, Time::whole(2));
         assert_eq!(splits[2].end, Time::new(9, 4));
+    }
+
+    // -- Large denominator arithmetic (i128 safety) --
+
+    #[test]
+    fn large_cross_product_comparison() {
+        // num * other.den must exceed i64::MAX to test i128 path
+        // 2_000_000_000 * 5_000_000_000 = 10^19 > i64::MAX (9.2×10^18)
+        let a = Time { num: 2_000_000_001, den: 5_000_000_000 };
+        let b = Time { num: 2_000_000_000, den: 5_000_000_000 };
+        assert!(a > b);
+        assert!(b < a);
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn large_cross_product_equality() {
+        // 2/5B == 4/10B after cross-multiply
+        let a = Time { num: 2_000_000_000, den: 5_000_000_000 };
+        let b = Time { num: 4_000_000_000, den: 10_000_000_000 };
+        assert_eq!(a, b);
+    }
+
+    #[test]
+    fn large_denominator_addition() {
+        // 1/3B + 1/4B = 7/12B
+        let a = Time::new(1, 3_000_000_000);
+        let b = Time::new(1, 4_000_000_000);
+        let sum = a + b;
+        assert_eq!(sum, Time::new(7, 12_000_000_000));
+    }
+
+    #[test]
+    fn large_denominator_subtraction() {
+        let a = Time::new(1, 3_000_000_000);
+        let b = Time::new(1, 4_000_000_000);
+        let diff = a - b;
+        assert_eq!(diff, Time::new(1, 12_000_000_000));
+    }
+
+    #[test]
+    fn large_numerator_multiplication() {
+        let a = Time::new(1_000_000_000, 1);
+        let b = Time::new(1_000_000_000, 1);
+        let prod = a * b;
+        assert_eq!(prod, Time::new(1_000_000_000_000_000_000, 1));
+    }
+
+    #[test]
+    fn large_denominator_division() {
+        let a = Time::new(1, 3_000_000_000);
+        let b = Time::new(1, 4_000_000_000);
+        // (1/3B) / (1/4B) = 4B/3B = 4/3
+        let result = a / b;
+        assert_eq!(result, Time::new(4, 3));
     }
 }
