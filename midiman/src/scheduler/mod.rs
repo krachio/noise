@@ -18,7 +18,7 @@ use crossbeam_channel::Sender;
 
 use crate::event::{Event, Value};
 use crate::pattern::query;
-use crate::time::{self, Time};
+use crate::time;
 
 use clock::{Clock, SharedBpm};
 use hotswap::SwapSlot;
@@ -123,33 +123,23 @@ fn run_loop(
 ) {
     let mut clock = Clock::new(config.bpm, config.beats_per_cycle);
     let tick_dur = Duration::from_secs_f64(config.tick_interval_secs);
+    let lookahead = Duration::from_secs_f64(config.lookahead_secs);
 
-    let mut cycle_dur_us = (clock.cycle_duration_secs() * 1_000_000.0) as i64;
-    let lookahead_us = (config.lookahead_secs * 1_000_000.0) as i64;
-    let mut lookahead_cycles = Time::new(lookahead_us, cycle_dur_us as u64);
-
-    let mut last_query_end = Time::zero();
+    let mut next_cycle: i64 = 0;
 
     while !stop.load(Ordering::Relaxed) {
         // Check for BPM changes
         let new_bpm = shared_bpm.get();
         if (new_bpm - clock.bpm()).abs() > f64::EPSILON {
             clock.set_bpm(new_bpm);
-            cycle_dur_us = (clock.cycle_duration_secs() * 1_000_000.0) as i64;
-            lookahead_cycles = Time::new(lookahead_us, cycle_dur_us as u64);
         }
 
         let now = Instant::now();
-        let now_cycle = clock.instant_to_cycle(now);
-        let query_end = now_cycle + lookahead_cycles;
+        let horizon = now + lookahead;
 
-        if query_end > last_query_end {
-            let query_start = if last_query_end > now_cycle {
-                last_query_end
-            } else {
-                now_cycle
-            };
-            let query_arc = time::Arc::new(query_start, query_end);
+        // Query whole cycles whose start falls within [now, now + lookahead)
+        while clock.cycle_start_instant(next_cycle) <= horizon {
+            let query_arc = time::Arc::cycle(next_cycle);
 
             let slots_guard = slots.lock().expect("slots mutex poisoned");
             for (name, slot) in &*slots_guard {
@@ -171,7 +161,7 @@ fn run_loop(
             }
             drop(slots_guard);
 
-            last_query_end = query_end;
+            next_cycle += 1;
         }
 
         spin_sleep::sleep(tick_dur);
@@ -261,6 +251,72 @@ mod tests {
         let has_72 = events.iter().any(|e| e.event.value == note(72));
         assert!(has_60, "expected note 60 before swap");
         assert!(has_72, "expected note 72 after swap");
+    }
+
+    #[test]
+    fn scheduler_survives_many_cycles() {
+        // At 60000 BPM with 4 beats/cycle, 1 cycle = 4ms.
+        // 500ms → ~125 cycles. Must not overflow.
+        let config = SchedulerConfig {
+            bpm: 60_000.0,
+            beats_per_cycle: 4.0,
+            lookahead_secs: 0.05,
+            tick_interval_secs: 0.001,
+        };
+
+        let (tx, rx) = crossbeam_channel::unbounded();
+        let mut initial = HashMap::new();
+        initial.insert(
+            "d1".into(),
+            Arc::new(SwapSlot::new(CompiledPattern::atom(note(60)))),
+        );
+
+        let (handle, _slots, _bpm) = start(config, initial, tx);
+        thread::sleep(Duration::from_millis(500));
+        handle.stop();
+
+        let events: Vec<_> = rx.try_iter().collect();
+        // Should have at least 100 events (one per cycle, ~125 cycles)
+        assert!(
+            events.len() >= 100,
+            "expected >= 100 events from 125+ cycles, got {}",
+            events.len()
+        );
+    }
+
+    #[test]
+    fn scheduler_survives_bpm_change() {
+        // 140 BPM produces cycle_dur_us=1_714_285, which creates large
+        // lookahead denominators that overflow in cross-multiplication.
+        let config = SchedulerConfig {
+            bpm: 120.0,
+            beats_per_cycle: 4.0,
+            lookahead_secs: 0.1,
+            tick_interval_secs: 0.001,
+        };
+
+        let (tx, rx) = crossbeam_channel::unbounded();
+        let mut initial = HashMap::new();
+        initial.insert(
+            "d1".into(),
+            Arc::new(SwapSlot::new(CompiledPattern::atom(note(60)))),
+        );
+
+        let (handle, _slots, shared_bpm) = start(config, initial, tx);
+        thread::sleep(Duration::from_millis(100));
+
+        // Change to a non-clean BPM that triggers overflow
+        shared_bpm.set(140.0);
+        thread::sleep(Duration::from_millis(500));
+        // Scheduler thread must still be alive (no panic)
+        assert!(handle.is_running(), "scheduler thread panicked");
+        handle.stop();
+
+        let events: Vec<_> = rx.try_iter().collect();
+        assert!(
+            !events.is_empty(),
+            "expected events after BPM change, got none"
+        );
     }
 
     #[test]

@@ -42,17 +42,6 @@ impl Clock {
         self.beats_per_cycle * 60.0 / self.bpm
     }
 
-    /// Convert a wall-clock instant to cycle-time as a rational.
-    /// Uses high-precision: microsecond numerator, cycle-duration denominator.
-    #[must_use]
-    pub fn instant_to_cycle(&self, now: Instant) -> Time {
-        let elapsed_secs = now.duration_since(self.start).as_secs_f64();
-        let cycles = elapsed_secs / self.cycle_duration_secs();
-        // Convert to rational with microsecond precision
-        let micros = (cycles * 1_000_000.0) as i64;
-        Time::new(micros, 1_000_000)
-    }
-
     /// Convert a cycle-time to wall-clock seconds from start.
     #[must_use]
     pub fn cycle_to_secs(&self, cycle: Time) -> f64 {
@@ -69,6 +58,14 @@ impl Clock {
     /// Update the BPM (takes effect on the next tick).
     pub fn set_bpm(&mut self, bpm: f64) {
         self.bpm = bpm;
+    }
+
+    /// Wall-clock instant when the given whole cycle number starts.
+    /// Pure f64 arithmetic — no `Time` involved.
+    #[must_use]
+    pub fn cycle_start_instant(&self, cycle: i64) -> Instant {
+        let secs = cycle as f64 * self.cycle_duration_secs();
+        self.start + std::time::Duration::from_secs_f64(secs)
     }
 
     /// Convert a cycle-time onset to a wall-clock instant.
@@ -139,33 +136,28 @@ mod tests {
     }
 
     #[test]
-    fn instant_to_cycle_at_start_is_zero() {
+    fn cycle_start_instant_at_cycle_zero() {
         let start = Instant::now();
         let clock = Clock::with_start(120.0, 4.0, start);
-        let cycle = clock.instant_to_cycle(start);
-        assert_eq!(cycle, Time::zero());
+        assert_eq!(clock.cycle_start_instant(0), start);
     }
 
     #[test]
-    fn instant_to_cycle_after_one_cycle() {
+    fn cycle_start_instant_at_cycle_one() {
         let start = Instant::now();
         let clock = Clock::with_start(120.0, 4.0, start);
-        // One cycle = 2 seconds at 120 BPM, 4 beats/cycle
-        let later = start + Duration::from_secs(2);
-        let cycle = clock.instant_to_cycle(later);
-        // Should be approximately 1.0 (within microsecond precision)
-        let cycle_f = cycle.num as f64 / cycle.den as f64;
-        assert!((cycle_f - 1.0).abs() < 1e-6);
+        // Cycle 1 starts at 2 seconds (120 BPM, 4 beats/cycle)
+        let expected = start + Duration::from_secs(2);
+        assert_eq!(clock.cycle_start_instant(1), expected);
     }
 
     #[test]
-    fn instant_to_cycle_half_cycle() {
+    fn cycle_start_instant_at_high_cycle() {
         let start = Instant::now();
         let clock = Clock::with_start(120.0, 4.0, start);
-        let later = start + Duration::from_secs(1);
-        let cycle = clock.instant_to_cycle(later);
-        let cycle_f = cycle.num as f64 / cycle.den as f64;
-        assert!((cycle_f - 0.5).abs() < 1e-6);
+        // Cycle 1000 starts at 2000 seconds
+        let expected = start + Duration::from_secs(2000);
+        assert_eq!(clock.cycle_start_instant(1000), expected);
     }
 
     #[test]
