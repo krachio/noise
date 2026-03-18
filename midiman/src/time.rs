@@ -3,6 +3,27 @@
 //! All time values are represented as rationals (`i64`/`u64`) to avoid
 //! floating-point drift. [`Arc`] is a half-open interval `[start, end)`
 //! used for querying patterns over time ranges.
+//!
+//! # Examples
+//!
+//! ```
+//! use midiman::time::{Time, Arc};
+//!
+//! // One beat in 4/4 time = 1/4 of a cycle
+//! let beat = Time::new(1, 4);
+//! let two_beats = beat + beat;
+//! assert_eq!(two_beats, Time::new(1, 2));
+//!
+//! // A cycle spans [0, 1) in rational time
+//! let cycle_0 = Arc::cycle(0);
+//! assert_eq!(cycle_0.start, Time::zero());
+//! assert_eq!(cycle_0.end, Time::one());
+//!
+//! // Split a multi-cycle arc into per-cycle pieces
+//! let wide = Arc::new(Time::new(1, 2), Time::new(5, 2));
+//! let splits = wide.split_cycles();
+//! assert_eq!(splits.len(), 3); // spans parts of cycles 0, 1, 2
+//! ```
 
 use std::cmp::Ordering;
 use std::fmt;

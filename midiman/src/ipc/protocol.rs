@@ -1,4 +1,26 @@
 //! Wire protocol types for IPC messages.
+//!
+//! Messages are newline-delimited JSON over a Unix socket.
+//! The frontend sends [`ClientMessage`]s, the kernel replies with [`ServerMessage`]s.
+//!
+//! # JSON examples
+//!
+//! ```json
+//! // Set a pattern on slot d1
+//! {"cmd": "SetPattern", "slot": "d1", "pattern": {"op": "Atom", "value": {"type": "Note", "channel": 0, "note": 60, "velocity": 100, "dur": 0.5}}}
+//!
+//! // Atomic batch: swap two patterns + change BPM in one tick
+//! {"cmd": "Batch", "commands": [
+//!   {"cmd": "SetPattern", "slot": "d1", "pattern": {"op": "Silence"}},
+//!   {"cmd": "SetPattern", "slot": "d2", "pattern": {"op": "Silence"}},
+//!   {"cmd": "SetBpm", "bpm": 140.0}
+//! ]}
+//!
+//! // Responses
+//! {"status": "Ok", "msg": "pattern set on d1"}
+//! {"status": "Error", "msg": "Cat requires at least one child"}
+//! {"status": "Pong"}
+//! ```
 
 use serde::{Deserialize, Serialize};
 

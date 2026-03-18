@@ -4,6 +4,24 @@
 //! two time arcs: `whole` (the event's natural span) and `part` (the portion
 //! that falls within the queried range). This whole/part model enables correct
 //! behavior under time-shifting combinators like `Fast` and `Slow`.
+//!
+//! # Examples
+//!
+//! ```
+//! use midiman::event::{Value, OscArg};
+//!
+//! // MIDI note: middle C, half-cycle duration
+//! let note = Value::Note { channel: 0, note: 60, velocity: 100, dur: 0.5 };
+//!
+//! // MIDI CC: modulation wheel
+//! let cc = Value::Cc { channel: 0, controller: 1, value: 64 };
+//!
+//! // OSC message targeting soundman
+//! let osc = Value::Osc {
+//!     address: "/soundman/set".into(),
+//!     args: vec![OscArg::Str("pitch".into()), OscArg::Float(440.0)],
+//! };
+//! ```
 
 use serde::{Deserialize, Serialize};
 

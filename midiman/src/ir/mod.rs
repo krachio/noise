@@ -4,6 +4,41 @@
 //! [`validate()`] checks structural invariants (no zero denominators,
 //! no empty children) and [`compile()`] transforms an `IrNode` tree into
 //! an arena-indexed [`CompiledPattern`](crate::pattern::CompiledPattern).
+//!
+//! # JSON wire format
+//!
+//! Nodes are tagged by `"op"`. The frontend sends these as JSON:
+//!
+//! ```json
+//! {"op": "Fast", "factor": [2, 1], "child":
+//!   {"op": "Cat", "children": [
+//!     {"op": "Atom", "value": {"type": "Note", "channel": 0, "note": 60, "velocity": 100, "dur": 0.5}},
+//!     {"op": "Atom", "value": {"type": "Note", "channel": 0, "note": 64, "velocity": 100, "dur": 0.5}}
+//!   ]}
+//! }
+//! ```
+//!
+//! # Examples
+//!
+//! ```
+//! use midiman::ir::{IrNode, compile};
+//! use midiman::event::Value;
+//! use midiman::pattern::query;
+//! use midiman::time::Arc;
+//!
+//! // Build an IR tree: two notes alternating
+//! let ir = IrNode::Cat {
+//!     children: vec![
+//!         IrNode::Atom { value: Value::Note { channel: 0, note: 60, velocity: 100, dur: 0.5 } },
+//!         IrNode::Atom { value: Value::Note { channel: 0, note: 64, velocity: 100, dur: 0.5 } },
+//!     ],
+//! };
+//!
+//! // Compile and query cycle 0
+//! let pattern = compile(&ir).unwrap();
+//! let events = query(&pattern, pattern.root, Arc::cycle(0));
+//! assert_eq!(events.len(), 2);
+//! ```
 
 mod compile;
 mod validate;

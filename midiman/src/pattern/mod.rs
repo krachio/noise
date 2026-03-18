@@ -4,6 +4,22 @@
 //! This avoids heap allocation and pointer chasing during evaluation.
 //! [`query()`] walks the arena recursively to produce events for a given
 //! time arc.
+//!
+//! # Examples
+//!
+//! ```
+//! use midiman::pattern::{CompiledPattern, query};
+//! use midiman::event::Value;
+//! use midiman::time::Arc;
+//!
+//! // Create a single-note pattern and query one cycle
+//! let pat = CompiledPattern::atom(
+//!     Value::Note { channel: 0, note: 60, velocity: 100, dur: 0.5 },
+//! );
+//! let events = query(&pat, pat.root, Arc::cycle(0));
+//! assert_eq!(events.len(), 1);
+//! assert_eq!(events[0].value, Value::Note { channel: 0, note: 60, velocity: 100, dur: 0.5 });
+//! ```
 
 mod query;
 
