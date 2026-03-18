@@ -1,4 +1,13 @@
-//! MIDI output sink via midir.
+//! MIDI output sink via [midir](https://docs.rs/midir).
+//!
+//! Connects to the system's MIDI output ports and sends standard messages:
+//! - **Note On** (`0x90`): triggered by [`Value::Note`]
+//! - **Note Off** (`0x80`): scheduled by the dispatch loop after `dur` cycles
+//! - **CC** (`0xB0`): triggered by [`Value::Cc`]
+//! - **Clock** (`0xF8`/`0xFA`/`0xFC`): 24 ppqn sync, opt-in via `MIDIMAN_MIDI_CLOCK=1`
+//!
+//! Use [`MidiSink::connect_first`] to auto-connect to the first available port,
+//! or [`MidiSink::connect_by_name`] to target a specific device.
 
 use midir::{MidiOutput, MidiOutputConnection};
 

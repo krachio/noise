@@ -1,3 +1,11 @@
+//! Pattern query evaluator.
+//!
+//! Recursively walks the arena-indexed pattern tree, transforming time arcs
+//! through each combinator. The key invariant: query arcs are split into
+//! per-cycle pieces first (via [`Arc::split_cycles`](crate::time::Arc::split_cycles)),
+//! so each recursive call operates within a single cycle. Combinators like
+//! `Fast` and `Slow` scale the arc before recursing; `Cat` slices it by child index.
+
 use crate::event::{Event, Value};
 use crate::time::{Arc, Time};
 
