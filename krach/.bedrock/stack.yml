@@ -1,0 +1,6 @@
+# Fill in with /stack or manually. /qa reads these to know what to run.
+language: python 3.12
+type_checker: pyright --pythonversion 3.12
+test_runner: pytest
+package_manager: uv
+pre_commit_hooks: pyright pytest
