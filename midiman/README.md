@@ -216,6 +216,18 @@ Newline-delimited JSON over Unix socket.
 {"cmd": "Ping"}
 ```
 
+**Batch** — atomic group of commands (all-or-nothing):
+
+```json
+{"cmd": "Batch", "commands": [
+  {"cmd": "SetPattern", "slot": "d1", "pattern": <IrNode>},
+  {"cmd": "SetPattern", "slot": "d2", "pattern": <IrNode>},
+  {"cmd": "SetBpm", "bpm": 140.0}
+]}
+```
+
+All commands compile and validate before any are applied. If any command fails, the entire batch is rejected. Nested batches are not allowed.
+
 ### Responses
 
 ```json
@@ -303,7 +315,7 @@ MIDI output connects to the first available port automatically.
 
 ```bash
 cargo check    # type check (strict clippy, unsafe_code = "forbid")
-cargo test     # 118 tests (107 unit + 11 integration)
+cargo test     # 123 tests
 ```
 
 ## License

@@ -19,6 +19,9 @@ pub enum ClientMessage {
     SetBpm { bpm: f64 },
     /// Ping / health check.
     Ping,
+    /// Atomic batch: all commands apply before the next scheduler tick.
+    /// Flat only — nested Batch is rejected. All-or-nothing on failure.
+    Batch { commands: Vec<ClientMessage> },
 }
 
 /// Message from server to client.
@@ -87,6 +90,33 @@ mod tests {
         let json = serde_json::to_string(&ClientMessage::Ping).unwrap();
         let decoded: ClientMessage = serde_json::from_str(&json).unwrap();
         assert!(matches!(decoded, ClientMessage::Ping));
+    }
+
+    #[test]
+    fn client_message_batch_roundtrip() {
+        let msg = ClientMessage::Batch {
+            commands: vec![
+                ClientMessage::SetPattern {
+                    slot: "d1".into(),
+                    pattern: IrNode::Atom {
+                        value: Value::Note {
+                            channel: 0,
+                            note: 60,
+                            velocity: 100,
+                            dur: 0.5,
+                        },
+                    },
+                },
+                ClientMessage::SetBpm { bpm: 140.0 },
+                ClientMessage::Hush { slot: "d2".into() },
+            ],
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let decoded: ClientMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            ClientMessage::Batch { commands } => assert_eq!(commands.len(), 3),
+            _ => panic!("expected Batch"),
+        }
     }
 
     #[test]

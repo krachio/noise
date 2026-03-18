@@ -140,54 +140,110 @@ fn handle_connection(stream: UnixStream, slots: &Slots, stop: &AtomicBool, share
     }
 }
 
-fn process_message(msg: ClientMessage, slots: &Slots, shared_bpm: &SharedBpm) -> ServerMessage {
+/// A pre-validated action ready to apply under the slots lock.
+enum BatchAction {
+    SetPattern { slot: String, compiled: CompiledPattern },
+    Hush { slot: String },
+    HushAll,
+    SetBpm { bpm: f64 },
+    Ping,
+}
+
+/// Validate and compile a single command into a `BatchAction`.
+/// Returns `Err` for compile errors or nested batches.
+fn prepare_command(msg: &ClientMessage) -> Result<BatchAction, String> {
     match msg {
-        ClientMessage::SetPattern { slot, pattern } => match ir::compile(&pattern) {
-            Ok(compiled) => {
-                let mut guard = slots.lock().expect("slots lock");
-                if let Some(existing) = guard.get(&slot) {
-                    existing.swap(compiled);
-                } else {
-                    guard.insert(slot.clone(), Arc::new(SwapSlot::new(compiled)));
-                }
-                ServerMessage::Ok {
-                    msg: format!("pattern set on {slot}"),
-                }
+        ClientMessage::SetPattern { slot, pattern } => {
+            let compiled = ir::compile(pattern).map_err(|e| format!("compile error: {e}"))?;
+            Ok(BatchAction::SetPattern { slot: slot.clone(), compiled })
+        }
+        ClientMessage::Hush { slot } => Ok(BatchAction::Hush { slot: slot.clone() }),
+        ClientMessage::HushAll => Ok(BatchAction::HushAll),
+        ClientMessage::SetBpm { bpm } => Ok(BatchAction::SetBpm { bpm: *bpm }),
+        ClientMessage::Ping => Ok(BatchAction::Ping),
+        ClientMessage::Batch { .. } => Err("nested Batch is not allowed".into()),
+    }
+}
+
+/// Apply a prepared action. Caller holds the slots lock.
+fn apply_action(
+    action: BatchAction,
+    slots: &mut std::collections::HashMap<String, Arc<SwapSlot>>,
+    shared_bpm: &SharedBpm,
+) {
+    match action {
+        BatchAction::SetPattern { slot, compiled } => {
+            if let Some(existing) = slots.get(&slot) {
+                existing.swap(compiled);
+            } else {
+                slots.insert(slot, Arc::new(SwapSlot::new(compiled)));
             }
-            Err(e) => ServerMessage::Error {
-                msg: format!("compile error: {e}"),
-            },
-        },
-        ClientMessage::Hush { slot } => {
-            let mut guard = slots.lock().expect("slots lock");
-            if let Some(existing) = guard.get(&slot) {
+        }
+        BatchAction::Hush { slot } => {
+            if let Some(existing) = slots.get(&slot) {
                 existing.swap(CompiledPattern::silence());
             } else {
-                guard.insert(
-                    slot.clone(),
-                    Arc::new(SwapSlot::new(CompiledPattern::silence())),
-                );
-            }
-            ServerMessage::Ok {
-                msg: format!("{slot} hushed"),
+                slots.insert(slot, Arc::new(SwapSlot::new(CompiledPattern::silence())));
             }
         }
-        ClientMessage::HushAll => {
-            let guard = slots.lock().expect("slots lock");
-            for slot in guard.values() {
-                slot.swap(CompiledPattern::silence());
-            }
-            ServerMessage::Ok {
-                msg: "all slots hushed".into(),
+        BatchAction::HushAll => {
+            for s in slots.values() {
+                s.swap(CompiledPattern::silence());
             }
         }
-        ClientMessage::SetBpm { bpm } => {
+        BatchAction::SetBpm { bpm } => {
             shared_bpm.set(bpm);
+        }
+        BatchAction::Ping => {}
+    }
+}
+
+fn process_message(msg: ClientMessage, slots: &Slots, shared_bpm: &SharedBpm) -> ServerMessage {
+    match msg {
+        ClientMessage::Batch { commands } => {
+            // Phase 1: validate and compile all commands (no lock held)
+            let mut actions = Vec::with_capacity(commands.len());
+            for cmd in &commands {
+                match prepare_command(cmd) {
+                    Ok(action) => actions.push(action),
+                    Err(e) => return ServerMessage::Error { msg: e },
+                }
+            }
+
+            // Phase 2: apply all under one lock — atomic from scheduler's perspective
+            let mut guard = slots.lock().expect("slots lock");
+            for action in actions {
+                apply_action(action, &mut guard, shared_bpm);
+            }
+
             ServerMessage::Ok {
-                msg: format!("bpm set to {bpm}"),
+                msg: format!("batch applied ({} commands)", commands.len()),
             }
         }
-        ClientMessage::Ping => ServerMessage::Pong,
+
+        // Single commands go through the same prepare → apply path
+        other => match prepare_command(&other) {
+            Ok(action) => {
+                if matches!(action, BatchAction::Ping) {
+                    return ServerMessage::Pong;
+                }
+                let mut guard = slots.lock().expect("slots lock");
+                let msg = describe_action(&action);
+                apply_action(action, &mut guard, shared_bpm);
+                ServerMessage::Ok { msg }
+            }
+            Err(e) => ServerMessage::Error { msg: e },
+        },
+    }
+}
+
+fn describe_action(action: &BatchAction) -> String {
+    match action {
+        BatchAction::SetPattern { slot, .. } => format!("pattern set on {slot}"),
+        BatchAction::Hush { slot } => format!("{slot} hushed"),
+        BatchAction::HushAll => "all slots hushed".into(),
+        BatchAction::SetBpm { bpm } => format!("bpm set to {bpm}"),
+        BatchAction::Ping => "pong".into(),
     }
 }
 
@@ -281,6 +337,93 @@ mod tests {
         );
 
         let resp = send_recv(&mut writer, &mut reader, r#"{"cmd":"Hush","slot":"d1"}"#);
+        assert!(matches!(resp, ServerMessage::Ok { .. }));
+
+        drop(writer);
+        handle.stop();
+    }
+
+    #[test]
+    fn ipc_batch_applies_all_commands() {
+        let path = temp_socket_path("batch");
+        let slots = test_slots();
+        let slots_ref = Arc::clone(&slots);
+        let handle = start(path.clone(), slots, test_bpm()).unwrap();
+
+        let stream = UnixStream::connect(&path).unwrap();
+        let mut writer = stream.try_clone().unwrap();
+        let mut reader = BufReader::new(stream);
+
+        let msg = r#"{"cmd":"Batch","commands":[{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Atom","value":{"type":"Note","channel":0,"note":60,"velocity":100,"dur":0.5}}},{"cmd":"SetPattern","slot":"d2","pattern":{"op":"Atom","value":{"type":"Note","channel":0,"note":72,"velocity":100,"dur":0.5}}},{"cmd":"SetBpm","bpm":140.0}]}"#;
+        let resp = send_recv(&mut writer, &mut reader, msg);
+        assert!(matches!(resp, ServerMessage::Ok { .. }));
+
+        // Both slots should exist — applied atomically
+        let guard = slots_ref.lock().unwrap();
+        assert!(guard.contains_key("d1"), "d1 should exist after batch");
+        assert!(guard.contains_key("d2"), "d2 should exist after batch");
+
+        drop(writer);
+        handle.stop();
+    }
+
+    #[test]
+    fn ipc_batch_rolls_back_on_failure() {
+        let path = temp_socket_path("batch-fail");
+        let slots = test_slots();
+        let slots_ref = Arc::clone(&slots);
+        let handle = start(path.clone(), slots, test_bpm()).unwrap();
+
+        let stream = UnixStream::connect(&path).unwrap();
+        let mut writer = stream.try_clone().unwrap();
+        let mut reader = BufReader::new(stream);
+
+        // First command valid, second has zero denominator — entire batch should fail
+        let msg = r#"{"cmd":"Batch","commands":[{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Atom","value":{"type":"Note","channel":0,"note":60,"velocity":100,"dur":0.5}}},{"cmd":"SetPattern","slot":"d2","pattern":{"op":"Fast","factor":[1,0],"child":{"op":"Atom","value":{"type":"Note","channel":0,"note":72,"velocity":100,"dur":0.5}}}}]}"#;
+        let resp = send_recv(&mut writer, &mut reader, msg);
+        assert!(matches!(resp, ServerMessage::Error { .. }));
+
+        // Neither slot should exist — all-or-nothing
+        let guard = slots_ref.lock().unwrap();
+        assert!(!guard.contains_key("d1"), "d1 should not exist after failed batch");
+        assert!(!guard.contains_key("d2"), "d2 should not exist after failed batch");
+
+        drop(writer);
+        handle.stop();
+    }
+
+    #[test]
+    fn ipc_batch_rejects_nested_batch() {
+        let path = temp_socket_path("batch-nest");
+        let handle = start(path.clone(), test_slots(), test_bpm()).unwrap();
+
+        let stream = UnixStream::connect(&path).unwrap();
+        let mut writer = stream.try_clone().unwrap();
+        let mut reader = BufReader::new(stream);
+
+        let msg = r#"{"cmd":"Batch","commands":[{"cmd":"Batch","commands":[{"cmd":"Ping"}]}]}"#;
+        let resp = send_recv(&mut writer, &mut reader, msg);
+        match resp {
+            ServerMessage::Error { msg } => {
+                assert!(msg.contains("nested"), "error should mention nesting: {msg}");
+            }
+            other => panic!("expected Error for nested batch, got {other:?}"),
+        }
+
+        drop(writer);
+        handle.stop();
+    }
+
+    #[test]
+    fn ipc_batch_empty_succeeds() {
+        let path = temp_socket_path("batch-empty");
+        let handle = start(path.clone(), test_slots(), test_bpm()).unwrap();
+
+        let stream = UnixStream::connect(&path).unwrap();
+        let mut writer = stream.try_clone().unwrap();
+        let mut reader = BufReader::new(stream);
+
+        let resp = send_recv(&mut writer, &mut reader, r#"{"cmd":"Batch","commands":[]}"#);
         assert!(matches!(resp, ServerMessage::Ok { .. }));
 
         drop(writer);
