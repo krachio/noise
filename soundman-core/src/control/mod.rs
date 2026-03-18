@@ -2,13 +2,22 @@ pub mod osc;
 
 use crate::protocol::ClientMessage;
 
+/// Source of control messages for the engine.
+///
+/// Implementations translate external protocols (OSC, MIDI, IPC, …) into
+/// [`ClientMessage`]s. The engine polls the input each control cycle via
+/// [`EngineController::poll_control`](crate::engine::EngineController::poll_control).
 pub trait ControlInput: Send {
+    /// Bind to the underlying transport (e.g. open a UDP socket).
+    ///
     /// # Errors
-    /// Returns an error string if the control input cannot be started.
+    /// Returns an error string if the transport cannot be opened.
     fn start(&mut self) -> Result<(), String>;
 
+    /// Drain all pending messages since the last call. Non-blocking.
     fn poll(&mut self) -> Vec<ClientMessage>;
 
+    /// Release the transport.
     fn stop(&mut self);
 }
 

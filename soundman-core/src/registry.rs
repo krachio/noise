@@ -3,13 +3,21 @@ use std::collections::HashMap;
 use crate::graph::node::DspNode;
 use crate::ir::types::NodeTypeDecl;
 
+/// Creates [`DspNode`] instances for a given node type.
+///
+/// Each registered node type has one factory. The factory is `Send + Sync`
+/// because the registry lives on the control thread and may be shared.
 pub trait NodeFactory: Send + Sync {
+    /// Instantiate a new node configured for the given sample rate and block size.
     fn create(&self, sample_rate: u32, block_size: usize) -> Box<dyn DspNode>;
 }
 
+/// Errors from node type registration and lookup.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RegistryError {
+    /// No factory registered for this `type_id`.
     TypeNotFound(String),
+    /// A factory with this `type_id` already exists.
     DuplicateType(String),
 }
 
@@ -24,6 +32,11 @@ impl std::fmt::Display for RegistryError {
 
 impl std::error::Error for RegistryError {}
 
+/// Maps `type_id` strings to [`NodeTypeDecl`]s and [`NodeFactory`] instances.
+///
+/// Built-in types (`"oscillator"`, `"dac"`) are registered at engine creation.
+/// External types (e.g. FAUST nodes) can be added via
+/// [`EngineController::registry_mut`](crate::engine::EngineController::registry_mut).
 pub struct NodeRegistry {
     types: HashMap<String, NodeTypeDecl>,
     factories: HashMap<String, Box<dyn NodeFactory>>,

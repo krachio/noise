@@ -2,9 +2,16 @@ pub mod cpal_backend;
 
 use crate::engine::config::EngineConfig;
 
+/// Audio callback invoked by the output backend each block.
+/// Receives a mutable buffer of interleaved samples to fill.
 pub type AudioCallback = Box<dyn FnMut(&mut [f32]) + Send>;
 
+/// Delivers audio to a hardware device or test harness.
+///
+/// The callback runs on the audio thread — it must not block or allocate.
 pub trait AudioOutput {
+    /// Open the output device and begin calling `callback` each block.
+    ///
     /// # Errors
     /// Returns an error string if the output device cannot be opened.
     fn start(
@@ -13,6 +20,7 @@ pub trait AudioOutput {
         callback: AudioCallback,
     ) -> Result<(), String>;
 
+    /// Stop playback and release the device.
     fn stop(&mut self);
 }
 

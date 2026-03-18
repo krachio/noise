@@ -1,18 +1,23 @@
 use std::fmt;
 
+/// Index of a node within a compiled [`DspGraph`](super::DspGraph).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct NodeId(pub usize);
 
+/// Identifies a specific port on a specific node within a compiled graph.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct PortId {
     pub node: NodeId,
     pub port: usize,
 }
 
+/// Error returned by [`DspNode::set_param`] when a parameter update fails.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Clone, PartialEq)]
 pub enum ParamError {
+    /// No parameter with this name exists on the node.
     NotFound(String),
+    /// The value is outside the parameter's valid range.
     OutOfRange { name: String, value: f32, min: f32, max: f32 },
 }
 
@@ -29,16 +34,34 @@ impl fmt::Display for ParamError {
 
 impl std::error::Error for ParamError {}
 
+/// A single processing node in the audio graph.
+///
+/// Each node reads from its input buffers, writes to its output buffers,
+/// and exposes named parameters that can be changed at control rate.
+/// Nodes must be `Send` so compiled graphs can be transferred across threads.
+///
+/// Implement this trait to add custom DSP to soundman — then wrap it in a
+/// [`NodeFactory`](crate::registry::NodeFactory) and register it with the
+/// [`NodeRegistry`](crate::registry::NodeRegistry).
 pub trait DspNode: Send {
+    /// Process one block of audio. `inputs[i]` is the i-th input channel,
+    /// `outputs[i]` is the i-th output channel. All slices have the same length.
     fn process(&mut self, inputs: &[&[f32]], outputs: &mut [&mut [f32]]);
+
+    /// Number of audio input channels (0 for generators).
     fn num_inputs(&self) -> usize;
+
+    /// Number of audio output channels.
     fn num_outputs(&self) -> usize;
 
+    /// Set a named parameter to a new value.
+    ///
     /// # Errors
     /// Returns `ParamError::NotFound` if the parameter doesn't exist,
     /// or `ParamError::OutOfRange` if the value is outside the valid range.
     fn set_param(&mut self, name: &str, value: f32) -> Result<(), ParamError>;
 
+    /// Re-initialize internal state for a new sample rate.
     fn reset(&mut self, sample_rate: u32);
 }
 
