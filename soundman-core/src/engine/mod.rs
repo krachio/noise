@@ -172,6 +172,12 @@ impl EngineController {
         &self.config
     }
 
+    /// Mutable access to the node registry for registering custom node types.
+    #[allow(clippy::missing_const_for_fn)]
+    pub fn registry_mut(&mut self) -> &mut NodeRegistry {
+        &mut self.registry
+    }
+
     fn recompile_and_send(&mut self) -> Result<(), CompileError> {
         let graph = compiler::compile(
             &self.shadow_graph,

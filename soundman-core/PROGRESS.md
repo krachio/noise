@@ -2,7 +2,7 @@
 
 ## Current state
 
-**Milestone 1 complete.** 87 tests (81 unit + 6 integration), 0 unsafe, clippy clean.
+**Milestone 1 complete + audio hardening.** 89 tests (83 unit + 6 integration), 0 unsafe, clippy clean.
 
 ### Modules
 - **IR layer** (`ir/`): `NodeTypeDecl`, `PortDecl`, `ControlDecl`, `GraphIr`, `NodeInstance`, `ConnectionIr` — serde JSON wire format
@@ -24,6 +24,13 @@
 - [x] `cargo test` passes (87 tests)
 - [x] `cargo clippy -- -D warnings` clean
 - [x] No `unsafe` in main crate
+
+### Post-M1 hardening
+- Lock-free audio: `EngineController` + `AudioProcessor` split, connected by `rtrb` SPSC ring buffer
+- Pre-allocated crossfade buffers (no allocation on audio thread)
+- Device sample rate query (uses native rate, not hardcoded 48000)
+- `OscType::Double` support (midiman compatibility)
+- `env_logger` integration (RUST_LOG=soundman=debug)
 
 ## Next (M2: Multi-node graph)
 - Gain/mixer nodes
