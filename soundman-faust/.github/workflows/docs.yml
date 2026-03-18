@@ -27,6 +27,7 @@ jobs:
         with:
           repository: krachio/soundman
           path: soundman
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       - uses: dtolnay/rust-toolchain@stable
       - run: cargo doc --no-deps
         working-directory: soundman-faust
