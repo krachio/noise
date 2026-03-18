@@ -162,6 +162,7 @@ impl EngineController {
             }
             ClientMessage::Ping => { debug!("ping"); }
             ClientMessage::Shutdown => { debug!("shutdown"); }
+            ClientMessage::ListNodes { .. } => { debug!("list_nodes (reply handled by caller)"); }
             ClientMessage::RegisterNodeType(_) => {}
         }
         Ok(())
@@ -184,6 +185,12 @@ impl EngineController {
     #[allow(clippy::missing_const_for_fn)]
     pub fn registry_mut(&mut self) -> &mut NodeRegistry {
         &mut self.registry
+    }
+
+    /// Returns the type IDs of all registered node types.
+    #[must_use]
+    pub fn list_node_types(&self) -> Vec<String> {
+        self.registry.type_ids().into_iter().map(str::to_owned).collect()
     }
 
     fn recompile_and_send(&mut self) -> Result<(), CompileError> {
@@ -399,5 +406,22 @@ mod tests {
         proc.process(&mut output);
         let energy: f32 = output.iter().map(|s| s * s).sum();
         assert!(energy > 0.0, "incrementally built graph should produce audio");
+    }
+
+    #[test]
+    fn list_node_types_returns_builtin_types() {
+        let config = EngineConfig::default();
+        let (ctrl, _) = engine(&config);
+        let types = ctrl.list_node_types();
+        assert!(types.contains(&"oscillator".to_string()));
+        assert!(types.contains(&"dac".to_string()));
+    }
+
+    #[test]
+    fn list_node_types_only_contains_registered_types() {
+        let config = EngineConfig::default();
+        let (ctrl, _) = engine(&config);
+        let types = ctrl.list_node_types();
+        assert_eq!(types.len(), 2, "only oscillator and dac are registered by default");
     }
 }

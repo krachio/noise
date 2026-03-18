@@ -2,7 +2,7 @@ use std::collections::HashMap;
 
 use log::{error, info};
 use soundman::control::ControlInput;
-use soundman::control::osc::OscControlInput;
+use soundman::control::osc::{OscControlInput, send_node_types_reply};
 use soundman::engine::config::EngineConfig;
 use soundman::ir::{ConnectionIr, GraphIr, NodeInstance};
 use soundman::output::AudioOutput;
@@ -87,6 +87,7 @@ fn main() {
     info!("OSC control on 127.0.0.1:9000");
     info!("  /soundman/set pitch <freq>");
     info!("  /soundman/gain <0.0-1.0>");
+    info!("  /soundman/list_nodes <reply_port>");
     info!("  /soundman/shutdown");
     info!("set RUST_LOG=soundman=debug for verbose output");
 
@@ -103,8 +104,13 @@ fn main() {
         let mut should_shutdown = false;
 
         for msg in messages {
-            if matches!(msg, ClientMessage::Shutdown) {
-                should_shutdown = true;
+            match &msg {
+                ClientMessage::Shutdown => { should_shutdown = true; }
+                ClientMessage::ListNodes { reply_port } => {
+                    let types = controller.list_node_types();
+                    send_node_types_reply("127.0.0.1", *reply_port, &types);
+                }
+                _ => {}
             }
             let _ = controller.handle_message(msg);
         }

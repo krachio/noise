@@ -69,6 +69,13 @@ impl OscControlInput {
                 let gain = msg.args.first().and_then(Self::osc_as_f32)?;
                 Some(ClientMessage::SetMasterGain { gain })
             }
+            "list_nodes" => {
+                // /soundman/list_nodes <reply_port: int>
+                let port = msg.args.first().and_then(|a| {
+                    if let OscType::Int(p) = a { u16::try_from(*p).ok() } else { None }
+                })?;
+                Some(ClientMessage::ListNodes { reply_port: port })
+            }
             "ping" => Some(ClientMessage::Ping),
             "shutdown" => Some(ClientMessage::Shutdown),
             unknown => {
@@ -89,6 +96,24 @@ impl OscControlInput {
                 .flat_map(Self::decode_packet)
                 .collect(),
         }
+    }
+}
+
+/// Send a `/soundman/node_types` OSC reply to `host:port`.
+///
+/// The reply carries a single JSON-encoded string arg: `["type1", "type2", ...]`.
+/// Errors are logged and silently dropped — this is a best-effort reply.
+pub fn send_node_types_reply(host: &str, port: u16, types: &[String]) {
+    let Ok(json) = serde_json::to_string(types) else { return };
+    let msg = OscPacket::Message(OscMessage {
+        addr: "/soundman/node_types".to_string(),
+        args: vec![OscType::String(json)],
+    });
+    let Ok(encoded) = rosc::encoder::encode(&msg) else { return };
+    let Ok(socket) = UdpSocket::bind("0.0.0.0:0") else { return };
+    let addr = format!("{host}:{port}");
+    if socket.send_to(&encoded, &addr).is_err() {
+        warn!("failed to send node_types reply to {addr}");
     }
 }
 
@@ -283,5 +308,56 @@ mod tests {
             &messages[0],
             ClientMessage::SetControl { label, .. } if label == "pitch"
         ));
+    }
+
+    #[test]
+    fn parse_list_nodes_with_int_port() {
+        let msg = OscMessage {
+            addr: "/soundman/list_nodes".into(),
+            args: vec![OscType::Int(12345)],
+        };
+        let result = OscControlInput::parse_osc_message(&msg).unwrap();
+        assert!(matches!(result, ClientMessage::ListNodes { reply_port: 12345 }));
+    }
+
+    #[test]
+    fn parse_list_nodes_missing_port_returns_none() {
+        let msg = OscMessage {
+            addr: "/soundman/list_nodes".into(),
+            args: vec![],
+        };
+        assert!(OscControlInput::parse_osc_message(&msg).is_none());
+    }
+
+    #[test]
+    fn send_node_types_reply_delivers_osc_to_port() {
+        use std::net::UdpSocket;
+
+        let receiver = UdpSocket::bind("127.0.0.1:0").unwrap();
+        receiver
+            .set_read_timeout(Some(std::time::Duration::from_secs(1)))
+            .unwrap();
+        let port = receiver.local_addr().unwrap().port();
+
+        let types = vec!["oscillator".to_string(), "dac".to_string()];
+        send_node_types_reply("127.0.0.1", port, &types);
+
+        let mut buf = vec![0u8; 4096];
+        let (size, _) = receiver.recv_from(&mut buf).unwrap();
+        let (_, packet) = rosc::decoder::decode_udp(&buf[..size]).unwrap();
+
+        if let rosc::OscPacket::Message(msg) = packet {
+            assert_eq!(msg.addr, "/soundman/node_types");
+            assert_eq!(msg.args.len(), 1);
+            if let rosc::OscType::String(json) = &msg.args[0] {
+                let parsed: Vec<String> = serde_json::from_str(json).unwrap();
+                assert!(parsed.contains(&"oscillator".to_string()));
+                assert!(parsed.contains(&"dac".to_string()));
+            } else {
+                panic!("expected string arg");
+            }
+        } else {
+            panic!("expected OSC message, got bundle");
+        }
     }
 }

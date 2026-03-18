@@ -55,6 +55,9 @@ pub enum ClientMessage {
     RegisterNodeType(NodeTypeDecl),
     /// Set the master output gain (0.0–1.0).
     SetMasterGain { gain: f32 },
+    /// Request the list of registered node type IDs.
+    /// soundman sends a `/soundman/node_types` OSC reply to `127.0.0.1:<reply_port>`.
+    ListNodes { reply_port: u16 },
     /// Health check — engine responds with `ServerMessage::Pong`.
     Ping,
     /// Shut down the engine.
