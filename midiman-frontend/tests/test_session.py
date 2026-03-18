@@ -11,6 +11,12 @@ from midiman_frontend.pattern import note
 from midiman_frontend.session import Session
 
 
+def _stub_ok_response(mock_cls: MagicMock) -> None:
+    """Configure mock socket to always return Ok responses."""
+    ok = json.dumps({"status": "Ok", "msg": "ok"}).encode() + b"\n"
+    mock_cls.return_value.makefile.return_value.readline.return_value = ok
+
+
 def _parse_sent(mock_sock: MagicMock) -> list[dict[str, Any]]:
     """Parse all newline-delimited JSON messages sent via sendall."""
     results: list[dict[str, Any]] = []
@@ -54,6 +60,7 @@ class TestSessionConnection:
 class TestSessionCommands:
     @patch("midiman_frontend.session.socket.socket")
     def test_set_tempo(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
         with Session() as s:
             s.tempo = 130.0
         msgs = _parse_sent(mock_cls.return_value)
@@ -61,6 +68,7 @@ class TestSessionCommands:
 
     @patch("midiman_frontend.session.socket.socket")
     def test_stop_all(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
         with Session() as s:
             s.stop()
         msgs = _parse_sent(mock_cls.return_value)
@@ -70,6 +78,7 @@ class TestSessionCommands:
 class TestTrackClipManagement:
     @patch("midiman_frontend.session.socket.socket")
     def test_single_clip_sends_set_pattern(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
         with Session() as s:
             drums = s.track("drums")
             drums["kick"] = note(36)
@@ -81,6 +90,7 @@ class TestTrackClipManagement:
 
     @patch("midiman_frontend.session.socket.socket")
     def test_two_clips_sends_stack(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
         with Session() as s:
             drums = s.track("drums")
             drums["kick"] = note(36)
@@ -93,6 +103,7 @@ class TestTrackClipManagement:
 
     @patch("midiman_frontend.session.socket.socket")
     def test_del_clip_with_remaining(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
         with Session() as s:
             drums = s.track("drums")
             drums["kick"] = note(36)
@@ -105,6 +116,7 @@ class TestTrackClipManagement:
 
     @patch("midiman_frontend.session.socket.socket")
     def test_del_last_clip_sends_hush(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
         with Session() as s:
             drums = s.track("drums")
             drums["kick"] = note(36)
@@ -116,6 +128,7 @@ class TestTrackClipManagement:
 
     @patch("midiman_frontend.session.socket.socket")
     def test_track_stop_clears_and_hushes(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
         with Session() as s:
             drums = s.track("drums")
             drums["kick"] = note(36)
@@ -126,6 +139,7 @@ class TestTrackClipManagement:
 
     @patch("midiman_frontend.session.socket.socket")
     def test_newline_delimited(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
         with Session() as s:
             s.stop()
         raw: bytes = mock_cls.return_value.sendall.call_args[0][0]

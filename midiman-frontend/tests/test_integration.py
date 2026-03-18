@@ -7,6 +7,11 @@ from unittest.mock import MagicMock, patch
 from midiman_frontend import Session, note, rest, scale, thin
 
 
+def _stub_ok_response(mock_cls: MagicMock) -> None:
+    ok = json.dumps({"status": "Ok", "msg": "ok"}).encode() + b"\n"
+    mock_cls.return_value.makefile.return_value.readline.return_value = ok
+
+
 def _parse_sent(mock_sock: MagicMock) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for call in mock_sock.sendall.call_args_list:
@@ -20,6 +25,7 @@ def _parse_sent(mock_sock: MagicMock) -> list[dict[str, Any]]:
 class TestPublicImports:
     def test_all_names_importable(self) -> None:
         from midiman_frontend import (
+            KernelError,
             Pattern,
             Session,
             cc,
@@ -34,13 +40,17 @@ class TestPublicImports:
 
         assert all(
             x is not None
-            for x in [Pattern, Session, note, rest, cc, scale, reverse, shift, spread, thin]
+            for x in [
+                KernelError, Pattern, Session, note, rest, cc,
+                scale, reverse, shift, spread, thin,
+            ]
         )
 
 
 class TestEndToEnd:
     @patch("midiman_frontend.session.socket.socket")
     def test_multi_track_session(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
         with Session() as s:
             s.tempo = 128
 
@@ -89,6 +99,7 @@ class TestEndToEnd:
 
     @patch("midiman_frontend.session.socket.socket")
     def test_composable_transforms_in_session(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
         with Session() as s:
             drums = s.track("drums")
             fx = scale(2) >> thin(0.1)

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
+import json
 import os
 import socket
 from dataclasses import dataclass, field
+from typing import IO, Any
 
 from midiman_frontend.ir import (
     ClientMessage,
     Hush,
     HushAll,
+    Ping,
     SetBpm,
     SetPattern,
     Stack,
@@ -16,8 +19,21 @@ from midiman_frontend.ir import (
 from midiman_frontend.pattern import Pattern
 
 
+class KernelError(Exception):
+    """Raised when the midiman kernel returns an error response."""
+
+
 def _default_socket_path() -> str:
     return os.environ.get("MIDIMAN_SOCKET", "/tmp/midiman.sock")
+
+
+def _parse_response(line: bytes) -> None:
+    if not line:
+        raise ConnectionError("kernel closed connection")
+    data: dict[str, Any] = json.loads(line)
+    status = data.get("status")
+    if status == "Error":
+        raise KernelError(data.get("msg", "unknown error"))
 
 
 class Track:
@@ -58,6 +74,7 @@ class Track:
 class Session:
     socket_path: str = field(default_factory=_default_socket_path)
     _sock: socket.socket | None = field(default=None, init=False, repr=False)
+    _reader: IO[bytes] | None = field(default=None, init=False, repr=False)
     _tracks: dict[str, Track] = field(
         default_factory=lambda: dict[str, Track](), init=False, repr=False
     )
@@ -65,8 +82,12 @@ class Session:
     def connect(self) -> None:
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._sock.connect(self.socket_path)
+        self._reader = self._sock.makefile("rb")
 
     def disconnect(self) -> None:
+        if self._reader is not None:
+            self._reader.close()
+            self._reader = None
         if self._sock is not None:
             self._sock.close()
             self._sock = None
@@ -94,8 +115,12 @@ class Session:
     def stop(self) -> None:
         self.send(HushAll())
 
+    def ping(self) -> None:
+        self.send(Ping())
+
     def send(self, msg: ClientMessage) -> None:
-        if self._sock is None:
+        if self._sock is None or self._reader is None:
             raise RuntimeError("not connected — call connect() or use context manager")
         data = command_to_json(msg) + "\n"
         self._sock.sendall(data.encode())
+        _parse_response(self._reader.readline())
