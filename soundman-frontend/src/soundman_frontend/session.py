@@ -1,6 +1,9 @@
+import json
+import socket
 from dataclasses import dataclass, field
 from types import TracebackType
 
+from pythonosc import osc_packet
 from pythonosc.udp_client import SimpleUDPClient
 
 from soundman_frontend.ir import GraphIr
@@ -29,6 +32,25 @@ class SoundmanSession:
 
     def shutdown(self) -> None:
         self._client.send_message("/soundman/shutdown", [])  # type: ignore[reportUnknownMemberType]
+
+    def list_nodes(self, timeout: float = 1.0) -> list[str]:
+        """Query soundman for registered node type IDs.
+
+        Sends /soundman/list_nodes <reply_port> and waits for a
+        /soundman/node_types reply carrying a JSON-encoded list of type IDs.
+
+        Raises TimeoutError if no reply arrives within `timeout` seconds.
+        """
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as reply_sock:
+            reply_sock.bind(("127.0.0.1", 0))
+            reply_sock.settimeout(timeout)
+            _, reply_port = reply_sock.getsockname()
+            self._client.send_message("/soundman/list_nodes", reply_port)  # type: ignore[reportUnknownMemberType]
+            data, _ = reply_sock.recvfrom(4096)
+
+        packet = osc_packet.OscPacket(data)
+        msg = packet.messages[0].message
+        return list[str](json.loads(msg.params[0]))
 
     def __enter__(self) -> "SoundmanSession":
         return self

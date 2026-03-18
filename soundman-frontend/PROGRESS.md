@@ -2,18 +2,13 @@
 
 ## Current state
 
-Stack configured and tooling installed. Project is ready for development.
+Python OSC client for soundman. 26 tests, pyright strict clean.
 
-- Python 3.13, uv package manager
-- pyright strict type checking
-- pytest test runner
-- pre-commit hooks for pyright and pytest
-- Test scaffold in `tests/`
+- **`ir.py`**: `NodeInstance`, `ConnectionIr`, `GraphIr` — frozen dataclasses, JSON serialization wire-compatible with soundman's serde format
+- **`graph.py`**: Fluent `Graph` builder — `node()`, `connect()`, `expose()`, `expose_schema()` (duck-typed `ControlSchemaLike` Protocol for faust-dsl integration), `build() → GraphIr`
+- **`session.py`**: `SoundmanSession` — OSC UDP client wrapping python-osc; `load_graph`, `set`, `gain`, `ping`, `shutdown`; context manager
 
 ## Next
 
-- Define the project's domain and write first real feature + tests.
-
-## Open decisions
-
-- What does soundman-frontend actually do? (domain TBD)
+- Wire into krach alongside midiman-frontend and faust-dsl
+- `expose_schema()` integration test against a real faust-dsl `ControlSchema`

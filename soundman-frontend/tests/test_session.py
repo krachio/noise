@@ -81,3 +81,44 @@ def test_default_host_and_port() -> None:
     s = SoundmanSession()
     assert s.host == "127.0.0.1"
     assert s.port == 9000
+
+
+def test_list_nodes_sends_query_and_receives_reply() -> None:
+    # Set up a fake soundman that receives the query and sends back a reply.
+    fake_soundman = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    fake_soundman.bind(("127.0.0.1", 0))
+    fake_soundman.settimeout(1.0)
+    soundman_port = fake_soundman.getsockname()[1]
+
+    session = SoundmanSession(host="127.0.0.1", port=soundman_port)
+
+    import threading
+
+    result: list[list[str]] = []
+
+    def fake_soundman_reply() -> None:
+        data, _ = fake_soundman.recvfrom(4096)
+        query = osc_packet.OscPacket(data).messages[0].message
+        assert isinstance(query, osc_message.OscMessage)
+        assert query.address == "/soundman/list_nodes"
+        reply_port = query.params[0]
+
+        # Send back a /soundman/node_types reply using SimpleUDPClient
+        from pythonosc.udp_client import SimpleUDPClient
+        reply_client = SimpleUDPClient("127.0.0.1", reply_port)
+        reply_client.send_message("/soundman/node_types", '["oscillator","dac"]')  # type: ignore[reportUnknownMemberType]
+
+    t = threading.Thread(target=fake_soundman_reply)
+    t.start()
+    result.append(session.list_nodes(timeout=1.0))
+    t.join(timeout=2.0)
+
+    assert result[0] == ["oscillator", "dac"]
+    fake_soundman.close()
+
+
+def test_list_nodes_timeout_raises() -> None:
+    # Point at a port nothing is listening on — should time out.
+    session = SoundmanSession(host="127.0.0.1", port=19001)
+    with pytest.raises(TimeoutError):
+        session.list_nodes(timeout=0.1)
