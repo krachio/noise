@@ -1,7 +1,9 @@
 pub mod dsp;
 pub mod factory;
 mod ffi;
+pub mod loader;
 pub mod node;
+pub mod watcher;
 
 use log::info;
 use soundman::registry::NodeRegistry;
