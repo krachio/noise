@@ -13,14 +13,14 @@ Python DSL ──(pattern graph)──▶ JSON IR ──Unix socket──▶ mid
 ```
 
 **Pattern layer:** immutable dataclass graphs built with `+`, `|`, `*` operators and transform methods.
-**Session layer:** Ableton-style tracks and clips with automatic recompilation on mutation.
+**Session layer:** flat slot→pattern binding with explicit state management.
 
 | Module | Role |
 |--------|------|
 | `ir.py` | Frozen dataclasses for `IrNode`, `Value`, `ClientMessage` + JSON serialization + validation |
 | `pattern.py` | `Pattern` class with operators and transform methods, atom constructors |
 | `transform.py` | Composable `Transform` callables with `>>` composition |
-| `session.py` | `Session` (Unix socket IPC), `Track` (dict-like clip management), `KernelError` |
+| `session.py` | `Session` (Unix socket IPC), `SlotState`, `KernelError` |
 
 ## Quick start
 
@@ -42,23 +42,26 @@ from midiman_frontend import Session, note, rest
 with Session() as s:
     s.tempo = 128
 
-    drums = s.track("drums")
-    drums["kick"]  = note(36) + rest() + note(36) + rest()
-    drums["snare"] = rest() + note(38) + rest() + note(38)
-    drums["hats"]  = note(42, duration=0.1) * 8
+    kick = note(36) + rest() + note(36) + rest()
+    hats = note(42, duration=0.1) * 8
 
-    melody = s.track("melody")
-    melody["arp"] = (note(60) + note(64) + note(67)).over(3)
+    s.play("drums", kick | hats)
+    s.play("melody", (note(60) + note(64) + note(67)).over(3))
 
-    # Live update — replace a clip, others stay
-    drums["kick"] = note(36).spread(3, 8)
+    # Live update — recompose and resend
+    s.play("drums", kick.spread(3, 8) | hats)
 
-    # Remove a clip
-    del drums["hats"]
+    # Silence a slot (pattern remembered)
+    s.hush("drums")
 
-    # Stop
-    drums.stop()   # silence one track
-    s.stop()       # silence all
+    # Bring it back
+    s.resume("drums")
+
+    # Forget a slot entirely
+    s.remove("drums")
+
+    # Silence everything (patterns remembered)
+    s.stop()
 ```
 
 ## Pattern algebra
@@ -95,20 +98,32 @@ fx = scale(2) >> reverse >> thin(0.2)
 processed = fx(note(60) + note(64) + note(67))
 ```
 
-## Session model
+## Session
 
-**Session** — owns the Unix socket connection. Reads kernel responses and raises `KernelError` on errors.
+Session is a thin binding layer — maps slot names to pattern trees and sends them to the kernel over a Unix socket. All state is visible.
 
 ```python
-s = Session()                    # default /tmp/midiman.sock
-s = Session("/custom/path.sock") # custom socket
+s.play("drums", pat)     # send SetPattern, track as playing
+s.hush("drums")          # send Hush, mark stopped (pattern remembered)
+s.resume("drums")        # re-send last pattern
+s.remove("drums")        # send Hush, forget slot entirely
+s.stop()                 # send HushAll, mark all stopped
+s.tempo = 128            # send SetBpm
+s.ping()                 # send Ping
 ```
 
-**Track** — dict-like container of named clips bound to a session slot. On any clip mutation, recompiles and sends the pattern to the kernel.
+State is queryable:
 
-- 0 clips → `Hush`
-- 1 clip → `SetPattern(slot, clip_ir)`
-- N clips → `SetPattern(slot, Stack([clip1, ..., clipN]))`
+```python
+>>> s
+Session(connected, tempo=128.0)
+  drums: playing
+  melody: playing
+  bass: stopped
+
+>>> s.slots
+{"drums": SlotState(pattern=..., playing=True), ...}
+```
 
 ## With midiman + soundman
 
@@ -131,13 +146,12 @@ from midiman_frontend.ir import OscFloat, OscStr
 
 with Session() as s:
     s.tempo = 120
-    synth = s.track("synth")
-    synth["arp"] = (
+    s.play("synth", (
         osc("/soundman/set", OscStr("pitch"), OscFloat(261.63))
         + osc("/soundman/set", OscStr("pitch"), OscFloat(329.63))
         + osc("/soundman/set", OscStr("pitch"), OscFloat(392.00))
         + osc("/soundman/set", OscStr("pitch"), OscFloat(493.88))
-    )
+    ))
 ```
 
 C major 7th arpeggio through soundman's oscillator.
@@ -146,7 +160,7 @@ C major 7th arpeggio through soundman's oscillator.
 
 ```bash
 uv run pyright   # type check (strict mode, 0 errors)
-uv run pytest    # 98 tests
+uv run pytest    # 112 tests
 ```
 
 ## License
