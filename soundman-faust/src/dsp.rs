@@ -18,11 +18,17 @@ static COMPILE_LOCK: Mutex<()> = Mutex::new(());
 /// Metadata for a single FAUST parameter discovered via `buildUserInterface`.
 #[derive(Debug, Clone)]
 pub struct ParamMeta {
+    /// Parameter name as declared in FAUST (e.g. `"freq"`, `"gain"`).
     pub label: String,
+    /// Raw pointer into the DSP instance's parameter memory.
     pub zone: *mut FaustFloat,
+    /// Default value.
     pub init: f32,
+    /// Minimum allowed value.
     pub min: f32,
+    /// Maximum allowed value.
     pub max: f32,
+    /// UI step size hint.
     pub step: f32,
 }
 
@@ -145,16 +151,19 @@ impl FaustDsp {
         })
     }
 
+    /// Number of audio input channels.
     #[must_use]
     pub const fn num_inputs(&self) -> usize {
         self.num_inputs
     }
 
+    /// Number of audio output channels.
     #[must_use]
     pub const fn num_outputs(&self) -> usize {
         self.num_outputs
     }
 
+    /// Discovered parameters, keyed by label.
     #[must_use]
     #[allow(clippy::missing_const_for_fn)]
     pub fn params(&self) -> &HashMap<String, ParamMeta> {

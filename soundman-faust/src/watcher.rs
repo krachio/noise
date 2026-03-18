@@ -10,11 +10,14 @@ use notify::{Event, EventKind, RecursiveMode, Watcher};
 pub enum WatchEvent {
     /// A `.dsp` file was created or modified.
     Changed {
+        /// Derived type ID (e.g. `"faust:sine"` for `sine.dsp`).
         type_id: String,
+        /// Absolute path to the changed file.
         path: PathBuf,
     },
     /// A `.dsp` file was removed.
     Removed {
+        /// Derived type ID of the removed file.
         type_id: String,
     },
 }

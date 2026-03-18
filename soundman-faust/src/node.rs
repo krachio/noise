@@ -10,6 +10,7 @@ pub struct FaustNode {
 }
 
 impl FaustNode {
+    /// Wrap a compiled [`FaustDsp`] as a soundman graph node.
     #[must_use]
     pub const fn new(dsp: FaustDsp) -> Self {
         Self { dsp }

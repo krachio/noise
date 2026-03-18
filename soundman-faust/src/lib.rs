@@ -1,3 +1,62 @@
+//! FAUST LLVM JIT plugin for the [soundman] audio engine.
+//!
+//! Compiles [FAUST](https://faust.grame.fr) DSP code at runtime via LLVM JIT
+//! and registers the resulting nodes in soundman's [`NodeRegistry`].
+//!
+//! # Quick start
+//!
+//! Register a FAUST program as a node type, then use it in a graph:
+//!
+//! ```no_run
+//! use soundman::engine::{self, config::EngineConfig};
+//! use soundman_faust::register_faust_node;
+//!
+//! let (mut ctrl, mut proc) = engine::engine(&EngineConfig::default());
+//!
+//! register_faust_node(
+//!     ctrl.registry_mut(),
+//!     "faust:sine",
+//!     "sine",
+//!     r#"
+//!         import("stdfaust.lib");
+//!         freq = hslider("freq", 440, 20, 20000, 1);
+//!         process = os.osc(freq);
+//!     "#,
+//! ).unwrap();
+//! ```
+//!
+//! # Hot reload
+//!
+//! For live-reloading `.dsp` files from a directory, use [`hot_reload::HotReloadEngine`]:
+//!
+//! ```no_run
+//! use soundman::engine::config::EngineConfig;
+//! use soundman_faust::hot_reload::HotReloadEngine;
+//!
+//! let (mut engine, mut proc) = HotReloadEngine::new(
+//!     &EngineConfig::default(),
+//!     "./dsp",  // directory of .dsp files
+//! ).unwrap();
+//!
+//! // In your control loop:
+//! engine.poll_reload().unwrap();
+//! ```
+//!
+//! # Modules
+//!
+//! | Module | Purpose |
+//! |--------|---------|
+//! | [`dsp`] | Safe wrapper around compiled FAUST DSP instances |
+//! | [`factory`] | [`FaustFactory`] — soundman [`NodeFactory`] implementation |
+//! | [`node`] | [`FaustNode`](node::FaustNode) — soundman [`DspNode`](soundman::graph::node::DspNode) adapter |
+//! | [`loader`] | Load `.dsp` files from disk, register directories |
+//! | [`watcher`] | File watcher for `.dsp` changes |
+//! | [`hot_reload`] | All-in-one engine with live reload |
+//!
+//! [soundman]: https://docs.rs/soundman
+//! [`NodeRegistry`]: soundman::registry::NodeRegistry
+//! [`NodeFactory`]: soundman::registry::NodeFactory
+
 pub mod dsp;
 pub mod factory;
 mod ffi;
