@@ -1,9 +1,15 @@
 use crate::graph::DspGraph;
 
+/// Instructions sent from the control thread to the audio thread via the
+/// lock-free SPSC channel. Processed by [`GraphSwapper::drain_commands`](super::GraphSwapper::drain_commands).
 pub enum Command {
+    /// Replace the active graph (triggers crossfade).
     SwapGraph(Box<DspGraph>),
+    /// Set a parameter on a node in the active graph.
     SetParam { node_id: String, name: String, value: f32 },
+    /// Set the master output gain.
     SetMasterGain(f32),
+    /// Signal engine shutdown.
     Shutdown,
 }
 

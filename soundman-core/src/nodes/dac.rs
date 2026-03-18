@@ -2,6 +2,10 @@ use crate::graph::node::{DspNode, ParamError};
 use crate::ir::types::{ChannelLayout, NodeTypeDecl, PortDecl};
 use crate::registry::NodeFactory;
 
+/// Terminal output node — copies its input to the graph's output buffer.
+///
+/// One mono input, one mono output, no parameters. Every graph that
+/// produces audible output needs a `"dac"` node as the final sink.
 #[derive(Debug)]
 pub struct DacNode;
 
@@ -32,6 +36,7 @@ impl NodeFactory for DacFactory {
     }
 }
 
+/// Returns the [`NodeTypeDecl`] for the built-in `"dac"` type.
 #[must_use]
 pub fn dac_type_decl() -> NodeTypeDecl {
     NodeTypeDecl {

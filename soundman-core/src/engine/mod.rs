@@ -19,7 +19,11 @@ use crate::swap::command::Command;
 
 const COMMAND_QUEUE_CAPACITY: usize = 256;
 
-/// Control-thread side: handles client messages, compiles graphs, sends commands.
+/// Control-thread half of the engine.
+///
+/// Maintains a shadow copy of the [`GraphIr`](crate::ir::GraphIr), recompiles
+/// on mutations, and sends [`Command`]s to the [`AudioProcessor`] via a
+/// lock-free SPSC ring buffer (`rtrb`).
 pub struct EngineController {
     config: EngineConfig,
     registry: NodeRegistry,
@@ -28,7 +32,11 @@ pub struct EngineController {
     producer: Producer<Command>,
 }
 
-/// Audio-thread side: drains commands, processes audio. No locks, no allocation.
+/// Audio-thread half of the engine.
+///
+/// Drains [`Command`]s from the ring buffer and calls
+/// [`GraphSwapper::process`](crate::swap::GraphSwapper::process) each block.
+/// No locks, no allocation — safe to call from a real-time audio callback.
 pub struct AudioProcessor {
     swapper: GraphSwapper,
     consumer: Consumer<Command>,

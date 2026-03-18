@@ -6,6 +6,15 @@ use rosc::{OscMessage, OscPacket, OscType};
 use super::ControlInput;
 use crate::protocol::ClientMessage;
 
+/// Receives OSC messages over UDP and converts them to [`ClientMessage`]s.
+///
+/// Listens on the address passed to [`new`](Self::new) (e.g. `"127.0.0.1:9000"`).
+/// Non-blocking — [`poll`](crate::control::ControlInput::poll) drains all
+/// pending UDP packets each call. Accepts both `OscType::Float` and
+/// `OscType::Double` for numeric arguments.
+///
+/// OSC address namespace: `/soundman/set`, `/soundman/gain`,
+/// `/soundman/load_graph`, `/soundman/ping`, `/soundman/shutdown`.
 pub struct OscControlInput {
     socket: Option<UdpSocket>,
     addr: String,

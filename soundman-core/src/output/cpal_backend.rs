@@ -11,6 +11,11 @@ pub struct DeviceConfig {
     pub channels: usize,
 }
 
+/// Audio output via [cpal](https://docs.rs/cpal).
+///
+/// Opens the default output device and drives the audio callback from cpal's
+/// audio thread. Use [`query_device`](Self::query_device) to discover the
+/// native sample rate before constructing an [`EngineConfig`](crate::engine::config::EngineConfig).
 pub struct CpalBackend {
     stream: Option<cpal::Stream>,
 }

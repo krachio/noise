@@ -1,3 +1,9 @@
+//! Graph hot-swap with linear crossfade.
+//!
+//! [`GraphSwapper`] manages the active and retiring graphs on the audio thread.
+//! When a new graph arrives, it crossfades from the old graph over a
+//! configurable number of samples — no clicks, no allocation.
+
 pub mod command;
 
 use crate::graph::DspGraph;
@@ -10,6 +16,10 @@ enum SwapState {
     Crossfading { samples_remaining: usize },
 }
 
+/// Manages graph lifecycle on the audio thread: swap, crossfade, and master gain.
+///
+/// All buffers are pre-allocated at construction. No heap allocation occurs
+/// during [`process`](Self::process).
 pub struct GraphSwapper {
     active: Option<Box<DspGraph>>,
     retiring: Option<Box<DspGraph>>,

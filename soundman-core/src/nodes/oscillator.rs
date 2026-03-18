@@ -4,6 +4,8 @@ use crate::graph::node::{DspNode, ParamError};
 use crate::ir::types::{ChannelLayout, ControlDecl, NodeTypeDecl, PortDecl, Rate};
 use crate::registry::NodeFactory;
 
+/// Oscillator waveform shape. Selected via the `waveform` parameter
+/// (0 = sine, 1 = saw, 2 = square).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Waveform {
     Sine,
@@ -24,6 +26,10 @@ impl Waveform {
     }
 }
 
+/// Mono oscillator with selectable waveform.
+///
+/// Parameters: `freq` (20–20000 Hz), `waveform` (0/1/2).
+/// Zero inputs, one mono output.
 #[derive(Debug)]
 pub struct Oscillator {
     phase: f32,
@@ -111,6 +117,7 @@ impl NodeFactory for OscillatorFactory {
     }
 }
 
+/// Returns the [`NodeTypeDecl`] for the built-in `"oscillator"` type.
 #[must_use]
 pub fn oscillator_type_decl() -> NodeTypeDecl {
     NodeTypeDecl {
