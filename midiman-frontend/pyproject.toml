@@ -1,7 +1,7 @@
 [project]
 name = "midiman-frontend"
 version = "0.1.0"
-description = "Add your description here"
+description = "Ableton-inspired Python DSL frontend for the midiman pattern kernel"
 requires-python = ">=3.13"
 dependencies = []
 
