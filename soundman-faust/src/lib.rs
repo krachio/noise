@@ -1,6 +1,7 @@
 pub mod dsp;
 pub mod factory;
 mod ffi;
+pub mod hot_reload;
 pub mod loader;
 pub mod node;
 pub mod watcher;
