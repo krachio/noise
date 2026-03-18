@@ -20,15 +20,14 @@ class TestResponseHandling:
     def test_ok_response_no_error(self, mock_cls: MagicMock) -> None:
         _mock_response(mock_cls, {"status": "Ok", "msg": "pattern set on drums"})
         with Session() as s:
-            drums = s.track("drums")
-            drums["kick"] = note(36)
+            s.play("drums", note(36))
 
     @patch("midiman_frontend.session.socket.socket")
     def test_error_response_raises_kernel_error(self, mock_cls: MagicMock) -> None:
         _mock_response(mock_cls, {"status": "Error", "msg": "invalid pattern"})
         with Session() as s:
             with pytest.raises(KernelError, match="invalid pattern"):
-                s.track("drums")["kick"] = note(36)
+                s.play("drums", note(36))
 
     @patch("midiman_frontend.session.socket.socket")
     def test_kernel_error_contains_message(self, mock_cls: MagicMock) -> None:

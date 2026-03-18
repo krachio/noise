@@ -1,5 +1,5 @@
 from midiman_frontend.pattern import Pattern, cc, note, osc, rest
-from midiman_frontend.session import KernelError, Session, Track
+from midiman_frontend.session import KernelError, Session, SlotState
 from midiman_frontend.transform import (
     Transform,
     every,
@@ -14,7 +14,7 @@ __all__ = [
     "KernelError",
     "Pattern",
     "Session",
-    "Track",
+    "SlotState",
     "Transform",
     "cc",
     "every",

@@ -13,7 +13,6 @@ from midiman_frontend.ir import (
     Ping,
     SetBpm,
     SetPattern,
-    Stack,
     command_to_json,
 )
 from midiman_frontend.pattern import Pattern
@@ -21,6 +20,12 @@ from midiman_frontend.pattern import Pattern
 
 class KernelError(Exception):
     """Raised when the midiman kernel returns an error response."""
+
+
+@dataclass(frozen=True)
+class SlotState:
+    pattern: Pattern
+    playing: bool
 
 
 def _default_socket_path() -> str:
@@ -31,43 +36,8 @@ def _parse_response(line: bytes) -> None:
     if not line:
         raise ConnectionError("kernel closed connection")
     data: dict[str, Any] = json.loads(line)
-    status = data.get("status")
-    if status == "Error":
+    if data.get("status") == "Error":
         raise KernelError(data.get("msg", "unknown error"))
-
-
-class Track:
-    def __init__(self, name: str, session: Session) -> None:
-        self._name = name
-        self._session = session
-        self._clips: dict[str, Pattern] = {}
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    def __setitem__(self, clip_name: str, pattern: Pattern) -> None:
-        self._clips[clip_name] = pattern
-        self._sync()
-
-    def __delitem__(self, clip_name: str) -> None:
-        del self._clips[clip_name]
-        self._sync()
-
-    def stop(self) -> None:
-        self._clips.clear()
-        self._session.send(Hush(slot=self._name))
-
-    def _sync(self) -> None:
-        if not self._clips:
-            self._session.send(Hush(slot=self._name))
-            return
-        clips = tuple(self._clips.values())
-        if len(clips) == 1:
-            node = clips[0].node
-        else:
-            node = Stack(children=tuple(c.node for c in clips))
-        self._session.send(SetPattern(slot=self._name, pattern=node))
 
 
 @dataclass
@@ -75,9 +45,12 @@ class Session:
     socket_path: str = field(default_factory=_default_socket_path)
     _sock: socket.socket | None = field(default=None, init=False, repr=False)
     _reader: IO[bytes] | None = field(default=None, init=False, repr=False)
-    _tracks: dict[str, Track] = field(
-        default_factory=lambda: dict[str, Track](), init=False, repr=False
+    _slots: dict[str, SlotState] = field(
+        default_factory=lambda: dict[str, SlotState](), init=False, repr=False
     )
+    _tempo: float = field(default=120.0, init=False, repr=False)
+
+    # ── Connection ──────────────────────────────────────────────────────
 
     def connect(self) -> None:
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -99,21 +72,51 @@ class Session:
     def __exit__(self, *args: object) -> None:
         self.disconnect()
 
+    # ── Slot management ─────────────────────────────────────────────────
+
+    def play(self, slot: str, pattern: Pattern) -> None:
+        self._slots[slot] = SlotState(pattern=pattern, playing=True)
+        self.send(SetPattern(slot=slot, pattern=pattern.node))
+
+    def hush(self, slot: str) -> None:
+        if slot in self._slots:
+            state = self._slots[slot]
+            self._slots[slot] = SlotState(pattern=state.pattern, playing=False)
+        self.send(Hush(slot=slot))
+
+    def resume(self, slot: str) -> None:
+        state = self._slots[slot]  # raises KeyError if unknown
+        if not state.playing:
+            self._slots[slot] = SlotState(pattern=state.pattern, playing=True)
+            self.send(SetPattern(slot=slot, pattern=state.pattern.node))
+
+    def remove(self, slot: str) -> None:
+        self._slots.pop(slot, None)
+        self.send(Hush(slot=slot))
+
+    def stop(self) -> None:
+        self._slots = {
+            name: SlotState(pattern=state.pattern, playing=False)
+            for name, state in self._slots.items()
+        }
+        self.send(HushAll())
+
+    # ── State visibility ────────────────────────────────────────────────
+
+    @property
+    def slots(self) -> dict[str, SlotState]:
+        return dict(self._slots)
+
     @property
     def tempo(self) -> float:
-        return 0.0  # write-only in practice; kernel doesn't send back
+        return self._tempo
 
     @tempo.setter
     def tempo(self, bpm: float) -> None:
+        self._tempo = bpm
         self.send(SetBpm(bpm=bpm))
 
-    def track(self, name: str) -> Track:
-        if name not in self._tracks:
-            self._tracks[name] = Track(name, self)
-        return self._tracks[name]
-
-    def stop(self) -> None:
-        self.send(HushAll())
+    # ── IPC ──────────────────────────────────────────────────────────────
 
     def ping(self) -> None:
         self.send(Ping())
@@ -124,3 +127,13 @@ class Session:
         data = command_to_json(msg) + "\n"
         self._sock.sendall(data.encode())
         _parse_response(self._reader.readline())
+
+    # ── Repr ─────────────────────────────────────────────────────────────
+
+    def __repr__(self) -> str:
+        status = "connected" if self._sock else "disconnected"
+        lines = [f"Session({status}, tempo={self._tempo})"]
+        for name, state in self._slots.items():
+            label = "playing" if state.playing else "stopped"
+            lines.append(f"  {name}: {label}")
+        return "\n".join(lines)

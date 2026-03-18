@@ -28,6 +28,7 @@ class TestPublicImports:
             KernelError,
             Pattern,
             Session,
+            SlotState,
             cc,
             note,
             rest,
@@ -41,7 +42,7 @@ class TestPublicImports:
         assert all(
             x is not None
             for x in [
-                KernelError, Pattern, Session, note, rest, cc,
+                KernelError, Pattern, Session, SlotState, note, rest, cc,
                 scale, reverse, shift, spread, thin,
             ]
         )
@@ -49,24 +50,19 @@ class TestPublicImports:
 
 class TestEndToEnd:
     @patch("midiman_frontend.session.socket.socket")
-    def test_multi_track_session(self, mock_cls: MagicMock) -> None:
+    def test_multi_slot_session(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
             s.tempo = 128
 
-            drums = s.track("drums")
-            mel = s.track("melody")
+            kick = note(36) + rest() + note(38) + rest()
+            hats = note(42) * 4
+            drums = kick | hats
 
-            kick_pat = note(36) + rest() + note(38) + rest()
-            hats_pat = note(42) * 4
+            s.play("drums", drums)
+            s.play("melody", (note(60) + note(64) + note(67)).over(3))
 
-            drums["kick"] = kick_pat
-            drums["hats"] = hats_pat
-
-            mel["arp"] = (note(60) + note(64) + note(67)).over(3)
-
-            del drums["hats"]
-            mel.stop()
+            s.hush("drums")
             s.stop()
 
         msgs = _parse_sent(mock_cls.return_value)
@@ -85,10 +81,9 @@ class TestEndToEnd:
         assert "drums" in slots
         assert "melody" in slots
 
-        drums_stack = next(
-            m for m in pattern_msgs if m["slot"] == "drums" and m["pattern"]["op"] == "Stack"
-        )
-        assert len(drums_stack["pattern"]["children"]) == 2
+        drums_msg = next(m for m in pattern_msgs if m["slot"] == "drums")
+        assert drums_msg["pattern"]["op"] == "Stack"
+        assert len(drums_msg["pattern"]["children"]) == 2
 
         melody_msg = next(m for m in pattern_msgs if m["slot"] == "melody")
         assert melody_msg["pattern"]["op"] == "Slow"
@@ -98,12 +93,11 @@ class TestEndToEnd:
         assert len(inner["children"]) == 3
 
     @patch("midiman_frontend.session.socket.socket")
-    def test_composable_transforms_in_session(self, mock_cls: MagicMock) -> None:
+    def test_composable_transforms(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
-            drums = s.track("drums")
             fx = scale(2) >> thin(0.1)
-            drums["main"] = fx(note(36) + rest() + note(38) + rest())
+            s.play("drums", fx(note(36) + rest() + note(38) + rest()))
 
         msgs = _parse_sent(mock_cls.return_value)
         pattern_msgs = [m for m in msgs if m["cmd"] == "SetPattern"]
@@ -112,3 +106,14 @@ class TestEndToEnd:
         assert pat["op"] == "Degrade"
         assert pat["child"]["op"] == "Fast"
         assert pat["child"]["child"]["op"] == "Cat"
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_hush_resume_cycle(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        pat = note(60) + note(64)
+        with Session() as s:
+            s.play("mel", pat)
+            s.hush("mel")
+            s.resume("mel")
+            assert s.slots["mel"].playing is True
+            assert s.slots["mel"].pattern == pat

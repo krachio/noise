@@ -8,17 +8,15 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from midiman_frontend.pattern import note
-from midiman_frontend.session import Session
+from midiman_frontend.session import Session, SlotState
 
 
 def _stub_ok_response(mock_cls: MagicMock) -> None:
-    """Configure mock socket to always return Ok responses."""
     ok = json.dumps({"status": "Ok", "msg": "ok"}).encode() + b"\n"
     mock_cls.return_value.makefile.return_value.readline.return_value = ok
 
 
 def _parse_sent(mock_sock: MagicMock) -> list[dict[str, Any]]:
-    """Parse all newline-delimited JSON messages sent via sendall."""
     results: list[dict[str, Any]] = []
     for call in mock_sock.sendall.call_args_list:
         raw: bytes = call[0][0]
@@ -50,103 +48,219 @@ class TestSessionConnection:
         mock_cls.return_value.close.assert_called_once()
 
     @patch("midiman_frontend.session.socket.socket")
-    def test_disconnect_closes_socket(self, mock_cls: MagicMock) -> None:
+    def test_disconnect_closes_socket_and_reader(self, mock_cls: MagicMock) -> None:
         s = Session()
         s.connect()
         s.disconnect()
+        mock_cls.return_value.makefile.return_value.close.assert_called_once()
         mock_cls.return_value.close.assert_called_once()
 
 
-class TestSessionCommands:
+class TestPlay:
     @patch("midiman_frontend.session.socket.socket")
-    def test_set_tempo(self, mock_cls: MagicMock) -> None:
+    def test_play_sends_set_pattern(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
-            s.tempo = 130.0
+            s.play("drums", note(36))
         msgs = _parse_sent(mock_cls.return_value)
-        assert any(m.get("cmd") == "SetBpm" and m.get("bpm") == 130.0 for m in msgs)
+        pat_msgs = [m for m in msgs if m["cmd"] == "SetPattern"]
+        assert len(pat_msgs) == 1
+        assert pat_msgs[0]["slot"] == "drums"
+        assert pat_msgs[0]["pattern"]["op"] == "Atom"
 
     @patch("midiman_frontend.session.socket.socket")
-    def test_stop_all(self, mock_cls: MagicMock) -> None:
+    def test_play_tracks_slot_state(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
+        pat = note(36)
         with Session() as s:
-            s.stop()
-        msgs = _parse_sent(mock_cls.return_value)
-        assert any(m.get("cmd") == "HushAll" for m in msgs)
-
-
-class TestTrackClipManagement:
-    @patch("midiman_frontend.session.socket.socket")
-    def test_single_clip_sends_set_pattern(self, mock_cls: MagicMock) -> None:
-        _stub_ok_response(mock_cls)
-        with Session() as s:
-            drums = s.track("drums")
-            drums["kick"] = note(36)
-        msgs = _parse_sent(mock_cls.return_value)
-        pattern_msgs = [m for m in msgs if m.get("cmd") == "SetPattern"]
-        assert len(pattern_msgs) == 1
-        assert pattern_msgs[0]["slot"] == "drums"
-        assert pattern_msgs[0]["pattern"]["op"] == "Atom"
+            s.play("drums", pat)
+            state = s.slots["drums"]
+            assert state.pattern == pat
+            assert state.playing is True
 
     @patch("midiman_frontend.session.socket.socket")
-    def test_two_clips_sends_stack(self, mock_cls: MagicMock) -> None:
+    def test_play_replaces_existing_pattern(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
-            drums = s.track("drums")
-            drums["kick"] = note(36)
-            drums["hats"] = note(42)
-        msgs = _parse_sent(mock_cls.return_value)
-        pattern_msgs = [m for m in msgs if m.get("cmd") == "SetPattern"]
-        last = pattern_msgs[-1]
-        assert last["pattern"]["op"] == "Stack"
-        assert len(last["pattern"]["children"]) == 2
+            s.play("drums", note(36))
+            s.play("drums", note(38))
+            assert s.slots["drums"].pattern == note(38)
 
     @patch("midiman_frontend.session.socket.socket")
-    def test_del_clip_with_remaining(self, mock_cls: MagicMock) -> None:
+    def test_play_on_hushed_slot_resumes(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
-            drums = s.track("drums")
-            drums["kick"] = note(36)
-            drums["hats"] = note(42)
-            del drums["hats"]
-        msgs = _parse_sent(mock_cls.return_value)
-        pattern_msgs = [m for m in msgs if m.get("cmd") == "SetPattern"]
-        last = pattern_msgs[-1]
-        assert last["pattern"]["op"] == "Atom"
+            s.play("drums", note(36))
+            s.hush("drums")
+            s.play("drums", note(38))
+            assert s.slots["drums"].playing is True
 
+
+class TestHush:
     @patch("midiman_frontend.session.socket.socket")
-    def test_del_last_clip_sends_hush(self, mock_cls: MagicMock) -> None:
+    def test_hush_sends_hush_command(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
-            drums = s.track("drums")
-            drums["kick"] = note(36)
-            del drums["kick"]
+            s.play("drums", note(36))
+            s.hush("drums")
         msgs = _parse_sent(mock_cls.return_value)
-        hush_msgs = [m for m in msgs if m.get("cmd") == "Hush"]
+        hush_msgs = [m for m in msgs if m["cmd"] == "Hush"]
         assert len(hush_msgs) == 1
         assert hush_msgs[0]["slot"] == "drums"
 
     @patch("midiman_frontend.session.socket.socket")
-    def test_track_stop_clears_and_hushes(self, mock_cls: MagicMock) -> None:
+    def test_hush_keeps_pattern_stopped(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
+        pat = note(36)
         with Session() as s:
-            drums = s.track("drums")
-            drums["kick"] = note(36)
-            drums.stop()
-        msgs = _parse_sent(mock_cls.return_value)
-        hush_msgs = [m for m in msgs if m.get("cmd") == "Hush"]
-        assert any(m["slot"] == "drums" for m in hush_msgs)
+            s.play("drums", pat)
+            s.hush("drums")
+            state = s.slots["drums"]
+            assert state.pattern == pat
+            assert state.playing is False
 
     @patch("midiman_frontend.session.socket.socket")
-    def test_newline_delimited(self, mock_cls: MagicMock) -> None:
+    def test_hush_unknown_slot_no_error(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.hush("nonexistent")
+        msgs = _parse_sent(mock_cls.return_value)
+        assert any(m["cmd"] == "Hush" and m["slot"] == "nonexistent" for m in msgs)
+
+
+class TestResume:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_resume_sends_set_pattern(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.play("drums", note(36))
+            s.hush("drums")
+            s.resume("drums")
+        msgs = _parse_sent(mock_cls.return_value)
+        pat_msgs = [m for m in msgs if m["cmd"] == "SetPattern"]
+        assert len(pat_msgs) == 2  # initial play + resume
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_resume_sets_playing_true(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.play("drums", note(36))
+            s.hush("drums")
+            s.resume("drums")
+            assert s.slots["drums"].playing is True
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_resume_unknown_slot_raises(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            with pytest.raises(KeyError):
+                s.resume("nonexistent")
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_resume_already_playing_is_noop(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.play("drums", note(36))
+            s.resume("drums")
+        msgs = _parse_sent(mock_cls.return_value)
+        pat_msgs = [m for m in msgs if m["cmd"] == "SetPattern"]
+        assert len(pat_msgs) == 1  # only the initial play
+
+
+class TestRemove:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_remove_sends_hush(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.play("drums", note(36))
+            s.remove("drums")
+        msgs = _parse_sent(mock_cls.return_value)
+        assert any(m["cmd"] == "Hush" and m["slot"] == "drums" for m in msgs)
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_remove_deletes_from_slots(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.play("drums", note(36))
+            s.remove("drums")
+            assert "drums" not in s.slots
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_remove_unknown_slot_no_error(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.remove("nonexistent")
+
+
+class TestStop:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_stop_sends_hush_all(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
             s.stop()
-        raw: bytes = mock_cls.return_value.sendall.call_args[0][0]
-        assert raw.endswith(b"\n")
+        msgs = _parse_sent(mock_cls.return_value)
+        assert any(m["cmd"] == "HushAll" for m in msgs)
 
     @patch("midiman_frontend.session.socket.socket")
-    def test_send_before_connect_raises(self, mock_cls: MagicMock) -> None:
+    def test_stop_marks_all_stopped(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.play("drums", note(36))
+            s.play("melody", note(60))
+            s.stop()
+            assert all(not st.playing for st in s.slots.values())
+            assert "drums" in s.slots
+            assert "melody" in s.slots
+
+
+class TestTempo:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_set_tempo_sends_bpm(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.tempo = 140.0
+        msgs = _parse_sent(mock_cls.return_value)
+        assert any(m["cmd"] == "SetBpm" and m["bpm"] == 140.0 for m in msgs)
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_tempo_readable(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.tempo = 140.0
+            assert s.tempo == 140.0
+
+
+class TestSlotStateImmutable:
+    def test_slot_state_is_frozen(self) -> None:
+        state = SlotState(pattern=note(36), playing=True)
+        with pytest.raises(AttributeError):
+            state.playing = False  # type: ignore[misc]
+
+
+class TestSlotsReadOnly:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_slots_returns_copy(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.play("drums", note(36))
+            slots = s.slots
+            slots.pop("drums")  # mutate the copy
+            assert "drums" in s.slots  # original unchanged
+
+
+class TestSendBeforeConnect:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_play_before_connect_raises(self, mock_cls: MagicMock) -> None:
         s = Session()
         with pytest.raises(RuntimeError):
-            s.stop()
+            s.play("drums", note(36))
+
+
+class TestNewlineDelimited:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_messages_end_with_newline(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.play("drums", note(36))
+        raw: bytes = mock_cls.return_value.sendall.call_args[0][0]
+        assert raw.endswith(b"\n")
