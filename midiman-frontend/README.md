@@ -17,7 +17,7 @@ Python DSL ──(pattern graph)──▶ JSON IR ──Unix socket──▶ mid
 
 | Module | Role |
 |--------|------|
-| `ir.py` | Frozen dataclasses for `IrNode`, `Value`, `ClientMessage` + JSON serialization + validation |
+| `ir.py` | Frozen dataclasses for `IrNode`, `Value`, `ClientMessage` (incl. `Batch`) + JSON serialization + validation |
 | `pattern.py` | `Pattern` class with operators and transform methods, atom constructors |
 | `transform.py` | Composable `Transform` callables with `>>` composition |
 | `session.py` | `Session` (Unix socket IPC), `SlotState`, `KernelError` |
@@ -45,8 +45,11 @@ with Session() as s:
     kick = note(36) + rest() + note(36) + rest()
     hats = note(42, duration=0.1) * 8
 
-    s.play("drums", kick | hats)
-    s.play("melody", (note(60) + note(64) + note(67)).over(3))
+    # Atomic multi-slot launch — stays in sync
+    s.launch({
+        "drums": kick | hats,
+        "melody": (note(60) + note(64) + note(67)).over(3),
+    })
 
     # Live update — recompose and resend
     s.play("drums", kick.spread(3, 8) | hats)
@@ -92,25 +95,33 @@ Nested `+` and `|` flatten automatically: `(a + b) + c` produces `Cat([a, b, c])
 Standalone curried versions of pattern methods, composable with `>>`:
 
 ```python
-from midiman_frontend import scale, thin, reverse
+from midiman_frontend import scale, reverse, thin, every
 
 fx = scale(2) >> reverse >> thin(0.2)
 processed = fx(note(60) + note(64) + note(67))
+
+# Apply a transform every N cycles
+swing = every(2, reverse)
 ```
+
+Available: `scale`, `reverse`, `shift`, `every`, `spread`, `thin`.
 
 ## Session
 
 Session is a thin binding layer — maps slot names to pattern trees and sends them to the kernel over a Unix socket. All state is visible.
 
-```python
-s.play("drums", pat)     # send SetPattern, track as playing
-s.hush("drums")          # send Hush, mark stopped (pattern remembered)
-s.resume("drums")        # re-send last pattern
-s.remove("drums")        # send Hush, forget slot entirely
-s.stop()                 # send HushAll, mark all stopped
-s.tempo = 128            # send SetBpm
-s.ping()                 # send Ping
-```
+| Method | Effect | Wire command |
+|--------|--------|-------------|
+| `s.play("drums", pat)` | set pattern, mark playing | `SetPattern` |
+| `s.hush("drums")` | silence, keep pattern (resumable) | `Hush` |
+| `s.resume("drums")` | re-send remembered pattern | `SetPattern` |
+| `s.remove("drums")` | silence and forget pattern | `Hush` |
+| `s.stop()` | silence all slots (patterns remembered) | `HushAll` |
+| `s.launch({"drums": p1, "mel": p2})` | atomic multi-slot update | `Batch` |
+| `s.tempo = 128` | set BPM | `SetBpm` |
+| `s.ping()` | health check | `Ping` |
+
+`launch()` sends all patterns in a single `Batch` command — the kernel applies them atomically, so slots stay in sync.
 
 State is queryable:
 
@@ -160,7 +171,7 @@ C major 7th arpeggio through soundman's oscillator.
 
 ```bash
 uv run pyright   # type check (strict mode, 0 errors)
-uv run pytest    # 112 tests
+uv run pytest    # 120 tests
 ```
 
 ## License
