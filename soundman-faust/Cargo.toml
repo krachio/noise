@@ -1,0 +1,19 @@
+[package]
+name = "soundman-faust"
+version = "0.1.0"
+edition = "2024"
+
+[lints.rust]
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+
+[dependencies]
+soundman = { path = "../soundman" }
+log = "0.4"
+
+[dev-dependencies]
+env_logger = "0.11"
