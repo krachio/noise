@@ -112,8 +112,8 @@ impl DspNode for Oscillator {
 pub struct OscillatorFactory;
 
 impl NodeFactory for OscillatorFactory {
-    fn create(&self, sample_rate: u32, _block_size: usize) -> Box<dyn DspNode> {
-        Box::new(Oscillator::new(sample_rate))
+    fn create(&self, sample_rate: u32, _block_size: usize) -> Result<Box<dyn DspNode>, String> {
+        Ok(Box::new(Oscillator::new(sample_rate)))
     }
 }
 
@@ -248,7 +248,7 @@ mod tests {
     #[test]
     fn factory_creates_working_oscillator() {
         let factory = OscillatorFactory;
-        let mut node = factory.create(SAMPLE_RATE, 512);
+        let mut node = factory.create(SAMPLE_RATE, 512).unwrap();
         assert_eq!(node.num_inputs(), 0);
         assert_eq!(node.num_outputs(), 1);
 
@@ -262,7 +262,7 @@ mod tests {
     fn type_decl_matches_implementation() {
         let decl = oscillator_type_decl();
         let factory = OscillatorFactory;
-        let node = factory.create(SAMPLE_RATE, 512);
+        let node = factory.create(SAMPLE_RATE, 512).unwrap();
 
         assert_eq!(decl.type_id, "oscillator");
         assert_eq!(decl.audio_inputs.len(), node.num_inputs());

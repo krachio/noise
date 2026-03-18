@@ -9,7 +9,10 @@ use crate::ir::types::NodeTypeDecl;
 /// because the registry lives on the control thread and may be shared.
 pub trait NodeFactory: Send + Sync {
     /// Instantiate a new node configured for the given sample rate and block size.
-    fn create(&self, sample_rate: u32, block_size: usize) -> Box<dyn DspNode>;
+    ///
+    /// # Errors
+    /// Returns an error string if instantiation fails (e.g. compilation, resource loading).
+    fn create(&self, sample_rate: u32, block_size: usize) -> Result<Box<dyn DspNode>, String>;
 }
 
 /// Errors from node type registration and lookup.
@@ -19,6 +22,8 @@ pub enum RegistryError {
     TypeNotFound(String),
     /// A factory with this `type_id` already exists.
     DuplicateType(String),
+    /// Factory failed to create a node instance.
+    CreateFailed(String),
 }
 
 impl std::fmt::Display for RegistryError {
@@ -26,6 +31,7 @@ impl std::fmt::Display for RegistryError {
         match self {
             Self::TypeNotFound(id) => write!(f, "node type not found: {id}"),
             Self::DuplicateType(id) => write!(f, "node type already registered: {id}"),
+            Self::CreateFailed(msg) => write!(f, "node creation failed: {msg}"),
         }
     }
 }
@@ -79,7 +85,9 @@ impl NodeRegistry {
             .factories
             .get(type_id)
             .ok_or_else(|| RegistryError::TypeNotFound(type_id.into()))?;
-        Ok(factory.create(sample_rate, block_size))
+        factory
+            .create(sample_rate, block_size)
+            .map_err(RegistryError::CreateFailed)
     }
 
     #[must_use]
@@ -130,8 +138,8 @@ mod tests {
     struct StubFactory;
 
     impl NodeFactory for StubFactory {
-        fn create(&self, sample_rate: u32, _block_size: usize) -> Box<dyn DspNode> {
-            Box::new(StubNode { sample_rate })
+        fn create(&self, sample_rate: u32, _block_size: usize) -> Result<Box<dyn DspNode>, String> {
+            Ok(Box::new(StubNode { sample_rate }))
         }
     }
 

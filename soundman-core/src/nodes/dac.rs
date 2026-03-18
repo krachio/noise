@@ -31,8 +31,8 @@ impl DspNode for DacNode {
 pub struct DacFactory;
 
 impl NodeFactory for DacFactory {
-    fn create(&self, _sample_rate: u32, _block_size: usize) -> Box<dyn DspNode> {
-        Box::new(DacNode)
+    fn create(&self, _sample_rate: u32, _block_size: usize) -> Result<Box<dyn DspNode>, String> {
+        Ok(Box::new(DacNode))
     }
 }
 
@@ -106,7 +106,7 @@ mod tests {
     #[test]
     fn factory_creates_dac() {
         let factory = DacFactory;
-        let node = factory.create(48000, 512);
+        let node = factory.create(48000, 512).unwrap();
         assert_eq!(node.num_inputs(), 1);
         assert_eq!(node.num_outputs(), 1);
     }
@@ -115,7 +115,7 @@ mod tests {
     fn type_decl_matches_implementation() {
         let decl = dac_type_decl();
         let factory = DacFactory;
-        let node = factory.create(48000, 512);
+        let node = factory.create(48000, 512).unwrap();
 
         assert_eq!(decl.type_id, "dac");
         assert_eq!(decl.audio_inputs.len(), node.num_inputs());
