@@ -1,5 +1,8 @@
+//! Node type declarations — port layouts, control metadata, channel formats.
+
 use serde::{Deserialize, Serialize};
 
+/// Channel format for an audio port.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ChannelLayout {
@@ -17,29 +20,40 @@ impl ChannelLayout {
     }
 }
 
+/// Whether a control parameter updates at control rate or audio rate.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Rate {
+    /// Updated once per block via [`DspNode::set_param`](crate::graph::node::DspNode::set_param).
     Control,
+    /// Updated per-sample (future; currently treated as control rate).
     Audio,
 }
 
+/// An audio input or output port on a node type.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PortDecl {
     pub name: String,
     pub channels: ChannelLayout,
 }
 
+/// Metadata for a single controllable parameter.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ControlDecl {
     pub name: String,
+    /// `(min, max)` — valid range for this parameter.
     pub range: (f32, f32),
     pub default: f32,
     pub rate: Rate,
+    /// Optional unit label (e.g. `"Hz"`, `"dB"`).
     pub unit: Option<String>,
 }
 
+/// Full type declaration for a node — ports, controls, and type identifier.
+///
+/// Registered in the [`NodeRegistry`](crate::registry::NodeRegistry) alongside
+/// a [`NodeFactory`](crate::registry::NodeFactory).
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NodeTypeDecl {

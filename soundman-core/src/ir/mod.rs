@@ -1,18 +1,30 @@
+//! Graph intermediate representation — the JSON wire format.
+//!
+//! A [`GraphIr`] describes the audio graph declaratively: which nodes exist,
+//! how they connect, and which controls are exposed for external manipulation.
+//! The engine compiles this IR into a runnable [`DspGraph`](crate::graph::DspGraph).
+
 pub mod types;
 
 use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
+/// A node in the graph IR. References a registered `type_id` and provides
+/// initial control values.
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct NodeInstance {
+    /// Unique identifier within this graph (e.g. `"osc1"`, `"filter2"`).
     pub id: String,
+    /// Registered node type (e.g. `"oscillator"`, `"dac"`, `"faust:lowpass2"`).
     pub type_id: String,
+    /// Initial parameter values, keyed by parameter name.
     #[serde(default)]
     pub controls: HashMap<String, f32>,
 }
 
+/// A directed edge between two node ports.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ConnectionIr {
     pub from_node: String,
@@ -21,11 +33,17 @@ pub struct ConnectionIr {
     pub to_port: String,
 }
 
+/// Complete graph description — nodes, connections, and exposed controls.
+///
+/// Exposed controls map a user-facing label (e.g. `"pitch"`) to a
+/// `(node_id, param_name)` pair, allowing external control via
+/// [`ClientMessage::SetControl`](crate::protocol::ClientMessage::SetControl).
 #[allow(clippy::derive_partial_eq_without_eq)]
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct GraphIr {
     pub nodes: Vec<NodeInstance>,
     pub connections: Vec<ConnectionIr>,
+    /// Maps `label → (node_id, param_name)` for external control.
     #[serde(default)]
     pub exposed_controls: HashMap<String, (String, String)>,
 }

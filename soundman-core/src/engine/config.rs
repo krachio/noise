@@ -1,12 +1,22 @@
+/// Audio engine configuration.
+///
+/// Defaults: 48 kHz, 512-sample blocks, stereo, 10 ms crossfade.
+/// Use [`CpalBackend::query_device`](crate::output::cpal_backend::CpalBackend::query_device)
+/// to match the hardware sample rate.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EngineConfig {
+    /// Sample rate in Hz (e.g. 44100, 48000).
     pub sample_rate: u32,
+    /// Samples per processing block.
     pub block_size: usize,
+    /// Number of output channels (1 = mono, 2 = stereo).
     pub channels: usize,
+    /// Duration of graph-swap crossfade in milliseconds.
     pub crossfade_ms: u32,
 }
 
 impl EngineConfig {
+    /// Crossfade duration converted to samples.
     #[must_use]
     #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub const fn crossfade_samples(&self) -> usize {
