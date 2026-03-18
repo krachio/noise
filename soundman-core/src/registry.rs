@@ -73,6 +73,27 @@ impl NodeRegistry {
         Ok(())
     }
 
+    /// Replace the declaration and factory for an already-registered type.
+    ///
+    /// Useful for hot-reload: recompile a DSP and swap the factory without
+    /// tearing down the whole registry.
+    ///
+    /// # Errors
+    /// Returns `RegistryError::TypeNotFound` if this `type_id` has not been registered.
+    pub fn reregister(
+        &mut self,
+        decl: NodeTypeDecl,
+        factory: impl NodeFactory + 'static,
+    ) -> Result<(), RegistryError> {
+        if !self.types.contains_key(&decl.type_id) {
+            return Err(RegistryError::TypeNotFound(decl.type_id));
+        }
+        let type_id = decl.type_id.clone();
+        self.types.insert(type_id.clone(), decl);
+        self.factories.insert(type_id, Box::new(factory));
+        Ok(())
+    }
+
     /// # Errors
     /// Returns `RegistryError::TypeNotFound` if no factory exists for this `type_id`.
     pub fn create_node(
@@ -211,5 +232,67 @@ mod tests {
     fn get_type_returns_none_for_unknown() {
         let registry = NodeRegistry::new();
         assert!(registry.get_type("missing").is_none());
+    }
+
+    // -- reregister tests --
+
+    struct StubNode2;
+
+    impl DspNode for StubNode2 {
+        fn process(&mut self, _inputs: &[&[f32]], _outputs: &mut [&mut [f32]]) {}
+        fn num_inputs(&self) -> usize { 0 }
+        fn num_outputs(&self) -> usize { 2 }
+        fn set_param(&mut self, name: &str, _value: f32) -> Result<(), ParamError> {
+            Err(ParamError::NotFound(name.into()))
+        }
+        fn reset(&mut self, _sample_rate: u32) {}
+    }
+
+    struct StubFactory2;
+
+    impl NodeFactory for StubFactory2 {
+        fn create(&self, _sample_rate: u32, _block_size: usize) -> Result<Box<dyn DspNode>, String> {
+            Ok(Box::new(StubNode2))
+        }
+    }
+
+    fn oscillator_decl_stereo() -> NodeTypeDecl {
+        NodeTypeDecl {
+            type_id: "oscillator".into(),
+            audio_inputs: vec![],
+            audio_outputs: vec![
+                PortDecl { name: "left".into(), channels: ChannelLayout::Mono },
+                PortDecl { name: "right".into(), channels: ChannelLayout::Mono },
+            ],
+            controls: vec![],
+        }
+    }
+
+    #[test]
+    fn reregister_overwrites_factory_and_decl() {
+        let mut registry = NodeRegistry::new();
+        registry.register(oscillator_decl(), StubFactory).unwrap();
+
+        // Original: 1 output, has "freq" control
+        let node = registry.create_node("oscillator", 48000, 512).unwrap();
+        assert_eq!(node.num_outputs(), 1);
+        assert_eq!(registry.get_type("oscillator").unwrap().controls.len(), 1);
+
+        // Reregister with stereo factory
+        registry.reregister(oscillator_decl_stereo(), StubFactory2).unwrap();
+
+        // Now: 2 outputs, no controls
+        let node = registry.create_node("oscillator", 48000, 512).unwrap();
+        assert_eq!(node.num_outputs(), 2);
+        let decl = registry.get_type("oscillator").unwrap();
+        assert_eq!(decl.audio_outputs.len(), 2);
+        assert!(decl.controls.is_empty());
+    }
+
+    #[test]
+    fn reregister_unknown_type_fails() {
+        let mut registry = NodeRegistry::new();
+        let result = registry.reregister(oscillator_decl(), StubFactory);
+        assert!(matches!(result, Err(RegistryError::TypeNotFound(ref id)) if id == "oscillator"));
     }
 }
