@@ -92,11 +92,31 @@ cd ../midiman && MIDIMAN_OSC_TARGET=127.0.0.1:9000 cargo run
 echo '{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Cat","children":[{"op":"Atom","value":{"type":"Osc","address":"/soundman/set","args":[{"Str":"pitch"},{"Float":261.63}]}},{"op":"Atom","value":{"type":"Osc","address":"/soundman/set","args":[{"Str":"pitch"},{"Float":329.63}]}},{"op":"Atom","value":{"type":"Osc","address":"/soundman/set","args":[{"Str":"pitch"},{"Float":392.0}]}},{"op":"Atom","value":{"type":"Osc","address":"/soundman/set","args":[{"Str":"pitch"},{"Float":493.88}]}}]}}' | socat - UNIX-CONNECT:/tmp/midiman.sock
 ```
 
+## Custom node types
+
+soundman is DSP-agnostic. Register your own node types via `EngineController::registry_mut()`:
+
+```rust
+let (mut ctrl, proc) = engine::engine(&config);
+
+// Register a new type
+ctrl.registry_mut().register(decl, factory).unwrap();
+
+// Hot-reload: swap factory for an existing type (e.g. after recompilation)
+ctrl.registry_mut().reregister(updated_decl, new_factory).unwrap();
+```
+
+Each type needs:
+- **`NodeTypeDecl`** — declares ports (audio in/out) and controls (name, range, default)
+- **`NodeFactory`** — `create(sample_rate, block_size) -> Result<Box<dyn DspNode>, String>`
+
+See [`soundman-faust`](https://github.com/krachio/soundman-faust) for a real-world example that compiles FAUST DSP code via LLVM JIT and registers nodes at runtime.
+
 ## Development
 
 ```bash
 cargo check    # type check (strict clippy, unsafe_code = "forbid")
-cargo test     # 89 tests (83 unit + 6 integration)
+cargo test     # 91 unit + 6 integration tests
 ```
 
 ## License
