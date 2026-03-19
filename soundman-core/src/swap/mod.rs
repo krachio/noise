@@ -104,12 +104,11 @@ impl GraphSwapper {
             }
         }
 
-        // Apply master gain
-        #[allow(clippy::float_cmp)]
-        if self.master_gain != 1.0 {
-            for sample in output.iter_mut() {
-                *sample *= self.master_gain;
-            }
+        // Apply master gain and clamp to [-1.0, 1.0].
+        // Clamping always runs: individual DSPs or fan-in summing can exceed unit range
+        // even at gain=1.0, and writing > ±1.0 to CoreAudio resets the audio stream.
+        for sample in output.iter_mut() {
+            *sample = (*sample * self.master_gain).clamp(-1.0, 1.0);
         }
     }
 
@@ -295,6 +294,34 @@ mod tests {
             assert!(
                 (-0.51..=0.51).contains(&s),
                 "sample {s} exceeds master gain bound"
+            );
+        }
+    }
+
+    #[test]
+    fn output_always_clamped_to_unit_range() {
+        // A gain > 1.0 would push a sine oscillator (peak ±1.0) beyond ±1.0.
+        // The output must be clamped regardless of gain to protect the audio device.
+        let registry = test_registry();
+        let block_size = 64;
+
+        let graph = make_graph(&registry, 440.0, block_size);
+        let mut swapper = GraphSwapper::new(480, block_size);
+        swapper.drain_commands(
+            [Command::SwapGraph(graph), Command::SetMasterGain(5.0)]
+                .into_iter(),
+        );
+
+        let mut output = vec![0.0_f32; block_size];
+        swapper.process(&mut output);
+
+        let has_audio = output.iter().any(|&s| s != 0.0);
+        assert!(has_audio, "should produce audio");
+
+        for &s in &output {
+            assert!(
+                (-1.0..=1.0).contains(&s),
+                "sample {s} exceeds unit range after high-gain processing"
             );
         }
     }

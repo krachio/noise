@@ -15,8 +15,10 @@ Rules (MUST follow):
 - Cell ordering: dsp() calls first → sm.load_graph() second → mm.play() last.
 - All comments must use Python syntax (# prefix). No prose outside code.
 - Use at most 2 × `# ---` dividers (3 cells maximum).
-- Multi-voice graphs: all voices sum at the DAC input. For N voices, scale each
-  DSP's output by roughly 0.8/N, or call sm.gain(0.8/N) after sm.load_graph().
+- Multi-voice graphs: all voices sum at the DAC input. Always call sm.gain(0.8/N)
+  after sm.load_graph() where N is the number of voices. Examples: 2 voices →
+  sm.gain(0.4), 3 voices → sm.gain(0.27), 4 voices → sm.gain(0.2). Never use
+  sm.gain(0.7) or higher with more than one voice.
 
 ---
 
