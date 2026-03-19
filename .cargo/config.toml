@@ -1,0 +1,4 @@
+# FAUST LLVM JIT is not thread-safe across factory creation/deletion.
+# Serialize all workspace tests to prevent segfaults.
+[env]
+RUST_TEST_THREADS = "1"
