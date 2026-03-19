@@ -1,6 +1,6 @@
 from typing import Any
 
-from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, split_cells
+from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, parse_dsp_controls, split_cells
 
 
 def make_state(**kwargs: object) -> SessionState:
@@ -193,6 +193,22 @@ def test_extract_code_empty_block_returns_none() -> None:
 def test_extract_code_strips_surrounding_blank_lines() -> None:
     response = "```python\n\nmm.play('hi', note(48))\n\n```"
     assert extract_code(response) == "mm.play('hi', note(48))"
+
+
+# ── parse_dsp_controls ───────────────────────────────────────────────────────
+
+def test_parse_dsp_controls_extracts_names() -> None:
+    source = 'process = en.adsr(hslider("gate", 0.0, 0.0, 1.0, 0.001)) * hslider("freq", 440.0, 20.0, 2000.0, 0.001);'
+    assert parse_dsp_controls(source) == ("gate", "freq")
+
+
+def test_parse_dsp_controls_deduplicates() -> None:
+    source = 'en.adsr(hslider("gate", 0.0, 0.0, 1.0, 0.001)) * en.adsr(hslider("gate", 0.0, 0.0, 1.0, 0.001));'
+    assert parse_dsp_controls(source) == ("gate",)
+
+
+def test_parse_dsp_controls_no_hsliders() -> None:
+    assert parse_dsp_controls('process = no.noise;') == ()
 
 
 # ── split_cells ───────────────────────────────────────────────────────────────

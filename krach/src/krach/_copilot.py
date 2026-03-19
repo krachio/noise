@@ -19,7 +19,16 @@ class SessionState:
 
 _CONTEXT_MD = (Path(__file__).parent / "context.md").read_text()
 
+_HSLIDER_RE = re.compile(r'hslider\("([^"]+)"')
 _CODE_BLOCK_RE = re.compile(r"```(?:python)?\n(.*?)```", re.DOTALL)
+
+
+def parse_dsp_controls(source: str) -> tuple[str, ...]:
+    """Return deduplicated hslider control names from a FAUST .dsp source string."""
+    seen: dict[str, None] = {}
+    for name in _HSLIDER_RE.findall(source):
+        seen[name] = None
+    return tuple(seen)
 # Match '# ---' only when it is the entire content of a line.
 _CELL_DIVIDER_RE = re.compile(r"^[ \t]*# ---[ \t]*$", re.MULTILINE)
 

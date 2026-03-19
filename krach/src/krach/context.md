@@ -11,7 +11,7 @@ on its own line. The user steps through each section one cell at a time.
 
 Rules (MUST follow):
 - Never write import statements. Every symbol you need is listed under "Available symbols" in the session state — use those names directly.
-- Only use control labels listed under "Node controls". Never invent control names.
+- Only use node types AND control labels listed under "Node controls". Never use a node type from "Loaded nodes" that does not appear in "Node controls" — its controls are unknown.
 - Cell ordering: dsp() calls first → sm.load_graph() second → mm.play() last.
 - All comments must use Python syntax (# prefix). No prose outside code.
 - Use at most 2 × `# ---` dividers (3 cells maximum).

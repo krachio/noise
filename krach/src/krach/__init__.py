@@ -80,13 +80,18 @@ def main() -> None:
 
     import anthropic
 
-    from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, split_cells
+    from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, parse_dsp_controls, split_cells
 
     mm = Session(socket_path=str(midiman_sock))
     mm.connect()
     sm = SoundmanSession(host="127.0.0.1", port=9001)
 
+    # Pre-populate controls from DSP files already on disk (previous sessions).
     _node_controls: dict[str, tuple[str, ...]] = {}
+    for _p in dsp_dir.glob("*.dsp"):
+        _controls = parse_dsp_controls(_p.read_text())
+        if _controls:
+            _node_controls[f"faust:{_p.stem}"] = _controls
     _user_ns_keys: tuple[str, ...] = ()  # populated after user_ns is built
 
     def _session_state() -> SessionState:
