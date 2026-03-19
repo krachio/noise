@@ -28,7 +28,8 @@ RUST_LOG=warn \
   "$REPO/target/debug/soundman" &
 SOUNDMAN_PID=$!
 
-trap "kill $MIDIMAN_PID $SOUNDMAN_PID 2>/dev/null; wait" EXIT
+cleanup() { kill $MIDIMAN_PID $SOUNDMAN_PID 2>/dev/null; wait 2>/dev/null; }
+trap cleanup EXIT INT TERM
 sleep 1
 
 PYTHON="$REPO/soundman-frontend/.venv/bin/python"
@@ -96,7 +97,7 @@ BPM  = 120
 BARS = 4
 BAR_DUR = 4 * 60 / BPM  # seconds
 print(f"step 3 — playing {BARS} bars at {BPM} BPM (you should hear kick+snare+hat)")
-time.sleep(BARS * BAR_DUR + 0.5)
+time.sleep(BARS * BAR_DUR)
 
 # ── step 4: add a polyrhythmic bass line ──────────────────────────────────
 bass_line = [43.7, 55.0, 65.4, 43.7, 55.0, 87.3, 65.4, 55.0,
@@ -113,7 +114,7 @@ mm.launch({
 })
 
 print("step 4 — added polyrhythmic bass (3-against-4)")
-time.sleep(BARS * BAR_DUR + 0.5)
+time.sleep(BARS * BAR_DUR)
 
 mm.stop()
 sm.shutdown()
