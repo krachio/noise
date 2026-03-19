@@ -25,11 +25,11 @@ a voice never breaks other voices' patterns.
 
 ### Managing voices
 ```python
-# Add a voice — string type_id (pre-existing FAUST DSP):
-mix.voice("kit",  "faust:kit",       gain=0.8)
+# Add a voice — pass a Python DSP function directly:
+mix.voice("bass", my_bass_fn, gain=0.3)
 
-# Add a voice — Python function (transpiled to FAUST on the fly):
-mix.voice("bass", acid_bass,          gain=0.3)
+# Or reference a pre-existing type from "Node controls" in session state:
+mix.voice("bass", "faust:bass", gain=0.3)
 
 # Adjust gain without rebuilding the graph:
 mix.gain("bass", 0.15)
@@ -38,27 +38,30 @@ mix.gain("bass", 0.15)
 mix.remove("bass")
 ```
 
+IMPORTANT: Only use string type_ids that appear in "Node controls" in the session state.
+If a type is not listed, define it as a Python function instead.
+
 ### Building patterns with mix.hit() and mix.step()
 ```python
-# Percussive trigger (trig + reset on a single control):
-mix.hit("kit", "kick")     # → kit_kick 1.0 then 0.0
-
 # Melodic trigger (set freq + optional params + gate trig/reset):
 mix.step("bass", 55.0)                      # → bass_freq=55, gate trig/reset
 mix.step("bass", 55.0, cutoff=1200.0)       # → also sets bass_cutoff=1200
+
+# Percussive trigger (trig + reset on a single control like "gate"):
+mix.hit("kick", "gate")    # → kick_gate 1.0 then 0.0
 ```
 
 These return Pattern objects — use `+`, `*`, `.over()`, `.every()`, etc.:
 ```python
-mm.play("kick",  mix.hit("kit", "kick") * 4)
+mm.play("kick",  mix.hit("kick", "gate") * 4)
 mm.play("bass",  (mix.step("bass", 55) + mix.step("bass", 73) + rest() +
                    mix.step("bass", 65, cutoff=1200)).over(2))
 ```
 
 ### Control naming convention
-Labels are always `{voice_name}_{param}`. Examples:
-- `mix.voice("kit", "faust:kit")` → labels: kit_kick, kit_hat, kit_snare, kit_bass, kit_freq
-- `mix.voice("bass", "faust:acid_bass")` → labels: bass_freq, bass_gate, bass_cutoff
+Labels are always `{voice_name}_{param}`. Example:
+- `mix.voice("bass", my_bass_fn)` with controls (freq, gate, cutoff) →
+  labels: bass_freq, bass_gate, bass_cutoff
 
 ---
 
@@ -121,7 +124,17 @@ mix.voice("bass", acid_bass, gain=0.3)
 ## Full example
 
 ```python
-# Define a custom bass synth
+# Define synths as Python functions
+def my_kick() -> Signal:
+    gate = control("gate", 0.0, 0.0, 1.0)
+    env = adsr(0.001, 0.25, 0.0, 0.05, gate)
+    return sine_osc(55.0 + env * 200.0) * env * 0.9
+
+def my_hat() -> Signal:
+    gate = control("gate", 0.0, 0.0, 1.0)
+    env = adsr(0.001, 0.04, 0.0, 0.02, gate)
+    return highpass(white_noise(), 8000.0) * env * 0.5
+
 def acid_bass() -> Signal:
     freq = control("freq", 55.0, 20.0, 800.0)
     gate = control("gate", 0.0, 0.0, 1.0)
@@ -129,17 +142,16 @@ def acid_bass() -> Signal:
     env = adsr(0.005, 0.15, 0.3, 0.08, gate)
     return lowpass(saw(freq), cutoff) * env * 0.55
 
-# --- Set up voices
-mix.voice("kit",  "faust:kit",  gain=0.8)
-mix.voice("bass", acid_bass,    gain=0.3)
+# --- Set up voices (all Python functions — no dependency on pre-existing DSPs)
+mix.voice("kick", my_kick,   gain=0.8)
+mix.voice("hat",  my_hat,    gain=0.5)
+mix.voice("bass", acid_bass, gain=0.3)
 
 # --- Play patterns
 mm.tempo = 128
 
-mm.play("kick",  mix.hit("kit", "kick") * 4)
-mm.play("snare", rest() + mix.hit("kit", "snare") + rest() + mix.hit("kit", "snare"))
-mm.play("hat",   (mix.hit("kit", "hat") + rest()) * 8)
-
+mm.play("kick", mix.hit("kick", "gate") * 4)
+mm.play("hat",  (mix.hit("hat", "gate") + rest()) * 8)
 mm.play("bass", (
     mix.step("bass", 55.0, cutoff=800.0) +
     mix.step("bass", 73.4, cutoff=1200.0) +
