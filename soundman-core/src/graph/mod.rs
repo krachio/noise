@@ -124,7 +124,9 @@ impl DspGraph {
                         .iter_mut()
                         .zip(self.buffers.buffers[src_buf_idx].iter())
                     {
-                        *d += s;
+                        // Sanitize NaN: a diverged IIR filter in one voice must not
+                        // silence all other voices by poisoning the fan-in sum.
+                        *d += if s.is_finite() { *s } else { 0.0 };
                     }
                 }
             }
@@ -257,6 +259,21 @@ mod tests {
             Err(ParamError::NotFound(name.into()))
         }
         fn reset(&mut self, _sample_rate: u32) {}
+    }
+
+    /// Emits NaN on every sample — simulates a diverged IIR filter.
+    struct NanNode;
+
+    impl DspNode for NanNode {
+        fn process(&mut self, _: &[&[f32]], outputs: &mut [&mut [f32]]) {
+            if let Some(out) = outputs.first_mut() { out.fill(f32::NAN); }
+        }
+        fn num_inputs(&self) -> usize { 0 }
+        fn num_outputs(&self) -> usize { 1 }
+        fn set_param(&mut self, name: &str, _: f32) -> Result<(), ParamError> {
+            Err(ParamError::NotFound(name.into()))
+        }
+        fn reset(&mut self, _: u32) {}
     }
 
     /// Two-input node: output = input[0] − input[1].
@@ -531,6 +548,32 @@ mod tests {
 
         for &s in &output {
             assert!((s - 0.4).abs() < 1e-6, "expected input[0]-input[1] = 0.4, got {s}");
+        }
+    }
+
+    #[test]
+    fn nan_source_does_not_silence_healthy_sources() {
+        // NaN from a diverged FAUST IIR filter must not poison the fan-in sum
+        // and silence other voices (e.g. drums when acid bass diverges).
+        let block_size = 16;
+        let mut graph = make_graph(
+            vec![Box::new(ConstantNode(0.5)), Box::new(NanNode), Box::new(DacNode)],
+            vec!["good".into(), "nan".into(), "out".into()],
+            vec![
+                Connection { from_node: NodeId(0), from_port: 0, to_node: NodeId(2), to_port: 0 },
+                Connection { from_node: NodeId(1), from_port: 0, to_node: NodeId(2), to_port: 0 },
+            ],
+            vec![NodeId(0), NodeId(1), NodeId(2)],
+            Some(NodeId(2)),
+            block_size,
+        );
+
+        let mut output = vec![0.0_f32; block_size];
+        graph.process(&mut output);
+
+        for &s in &output {
+            assert!(s.is_finite(), "NaN from one source must not poison the output");
+            assert!((s - 0.5).abs() < 1e-6, "healthy source output must survive NaN neighbour");
         }
     }
 }
