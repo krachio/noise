@@ -12,6 +12,7 @@ class SessionState:
     playing: tuple[str, ...]
     stopped: tuple[str, ...]
     nodes: tuple[str, ...]
+    node_controls: tuple[tuple[str, tuple[str, ...]], ...]
 
 
 _CONTEXT_MD = (Path(__file__).parent / "context.md").read_text()
@@ -37,14 +38,18 @@ def split_cells(code: str) -> list[str]:
 
 def build_context(state: SessionState) -> str:
     """Build the system prompt: DSL reference + live session state."""
-    live = (
-        f"## Current session state\n"
-        f"- BPM: {state.bpm}\n"
-        f"- Playing slots: {list(state.playing) or 'none'}\n"
-        f"- Stopped slots: {list(state.stopped) or 'none'}\n"
-        f"- Loaded nodes: {list(state.nodes)}\n"
-    )
-    return _CONTEXT_MD + "\n---\n\n" + live
+    lines = [
+        "## Current session state",
+        f"- BPM: {state.bpm}",
+        f"- Playing slots: {list(state.playing) or 'none'}",
+        f"- Stopped slots: {list(state.stopped) or 'none'}",
+        f"- Loaded nodes: {list(state.nodes)}",
+    ]
+    if state.node_controls:
+        lines.append("- Node controls (use ONLY these labels with set_ctrl):")
+        for node_id, controls in state.node_controls:
+            lines.append(f"  - {node_id}: {', '.join(controls)}")
+    return _CONTEXT_MD + "\n---\n\n" + "\n".join(lines) + "\n"
 
 
 def format_status(state: SessionState) -> str:

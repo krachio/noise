@@ -9,6 +9,7 @@ def make_state(**kwargs: object) -> SessionState:
         "playing": ("kick", "bass"),
         "stopped": ("melody",),
         "nodes": ("oscillator", "dac", "faust:kit"),
+        "node_controls": (),
     }
     return SessionState(**{**defaults, **kwargs})  # type: ignore[arg-type]
 
@@ -38,6 +39,24 @@ def test_build_context_contains_dsl_reference() -> None:
     assert "note(" in ctx
     assert "Graph()" in ctx
     assert "dsp(" in ctx
+
+
+def test_build_context_includes_node_controls() -> None:
+    state = make_state(node_controls=(
+        ("faust:mykick", ("gate", "pitch")),
+        ("faust:mybass", ("freq", "gate", "cutoff")),
+    ))
+    ctx = build_context(state)
+    assert "faust:mykick" in ctx
+    assert "gate" in ctx
+    assert "pitch" in ctx
+    assert "faust:mybass" in ctx
+    assert "cutoff" in ctx
+
+
+def test_build_context_no_controls_omits_section() -> None:
+    ctx = build_context(make_state(node_controls=()))
+    assert "Node controls (use ONLY" not in ctx
 
 
 # ── format_status ────────────────────────────────────────────────────────────

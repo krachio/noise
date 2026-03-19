@@ -38,7 +38,7 @@ def main() -> None:
     dsp_dir.mkdir(parents=True, exist_ok=True)
 
     midiman_sock.unlink(missing_ok=True)
-    env = {**os.environ, "RUST_LOG": "warn"}
+    env = {**os.environ, "RUST_LOG": "error"}
 
     midiman_proc = subprocess.Popen(
         [str(midiman_bin)],
@@ -89,12 +89,15 @@ def main() -> None:
     mm.connect()
     sm = SoundmanSession(host="127.0.0.1", port=9001)
 
+    _node_controls: dict[str, tuple[str, ...]] = {}
+
     def _session_state() -> SessionState:
         return SessionState(
             bpm=mm.tempo,
             playing=tuple(k for k, v in mm.slots.items() if v.playing),
             stopped=tuple(k for k, v in mm.slots.items() if not v.playing),
             nodes=tuple(_cached_nodes),
+            node_controls=tuple(_node_controls.items()),
         )
 
     def set_ctrl(label: str, value: float) -> object:
@@ -111,8 +114,9 @@ def main() -> None:
         """Transpile a Python DSP function and hot-drop it into soundman."""
         result = transpile(fn)  # type: ignore[arg-type]
         (dsp_dir / f"{name}.dsp").write_text(result.source)
-        controls = [ctrl.name for ctrl in result.schema.controls]
-        print(f"  {name}.dsp — controls: {controls}")
+        control_names = tuple(ctrl.name for ctrl in result.schema.controls)
+        _node_controls[f"faust:{name}"] = control_names
+        print(f"  {name}.dsp — controls: {list(control_names)}")
         print("  waiting for hot-reload...")
         time.sleep(2.5)
         _refresh_nodes()

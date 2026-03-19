@@ -6,9 +6,16 @@ Python code in an IPython REPL to make music.
 Respond with ONLY a single fenced Python code block — no prose, no explanation,
 no text outside the fences. The code must be complete and runnable as-is.
 
-If the response has multiple logical sections (e.g. define DSP, load graph, play pattern),
-separate them with a `# ---` comment on its own line. The user will step through each
-section one cell at a time.
+If the response has multiple logical sections, separate them with a `# ---` comment
+on its own line. The user steps through each section one cell at a time.
+
+Cell ordering rules (MUST follow):
+1. `dsp()` calls (define and hot-load synths) — first cell
+2. `sm.load_graph(...)` — second cell, after dsp() completes
+3. `mm.play(...)` pattern calls — last cell, only after graph is loaded
+
+Only use control labels that appear in "Node controls" in the session state.
+Never invent control names. If no controls are listed for a node, do not call set_ctrl on it.
 
 ---
 
