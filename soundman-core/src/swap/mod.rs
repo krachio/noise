@@ -104,11 +104,12 @@ impl GraphSwapper {
             }
         }
 
-        // Apply master gain and clamp to [-1.0, 1.0].
-        // Clamping always runs: individual DSPs or fan-in summing can exceed unit range
-        // even at gain=1.0, and writing > ±1.0 to CoreAudio resets the audio stream.
+        // Apply master gain, clamp to [-1.0, 1.0], and silence any NaN.
+        // NaN can arise from unstable IIR filters at extreme cutoff frequencies.
+        // Both NaN and clipping can kill the CoreAudio stream.
         for sample in output.iter_mut() {
-            *sample = (*sample * self.master_gain).clamp(-1.0, 1.0);
+            let s = *sample * self.master_gain;
+            *sample = if s.is_finite() { s.clamp(-1.0, 1.0) } else { 0.0 };
         }
     }
 
@@ -153,10 +154,44 @@ mod tests {
 
     use super::*;
     use crate::graph::compiler::compile;
+    use crate::graph::{BufferPool, Connection, DspGraph};
+    use crate::graph::node::{DspNode, NodeId, ParamError};
     use crate::ir::{ConnectionIr, GraphIr, NodeInstance};
-    use crate::nodes::dac::{dac_type_decl, DacFactory};
+    use crate::nodes::dac::{DacNode, dac_type_decl, DacFactory};
     use crate::nodes::oscillator::{oscillator_type_decl, OscillatorFactory};
     use crate::registry::NodeRegistry;
+
+    /// Node that outputs NaN on every sample — simulates an unstable IIR filter.
+    struct NanNode;
+
+    impl DspNode for NanNode {
+        fn process(&mut self, _: &[&[f32]], outputs: &mut [&mut [f32]]) {
+            if let Some(out) = outputs.first_mut() { out.fill(f32::NAN); }
+        }
+        fn num_inputs(&self) -> usize { 0 }
+        fn num_outputs(&self) -> usize { 1 }
+        fn set_param(&mut self, name: &str, _: f32) -> Result<(), ParamError> {
+            Err(ParamError::NotFound(name.into()))
+        }
+        fn reset(&mut self, _: u32) {}
+    }
+
+    fn nan_graph(block_size: usize) -> Box<DspGraph> {
+        let nodes: Vec<Box<dyn DspNode>> = vec![Box::new(NanNode), Box::new(DacNode)];
+        let connections = vec![Connection {
+            from_node: NodeId(0), from_port: 0, to_node: NodeId(1), to_port: 0,
+        }];
+        let buffers = BufferPool::new(2, block_size);
+        Box::new(DspGraph::new(
+            nodes,
+            vec!["nan".into(), "out".into()],
+            connections,
+            vec![NodeId(0), NodeId(1)],
+            Some(NodeId(1)),
+            buffers,
+            vec![vec![0], vec![1]],
+        ))
+    }
 
     fn test_registry() -> NodeRegistry {
         let mut registry = NodeRegistry::new();
@@ -323,6 +358,23 @@ mod tests {
                 (-1.0..=1.0).contains(&s),
                 "sample {s} exceeds unit range after high-gain processing"
             );
+        }
+    }
+
+    #[test]
+    fn nan_from_dsp_produces_silence_not_nan() {
+        // IIR filters at extreme cutoffs can produce NaN. It must not reach the
+        // audio device — NaN samples should be replaced with silence (0.0).
+        let block_size = 64;
+        let mut swapper = GraphSwapper::new(0, block_size);
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(nan_graph(block_size))));
+
+        let mut output = vec![0.0_f32; block_size];
+        swapper.process(&mut output);
+
+        for &s in &output {
+            assert!(s.is_finite(), "NaN from DSP must not reach output");
+            assert_eq!(s, 0.0, "NaN from DSP should be silenced");
         }
     }
 
