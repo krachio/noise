@@ -7,6 +7,7 @@ dependencies = [
     "midiman-frontend",
     "soundman-frontend",
     "faust-dsl",
+    "anthropic>=0.86.0",
 ]
 
 [project.scripts]

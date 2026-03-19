@@ -76,17 +76,40 @@ def main() -> None:
     from faust_dsl.music.effects import reverb
     from faust_dsl.music.envelopes import adsr
 
+    import anthropic
+
+    from krach._copilot import SessionState, ask_claude, build_context, format_status
+
     mm = Session(socket_path=str(midiman_sock))
     mm.connect()
     sm = SoundmanSession(host="127.0.0.1", port=9001)
+
+    def _session_state() -> SessionState:
+        return SessionState(
+            bpm=mm.tempo,
+            playing=tuple(k for k, v in mm.slots.items() if v.playing),
+            stopped=tuple(k for k, v in mm.slots.items() if not v.playing),
+            nodes=tuple(sm.list_nodes()),
+        )
 
     def dsp(name: str, fn: object) -> object:
         """Transpile a Python DSP function and hot-drop it into soundman."""
         result = transpile(fn)  # type: ignore[arg-type]
         (dsp_dir / f"{name}.dsp").write_text(result.source)
-        controls = [c.name for c in result.schema.controls]
+        controls = [ctrl.name for ctrl in result.schema.controls]
         print(f"  {name}.dsp — controls: {controls}")
         return result
+
+    def status() -> None:
+        """Print current session state: BPM, slots, loaded nodes."""
+        print(format_status(_session_state()))
+
+    def c(prompt: str) -> None:
+        """Ask Claude for live-coding help with full session context."""
+        model = os.environ.get("KRACH_MODEL", "claude-sonnet-4-6")
+        client = anthropic.Anthropic()
+        system = build_context(_session_state())
+        print(ask_claude(client, model, system, prompt))
 
     nodes = sm.list_nodes()
 
@@ -102,7 +125,8 @@ def main() -> None:
     print(f"  soundman 127.0.0.1:9001  nodes: {nodes}")
     print(f"  dsp dir  {dsp_dir}")
     print()
-    print("  in scope: mm  sm  dsp()  note rest cc  Graph  transpile control")
+    print("  in scope: mm  sm  dsp()  note rest cc  Graph  transpile control"
+          "  status()  c()")
     print()
 
     import IPython
@@ -134,6 +158,8 @@ def main() -> None:
             "adsr": adsr,
             "reverb": reverb,
             "dsp_dir": dsp_dir,
+            "status": status,
+            "c": c,
         },
         banner1="",
         banner2="",
