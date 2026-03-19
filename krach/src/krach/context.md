@@ -15,10 +15,11 @@ Rules (MUST follow):
 - Cell ordering: dsp() calls first → sm.load_graph() second → mm.play() last.
 - All comments must use Python syntax (# prefix). No prose outside code.
 - Use at most 2 × `# ---` dividers (3 cells maximum).
-- Multi-voice graphs: all voices sum at the DAC input. Always call sm.gain(0.8/N)
-  after sm.load_graph() where N is the number of voices. Examples: 2 voices →
-  sm.gain(0.4), 3 voices → sm.gain(0.27), 4 voices → sm.gain(0.2). Never use
-  sm.gain(0.7) or higher with more than one voice.
+- Multi-voice graphs: all voices sum at the DAC input. Use a "gain" node per voice
+  to set independent levels. Example for 2 voices at 0.5 each:
+  `.node("kg", "gain", gain=0.5).connect("kick", "out", "kg", "in").connect("kg", "out", "out", "in")`
+  Then call sm.gain(0.8) overall. Never connect more than one voice directly to "dac"
+  without per-voice gain nodes.
 
 ---
 
@@ -112,6 +113,7 @@ sm.load_graph(graph)
 
 ### Built-in node types
 - `"oscillator"` — sine/saw/square, control: `freq` (Hz)
+- `"gain"` — scales audio, control: `gain` (0.0–4.0, default 1.0). Use this to set per-voice levels before mixing into the DAC.
 - `"dac"` — audio output sink, port: `in`
 
 ### FAUST node types (prefix `faust:`)

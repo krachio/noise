@@ -11,6 +11,7 @@ use crate::control::ControlInput;
 use crate::graph::compiler::{self, CompileError};
 use crate::ir::{ConnectionIr, GraphIr, NodeInstance};
 use crate::nodes::dac::{dac_type_decl, DacFactory};
+use crate::nodes::gain::{gain_type_decl, GainFactory};
 use crate::nodes::oscillator::{oscillator_type_decl, OscillatorFactory};
 use crate::protocol::ClientMessage;
 use crate::registry::NodeRegistry;
@@ -48,6 +49,7 @@ pub fn engine(config: &EngineConfig) -> (EngineController, AudioProcessor) {
     let mut registry = NodeRegistry::new();
     let _ = registry.register(oscillator_type_decl(), OscillatorFactory);
     let _ = registry.register(dac_type_decl(), DacFactory);
+    let _ = registry.register(gain_type_decl(), GainFactory);
 
     let crossfade_samples = config.crossfade_samples();
     let block_size = config.block_size;
@@ -422,6 +424,7 @@ mod tests {
         let config = EngineConfig::default();
         let (ctrl, _) = engine(&config);
         let types = ctrl.list_node_types();
-        assert_eq!(types.len(), 2, "only oscillator and dac are registered by default");
+        assert_eq!(types.len(), 3, "oscillator, dac, and gain are registered by default");
+        assert!(types.contains(&"gain".to_string()));
     }
 }
