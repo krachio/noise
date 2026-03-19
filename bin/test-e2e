@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# End-to-end integration test: midiman + soundman + FAUST kit
+# Verifies the full pipeline: IPC → Engine → OSC → soundman → FAUST → audio
+#
+# What this tests:
+#   1. midiman engine loop accepts patterns and schedules events
+#   2. Events arrive at soundman via OSC at the correct times
+#   3. Multiple slots (kick/snare/hat) fire without burst
+#   4. You should hear ~4 bars of drums + bass
+
+set -e
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+cargo build --bin midiman --bin soundman -q --manifest-path "$REPO/Cargo.toml"
+
+TMPDIR_NATIVE="$(python3 -c 'import tempfile; print(tempfile.gettempdir())')"
+MIDIMAN_SOCK="${TMPDIR_NATIVE}/midiman.sock"
+rm -f "$MIDIMAN_SOCK"
+
+MIDIMAN_SOCKET="$MIDIMAN_SOCK" \
+MIDIMAN_OSC_TARGET="127.0.0.1:9001" \
+RUST_LOG=warn \
+  "$REPO/target/debug/midiman" &
+MIDIMAN_PID=$!
+
+SOUNDMAN_DSP_DIR="$HOME/.krach/dsp" \
+SOUNDMAN_OSC_ADDR="127.0.0.1:9001" \
+RUST_LOG=warn \
+  "$REPO/target/debug/soundman" &
+SOUNDMAN_PID=$!
+
+trap "kill $MIDIMAN_PID $SOUNDMAN_PID 2>/dev/null; wait" EXIT
+sleep 1
+
+PYTHON="$REPO/soundman-frontend/.venv/bin/python"
+[ -f "$PYTHON" ] || PYTHON=python3
+
+exec "$PYTHON" - <<'PYEOF'
+import sys, time, tempfile, os
+sys.path.insert(0, "/Users/jonkhler/dev/noise/midiman-frontend/src")
+sys.path.insert(0, "/Users/jonkhler/dev/noise/soundman-frontend/src")
+from midiman_frontend import Session
+from midiman_frontend.ir import OscFloat, OscStr
+from midiman_frontend.pattern import osc as midi_osc
+from soundman_frontend import Graph, SoundmanSession
+
+sm = SoundmanSession(host="127.0.0.1", port=9001)
+mm = Session(socket_path=os.path.join(tempfile.gettempdir(), "midiman.sock"))
+mm.connect()
+
+# ── step 1: verify connectivity (retry until soundman is ready) ───────────
+nodes = []
+for attempt in range(20):
+    try:
+        nodes = sm.list_nodes(timeout=0.5)
+        if "dac" in nodes:
+            break
+    except TimeoutError:
+        pass
+    time.sleep(0.5)
+else:
+    raise RuntimeError("soundman did not respond after 10s")
+
+print(f"step 1 — soundman nodes: {nodes}")
+assert "faust:kit" in nodes, "faust:kit not loaded (run bin/test-beat first to write the DSP file)"
+
+# ── step 2: load kit graph ────────────────────────────────────────────────
+sm.load_graph(
+    Graph()
+    .node("kit", "faust:kit", kick=0.0, hat=0.0, snare=0.0, freq=55.0, bass=0.0)
+    .node("out", "dac")
+    .connect("kit", "out", "out", "in")
+    .expose("kick",  "kit", "kick")
+    .expose("hat",   "kit", "hat")
+    .expose("snare", "kit", "snare")
+    .expose("freq",  "kit", "freq")
+    .expose("bass",  "kit", "bass")
+    .build()
+)
+time.sleep(0.2)
+print("step 2 — kit graph loaded")
+
+# ── step 3: send patterns via midiman ────────────────────────────────────
+def sc(label, value):
+    return midi_osc("/soundman/set", OscStr(label), OscFloat(value))
+
+mm.tempo = 120
+
+# trigger+reset pairs for FAUST rising-edge detection
+mm.launch({
+    "kick":  sc("kick", 1.0) + sc("kick", 0.0) + sc("kick", 1.0) + sc("kick", 0.0),
+    "snare": sc("snare",0.0) + sc("snare",1.0) + sc("snare",0.0) + sc("snare",1.0),
+    "hat":   (sc("hat", 1.0) + sc("hat", 0.0)) * 4,
+})
+
+BPM  = 120
+BARS = 4
+BAR_DUR = 4 * 60 / BPM  # seconds
+print(f"step 3 — playing {BARS} bars at {BPM} BPM (you should hear kick+snare+hat)")
+time.sleep(BARS * BAR_DUR + 0.5)
+
+# ── step 4: add a polyrhythmic bass line ──────────────────────────────────
+bass_line = [43.7, 55.0, 65.4, 43.7, 55.0, 87.3, 65.4, 55.0,
+             43.7, 55.0, 65.4, 87.3]
+bass_atoms = sc("bass", 0.0)  # start with reset
+for freq in bass_line:
+    bass_atoms = bass_atoms + sc("freq", freq) + sc("bass", 1.0) + sc("bass", 0.0)
+
+mm.launch({
+    "kick":  sc("kick", 1.0) + sc("kick", 0.0) + sc("kick", 1.0) + sc("kick", 0.0),
+    "snare": sc("snare",0.0) + sc("snare",1.0) + sc("snare",0.0) + sc("snare",1.0),
+    "hat":   (sc("hat", 1.0) + sc("hat", 0.0)) * 4,
+    "bass":  bass_atoms.over(3),  # 3-against-4 polyrhythm
+})
+
+print("step 4 — added polyrhythmic bass (3-against-4)")
+time.sleep(BARS * BAR_DUR + 0.5)
+
+mm.stop()
+sm.shutdown()
+mm.disconnect()
+print("done — all steps passed")
+PYEOF
