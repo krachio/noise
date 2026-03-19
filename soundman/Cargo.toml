@@ -1,0 +1,22 @@
+[package]
+name = "soundman"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "soundman"
+path = "src/main.rs"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = { level = "deny", priority = -1 }
+pedantic = { level = "deny", priority = -1 }
+nursery = { level = "deny", priority = -1 }
+
+[dependencies]
+soundman-core = { path = "../soundman-core" }
+soundman-faust = { path = "../soundman-faust" }
+log = "0.4"
+env_logger = "0.11"
