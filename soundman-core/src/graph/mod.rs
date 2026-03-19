@@ -110,15 +110,21 @@ impl DspGraph {
             let num_inputs = self.nodes[idx].num_inputs();
             let num_outputs = self.nodes[idx].num_outputs();
 
-            // Copy input data from buffer pool into scratch inputs
-            let mut input_port = 0;
+            // Zero scratch inputs, then sum all sources into their target port (fan-in mixing).
+            // Using conn.to_port as the port index ensures correct routing even when
+            // connections are not listed in port-index order.
+            for i in 0..num_inputs {
+                self.scratch_inputs[i].fill(0.0);
+            }
             for conn in &self.connections {
-                if conn.to_node == node_id {
+                if conn.to_node == node_id && conn.to_port < num_inputs {
+                    let to_port = conn.to_port;
                     let src_buf_idx = self.output_buffer_map[conn.from_node.0][conn.from_port];
-                    if input_port < num_inputs {
-                        self.scratch_inputs[input_port]
-                            .copy_from_slice(&self.buffers.buffers[src_buf_idx]);
-                        input_port += 1;
+                    for (d, s) in self.scratch_inputs[to_port]
+                        .iter_mut()
+                        .zip(self.buffers.buffers[src_buf_idx].iter())
+                    {
+                        *d += s;
                     }
                 }
             }
@@ -235,6 +241,65 @@ mod tests {
     use super::*;
     use crate::nodes::dac::DacNode;
     use crate::nodes::oscillator::Oscillator;
+
+    /// Emits a constant value on its single output — useful for deterministic graph tests.
+    struct ConstantNode(f32);
+
+    impl DspNode for ConstantNode {
+        fn process(&mut self, _inputs: &[&[f32]], outputs: &mut [&mut [f32]]) {
+            if let Some(out) = outputs.first_mut() {
+                out.fill(self.0);
+            }
+        }
+        fn num_inputs(&self) -> usize { 0 }
+        fn num_outputs(&self) -> usize { 1 }
+        fn set_param(&mut self, name: &str, _value: f32) -> Result<(), ParamError> {
+            Err(ParamError::NotFound(name.into()))
+        }
+        fn reset(&mut self, _sample_rate: u32) {}
+    }
+
+    /// Two-input node: output = input[0] − input[1].
+    /// Used to verify that the graph routes connections to the correct port index.
+    struct SubtractNode;
+
+    impl DspNode for SubtractNode {
+        fn process(&mut self, inputs: &[&[f32]], outputs: &mut [&mut [f32]]) {
+            if let Some(out) = outputs.first_mut() {
+                let in0 = inputs.first().map_or(0.0_f32, |s| s[0]);
+                let in1 = inputs.get(1).map_or(0.0_f32, |s| s[0]);
+                out.fill(in0 - in1);
+            }
+        }
+        fn num_inputs(&self) -> usize { 2 }
+        fn num_outputs(&self) -> usize { 1 }
+        fn set_param(&mut self, name: &str, _value: f32) -> Result<(), ParamError> {
+            Err(ParamError::NotFound(name.into()))
+        }
+        fn reset(&mut self, _sample_rate: u32) {}
+    }
+
+    fn make_graph(
+        nodes: Vec<Box<dyn DspNode>>,
+        node_ids: Vec<String>,
+        connections: Vec<Connection>,
+        process_order: Vec<NodeId>,
+        output_node: Option<NodeId>,
+        block_size: usize,
+    ) -> DspGraph {
+        let buffer_count: usize = nodes.iter().map(|n| n.num_outputs()).sum();
+        let buffers = BufferPool::new(buffer_count.max(1), block_size);
+        let mut buf_idx = 0;
+        let output_buffer_map: Vec<Vec<usize>> = nodes
+            .iter()
+            .map(|n| {
+                let ports: Vec<usize> = (buf_idx..buf_idx + n.num_outputs()).collect();
+                buf_idx += n.num_outputs();
+                ports
+            })
+            .collect();
+        DspGraph::new(nodes, node_ids, connections, process_order, output_node, buffers, output_buffer_map)
+    }
 
     #[test]
     fn topo_sort_linear_chain() {
@@ -408,5 +473,64 @@ mod tests {
         let mut graph = graph;
         let result = graph.set_param("missing", "freq", 440.0);
         assert!(matches!(result, Err(ParamError::NotFound(_))));
+    }
+
+    #[test]
+    fn fan_in_two_sources_summed_at_same_port() {
+        // Two ConstantNodes both connected to DAC's single input port.
+        // Output must be their sum (0.5 + 0.3 = 0.8), not just one of them.
+        let block_size = 16;
+        let mut graph = make_graph(
+            vec![Box::new(ConstantNode(0.5)), Box::new(ConstantNode(0.3)), Box::new(DacNode)],
+            vec!["c1".into(), "c2".into(), "out".into()],
+            vec![
+                Connection { from_node: NodeId(0), from_port: 0, to_node: NodeId(2), to_port: 0 },
+                Connection { from_node: NodeId(1), from_port: 0, to_node: NodeId(2), to_port: 0 },
+            ],
+            vec![NodeId(0), NodeId(1), NodeId(2)],
+            Some(NodeId(2)),
+            block_size,
+        );
+
+        let mut output = vec![0.0_f32; block_size];
+        graph.process(&mut output);
+
+        for &s in &output {
+            assert!((s - 0.8).abs() < 1e-6, "expected 0.5 + 0.3 = 0.8, got {s}");
+        }
+    }
+
+    #[test]
+    fn fan_in_routes_to_correct_port_index() {
+        // Connections stored in reverse port order (port 1 first, then port 0).
+        // SubtractNode output = input[0] − input[1] = 0.7 − 0.3 = 0.4.
+        // If conn.to_port is ignored (sequential counter bug), ports are swapped
+        // and the result would be 0.3 − 0.7 = −0.4.
+        let block_size = 16;
+        let mut graph = make_graph(
+            vec![
+                Box::new(ConstantNode(0.7)),  // NodeId(0) → port 0
+                Box::new(ConstantNode(0.3)),  // NodeId(1) → port 1
+                Box::new(SubtractNode),
+                Box::new(DacNode),
+            ],
+            vec!["c1".into(), "c2".into(), "sub".into(), "out".into()],
+            vec![
+                // Reversed: port 1 connection listed before port 0
+                Connection { from_node: NodeId(1), from_port: 0, to_node: NodeId(2), to_port: 1 },
+                Connection { from_node: NodeId(0), from_port: 0, to_node: NodeId(2), to_port: 0 },
+                Connection { from_node: NodeId(2), from_port: 0, to_node: NodeId(3), to_port: 0 },
+            ],
+            vec![NodeId(0), NodeId(1), NodeId(2), NodeId(3)],
+            Some(NodeId(3)),
+            block_size,
+        );
+
+        let mut output = vec![0.0_f32; block_size];
+        graph.process(&mut output);
+
+        for &s in &output {
+            assert!((s - 0.4).abs() < 1e-6, "expected input[0]-input[1] = 0.4, got {s}");
+        }
     }
 }
