@@ -24,14 +24,12 @@ def main() -> None:
     midiman_bin = repo / "target" / "debug" / "midiman"
     soundman_bin = repo / "target" / "debug" / "soundman"
 
-    # Build binaries if missing
-    if not midiman_bin.exists() or not soundman_bin.exists():
-        print("building binaries...")
-        subprocess.run(
-            ["cargo", "build", "--bin", "midiman", "--bin", "soundman", "-q"],
-            cwd=repo,
-            check=True,
-        )
+    print("building binaries...")
+    subprocess.run(
+        ["cargo", "build", "--bin", "midiman", "--bin", "soundman", "-q"],
+        cwd=repo,
+        check=True,
+    )
 
     midiman_sock = Path(tempfile.gettempdir()) / "midiman.sock"
     dsp_dir = Path.home() / ".krach" / "dsp"
