@@ -83,7 +83,7 @@ def main() -> None:
 
     import anthropic
 
-    from krach._copilot import SessionState, ask_claude, build_context, format_status
+    from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status
 
     mm = Session(socket_path=str(midiman_sock))
     mm.connect()
@@ -127,7 +127,13 @@ def main() -> None:
         model = os.environ.get("KRACH_MODEL", "claude-sonnet-4-6")
         client = anthropic.Anthropic()
         system = build_context(_session_state())
-        print(ask_claude(client, model, system, prompt))
+        response = ask_claude(client, model, system, prompt)
+        print(response)
+        code = extract_code(response)
+        if code:
+            import IPython
+            IPython.get_ipython().set_next_input(code)  # type: ignore[union-attr]
+            print("↑ pasted into next cell")
 
     nodes = sm.list_nodes()
 

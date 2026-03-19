@@ -1,6 +1,6 @@
 from typing import Any
 
-from krach._copilot import SessionState, ask_claude, build_context, format_status
+from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status
 
 
 def make_state(**kwargs: object) -> SessionState:
@@ -65,8 +65,9 @@ def test_format_status_shows_nodes() -> None:
 
 def test_format_status_empty_slots() -> None:
     out = format_status(make_state(playing=(), stopped=()))
-    assert "128" not in out or "bpm" in out.lower()  # still shows BPM
-    assert out.strip()  # not empty
+    assert "BPM:" in out
+    assert "▶" not in out
+    assert "⏸" not in out
 
 
 # ── ask_claude ───────────────────────────────────────────────────────────────
@@ -114,3 +115,48 @@ def test_ask_claude_passes_model_and_prompts() -> None:
     assert isinstance(msgs, list) and len(msgs) == 1  # type: ignore[arg-type]
     assert msgs[0]["role"] == "user"
     assert msgs[0]["content"] == "user prompt"
+
+
+# ── extract_code ─────────────────────────────────────────────────────────────
+
+def test_extract_code_single_python_block() -> None:
+    response = "Here's how:\n```python\nmm.play('kick', note(36))\n```"
+    assert extract_code(response) == "mm.play('kick', note(36))"
+
+
+def test_extract_code_fenced_without_language_tag() -> None:
+    response = "Try this:\n```\nmm.hush('bass')\n```"
+    assert extract_code(response) == "mm.hush('bass')"
+
+
+def test_extract_code_multiple_blocks_returns_last() -> None:
+    response = (
+        "First:\n```python\na = 1\n```\n"
+        "Better:\n```python\nb = 2\n```"
+    )
+    assert extract_code(response) == "b = 2"
+
+
+def test_extract_code_no_block_returns_none() -> None:
+    assert extract_code("Just call mm.set_bpm(120).") is None
+
+
+def test_extract_code_multiline_block_preserved() -> None:
+    response = (
+        "```python\n"
+        "trig = set_ctrl('kick', 1.0)\n"
+        "rst  = set_ctrl('kick', 0.0)\n"
+        "mm.play('kick', trig + rst)\n"
+        "```"
+    )
+    expected = "trig = set_ctrl('kick', 1.0)\nrst  = set_ctrl('kick', 0.0)\nmm.play('kick', trig + rst)"
+    assert extract_code(response) == expected
+
+
+def test_extract_code_empty_block_returns_none() -> None:
+    assert extract_code("```python\n```") is None
+
+
+def test_extract_code_strips_surrounding_blank_lines() -> None:
+    response = "```python\n\nmm.play('hi', note(48))\n\n```"
+    assert extract_code(response) == "mm.play('hi', note(48))"

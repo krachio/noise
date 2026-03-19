@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -14,6 +15,17 @@ class SessionState:
 
 
 _CONTEXT_MD = (Path(__file__).parent / "context.md").read_text()
+
+_CODE_BLOCK_RE = re.compile(r"```(?:python)?\n(.*?)```", re.DOTALL)
+
+
+def extract_code(response: str) -> str | None:
+    """Return the content of the last fenced code block, or None if absent."""
+    matches = _CODE_BLOCK_RE.findall(response)
+    if not matches:
+        return None
+    code = matches[-1].strip()
+    return code or None
 
 
 def build_context(state: SessionState) -> str:
