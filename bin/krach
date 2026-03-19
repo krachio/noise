@@ -1,0 +1,127 @@
+#!/usr/bin/env bash
+# krach — live coding session
+#
+# Starts midiman + soundman, then drops into an IPython REPL with
+# all tools in scope. Kills both processes on exit.
+#
+# Override defaults:
+#   MIDIMAN_SOCK  (default: /tmp/midiman.sock)
+#   SOUNDMAN_DSP_DIR  (default: ~/.krach/dsp/)
+#   SOUNDMAN_OSC_ADDR (default: 127.0.0.1:9001)
+
+set -e
+
+REPO="$(cd "$(dirname "$0")/.." && pwd)"
+MIDIMAN_SOCK="${MIDIMAN_SOCK:-/tmp/midiman.sock}"
+SOUNDMAN_OSC_ADDR="${SOUNDMAN_OSC_ADDR:-127.0.0.1:9001}"
+SOUNDMAN_DSP_DIR="${SOUNDMAN_DSP_DIR:-$HOME/.krach/dsp}"
+
+# Build binaries if needed
+cargo build --bin midiman --bin soundman --manifest-path "$REPO/Cargo.toml" -q
+
+cleanup() {
+    echo ""
+    echo "stopping midiman and soundman..."
+    kill "$MIDIMAN_PID" "$SOUNDMAN_PID" 2>/dev/null || true
+    wait "$MIDIMAN_PID" "$SOUNDMAN_PID" 2>/dev/null || true
+}
+trap cleanup EXIT
+
+# Start midiman
+rm -f "$MIDIMAN_SOCK"
+RUST_LOG=info "$REPO/target/debug/midiman" &
+MIDIMAN_PID=$!
+
+# Start soundman
+SOUNDMAN_DSP_DIR="$SOUNDMAN_DSP_DIR" \
+SOUNDMAN_OSC_ADDR="$SOUNDMAN_OSC_ADDR" \
+RUST_LOG=info "$REPO/target/debug/soundman" &
+SOUNDMAN_PID=$!
+
+# Wait for both to be ready
+sleep 1.5
+
+# Find a Python with the deps available — prefer the soundman-frontend venv
+# since it already has python-osc; fall back to system Python
+PYTHON="${REPO}/soundman-frontend/.venv/bin/python"
+if [ ! -f "$PYTHON" ]; then
+    PYTHON=python3
+fi
+
+echo ""
+echo "  ██╗  ██╗██████╗  █████╗  ██████╗██╗  ██╗"
+echo "  ██║ ██╔╝██╔══██╗██╔══██╗██╔════╝██║  ██║"
+echo "  █████╔╝ ██████╔╝███████║██║     ███████║"
+echo "  ██╔═██╗ ██╔══██╗██╔══██║██║     ██╔══██║"
+echo "  ██║  ██╗██║  ██║██║  ██║╚██████╗██║  ██║"
+echo "  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝"
+echo ""
+
+exec "$PYTHON" -c "
+import sys
+sys.path.insert(0, '${REPO}/midiman-frontend/src')
+sys.path.insert(0, '${REPO}/soundman-frontend/src')
+sys.path.insert(0, '${REPO}/faust-dsl/src')
+
+from midiman_frontend import Session, note, rest, cc
+from midiman_frontend.pattern import osc as midi_osc
+from soundman_frontend import SoundmanSession, Graph, GraphIr, NodeInstance, ConnectionIr
+from faust_dsl import transpile, control, Signal
+from faust_dsl.lib.oscillators import sine_osc, phasor, saw, square
+from faust_dsl.lib.filters import lowpass, highpass, bandpass
+from faust_dsl.lib.noise import white_noise
+from faust_dsl.music.envelopes import adsr
+from faust_dsl.music.effects import reverb
+from pathlib import Path
+
+mm = Session(socket_path='${MIDIMAN_SOCK}')
+mm.connect()
+sm = SoundmanSession(host='127.0.0.1', port=9001)
+
+dsp_dir = Path('${SOUNDMAN_DSP_DIR}')
+dsp_dir.mkdir(parents=True, exist_ok=True)
+
+def dsp(name, fn):
+    '''Transpile a Python DSP function and hot-drop it into soundman.'''
+    result = transpile(fn)
+    (dsp_dir / f'{name}.dsp').write_text(result.source)
+    print(f'  wrote {dsp_dir}/{name}.dsp — controls: {[c.name for c in result.schema.controls]}')
+    return result
+
+print('  midiman  ${MIDIMAN_SOCK}')
+print('  soundman 127.0.0.1:9001')
+print('  dsp dir  ${SOUNDMAN_DSP_DIR}')
+print()
+print('  mm, sm, dsp(), note, rest, cc, Graph, transpile, control, ...')
+print()
+
+try:
+    import IPython
+    IPython.embed(
+        user_ns=dict(
+            mm=mm, sm=sm, dsp=dsp,
+            note=note, rest=rest, cc=cc, midi_osc=midi_osc,
+            Graph=Graph, GraphIr=GraphIr,
+            NodeInstance=NodeInstance, ConnectionIr=ConnectionIr,
+            transpile=transpile, control=control, Signal=Signal,
+            sine_osc=sine_osc, phasor=phasor, saw=saw, square=square,
+            lowpass=lowpass, highpass=highpass, bandpass=bandpass,
+            white_noise=white_noise, adsr=adsr, reverb=reverb,
+            dsp_dir=dsp_dir,
+        ),
+        banner1='',
+        banner2='',
+    )
+except ImportError:
+    import code
+    code.interact(
+        banner='(install ipython for a better REPL)',
+        local=dict(
+            mm=mm, sm=sm, dsp=dsp,
+            note=note, rest=rest, cc=cc,
+            Graph=Graph, transpile=transpile, control=control,
+        ),
+    )
+
+mm.disconnect()
+"
