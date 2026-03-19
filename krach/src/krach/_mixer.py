@@ -157,7 +157,7 @@ class VoiceMixer:
         self._voices[name] = Voice(
             type_id=old.type_id, gain=value, controls=old.controls, init=old.init
         )
-        self._session.set(f"{name}_gain", value)
+        self._session.set(f"{name}_gain", float(value))
 
     def step(self, name: str, pitch: float | None = None, **params: float) -> Pattern:
         """Melodic trigger: set freq + optional params + gate trig/reset."""

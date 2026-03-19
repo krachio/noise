@@ -67,6 +67,7 @@ impl OscControlInput {
         match arg {
             OscType::Float(f) => Some(*f),
             OscType::Double(d) => Some(*d as f32),
+            OscType::Int(i) => Some(*i as f32),
             _ => None,
         }
     }
