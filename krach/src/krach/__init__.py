@@ -90,6 +90,7 @@ def main() -> None:
     sm = SoundmanSession(host="127.0.0.1", port=9001)
 
     _node_controls: dict[str, tuple[str, ...]] = {}
+    _user_ns_keys: tuple[str, ...] = ()  # populated after user_ns is built
 
     def _session_state() -> SessionState:
         return SessionState(
@@ -98,6 +99,7 @@ def main() -> None:
             stopped=tuple(k for k, v in mm.slots.items() if not v.playing),
             nodes=tuple(_cached_nodes),
             node_controls=tuple(_node_controls.items()),
+            in_scope=_user_ns_keys,
         )
 
     def set_ctrl(label: str, value: float) -> object:
@@ -190,41 +192,44 @@ def main() -> None:
 
     import IPython
 
+    user_ns = {
+        "mm": mm,
+        "sm": sm,
+        "dsp": dsp,
+        "note": note,
+        "rest": rest,
+        "cc": cc,
+        "midi_osc": midi_osc,
+        "set_ctrl": set_ctrl,
+        "OscFloat": OscFloat,
+        "OscInt": OscInt,
+        "OscStr": OscStr,
+        "Graph": Graph,
+        "GraphIr": GraphIr,
+        "NodeInstance": NodeInstance,
+        "ConnectionIr": ConnectionIr,
+        "transpile": transpile,
+        "control": control,
+        "Signal": Signal,
+        "sine_osc": sine_osc,
+        "phasor": phasor,
+        "saw": saw,
+        "square": square,
+        "lowpass": lowpass,
+        "highpass": highpass,
+        "bandpass": bandpass,
+        "white_noise": white_noise,
+        "adsr": adsr,
+        "reverb": reverb,
+        "dsp_dir": dsp_dir,
+        "status": status,
+        "c": c,
+        "cn": cn,
+    }
+    _user_ns_keys = tuple(sorted(user_ns))
+
     IPython.embed(  # type: ignore[reportUnknownMemberType]
-        user_ns={
-            "mm": mm,
-            "sm": sm,
-            "dsp": dsp,
-            "note": note,
-            "rest": rest,
-            "cc": cc,
-            "midi_osc": midi_osc,
-            "set_ctrl": set_ctrl,
-            "OscFloat": OscFloat,
-            "OscInt": OscInt,
-            "OscStr": OscStr,
-            "Graph": Graph,
-            "GraphIr": GraphIr,
-            "NodeInstance": NodeInstance,
-            "ConnectionIr": ConnectionIr,
-            "transpile": transpile,
-            "control": control,
-            "Signal": Signal,
-            "sine_osc": sine_osc,
-            "phasor": phasor,
-            "saw": saw,
-            "square": square,
-            "lowpass": lowpass,
-            "highpass": highpass,
-            "bandpass": bandpass,
-            "white_noise": white_noise,
-            "adsr": adsr,
-            "reverb": reverb,
-            "dsp_dir": dsp_dir,
-            "status": status,
-            "c": c,
-            "cn": cn,
-        },
+        user_ns=user_ns,
         banner1="",
         banner2="",
     )

@@ -10,6 +10,7 @@ def make_state(**kwargs: object) -> SessionState:
         "stopped": ("melody",),
         "nodes": ("oscillator", "dac", "faust:kit"),
         "node_controls": (),
+        "in_scope": (),
     }
     return SessionState(**{**defaults, **kwargs})  # type: ignore[arg-type]
 
@@ -57,6 +58,19 @@ def test_build_context_includes_node_controls() -> None:
 def test_build_context_no_controls_omits_section() -> None:
     ctx = build_context(make_state(node_controls=()))
     assert "Node controls (use ONLY" not in ctx
+
+
+def test_build_context_includes_in_scope_symbols() -> None:
+    state = make_state(in_scope=("mm", "sm", "note", "sine_osc", "adsr"))
+    ctx = build_context(state)
+    assert "mm" in ctx
+    assert "sine_osc" in ctx
+    assert "adsr" in ctx
+
+
+def test_build_context_in_scope_empty_omits_section() -> None:
+    ctx = build_context(make_state(in_scope=()))
+    assert "Available symbols (do not import" not in ctx
 
 
 # ── format_status ────────────────────────────────────────────────────────────

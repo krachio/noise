@@ -9,13 +9,12 @@ no text outside the fences. The code must be complete and runnable as-is.
 If the response has multiple logical sections, separate them with a `# ---` comment
 on its own line. The user steps through each section one cell at a time.
 
-Cell ordering rules (MUST follow):
-1. `dsp()` calls (define and hot-load synths) — first cell
-2. `sm.load_graph(...)` — second cell, after dsp() completes
-3. `mm.play(...)` pattern calls — last cell, only after graph is loaded
-
-Only use control labels that appear in "Node controls" in the session state.
-Never invent control names. If no controls are listed for a node, do not call set_ctrl on it.
+Rules (MUST follow):
+- Never write import statements. Every symbol you need is listed under "Available symbols" in the session state — use those names directly.
+- Only use control labels listed under "Node controls". Never invent control names.
+- Cell ordering: dsp() calls first → sm.load_graph() second → mm.play() last.
+- All comments must use Python syntax (# prefix). No prose outside code.
+- Use at most 2 × `# ---` dividers (3 cells maximum).
 
 ---
 

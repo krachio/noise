@@ -13,6 +13,7 @@ class SessionState:
     stopped: tuple[str, ...]
     nodes: tuple[str, ...]
     node_controls: tuple[tuple[str, tuple[str, ...]], ...]
+    in_scope: tuple[str, ...]
 
 
 _CONTEXT_MD = (Path(__file__).parent / "context.md").read_text()
@@ -49,6 +50,8 @@ def build_context(state: SessionState) -> str:
         lines.append("- Node controls (use ONLY these labels with set_ctrl):")
         for node_id, controls in state.node_controls:
             lines.append(f"  - {node_id}: {', '.join(controls)}")
+    if state.in_scope:
+        lines.append(f"- Available symbols (do not import, already in scope): {', '.join(sorted(state.in_scope))}")
     return _CONTEXT_MD + "\n---\n\n" + "\n".join(lines) + "\n"
 
 
