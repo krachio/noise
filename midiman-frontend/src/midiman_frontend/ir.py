@@ -204,7 +204,19 @@ class Ping:
     pass
 
 
-ClientMessage = SetPattern | Hush | HushAll | SetBpm | Ping
+SimpleCommand = SetPattern | Hush | HushAll | SetBpm | Ping
+
+
+@dataclass(frozen=True)
+class Batch:
+    commands: tuple[SimpleCommand, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.commands) == 0:
+            raise ValueError("Batch requires at least one command")
+
+
+ClientMessage = SimpleCommand | Batch
 
 # ── Serialization ────────────────────────────────────────────────────────────
 
@@ -308,6 +320,12 @@ def _command_to_dict(msg: ClientMessage) -> dict[str, Any]:
             return {"cmd": "SetBpm", "bpm": bpm}
         case Ping():
             return {"cmd": "Ping"}
+        case Batch(commands):
+            return {
+                "cmd": "Batch",
+                "commands": [_command_to_dict(c) for c in commands],
+            }
+
 
 
 def command_to_json(msg: ClientMessage) -> str:

@@ -4,6 +4,7 @@ import pytest
 
 from midiman_frontend.ir import (
     Atom,
+    Batch,
     Cat,
     Degrade,
     Early,
@@ -12,6 +13,8 @@ from midiman_frontend.ir import (
     Fast,
     Late,
     Note,
+    Ping,
+    SetBpm,
     Slow,
     Stack,
 )
@@ -107,6 +110,16 @@ class TestDegradeValidation:
     def test_boundary_values_ok(self) -> None:
         Degrade(prob=0.0, seed=0, child=_ATOM)
         Degrade(prob=1.0, seed=0, child=_ATOM)
+
+
+class TestBatchValidation:
+    def test_empty_batch_raises(self) -> None:
+        with pytest.raises(ValueError, match="at least one command"):
+            Batch(commands=())
+
+    def test_valid_batch_ok(self) -> None:
+        batch = Batch(commands=(Ping(), SetBpm(bpm=120.0)))
+        assert len(batch.commands) == 2
 
 
 class TestPatternMethodValidation:

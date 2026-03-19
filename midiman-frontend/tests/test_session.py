@@ -213,6 +213,41 @@ class TestStop:
             assert "melody" in s.slots
 
 
+class TestLaunch:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_launch_sends_batch(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.launch({"drums": note(36), "melody": note(60)})
+        msgs = _parse_sent(mock_cls.return_value)
+        batch_msgs = [m for m in msgs if m["cmd"] == "Batch"]
+        assert len(batch_msgs) == 1
+        cmds = batch_msgs[0]["commands"]
+        assert len(cmds) == 2
+        slots = {c["slot"] for c in cmds}
+        assert slots == {"drums", "melody"}
+        assert all(c["cmd"] == "SetPattern" for c in cmds)
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_launch_tracks_slot_states(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.launch({"drums": note(36), "melody": note(60)})
+            assert s.slots["drums"].playing is True
+            assert s.slots["melody"].playing is True
+            assert s.slots["drums"].pattern == note(36)
+            assert s.slots["melody"].pattern == note(60)
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_launch_replaces_existing_slots(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.play("drums", note(36))
+            s.launch({"drums": note(38), "bass": note(24)})
+            assert s.slots["drums"].pattern == note(38)
+            assert s.slots["bass"].pattern == note(24)
+
+
 class TestTempo:
     @patch("midiman_frontend.session.socket.socket")
     def test_set_tempo_sends_bpm(self, mock_cls: MagicMock) -> None:

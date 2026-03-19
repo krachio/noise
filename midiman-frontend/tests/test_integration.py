@@ -108,6 +108,22 @@ class TestEndToEnd:
         assert pat["child"]["child"]["op"] == "Cat"
 
     @patch("midiman_frontend.session.socket.socket")
+    def test_atomic_launch(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.launch({
+                "drums": note(36) + rest() + note(38) + rest(),
+                "melody": (note(60) + note(64) + note(67)).over(3),
+            })
+        msgs = _parse_sent(mock_cls.return_value)
+        batch_msgs = [m for m in msgs if m["cmd"] == "Batch"]
+        assert len(batch_msgs) == 1
+        inner = batch_msgs[0]["commands"]
+        assert len(inner) == 2
+        slots = {c["slot"] for c in inner}
+        assert slots == {"drums", "melody"}
+
+    @patch("midiman_frontend.session.socket.socket")
     def test_hush_resume_cycle(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         pat = note(60) + note(64)

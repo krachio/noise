@@ -7,6 +7,7 @@ from dataclasses import dataclass, field
 from typing import IO, Any
 
 from midiman_frontend.ir import (
+    Batch,
     ClientMessage,
     Hush,
     HushAll,
@@ -100,6 +101,13 @@ class Session:
             for name, state in self._slots.items()
         }
         self.send(HushAll())
+
+    def launch(self, patterns: dict[str, Pattern]) -> None:
+        commands: list[SetPattern] = []
+        for slot, pattern in patterns.items():
+            self._slots[slot] = SlotState(pattern=pattern, playing=True)
+            commands.append(SetPattern(slot=slot, pattern=pattern.node))
+        self.send(Batch(commands=tuple(commands)))
 
     # ── State visibility ────────────────────────────────────────────────
 

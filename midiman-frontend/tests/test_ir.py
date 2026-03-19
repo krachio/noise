@@ -7,6 +7,7 @@ import pytest
 
 from midiman_frontend.ir import (
     Atom,
+    Batch,
     Cat,
     Cc,
     Degrade,
@@ -208,6 +209,26 @@ class TestCommandSerialization:
     def test_ping(self) -> None:
         parsed = json.loads(command_to_json(Ping()))
         assert parsed == {"cmd": "Ping"}
+
+    def test_batch(self) -> None:
+        atom = Atom(Note(channel=0, note=36, velocity=100, dur=1.0))
+        cmd = Batch(commands=(
+            SetPattern(slot="drums", pattern=atom),
+            SetBpm(bpm=140.0),
+            Hush(slot="melody"),
+        ))
+        parsed = json.loads(command_to_json(cmd))
+        assert parsed["cmd"] == "Batch"
+        assert len(parsed["commands"]) == 3
+        assert parsed["commands"][0]["cmd"] == "SetPattern"
+        assert parsed["commands"][0]["slot"] == "drums"
+        assert parsed["commands"][1] == {"cmd": "SetBpm", "bpm": 140.0}
+        assert parsed["commands"][2] == {"cmd": "Hush", "slot": "melody"}
+
+    def test_batch_single_command(self) -> None:
+        cmd = Batch(commands=(Ping(),))
+        parsed = json.loads(command_to_json(cmd))
+        assert parsed == {"cmd": "Batch", "commands": [{"cmd": "Ping"}]}
 
 
 class TestImmutability:
