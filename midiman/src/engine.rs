@@ -107,24 +107,31 @@ impl Engine {
     pub fn apply(&mut self, cmd: EngineCommand) {
         match cmd {
             EngineCommand::SetPattern { name, pattern } => {
+                let now = Instant::now();
                 if let Some(&idx) = self.names.get(&name) {
+                    // Hot-swap: re-query from the current bar position so the
+                    // new pattern starts within the same cycle — no full-cycle
+                    // gap. Past atoms in the current cycle are filtered by
+                    // fire_at >= now inside fill().
                     self.slots[idx] = pattern;
+                    self.heap.clear();
+                    self.next_cycle = self.current_cycle(now);
                 } else {
+                    // New slot: start from the next full cycle so we never
+                    // burst-dispatch events from cycles that elapsed before
+                    // this slot existed.
                     let idx = self.slots.len();
                     self.slots.push(pattern);
                     self.names.insert(name, idx);
+                    self.heap.clear();
+                    self.next_cycle = self.first_future_cycle(now);
                 }
-                // Clear pre-scheduled events (belong to the old pattern) and
-                // jump to the first future cycle so fill() only produces events
-                // that haven't passed yet.
-                self.heap.clear();
-                self.next_cycle = self.first_future_cycle(Instant::now());
             }
             EngineCommand::Hush { name } => {
                 if let Some(&idx) = self.names.get(&name) {
                     self.slots[idx] = CompiledPattern::silence();
                     self.heap.clear();
-                    self.next_cycle = self.first_future_cycle(Instant::now());
+                    self.next_cycle = self.current_cycle(Instant::now());
                 }
             }
             EngineCommand::HushAll => {
@@ -146,17 +153,24 @@ impl Engine {
     /// The first cycle number whose start instant is strictly after `now`.
     /// Used after a reset to skip already-elapsed cycles without filtering
     /// individual events inside `fill()`.
-    fn first_future_cycle(&self, now: Instant) -> i64 {
-        if now <= self.clock.cycle_start_instant(0) {
+    /// The cycle that contains `now`.
+    fn current_cycle(&self, now: Instant) -> i64 {
+        let start = self.clock.cycle_start_instant(0);
+        if now <= start {
             return 0;
         }
-        let elapsed = now
-            .duration_since(self.clock.cycle_start_instant(0))
-            .as_secs_f64();
-        let elapsed_cycles = elapsed / self.clock.cycle_duration_secs();
+        let elapsed = now.duration_since(start).as_secs_f64();
+        let cycles = elapsed / self.clock.cycle_duration_secs();
         #[allow(clippy::cast_possible_truncation)]
-        let cycle = elapsed_cycles.floor() as i64;
-        cycle + 1
+        let cycle = cycles.floor() as i64;
+        cycle
+    }
+
+    /// The first cycle that starts strictly after `now`.
+    /// Used for **new** slots to skip cycles that elapsed before the slot
+    /// existed — prevents a burst of past-due events on first appearance.
+    fn first_future_cycle(&self, now: Instant) -> i64 {
+        self.current_cycle(now) + 1
     }
 
     /// Advance the heap: query all patterns for cycles within `[now, now+lookahead)`.
@@ -174,11 +188,17 @@ impl Engine {
                 for event in query(pattern, pattern.root, query_arc) {
                     if event.has_onset() {
                         let onset = event.whole.expect("onset implies whole").start;
-                        self.heap.push(Reverse(TimedEvent {
-                            fire_at: self.clock.onset_to_instant(onset),
-                            event,
-                            slot_name: name.clone(),
-                        }));
+                        let fire_at = self.clock.onset_to_instant(onset);
+                        // Drop events that have already passed (can occur when
+                        // next_cycle is reset to current_cycle on a hot-swap
+                        // mid-cycle — past atoms of that cycle are discarded).
+                        if fire_at >= now {
+                            self.heap.push(Reverse(TimedEvent {
+                                fire_at,
+                                event,
+                                slot_name: name.clone(),
+                            }));
+                        }
                     }
                 }
             }
