@@ -42,7 +42,11 @@ def main() -> None:
 
     midiman_proc = subprocess.Popen(
         [str(midiman_bin)],
-        env={**env, "MIDIMAN_SOCKET": str(midiman_sock)},
+        env={
+            **env,
+            "MIDIMAN_SOCKET": str(midiman_sock),
+            "MIDIMAN_OSC_TARGET": "127.0.0.1:9001",  # route OSC atoms to soundman
+        },
     )
     soundman_proc = subprocess.Popen(
         [str(soundman_bin)],

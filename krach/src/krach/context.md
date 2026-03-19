@@ -179,6 +179,36 @@ def snare() -> Signal:
 
 ---
 
+## Connecting midiman patterns to soundman
+
+`note()` emits MIDI note events — **not** audio. To drive soundman from midiman patterns,
+use `midi_osc()` atoms. midiman routes these to soundman at `127.0.0.1:9001`.
+
+```python
+from midiman_frontend.pattern import osc as midi_osc
+
+# Trigger a FAUST synth gate on beat 1 and 3 (requires faust:kit or faust:pluck loaded)
+kick_pat = midi_osc("/soundman/set", "kick", 1.0) + rest() + \
+           midi_osc("/soundman/set", "kick", 1.0) + rest()
+mm.play("kick", kick_pat)
+
+# Drive pitch of a running FAUST synth
+freqs = [87.3, 103.8, 116.5, 87.3]
+bass_pat = sum(
+    (midi_osc("/soundman/set", "freq", f) + midi_osc("/soundman/set", "bass", 1.0)
+     for f in freqs),
+    rest()
+)
+mm.play("bass", bass_pat)
+```
+
+**Key rule:** `note()` → MIDI only. `midi_osc("/soundman/set", label, value)` → soundman.
+
+For percussion, use `faust:kit` (controls: `kick`, `hat`, `snare`, `bass`, `freq`).
+For melodic lines, use `faust:pluck` (controls: `freq`, `gate`).
+
+---
+
 ## Full pipeline example
 
 ```python
