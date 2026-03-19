@@ -113,7 +113,7 @@ mix.voice("bass", acid_bass, gain=0.3)
 | `bandpass(sig, cutoff, q)` | Bandpass filter — signal first |
 | `white_noise()` | White noise |
 | `adsr(a, d, s, r, gate)` | ADSR envelope |
-| `reverb(room, sig)` | Reverb (zita) |
+| `reverb(sig, room)` | Freeverb — signal first, room 0.0-1.0 second |
 | `control(name, init, lo, hi)` | Exposed parameter |
 
 ---
