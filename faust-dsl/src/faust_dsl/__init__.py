@@ -47,6 +47,7 @@ from faust_dsl._dsp import (
     unit_delay,
 )
 from faust_dsl._codegen import emit_faust
+from faust_dsl.ad import ZeroTangent, jvp, register_jvp
 from faust_dsl._optimize import optimize_graph
 from faust_dsl.compose import DspFunc, bus, chain, merge, parallel, route, split
 from faust_dsl.transpile import (
@@ -110,6 +111,10 @@ __all__ = [
     "ne",
     # Conditional
     "select2",
+    # Automatic differentiation
+    "ZeroTangent",
+    "jvp",
+    "register_jvp",
     # Optimization
     "optimize_graph",
     # Composition
