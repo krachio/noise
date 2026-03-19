@@ -36,7 +36,7 @@ def main() -> None:
     dsp_dir.mkdir(parents=True, exist_ok=True)
 
     midiman_sock.unlink(missing_ok=True)
-    env = {**os.environ, "RUST_LOG": "error"}
+    env = {**os.environ, "RUST_LOG": "warn"}
 
     midiman_proc = subprocess.Popen(
         [str(midiman_bin)],
