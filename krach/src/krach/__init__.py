@@ -59,7 +59,6 @@ def main() -> None:
 
     if not _wait_for_socket(midiman_sock):
         raise RuntimeError("midiman socket not ready after 5s")
-    time.sleep(0.4)  # soundman OSC port
 
     # ── imports ──────────────────────────────────────────────────────────────
     from midiman_frontend import Session, cc, note, rest
@@ -158,6 +157,17 @@ def main() -> None:
         _paste(_cell_queue.pop(0))
         if _cell_queue:
             print(f"\n  ({len(_cell_queue)} more cell(s) — call cn() to advance)")
+
+    # Wait for soundman to finish loading DSP files (hot-reload at startup).
+    _soundman_deadline = time.monotonic() + 10.0
+    while time.monotonic() < _soundman_deadline:
+        try:
+            sm.list_nodes(timeout=0.5)
+            break
+        except TimeoutError:
+            time.sleep(0.1)
+    else:
+        raise RuntimeError("soundman not ready after 10s")
 
     nodes = sm.list_nodes()
 
