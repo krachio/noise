@@ -1,4 +1,21 @@
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
 use std::path::PathBuf;
+use std::time::Instant;
+
+/// Wrapper for `(Instant, ClientMessage)` that orders by `Instant` only.
+/// Used in the timed command priority queue.
+struct Timed(Instant, ClientMessage);
+impl PartialEq for Timed {
+    fn eq(&self, o: &Self) -> bool { self.0 == o.0 }
+}
+impl Eq for Timed {}
+impl PartialOrd for Timed {
+    fn partial_cmp(&self, o: &Self) -> Option<std::cmp::Ordering> { Some(self.cmp(o)) }
+}
+impl Ord for Timed {
+    fn cmp(&self, o: &Self) -> std::cmp::Ordering { self.0.cmp(&o.0) }
+}
 
 use log::{error, info, warn};
 use soundman_core::control::osc::{send_node_types_reply, OscControlInput};
@@ -72,27 +89,50 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf, osc_addr: &str) -> Result<(), S
     let mut osc = OscControlInput::new(osc_addr);
     osc.start()?;
 
+    // Priority queue for time-tagged SetControl commands.
+    // Messages sent by midiman as OSC bundles arrive here up to ~100ms before
+    // their scheduled time. We dequeue them when their timestamp arrives and
+    // pass them to the audio thread — firing in the block that CONTAINS the
+    // scheduled time rather than the block after it.
+    let mut pending: BinaryHeap<Reverse<Timed>> = BinaryHeap::new();
+
     loop {
-        for msg in osc.poll() {
-            match msg {
-                ClientMessage::Shutdown => {
+        // ① Receive OSC messages, preserving bundle time tags.
+        for (time_tag, msg) in osc.timed_poll() {
+            match (time_tag, msg) {
+                // SetControl with a time tag → queue for sample-accurate firing.
+                (Some(fire_at), msg @ ClientMessage::SetControl { .. }) => {
+                    pending.push(Reverse(Timed(fire_at, msg)));
+                }
+                // All other messages (including immediate SetControl) → apply now.
+                (_, ClientMessage::Shutdown) => {
                     backend.stop();
                     osc.stop();
                     return Ok(());
                 }
-                ClientMessage::ListNodes { reply_port } => {
+                (_, ClientMessage::ListNodes { reply_port }) => {
                     let types = engine.controller_mut().list_node_types();
                     send_node_types_reply("127.0.0.1", reply_port, &types);
                 }
-                ClientMessage::LoadGraph(ir) => {
+                (_, ClientMessage::LoadGraph(ir)) => {
                     if let Err(e) = engine.load_graph(ir) {
                         warn!("load_graph: {e}");
                     }
                 }
-                other => {
+                (_, other) => {
                     let _ = engine.controller_mut().handle_message(other);
                 }
             }
+        }
+
+        // ② Dequeue timed SetControl commands whose scheduled time has arrived.
+        let now = Instant::now();
+        while pending
+            .peek()
+            .is_some_and(|Reverse(Timed(t, _))| *t <= now)
+        {
+            let Reverse(Timed(_, msg)) = pending.pop().expect("just peeked");
+            let _ = engine.controller_mut().handle_message(msg);
         }
 
         if let Err(e) = engine.poll_reload() {

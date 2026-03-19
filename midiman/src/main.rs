@@ -80,20 +80,38 @@ fn main() {
         // ② Fill heap with events up to the lookahead horizon.
         engine.fill(now);
 
-        // ③ Drain due events from the heap and dispatch them.
-        for timed_event in engine.drain(now) {
-            // Schedule note-off for MIDI notes.
-            if let Value::Note { channel, note, dur, .. } = &timed_event.event.value {
-                let cycle_dur_secs = BEATS_PER_CYCLE * 60.0 / engine.bpm();
-                let note_off_at = timed_event.fire_at
-                    + Duration::from_secs_f64(dur * cycle_dur_secs);
-                note_offs.push(Reverse(PendingNoteOff {
-                    fire_at: note_off_at,
-                    channel: *channel,
-                    note: *note,
-                }));
+        // ③ Drain events and dispatch:
+        //    • OSC events: drain the FULL lookahead window (up to 100ms ahead)
+        //      and send immediately as bundles with the fire_at time tag.
+        //      soundman queues them and applies at the correct audio block.
+        //    • MIDI/CC events: dispatch only when due (fire_at ≤ now), unchanged.
+        for timed_event in engine.drain(now + LOOKAHEAD) {
+            match &timed_event.event.value {
+                Value::Osc { .. } => {
+                    // Send early with timestamp; soundman handles precise timing.
+                    let _ = output::dispatch(&timed_event, &mut midi_sink, &mut osc_sink);
+                }
+                Value::Note { channel, note, dur, .. } => {
+                    if timed_event.fire_at <= now {
+                        let cycle_dur_secs = BEATS_PER_CYCLE * 60.0 / engine.bpm();
+                        let note_off_at = timed_event.fire_at
+                            + Duration::from_secs_f64(dur * cycle_dur_secs);
+                        note_offs.push(Reverse(PendingNoteOff {
+                            fire_at: note_off_at,
+                            channel: *channel,
+                            note: *note,
+                        }));
+                        let _ = output::dispatch(&timed_event, &mut midi_sink, &mut osc_sink);
+                    }
+                    // Not yet due: dropped — engine will re-fill from current_cycle
+                    // on next SetPattern. In practice the drum machine is all-OSC.
+                }
+                _ => {
+                    if timed_event.fire_at <= now {
+                        let _ = output::dispatch(&timed_event, &mut midi_sink, &mut osc_sink);
+                    }
+                }
             }
-            let _ = output::dispatch(&timed_event, &mut midi_sink, &mut osc_sink);
         }
 
         // ④ Drain any note-offs that are now due.

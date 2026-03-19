@@ -84,27 +84,38 @@ fn midiman_sequences_soundman_set_control_over_osc() {
         };
         let (_, packet) = rosc::decoder::decode_udp(&buf[..len]).unwrap();
 
-        if let rosc::OscPacket::Message(msg) = packet {
-            // Verify address matches soundman's expected namespace
-            assert_eq!(
-                msg.addr, "/soundman/set",
-                "OSC address must match soundman's /soundman/set endpoint"
-            );
-
-            // Verify first arg is the control label
-            assert_eq!(
-                msg.args[0],
-                rosc::OscType::String("pitch".into()),
-                "first arg must be the control label"
-            );
-
-            // Extract frequency (midiman sends Double, soundman expects Float —
-            // this documents the current wire format)
-            match &msg.args[1] {
-                rosc::OscType::Double(f) => received_freqs.push(*f),
-                rosc::OscType::Float(f) => received_freqs.push(f64::from(*f)),
-                other => panic!("expected numeric arg, got {other:?}"),
+        // OSC events are now sent as time-tagged bundles (for sample-accurate
+        // scheduling in soundman). Extract the inner message.
+        let msg = match packet {
+            rosc::OscPacket::Bundle(bundle) => {
+                if let Some(rosc::OscPacket::Message(m)) = bundle.content.into_iter().next() {
+                    m
+                } else {
+                    continue;
+                }
             }
+            rosc::OscPacket::Message(m) => m,
+        };
+
+        // Verify address matches soundman's expected namespace
+        assert_eq!(
+            msg.addr, "/soundman/set",
+            "OSC address must match soundman's /soundman/set endpoint"
+        );
+
+        // Verify first arg is the control label
+        assert_eq!(
+            msg.args[0],
+            rosc::OscType::String("pitch".into()),
+            "first arg must be the control label"
+        );
+
+        // Extract frequency (midiman sends Double, soundman expects Float —
+        // this documents the current wire format)
+        match &msg.args[1] {
+            rosc::OscType::Double(f) => received_freqs.push(*f),
+            rosc::OscType::Float(f) => received_freqs.push(f64::from(*f)),
+            other => panic!("expected numeric arg, got {other:?}"),
         }
     }
 

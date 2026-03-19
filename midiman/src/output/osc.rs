@@ -8,13 +8,26 @@
 //! Note and CC values are ignored by this sink — they go to MIDI instead.
 
 use std::net::UdpSocket;
+use std::time::{Instant, SystemTime};
 
-use rosc::{OscMessage, OscPacket, OscType, encoder};
+use rosc::{OscBundle, OscMessage, OscPacket, OscTime, OscType, encoder};
 
 use crate::event::{OscArg, Value};
 use crate::engine::TimedEvent;
 
 use super::{OutputError, OutputSink};
+
+/// Encode a scheduling [`Instant`] as an NTP [`OscTime`] for use in OSC bundles.
+fn instant_to_osc_time(t: Instant) -> OscTime {
+    let now_sys = SystemTime::now();
+    let now_inst = Instant::now();
+    let target_sys = if t >= now_inst {
+        now_sys + t.duration_since(now_inst)
+    } else {
+        now_sys.checked_sub(now_inst.duration_since(t)).unwrap_or(now_sys)
+    };
+    OscTime::try_from(target_sys).unwrap_or(OscTime { seconds: 0, fractional: 0 })
+}
 
 /// OSC output sink using rosc + UdpSocket.
 pub struct OscSink {
@@ -33,7 +46,17 @@ impl OscSink {
         })
     }
 
-    fn send_osc(&self, address: &str, args: &[OscArg]) -> Result<(), OutputError> {
+    /// Send an OSC message wrapped in a bundle with the given scheduling time tag.
+    ///
+    /// soundman receives the bundle early (up to one lookahead window ahead of
+    /// `fire_at`), queues it, and applies the message at the audio block that
+    /// temporally contains `fire_at` — rather than the block after receipt.
+    fn send_osc_timed(
+        &self,
+        fire_at: Instant,
+        address: &str,
+        args: &[OscArg],
+    ) -> Result<(), OutputError> {
         let osc_args: Vec<OscType> = args
             .iter()
             .map(|a| match a {
@@ -43,9 +66,12 @@ impl OscSink {
             })
             .collect();
 
-        let packet = OscPacket::Message(OscMessage {
-            addr: address.to_owned(),
-            args: osc_args,
+        let packet = OscPacket::Bundle(OscBundle {
+            timetag: instant_to_osc_time(fire_at),
+            content: vec![OscPacket::Message(OscMessage {
+                addr: address.to_owned(),
+                args: osc_args,
+            })],
         });
 
         let bytes = encoder::encode(&packet)
@@ -62,7 +88,9 @@ impl OscSink {
 impl OutputSink for OscSink {
     fn send(&mut self, event: &TimedEvent) -> Result<(), OutputError> {
         match &event.event.value {
-            Value::Osc { address, args } => self.send_osc(address, args),
+            Value::Osc { address, args } => {
+                self.send_osc_timed(event.fire_at, address, args)
+            }
             _ => Ok(()), // Not handled by OSC sink
         }
     }
@@ -109,14 +137,20 @@ mod tests {
         let (len, _) = listener.recv_from(&mut buf).unwrap();
         let (_, packet) = rosc::decoder::decode_udp(&buf[..len]).unwrap();
 
+        // OSC events are now sent as bundles with a fire_at time tag.
         match packet {
-            OscPacket::Message(msg) => {
-                assert_eq!(msg.addr, "/test/hello");
-                assert_eq!(msg.args.len(), 2);
-                assert_eq!(msg.args[0], OscType::Double(42.0));
-                assert_eq!(msg.args[1], OscType::String("world".into()));
+            OscPacket::Bundle(bundle) => {
+                assert_eq!(bundle.content.len(), 1);
+                if let OscPacket::Message(msg) = &bundle.content[0] {
+                    assert_eq!(msg.addr, "/test/hello");
+                    assert_eq!(msg.args.len(), 2);
+                    assert_eq!(msg.args[0], OscType::Double(42.0));
+                    assert_eq!(msg.args[1], OscType::String("world".into()));
+                } else {
+                    panic!("bundle content should be a message");
+                }
             }
-            OscPacket::Bundle(_) => panic!("expected message, got bundle"),
+            OscPacket::Message(_) => panic!("expected bundle, got bare message"),
         }
     }
 

@@ -246,15 +246,21 @@ fn e2e_osc_loopback() {
     let (len, _) = listener.recv_from(&mut buf).unwrap();
     let (_, packet) = rosc::decoder::decode_udp(&buf[..len]).unwrap();
 
+    // OSC events are now sent as bundles with a fire_at time tag.
     match packet {
-        rosc::OscPacket::Message(msg) => {
-            assert_eq!(msg.addr, "/test/kick");
-            assert_eq!(msg.args.len(), 3);
-            assert_eq!(msg.args[0], rosc::OscType::Double(1.0));
-            assert_eq!(msg.args[1], rosc::OscType::Int(42));
-            assert_eq!(msg.args[2], rosc::OscType::String("hello".into()));
+        rosc::OscPacket::Bundle(bundle) => {
+            assert_eq!(bundle.content.len(), 1);
+            if let rosc::OscPacket::Message(msg) = &bundle.content[0] {
+                assert_eq!(msg.addr, "/test/kick");
+                assert_eq!(msg.args.len(), 3);
+                assert_eq!(msg.args[0], rosc::OscType::Double(1.0));
+                assert_eq!(msg.args[1], rosc::OscType::Int(42));
+                assert_eq!(msg.args[2], rosc::OscType::String("hello".into()));
+            } else {
+                panic!("bundle content should be a message");
+            }
         }
-        rosc::OscPacket::Bundle(_) => panic!("expected message, got bundle"),
+        rosc::OscPacket::Message(_) => panic!("expected bundle, got bare message"),
     }
 
     tk.stop();

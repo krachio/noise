@@ -1,10 +1,41 @@
 use std::net::UdpSocket;
+use std::time::{Instant, SystemTime};
 
 use log::{debug, trace, warn};
-use rosc::{OscMessage, OscPacket, OscType};
+use rosc::{OscMessage, OscPacket, OscTime, OscType};
 
 use super::ControlInput;
 use crate::protocol::ClientMessage;
+
+/// Encode an [`Instant`] as an OSC NTP time tag.
+///
+/// Uses the current wall clock as a pivot to convert the monotonic `Instant`
+/// to a `SystemTime`, then to NTP format (seconds + fractional since Jan 1, 1900).
+#[must_use]
+pub fn instant_to_osc_time(t: Instant) -> OscTime {
+    let now_sys = SystemTime::now();
+    let now_inst = Instant::now();
+    let target_sys = if t >= now_inst {
+        now_sys + t.duration_since(now_inst)
+    } else {
+        now_sys.checked_sub(now_inst.duration_since(t)).unwrap_or(now_sys)
+    };
+    OscTime::try_from(target_sys).unwrap_or(OscTime { seconds: 0, fractional: 0 })
+}
+
+/// Decode an OSC NTP time tag back to an [`Instant`].
+///
+/// Uses the current wall clock as a pivot. If the decoded time is in the past,
+/// returns `Instant::now()` (fire immediately).
+#[must_use]
+pub fn osc_time_to_instant(osc_time: OscTime) -> Instant {
+    let now_sys = SystemTime::now();
+    let now_inst = Instant::now();
+    let target_sys = SystemTime::from(osc_time);
+    target_sys
+        .duration_since(now_sys)
+        .map_or(now_inst, |delta| now_inst + delta)
+}
 
 /// Receives OSC messages over UDP and converts them to [`ClientMessage`]s.
 ///
@@ -96,6 +127,62 @@ impl OscControlInput {
                 .flat_map(Self::decode_packet)
                 .collect(),
         }
+    }
+
+    /// Decode a packet, tagging each message with its bundle's time tag (if any).
+    /// Messages from bare (non-bundled) packets get `None`.
+    fn decode_packet_timed(
+        packet: &OscPacket,
+        tag: Option<Instant>,
+    ) -> Vec<(Option<Instant>, ClientMessage)> {
+        match packet {
+            OscPacket::Message(msg) => Self::parse_osc_message(msg)
+                .map(|m| (tag, m))
+                .into_iter()
+                .collect(),
+            OscPacket::Bundle(bundle) => {
+                let bundle_time = Some(osc_time_to_instant(bundle.timetag));
+                bundle
+                    .content
+                    .iter()
+                    .flat_map(|p| Self::decode_packet_timed(p, bundle_time))
+                    .collect()
+            }
+        }
+    }
+}
+
+impl OscControlInput {
+    /// Like [`ControlInput::poll`] but preserves bundle time tags.
+    ///
+    /// Messages that arrived in an OSC bundle carry the bundle's scheduled
+    /// [`Instant`] (decoded from the NTP time tag). Bare messages get `None`.
+    pub fn timed_poll(&mut self) -> Vec<(Option<Instant>, ClientMessage)> {
+        let Some(socket) = &self.socket else {
+            return vec![];
+        };
+
+        let mut messages = Vec::new();
+
+        loop {
+            match socket.recv_from(&mut self.buf) {
+                Ok((size, addr)) => {
+                    if let Ok((_remaining, packet)) =
+                        rosc::decoder::decode_udp(&self.buf[..size])
+                    {
+                        let decoded = Self::decode_packet_timed(&packet, None);
+                        for (_, msg) in &decoded {
+                            debug!("OSC from {addr}: {msg:?}");
+                        }
+                        messages.extend(decoded);
+                    }
+                }
+                Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => break,
+                Err(_) => break,
+            }
+        }
+
+        messages
     }
 }
 
@@ -359,5 +446,102 @@ mod tests {
         } else {
             panic!("expected OSC message, got bundle");
         }
+    }
+
+    // ── OscTime ↔ Instant ────────────────────────────────────────────────
+
+    #[test]
+    fn osc_time_roundtrip_within_1ms() {
+        let original = Instant::now() + std::time::Duration::from_millis(500);
+        let encoded = instant_to_osc_time(original);
+        let decoded = osc_time_to_instant(encoded);
+        let diff = if decoded >= original {
+            decoded.duration_since(original)
+        } else {
+            original.duration_since(decoded)
+        };
+        assert!(
+            diff < std::time::Duration::from_millis(1),
+            "roundtrip error too large: {diff:?}"
+        );
+    }
+
+    #[test]
+    fn osc_time_past_instant_returns_now() {
+        // A past time should decode to approximately Instant::now() (fire immediately).
+        let past = Instant::now() - std::time::Duration::from_secs(1);
+        let encoded = instant_to_osc_time(past);
+        let decoded = osc_time_to_instant(encoded);
+        // Should be very close to now (not 1 second in the past).
+        let elapsed = decoded.elapsed();
+        assert!(
+            elapsed < std::time::Duration::from_millis(50),
+            "past time should decode to approximately now, elapsed={elapsed:?}"
+        );
+    }
+
+    #[test]
+    fn bundle_time_tag_extracted_in_timed_poll() {
+        let mut input = OscControlInput::new("127.0.0.1:0");
+        input.start().unwrap();
+        let input_addr = input.socket.as_ref().unwrap().local_addr().unwrap();
+
+        // Send a bundle with a time tag 200ms in the future.
+        let target = Instant::now() + std::time::Duration::from_millis(200);
+        let osc_time = instant_to_osc_time(target);
+
+        let sender = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let bundle = rosc::encoder::encode(&OscPacket::Bundle(rosc::OscBundle {
+            timetag: osc_time,
+            content: vec![OscPacket::Message(OscMessage {
+                addr: "/soundman/set".into(),
+                args: vec![
+                    OscType::String("pitch".into()),
+                    OscType::Float(440.0),
+                ],
+            })],
+        }))
+        .unwrap();
+        sender.send_to(&bundle, input_addr).unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let timed = input.timed_poll();
+        assert_eq!(timed.len(), 1, "expected one message, got {}", timed.len());
+        let (time_tag, msg) = &timed[0];
+        assert!(
+            matches!(msg, ClientMessage::SetControl { label, .. } if label == "pitch"),
+            "unexpected message: {msg:?}"
+        );
+        let fire_at = time_tag.expect("bundle message should have a time tag");
+        let diff = if fire_at >= target {
+            fire_at.duration_since(target)
+        } else {
+            target.duration_since(fire_at)
+        };
+        assert!(
+            diff < std::time::Duration::from_millis(2),
+            "decoded time tag too far from target: {diff:?}"
+        );
+    }
+
+    #[test]
+    fn bare_message_has_no_time_tag() {
+        let mut input = OscControlInput::new("127.0.0.1:0");
+        input.start().unwrap();
+        let input_addr = input.socket.as_ref().unwrap().local_addr().unwrap();
+
+        let sender = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let msg = rosc::encoder::encode(&OscPacket::Message(OscMessage {
+            addr: "/soundman/ping".into(),
+            args: vec![],
+        }))
+        .unwrap();
+        sender.send_to(&msg, input_addr).unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        let timed = input.timed_poll();
+        assert_eq!(timed.len(), 1);
+        let (time_tag, _) = &timed[0];
+        assert!(time_tag.is_none(), "bare message should have no time tag");
     }
 }
