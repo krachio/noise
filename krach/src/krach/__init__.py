@@ -65,6 +65,7 @@ def main() -> None:
 
     # ── imports ──────────────────────────────────────────────────────────────
     from midiman_frontend import Session, cc, note, rest
+    from midiman_frontend.ir import OscFloat, OscInt, OscStr
     from midiman_frontend.pattern import osc as midi_osc
     from soundman_frontend import (
         ConnectionIr,
@@ -144,6 +145,9 @@ def main() -> None:
             "rest": rest,
             "cc": cc,
             "midi_osc": midi_osc,
+            "OscFloat": OscFloat,
+            "OscInt": OscInt,
+            "OscStr": OscStr,
             "Graph": Graph,
             "GraphIr": GraphIr,
             "NodeInstance": NodeInstance,

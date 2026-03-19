@@ -186,23 +186,27 @@ use `midi_osc()` atoms. midiman routes these to soundman at `127.0.0.1:9001`.
 
 ```python
 from midiman_frontend.pattern import osc as midi_osc
+from midiman_frontend.ir import OscStr, OscFloat
 
-# Trigger a FAUST synth gate on beat 1 and 3 (requires faust:kit or faust:pluck loaded)
-kick_pat = midi_osc("/soundman/set", "kick", 1.0) + rest() + \
-           midi_osc("/soundman/set", "kick", 1.0) + rest()
+# Trigger a FAUST synth gate — args MUST be typed OscArg objects
+kick_pat = (
+    midi_osc("/soundman/set", OscStr("kick"), OscFloat(1.0)) + rest() +
+    midi_osc("/soundman/set", OscStr("kick"), OscFloat(1.0)) + rest()
+)
 mm.play("kick", kick_pat)
 
 # Drive pitch of a running FAUST synth
-freqs = [87.3, 103.8, 116.5, 87.3]
-bass_pat = sum(
-    (midi_osc("/soundman/set", "freq", f) + midi_osc("/soundman/set", "bass", 1.0)
-     for f in freqs),
-    rest()
-)
+def at_freq(label: str, hz: float):
+    return midi_osc("/soundman/set", OscStr(label), OscFloat(hz))
+
+bass_pat = at_freq("freq", 87.3) + at_freq("freq", 103.8) + at_freq("freq", 116.5) + rest()
 mm.play("bass", bass_pat)
 ```
 
-**Key rule:** `note()` → MIDI only. `midi_osc("/soundman/set", label, value)` → soundman.
+**Key rules:**
+- `note()` → MIDI only (no soundman connection)
+- `midi_osc(addr, *args)` → soundman, but args **must** be `OscStr(...)` / `OscFloat(...)` / `OscInt(...)`
+- Raw Python strings and floats will cause a `KernelError`
 
 For percussion, use `faust:kit` (controls: `kick`, `hat`, `snare`, `bass`, `freq`).
 For melodic lines, use `faust:pluck` (controls: `freq`, `gate`).
