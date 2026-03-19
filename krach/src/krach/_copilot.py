@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ast
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,7 +20,8 @@ class SessionState:
 _CONTEXT_MD = (Path(__file__).parent / "context.md").read_text()
 
 _CODE_BLOCK_RE = re.compile(r"```(?:python)?\n(.*?)```", re.DOTALL)
-_CELL_DIVIDER_RE = re.compile(r"[ \t]*# ---[ \t]*")
+# Match '# ---' only when it is the entire content of a line.
+_CELL_DIVIDER_RE = re.compile(r"^[ \t]*# ---[ \t]*$", re.MULTILINE)
 
 
 def extract_code(response: str) -> str | None:
@@ -31,10 +33,18 @@ def extract_code(response: str) -> str | None:
     return code or None
 
 
+def _is_valid_python(code: str) -> bool:
+    try:
+        ast.parse(code)
+        return True
+    except SyntaxError:
+        return False
+
+
 def split_cells(code: str) -> list[str]:
-    """Split code on '# ---' dividers into a list of non-empty cell strings."""
+    """Split code on '# ---' dividers; drop chunks that are not valid Python."""
     chunks = _CELL_DIVIDER_RE.split(code)
-    return [c.strip() for c in chunks if c.strip()]
+    return [c.strip() for c in chunks if c.strip() and _is_valid_python(c.strip())]
 
 
 def build_context(state: SessionState) -> str:

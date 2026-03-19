@@ -221,3 +221,18 @@ def test_split_cells_empty_chunk_skipped() -> None:
     # divider at start or back-to-back dividers produce no empty chunks
     code = "# ---\na = 1\n# ---\n# ---\nb = 2"
     assert split_cells(code) == ["a = 1", "b = 2"]
+
+
+def test_split_cells_prose_header_dropped() -> None:
+    # Claude sometimes emits a prose section label before # ---; must be dropped
+    code = "Define DSP voices\n# ---\ndef my_kick():\n    pass"
+    assert split_cells(code) == ["def my_kick():\n    pass"]
+
+
+def test_split_cells_comment_header_kept() -> None:
+    # A proper Python comment before a divider is valid and kept
+    code = "# Define DSP voices\n# ---\ndef my_kick():\n    pass"
+    # The comment-only first chunk is valid Python but empty of executable code;
+    # it passes ast.parse so it's included — harmless when run in IPython
+    result = split_cells(code)
+    assert any("def my_kick" in chunk for chunk in result)
