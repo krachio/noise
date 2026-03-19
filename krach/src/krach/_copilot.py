@@ -57,7 +57,7 @@ def ask_claude(client: Any, model: str, system: str, prompt: str) -> str:  # noq
     """Send a prompt to the Claude API and return the text response."""
     response = client.messages.create(
         model=model,
-        max_tokens=800,
+        max_tokens=2048,
         system=system,
         messages=[{"role": "user", "content": prompt}],
     )

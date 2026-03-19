@@ -123,17 +123,18 @@ def main() -> None:
         print(format_status(_session_state()))
 
     def c(prompt: str) -> None:
-        """Ask Claude for live-coding help with full session context."""
+        """Ask Claude for live-coding help; pastes the code into the next cell."""
         model = os.environ.get("KRACH_MODEL", "claude-sonnet-4-6")
         client = anthropic.Anthropic()
         system = build_context(_session_state())
         response = ask_claude(client, model, system, prompt)
-        print(response)
         code = extract_code(response)
         if code:
+            print(code)
             import IPython
             IPython.get_ipython().set_next_input(code)  # type: ignore[union-attr]
-            print("↑ pasted into next cell")
+        else:
+            print(response)
 
     nodes = sm.list_nodes()
 
