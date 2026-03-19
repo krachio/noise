@@ -16,12 +16,13 @@
 - **Control** (`control/`): `ControlInput` trait, `MockControlInput`, `OscControlInput` (UDP/rosc)
 - **Output** (`output/`): `AudioOutput` trait, `MockAudioOutput`, `CpalBackend` (cpal)
 - **Binary** (`main.rs`): starts 440Hz sine via cpal, OSC control on 127.0.0.1:9000
+- **Node introspection**: `/soundman/list_nodes <reply_port>` sends `/soundman/node_types` JSON reply via UDP; `EngineController::list_node_types()` exposes registry type IDs
 
 ### M1 acceptance criteria status
 - [x] Engine starts, produces 440Hz sine through cpal
 - [x] OSC `/soundman/set pitch 880.0` changes frequency (via exposed control)
 - [x] OSC `/soundman/load_graph <json>` swaps graph with crossfade
-- [x] `cargo test` passes (87 tests)
+- [x] `cargo test` passes (90 tests)
 - [x] `cargo clippy -- -D warnings` clean
 - [x] No `unsafe` in main crate
 
