@@ -165,7 +165,7 @@ sm.set("gate", 1.0)
 def filtered() -> Signal:
     freq   = control("freq", 440, 20, 4000)
     cutoff = control("cutoff", 1000, 100, 8000)
-    return lowpass(cutoff, sine_osc(freq)) * 0.5
+    return lowpass(sine_osc(freq), cutoff) * 0.5
 
 # Drum kit voice (808-style kick)
 def kick() -> Signal:
@@ -187,9 +187,9 @@ def snare() -> Signal:
 | `saw(freq)` | Sawtooth oscillator |
 | `square(freq)` | Square oscillator |
 | `phasor(freq)` | 0→1 ramp at freq Hz |
-| `lowpass(cutoff, sig)` | Butterworth lowpass |
-| `highpass(cutoff, sig)` | Butterworth highpass |
-| `bandpass(cutoff, sig)` | Bandpass filter |
+| `lowpass(sig, cutoff)` | Butterworth lowpass — signal first, cutoff Hz second |
+| `highpass(sig, cutoff)` | Butterworth highpass — signal first, cutoff Hz second |
+| `bandpass(sig, cutoff, q)` | Bandpass filter — signal first |
 | `white_noise()` | White noise |
 | `adsr(a, d, s, r, gate)` | ADSR envelope |
 | `reverb(room, sig)` | Reverb (zita) |
@@ -256,7 +256,7 @@ def bass_synth() -> Signal:
     freq = control("freq", 55.0, 20.0, 500.0)
     gate = control("gate", 0.0, 0.0, 1.0)
     env  = adsr(0.005, 0.2, 0.6, 0.3, gate)
-    return lowpass(freq * 3, sine_osc(freq)) * env * 0.6
+    return lowpass(sine_osc(freq), freq * 3) * env * 0.6
 
 # 2. Hot-load it
 dsp("bass", bass_synth)
