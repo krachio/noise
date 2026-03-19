@@ -5,14 +5,17 @@
 # all tools in scope. Kills both processes on exit.
 #
 # Override defaults:
-#   MIDIMAN_SOCK  (default: /tmp/midiman.sock)
+#   MIDIMAN_SOCK      (default: <tmpdir>/midiman.sock)
 #   SOUNDMAN_DSP_DIR  (default: ~/.krach/dsp/)
 #   SOUNDMAN_OSC_ADDR (default: 127.0.0.1:9001)
 
 set -e
 
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-MIDIMAN_SOCK="${MIDIMAN_SOCK:-/tmp/midiman.sock}"
+
+# Use the same tmpdir logic as midiman (std::env::temp_dir on macOS ≠ /tmp)
+TMPDIR_NATIVE="$(python3 -c 'import tempfile; print(tempfile.gettempdir())')"
+MIDIMAN_SOCK="${MIDIMAN_SOCK:-${TMPDIR_NATIVE}/midiman.sock}"
 SOUNDMAN_OSC_ADDR="${SOUNDMAN_OSC_ADDR:-127.0.0.1:9001}"
 SOUNDMAN_DSP_DIR="${SOUNDMAN_DSP_DIR:-$HOME/.krach/dsp}"
 
@@ -27,26 +30,31 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Start midiman
+# Start midiman — pass socket path explicitly via env var
 rm -f "$MIDIMAN_SOCK"
-RUST_LOG=info "$REPO/target/debug/midiman" &
+MIDIMAN_SOCKET="$MIDIMAN_SOCK" \
+RUST_LOG=warn "$REPO/target/debug/midiman" 2>&1 | grep -v "^$" &
 MIDIMAN_PID=$!
 
-# Start soundman
+# Start soundman — suppress verbose startup logs
 SOUNDMAN_DSP_DIR="$SOUNDMAN_DSP_DIR" \
 SOUNDMAN_OSC_ADDR="$SOUNDMAN_OSC_ADDR" \
-RUST_LOG=info "$REPO/target/debug/soundman" &
+RUST_LOG=warn "$REPO/target/debug/soundman" &
 SOUNDMAN_PID=$!
 
-# Wait for both to be ready
-sleep 1.5
+# Wait for midiman socket to appear (up to 5s)
+for i in $(seq 1 50); do
+    [ -S "$MIDIMAN_SOCK" ] && break
+    sleep 0.1
+done
+[ -S "$MIDIMAN_SOCK" ] || { echo "error: midiman socket not ready"; exit 1; }
 
-# Find a Python with the deps available — prefer the soundman-frontend venv
-# since it already has python-osc; fall back to system Python
+# Give soundman a moment to bind its OSC port
+sleep 0.5
+
+# Use the soundman-frontend venv (has python-osc); fall back to system Python
 PYTHON="${REPO}/soundman-frontend/.venv/bin/python"
-if [ ! -f "$PYTHON" ]; then
-    PYTHON=python3
-fi
+[ -f "$PYTHON" ] || PYTHON=python3
 
 echo ""
 echo "  ██╗  ██╗██████╗  █████╗  ██████╗██╗  ██╗"
@@ -85,14 +93,14 @@ def dsp(name, fn):
     '''Transpile a Python DSP function and hot-drop it into soundman.'''
     result = transpile(fn)
     (dsp_dir / f'{name}.dsp').write_text(result.source)
-    print(f'  wrote {dsp_dir}/{name}.dsp — controls: {[c.name for c in result.schema.controls]}')
+    print(f'  {name}.dsp — controls: {[c.name for c in result.schema.controls]}')
     return result
 
 print('  midiman  ${MIDIMAN_SOCK}')
-print('  soundman 127.0.0.1:9001')
+print('  soundman 127.0.0.1:9001  nodes:', sm.list_nodes())
 print('  dsp dir  ${SOUNDMAN_DSP_DIR}')
 print()
-print('  mm, sm, dsp(), note, rest, cc, Graph, transpile, control, ...')
+print('  in scope: mm  sm  dsp()  note rest cc  Graph  transpile control')
 print()
 
 try:
