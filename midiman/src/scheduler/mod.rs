@@ -1,0 +1,347 @@
+//! Real-time scheduler for pattern evaluation.
+//!
+//! The scheduler runs on a dedicated thread, querying all active pattern
+//! slots each tick and sending [`TimedEvent`]s to a channel for output
+//! dispatch. Pattern hot-swap is lock-free via [`hotswap::SwapSlot`]
+//! (backed by `arc-swap`).
+
+pub mod clock;
+pub mod hotswap;
+
+use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread;
+use std::time::{Duration, Instant};
+
+use crossbeam_channel::Sender;
+
+use crate::event::{Event, Value};
+use crate::pattern::query;
+use crate::time;
+
+use clock::{Clock, SharedBpm};
+use hotswap::SwapSlot;
+
+/// A scheduled event with its wall-clock fire time.
+#[derive(Clone, Debug)]
+pub struct TimedEvent {
+    /// When this event should be dispatched to the output sink.
+    pub fire_at: Instant,
+    /// The pattern event (value, whole arc, part arc).
+    pub event: Event<Value>,
+    /// Name of the slot that produced this event (e.g. `"d1"`).
+    pub slot_name: String,
+}
+
+/// Configuration for the scheduler.
+#[allow(missing_docs)]
+pub struct SchedulerConfig {
+    pub bpm: f64,
+    pub beats_per_cycle: f64,
+    /// How far ahead (in seconds) to query for events.
+    pub lookahead_secs: f64,
+    /// How often (in seconds) the scheduler tick fires.
+    pub tick_interval_secs: f64,
+}
+
+impl Default for SchedulerConfig {
+    fn default() -> Self {
+        Self {
+            bpm: 120.0,
+            beats_per_cycle: 4.0,
+            lookahead_secs: 0.1,
+            tick_interval_secs: 0.001,
+        }
+    }
+}
+
+/// Shared slots map — the IPC layer inserts/swaps patterns here.
+pub type Slots = Arc<Mutex<HashMap<String, Arc<SwapSlot>>>>;
+
+/// Handle to control a running scheduler.
+pub struct SchedulerHandle {
+    stop: Arc<AtomicBool>,
+    thread: Option<thread::JoinHandle<()>>,
+}
+
+impl SchedulerHandle {
+    /// Signal the scheduler to stop and wait for the thread to finish.
+    pub fn stop(mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(handle) = self.thread.take() {
+            let _ = handle.join();
+        }
+    }
+
+    /// Returns `true` if the scheduler thread is still alive.
+    pub fn is_running(&self) -> bool {
+        self.thread
+            .as_ref()
+            .is_some_and(|h| !h.is_finished())
+    }
+}
+
+/// Start the scheduler on a dedicated thread.
+/// Accepts initial slots so patterns are ready before the first tick.
+/// Returns a handle, the shared slots map, and a `SharedBpm` for live tempo changes.
+pub fn start(
+    config: SchedulerConfig,
+    initial_slots: HashMap<String, Arc<SwapSlot>>,
+    event_tx: Sender<TimedEvent>,
+) -> (SchedulerHandle, Slots, SharedBpm) {
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop_clone = Arc::clone(&stop);
+
+    let shared_bpm = SharedBpm::new(config.bpm);
+    let shared_bpm_clone = shared_bpm.clone();
+
+    let slots: Slots = Arc::new(Mutex::new(initial_slots));
+    let slots_clone = Arc::clone(&slots);
+
+    let thread = thread::Builder::new()
+        .name("midiman-scheduler".into())
+        .spawn(move || {
+            crate::rt::set_realtime_priority();
+            run_loop(config, stop_clone, slots_clone, event_tx, shared_bpm_clone);
+        })
+        .expect("failed to spawn scheduler thread");
+
+    let handle = SchedulerHandle {
+        stop,
+        thread: Some(thread),
+    };
+    (handle, slots, shared_bpm)
+}
+
+fn run_loop(
+    config: SchedulerConfig,
+    stop: Arc<AtomicBool>,
+    slots: Slots,
+    event_tx: Sender<TimedEvent>,
+    shared_bpm: SharedBpm,
+) {
+    let mut clock = Clock::new(config.bpm, config.beats_per_cycle);
+    let tick_dur = Duration::from_secs_f64(config.tick_interval_secs);
+    let lookahead = Duration::from_secs_f64(config.lookahead_secs);
+
+    let mut next_cycle: i64 = 0;
+
+    while !stop.load(Ordering::Relaxed) {
+        // Check for BPM changes
+        let new_bpm = shared_bpm.get();
+        if (new_bpm - clock.bpm()).abs() > f64::EPSILON {
+            clock.set_bpm(new_bpm);
+        }
+
+        let now = Instant::now();
+        let horizon = now + lookahead;
+
+        // Query whole cycles whose start falls within [now, now + lookahead)
+        while clock.cycle_start_instant(next_cycle) <= horizon {
+            let query_arc = time::Arc::cycle(next_cycle);
+
+            let slots_guard = slots.lock().expect("slots mutex poisoned");
+            for (name, slot) in &*slots_guard {
+                let pattern = slot.load();
+                let events = query(&pattern, pattern.root, query_arc);
+
+                for event in events {
+                    if event.has_onset() {
+                        let onset = event.whole.expect("onset implies whole").start;
+                        let fire_at = clock.onset_to_instant(onset);
+
+                        let _ = event_tx.send(TimedEvent {
+                            fire_at,
+                            event,
+                            slot_name: name.clone(),
+                        });
+                    }
+                }
+            }
+            drop(slots_guard);
+
+            next_cycle += 1;
+        }
+
+        spin_sleep::sleep(tick_dur);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::event::Value;
+    use crate::pattern::CompiledPattern;
+
+    fn note(n: u8) -> Value {
+        Value::Note {
+            channel: 0,
+            note: n,
+            velocity: 100,
+            dur: 0.5,
+        }
+    }
+
+    /// Very fast BPM so cycles complete quickly in tests.
+    fn fast_config() -> SchedulerConfig {
+        SchedulerConfig {
+            bpm: 6000.0,       // 1 cycle = 0.04s at 4 beats/cycle
+            beats_per_cycle: 4.0,
+            lookahead_secs: 0.1, // ~2.5 cycles ahead
+            tick_interval_secs: 0.001,
+        }
+    }
+
+    #[test]
+    fn scheduler_starts_and_stops() {
+        let (tx, _rx) = crossbeam_channel::unbounded();
+        let (handle, _slots, _bpm) = start(fast_config(), HashMap::new(), tx);
+        assert!(handle.is_running());
+        handle.stop();
+    }
+
+    #[test]
+    fn scheduler_emits_events_for_initial_slot() {
+        let (tx, rx) = crossbeam_channel::unbounded();
+
+        let mut initial = HashMap::new();
+        initial.insert(
+            "d1".into(),
+            Arc::new(SwapSlot::new(CompiledPattern::atom(note(60)))),
+        );
+
+        let (handle, _slots, _bpm) = start(fast_config(), initial, tx);
+
+        // At 6000 BPM, one cycle = 40ms. Wait for a few cycles.
+        thread::sleep(Duration::from_millis(100));
+        handle.stop();
+
+        let events: Vec<_> = rx.try_iter().collect();
+        assert!(
+            !events.is_empty(),
+            "expected events from scheduler, got none"
+        );
+        assert_eq!(events[0].slot_name, "d1");
+        assert_eq!(events[0].event.value, note(60));
+    }
+
+    #[test]
+    fn scheduler_hot_swaps_pattern() {
+        let (tx, rx) = crossbeam_channel::unbounded();
+
+        let slot = Arc::new(SwapSlot::new(CompiledPattern::atom(note(60))));
+        let mut initial = HashMap::new();
+        initial.insert("d1".into(), Arc::clone(&slot));
+
+        let (handle, _slots, _bpm) = start(fast_config(), initial, tx);
+
+        // Wait for some events with note 60
+        thread::sleep(Duration::from_millis(60));
+
+        // Hot-swap to note 72
+        slot.swap(CompiledPattern::atom(note(72)));
+
+        // Wait for events with note 72
+        thread::sleep(Duration::from_millis(100));
+        handle.stop();
+
+        let events: Vec<_> = rx.try_iter().collect();
+        let has_60 = events.iter().any(|e| e.event.value == note(60));
+        let has_72 = events.iter().any(|e| e.event.value == note(72));
+        assert!(has_60, "expected note 60 before swap");
+        assert!(has_72, "expected note 72 after swap");
+    }
+
+    #[test]
+    fn scheduler_survives_many_cycles() {
+        // At 60000 BPM with 4 beats/cycle, 1 cycle = 4ms.
+        // 500ms → ~125 cycles. Must not overflow.
+        let config = SchedulerConfig {
+            bpm: 60_000.0,
+            beats_per_cycle: 4.0,
+            lookahead_secs: 0.05,
+            tick_interval_secs: 0.001,
+        };
+
+        let (tx, rx) = crossbeam_channel::unbounded();
+        let mut initial = HashMap::new();
+        initial.insert(
+            "d1".into(),
+            Arc::new(SwapSlot::new(CompiledPattern::atom(note(60)))),
+        );
+
+        let (handle, _slots, _bpm) = start(config, initial, tx);
+        thread::sleep(Duration::from_millis(500));
+        handle.stop();
+
+        let events: Vec<_> = rx.try_iter().collect();
+        // Should have at least 100 events (one per cycle, ~125 cycles)
+        assert!(
+            events.len() >= 100,
+            "expected >= 100 events from 125+ cycles, got {}",
+            events.len()
+        );
+    }
+
+    #[test]
+    fn scheduler_survives_bpm_change() {
+        // 140 BPM produces cycle_dur_us=1_714_285, which creates large
+        // lookahead denominators that overflow in cross-multiplication.
+        let config = SchedulerConfig {
+            bpm: 120.0,
+            beats_per_cycle: 4.0,
+            lookahead_secs: 0.1,
+            tick_interval_secs: 0.001,
+        };
+
+        let (tx, rx) = crossbeam_channel::unbounded();
+        let mut initial = HashMap::new();
+        initial.insert(
+            "d1".into(),
+            Arc::new(SwapSlot::new(CompiledPattern::atom(note(60)))),
+        );
+
+        let (handle, _slots, shared_bpm) = start(config, initial, tx);
+        thread::sleep(Duration::from_millis(100));
+
+        // Change to a non-clean BPM that triggers overflow
+        shared_bpm.set(140.0);
+        thread::sleep(Duration::from_millis(500));
+        // Scheduler thread must still be alive (no panic)
+        assert!(handle.is_running(), "scheduler thread panicked");
+        handle.stop();
+
+        let events: Vec<_> = rx.try_iter().collect();
+        assert!(
+            !events.is_empty(),
+            "expected events after BPM change, got none"
+        );
+    }
+
+    #[test]
+    fn scheduler_multiple_slots() {
+        let (tx, rx) = crossbeam_channel::unbounded();
+
+        let mut initial = HashMap::new();
+        initial.insert(
+            "d1".into(),
+            Arc::new(SwapSlot::new(CompiledPattern::atom(note(60)))),
+        );
+        initial.insert(
+            "d2".into(),
+            Arc::new(SwapSlot::new(CompiledPattern::atom(note(64)))),
+        );
+
+        let (handle, _slots, _bpm) = start(fast_config(), initial, tx);
+
+        thread::sleep(Duration::from_millis(100));
+        handle.stop();
+
+        let events: Vec<_> = rx.try_iter().collect();
+        let has_d1 = events.iter().any(|e| e.slot_name == "d1");
+        let has_d2 = events.iter().any(|e| e.slot_name == "d2");
+        assert!(has_d1, "expected events from d1");
+        assert!(has_d2, "expected events from d2");
+    }
+}
