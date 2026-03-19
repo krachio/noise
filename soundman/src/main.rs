@@ -99,7 +99,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf, osc_addr: &str) -> Result<(), S
             warn!("poll_reload: {e}");
         }
 
-        std::thread::sleep(std::time::Duration::from_millis(10));
+        spin_sleep::sleep(std::time::Duration::from_millis(1));
     }
 }
 

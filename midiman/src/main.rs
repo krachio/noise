@@ -10,7 +10,10 @@ use midiman::output::{self, OutputSink};
 const DEFAULT_BPM: f64 = 120.0;
 const BEATS_PER_CYCLE: f64 = 4.0;
 const LOOKAHEAD: Duration = Duration::from_millis(100);
-const MAX_SLEEP: Duration = Duration::from_millis(10);
+// Wake up at most every 1ms to dispatch events and process commands.
+// Smaller values → tighter timing but higher CPU. 1ms is well below the
+// ~2-5ms jitter of a human drummer while keeping CPU overhead acceptable.
+const MAX_SLEEP: Duration = Duration::from_millis(1);
 
 /// A pending MIDI note-off to fire at a specific wall-clock time.
 #[derive(Debug, Eq, PartialEq)]

@@ -8,7 +8,7 @@ Full implementation complete — all 7 commits from the plan delivered in one pa
 - Language: Python 3.13
 - Package manager: uv with hatchling build backend (src layout: `src/faust_dsl/`)
 - Type checker: pyright strict — 0 errors
-- Test runner: pytest — 34 tests, all passing
+- Test runner: pytest — 68 tests, all passing
 
 ### Implemented modules
 
@@ -21,6 +21,7 @@ src/faust_dsl/
 ├── _lowering.py           FaustGraph → Faust expression strings
 ├── _codegen.py            FaustGraph → complete .dsp source
 ├── _optimize.py           CSE / DCE / constant folding passes
+├── ad.py                  Forward-mode AD: jvp(), jvp_graph(), ZeroTangent, register_jvp
 ├── transpile.py           transpile(), TranspiledDsp, ControlSchema, control()
 ├── compose.py             chain, parallel, split, merge, route
 ├── lib/

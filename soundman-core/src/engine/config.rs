@@ -1,6 +1,8 @@
 /// Audio engine configuration.
 ///
-/// Defaults: 48 kHz, 512-sample blocks, stereo, 10 ms crossfade.
+/// Defaults: 48 kHz, 256-sample blocks, stereo, 10 ms crossfade.
+/// 256 samples @ 44100 Hz ≈ 5.8 ms per block — half the quantization of
+/// 512-sample blocks, measurably tighter for percussion-driven patterns.
 /// Use [`CpalBackend::query_device`](crate::output::cpal_backend::CpalBackend::query_device)
 /// to match the hardware sample rate.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,7 +30,7 @@ impl Default for EngineConfig {
     fn default() -> Self {
         Self {
             sample_rate: 48000,
-            block_size: 512,
+            block_size: 256,
             channels: 2,
             crossfade_ms: 10,
         }
@@ -43,7 +45,7 @@ mod tests {
     fn default_config() {
         let config = EngineConfig::default();
         assert_eq!(config.sample_rate, 48000);
-        assert_eq!(config.block_size, 512);
+        assert_eq!(config.block_size, 256);
         assert_eq!(config.channels, 2);
         assert_eq!(config.crossfade_ms, 10);
     }
