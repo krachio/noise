@@ -2,27 +2,28 @@
 
 ## Current state
 
-Live coding / generative audio system — monorepo at `krachio/noise`, Cargo workspace.
+Live coding audio system — monorepo at `krachio/noise`, Cargo workspace.
 
-- **soundman-core** (Rust): Audio engine library — graph runtime, lock-free audio, cpal, OSC, `list_nodes` — 90 tests.
-- **soundman-faust** (Rust): FAUST LLVM JIT plugin — hot reload of `.dsp` files — 27 tests.
-- **soundman** (Rust binary): Composition binary — soundman-core + soundman-faust. Watches `~/.krach/dsp/`, OSC on port 9001.
-- **midiman** (Rust): Pattern sequencer — IPC server, MIDI/OSC output, sample-accurate OSC scheduling via bundle timestamps — 114 tests.
-- **midiman-frontend** (Python 3.13): Python DSL over midiman — pattern algebra, Session — 120 tests.
-- **soundman-frontend** (Python 3.13): OSC client for soundman — `Graph`, `SoundmanSession`, `list_nodes()` — 28 tests.
-- **faust-dsl** (Python 3.13): Python → Faust `.dsp` transpiler — `ControlSchema`, `control()` — 34 tests.
-- **krach** (scaffold only — see `bin/krach`).
-- **`bin/krach`**: Shell script — starts midiman + soundman, drops into IPython with mm, sm, dsp(), note, rest, Graph, transpile, etc. in scope.
+- **soundman-core** (Rust): Audio engine — graph runtime, lock-free audio, fan-in mixing with NaN isolation, output clamping, gain node, cpal, OSC — 104 tests.
+- **soundman-faust** (Rust): FAUST LLVM JIT plugin — hot reload of `.dsp` files — 14 tests.
+- **soundman** (Rust binary): soundman-core + soundman-faust. Watches `~/.krach/dsp/`, OSC on port 9001.
+- **midiman** (Rust): Pattern sequencer — single-loop engine with min-heap, sample-accurate OSC via bundle timestamps — 114 tests.
+- **midiman-frontend** (Python 3.13): Pattern DSL — algebra (+, |, *, .over()), Session — 120 tests.
+- **soundman-frontend** (Python 3.13): OSC client — `Graph`, `SoundmanSession` — 28 tests.
+- **faust-dsl** (Python 3.13): Python → Faust transpiler — 68 tests.
+- **krach** (Python 3.13): Live coding REPL — VoiceMixer (`mix`), copilot (`c()`), cell queue (`cn()`) — 44 tests.
 
 ## Usage
 
 ```bash
 ./bin/krach
-# mm, sm, dsp(), note, rest, cc, Graph, transpile, sine_osc, ... all in scope
+# mix.voice("kit", "faust:kit", gain=0.8)
+# mm.play("kick", mix.hit("kit", "kick") * 4)
 ```
 
 ## Next
 
-- soundman M2: gain/mixer nodes (needed for multi-voice graphs)
-- midiman: note-off scheduling, RT thread priority
-- Phase 2 timing: sub-block sample splitting (~0ms jitter, currently ±5.8ms)
+- Effects routing: mix.bus() / mix.send() for reverb/delay
+- Scenes: mm.scene() for pattern snapshot switching
+- midiman: note-off scheduling, follow actions
+- Phase 2 timing: sub-block sample splitting (~0ms jitter)
