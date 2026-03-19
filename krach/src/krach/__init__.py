@@ -61,16 +61,9 @@ def main() -> None:
         raise RuntimeError("midiman socket not ready after 5s")
 
     # ── imports ──────────────────────────────────────────────────────────────
-    from midiman_frontend import Session, cc, note, rest
-    from midiman_frontend.ir import OscFloat, OscInt, OscStr
-    from midiman_frontend.pattern import osc as midi_osc
-    from soundman_frontend import (
-        ConnectionIr,
-        Graph,
-        GraphIr,
-        NodeInstance,
-        SoundmanSession,
-    )
+    from midiman_frontend import Session
+    from midiman_frontend.pattern import rest
+    from soundman_frontend import SoundmanSession
     from faust_dsl import Signal, control, transpile
     from faust_dsl.lib.filters import bandpass, highpass, lowpass
     from faust_dsl.lib.noise import white_noise
@@ -81,6 +74,7 @@ def main() -> None:
     import anthropic
 
     from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, parse_dsp_controls, split_cells
+    from krach._mixer import VoiceMixer
 
     mm = Session(socket_path=str(midiman_sock))
     mm.connect()
@@ -92,6 +86,8 @@ def main() -> None:
         _controls = parse_dsp_controls(_p.read_text())
         if _controls:
             _node_controls[f"faust:{_p.stem}"] = _controls
+
+    mix = VoiceMixer(session=sm, dsp_dir=dsp_dir, node_controls=_node_controls)
     _user_ns_keys: tuple[str, ...] = ()  # populated after user_ns is built
 
     def _session_state() -> SessionState:
@@ -102,17 +98,10 @@ def main() -> None:
             nodes=tuple(_cached_nodes),
             node_controls=tuple(_node_controls.items()),
             in_scope=_user_ns_keys,
+            active_voices=tuple(
+                (name, v.type_id, v.gain, v.controls) for name, v in mix.voices.items()
+            ),
         )
-
-    def set_ctrl(label: str, value: float) -> object:
-        """Build a pattern atom that sets a soundman control via OSC.
-
-        Use with explicit reset to drive FAUST gate controls:
-            trig = set_ctrl("kick", 1.0)
-            rst  = set_ctrl("kick", 0.0)
-            mm.play("kick", trig + rst + trig + rst)
-        """
-        return midi_osc("/soundman/set", OscStr(label), OscFloat(value))
 
     def dsp(name: str, fn: object) -> object:
         """Transpile a Python DSP function and hot-drop it into soundman."""
@@ -199,29 +188,19 @@ def main() -> None:
     print(f"  soundman 127.0.0.1:9001  nodes: {nodes}")
     print(f"  dsp dir  {dsp_dir}")
     print()
-    print("  in scope: mm  sm  dsp()  note rest cc  Graph  transpile control"
-          "  status()  c()  cn()")
+    print("  in scope: mix  mm  dsp()  rest  status()  c()  cn()"
+          "  + faust-dsl: control sine_osc saw lowpass adsr ...")
     print()
 
     import IPython
 
     user_ns = {
+        # Primary API — voices and patterns
+        "mix": mix,
         "mm": mm,
-        "sm": sm,
-        "dsp": dsp,
-        "note": note,
         "rest": rest,
-        "cc": cc,
-        "midi_osc": midi_osc,
-        "set_ctrl": set_ctrl,
-        "OscFloat": OscFloat,
-        "OscInt": OscInt,
-        "OscStr": OscStr,
-        "Graph": Graph,
-        "GraphIr": GraphIr,
-        "NodeInstance": NodeInstance,
-        "ConnectionIr": ConnectionIr,
-        "transpile": transpile,
+        # Synth design (faust-dsl)
+        "dsp": dsp,
         "control": control,
         "Signal": Signal,
         "sine_osc": sine_osc,
@@ -234,7 +213,7 @@ def main() -> None:
         "white_noise": white_noise,
         "adsr": adsr,
         "reverb": reverb,
-        "dsp_dir": dsp_dir,
+        # Session
         "status": status,
         "c": c,
         "cn": cn,

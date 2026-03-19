@@ -15,6 +15,8 @@ class SessionState:
     nodes: tuple[str, ...]
     node_controls: tuple[tuple[str, tuple[str, ...]], ...]
     in_scope: tuple[str, ...]
+    active_voices: tuple[tuple[str, str, float, tuple[str, ...]], ...] = ()
+    # (voice_name, type_id, gain, (param1, param2, ...))
 
 
 _CONTEXT_MD = (Path(__file__).parent / "context.md").read_text()
@@ -65,6 +67,11 @@ def build_context(state: SessionState) -> str:
         f"- Stopped slots: {list(state.stopped) or 'none'}",
         f"- Loaded nodes: {list(state.nodes)}",
     ]
+    if state.active_voices:
+        lines.append("- Active voices (use mix.hit/mix.step with these):")
+        for vname, type_id, gain, params in state.active_voices:
+            labels = ", ".join(f"{vname}_{p}" for p in params)
+            lines.append(f"  - {vname} ({type_id}, gain={gain}): {labels}")
     if state.node_controls:
         lines.append("- Node controls (use ONLY these labels with set_ctrl):")
         for node_id, controls in state.node_controls:
