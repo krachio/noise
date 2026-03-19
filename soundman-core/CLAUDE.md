@@ -1,4 +1,4 @@
-# soundman
+# soundman-core
 
 ## Commands
 
