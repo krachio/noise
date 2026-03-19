@@ -1,0 +1,16 @@
+[project]
+name = "midiman-frontend"
+version = "0.1.0"
+description = "Ableton-inspired Python DSL frontend for the midiman pattern kernel"
+requires-python = ">=3.13"
+dependencies = []
+
+[dependency-groups]
+dev = ["pyright", "pytest", "pre-commit"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
