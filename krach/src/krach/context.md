@@ -181,35 +181,50 @@ def snare() -> Signal:
 
 ## Connecting midiman patterns to soundman
 
-`note()` emits MIDI note events — **not** audio. To drive soundman from midiman patterns,
-use `midi_osc()` atoms. midiman routes these to soundman at `127.0.0.1:9001`.
+`note()` emits MIDI note events — **not** audio. To drive soundman from midiman
+patterns, use `set_ctrl(label, value)` which builds an OSC atom targeting soundman.
+
+### Critical: FAUST gate controls need explicit reset
+
+FAUST detects triggers via rising-edge (`gate > gate'`). After setting `gate=1.0` it
+stays at 1.0, so the **next** `set_ctrl("kick", 1.0)` produces no edge and no sound.
+**Always pair each trigger with a reset**: `trig + rst + trig + rst`.
 
 ```python
-from midiman_frontend.pattern import osc as midi_osc
-from midiman_frontend.ir import OscStr, OscFloat
+# Correct pattern — trigger+reset pairs keep the edge alive each cycle
+kick_trig  = set_ctrl("kick",  1.0)
+kick_rst   = set_ctrl("kick",  0.0)
 
-# Trigger a FAUST synth gate — args MUST be typed OscArg objects
-kick_pat = (
-    midi_osc("/soundman/set", OscStr("kick"), OscFloat(1.0)) + rest() +
-    midi_osc("/soundman/set", OscStr("kick"), OscFloat(1.0)) + rest()
-)
-mm.play("kick", kick_pat)
+# Kick on beats 1 and 3  (4 atoms = one bar)
+mm.play("kick",  kick_trig + kick_rst + kick_trig + kick_rst)
 
-# Drive pitch of a running FAUST synth
-def at_freq(label: str, hz: float):
-    return midi_osc("/soundman/set", OscStr(label), OscFloat(hz))
+# Snare on beats 2 and 4
+snare_trig = set_ctrl("snare", 1.0)
+snare_rst  = set_ctrl("snare", 0.0)
+mm.play("snare", snare_rst + snare_trig + snare_rst + snare_trig)
 
-bass_pat = at_freq("freq", 87.3) + at_freq("freq", 103.8) + at_freq("freq", 116.5) + rest()
+# Hi-hat on every 8th note  (8 atoms)
+hat_trig = set_ctrl("hat", 1.0)
+hat_rst  = set_ctrl("hat", 0.0)
+mm.play("hat", (hat_trig + hat_rst) * 4)
+
+# Bass: set freq, trigger, reset — every 3 steps (polyrhythm)
+bass_notes = [87.3, 103.8, 116.5, 87.3, 130.8, 103.8]
+bass_pat = sum(
+    (set_ctrl("freq", f) + set_ctrl("bass", 1.0) + set_ctrl("bass", 0.0)
+     for f in bass_notes),
+    set_ctrl("bass", 0.0),
+).over(3)
 mm.play("bass", bass_pat)
 ```
 
 **Key rules:**
-- `note()` → MIDI only (no soundman connection)
-- `midi_osc(addr, *args)` → soundman, but args **must** be `OscStr(...)` / `OscFloat(...)` / `OscInt(...)`
-- Raw Python strings and floats will cause a `KernelError`
+- `set_ctrl(label, value)` → builds a soundman OSC atom (uses `OscStr`/`OscFloat` internally)
+- Always follow each trigger with a reset before the next trigger in the same pattern
+- `note()` → MIDI only, no soundman connection
 
-For percussion, use `faust:kit` (controls: `kick`, `hat`, `snare`, `bass`, `freq`).
-For melodic lines, use `faust:pluck` (controls: `freq`, `gate`).
+For percussion: `faust:kit` controls: `kick`, `hat`, `snare`, `bass`, `freq`
+For melodic lines: `faust:pluck` controls: `freq`, `gate`
 
 ---
 

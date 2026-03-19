@@ -97,6 +97,16 @@ def main() -> None:
             nodes=tuple(sm.list_nodes()),
         )
 
+    def set_ctrl(label: str, value: float) -> object:
+        """Build a pattern atom that sets a soundman control via OSC.
+
+        Use with explicit reset to drive FAUST gate controls:
+            trig = set_ctrl("kick", 1.0)
+            rst  = set_ctrl("kick", 0.0)
+            mm.play("kick", trig + rst + trig + rst)
+        """
+        return midi_osc("/soundman/set", OscStr(label), OscFloat(value))
+
     def dsp(name: str, fn: object) -> object:
         """Transpile a Python DSP function and hot-drop it into soundman."""
         result = transpile(fn)  # type: ignore[arg-type]
@@ -145,6 +155,7 @@ def main() -> None:
             "rest": rest,
             "cc": cc,
             "midi_osc": midi_osc,
+            "set_ctrl": set_ctrl,
             "OscFloat": OscFloat,
             "OscInt": OscInt,
             "OscStr": OscStr,
