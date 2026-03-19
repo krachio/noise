@@ -1,13 +1,13 @@
 use std::collections::HashMap;
 
 use log::{error, info};
-use soundman::control::ControlInput;
-use soundman::control::osc::{OscControlInput, send_node_types_reply};
-use soundman::engine::config::EngineConfig;
-use soundman::ir::{ConnectionIr, GraphIr, NodeInstance};
-use soundman::output::AudioOutput;
-use soundman::output::cpal_backend::CpalBackend;
-use soundman::protocol::ClientMessage;
+use soundman_core::control::ControlInput;
+use soundman_core::control::osc::{OscControlInput, send_node_types_reply};
+use soundman_core::engine::config::EngineConfig;
+use soundman_core::ir::{ConnectionIr, GraphIr, NodeInstance};
+use soundman_core::output::AudioOutput;
+use soundman_core::output::cpal_backend::CpalBackend;
+use soundman_core::protocol::ClientMessage;
 
 fn default_graph() -> GraphIr {
     GraphIr {
@@ -46,7 +46,7 @@ fn main() {
         channels: device.channels,
         ..Default::default()
     };
-    let (mut controller, processor) = soundman::engine::engine(&config);
+    let (mut controller, processor) = soundman_core::engine::engine(&config);
 
     // Load default graph
     controller

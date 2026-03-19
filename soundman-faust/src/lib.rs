@@ -8,7 +8,7 @@
 //! Register a FAUST program as a node type, then use it in a graph:
 //!
 //! ```no_run
-//! use soundman::engine::{self, config::EngineConfig};
+//! use soundman_core::engine::{self, config::EngineConfig};
 //! use soundman_faust::register_faust_node;
 //!
 //! let (mut ctrl, mut proc) = engine::engine(&EngineConfig::default());
@@ -30,7 +30,7 @@
 //! For live-reloading `.dsp` files from a directory, use [`hot_reload::HotReloadEngine`]:
 //!
 //! ```no_run
-//! use soundman::engine::config::EngineConfig;
+//! use soundman_core::engine::config::EngineConfig;
 //! use soundman_faust::hot_reload::HotReloadEngine;
 //!
 //! let (mut engine, mut proc) = HotReloadEngine::new(
@@ -48,14 +48,14 @@
 //! |--------|---------|
 //! | [`dsp`] | Safe wrapper around compiled FAUST DSP instances |
 //! | [`factory`] | [`FaustFactory`] — soundman [`NodeFactory`] implementation |
-//! | [`node`] | [`FaustNode`](node::FaustNode) — soundman [`DspNode`](soundman::graph::node::DspNode) adapter |
+//! | [`node`] | [`FaustNode`](node::FaustNode) — soundman [`DspNode`](soundman_core::graph::node::DspNode) adapter |
 //! | [`loader`] | Load `.dsp` files from disk, register directories |
 //! | [`watcher`] | File watcher for `.dsp` changes |
 //! | [`hot_reload`] | All-in-one engine with live reload |
 //!
 //! [soundman]: https://docs.rs/soundman
-//! [`NodeRegistry`]: soundman::registry::NodeRegistry
-//! [`NodeFactory`]: soundman::registry::NodeFactory
+//! [`NodeRegistry`]: soundman_core::registry::NodeRegistry
+//! [`NodeFactory`]: soundman_core::registry::NodeFactory
 
 pub mod dsp;
 pub mod factory;
@@ -66,7 +66,7 @@ pub mod node;
 pub mod watcher;
 
 use log::info;
-use soundman::registry::NodeRegistry;
+use soundman_core::registry::NodeRegistry;
 
 use crate::factory::FaustFactory;
 

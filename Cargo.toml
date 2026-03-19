@@ -1,0 +1,3 @@
+[workspace]
+members = ["soundman-core", "soundman-faust", "midiman"]
+resolver = "2"

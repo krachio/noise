@@ -1,6 +1,6 @@
 //! `FaustNode` — adapts a `FaustDsp` instance to soundman's `DspNode` trait.
 
-use soundman::graph::node::{DspNode, ParamError};
+use soundman_core::graph::node::{DspNode, ParamError};
 
 use crate::dsp::FaustDsp;
 

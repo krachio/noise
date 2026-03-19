@@ -1,7 +1,7 @@
 use std::fs;
 
-use soundman::engine;
-use soundman::engine::config::EngineConfig;
+use soundman_core::engine;
+use soundman_core::engine::config::EngineConfig;
 use soundman_faust::loader;
 
 fn tmp_dsp_dir() -> tempfile::TempDir {

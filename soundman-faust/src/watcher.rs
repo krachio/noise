@@ -94,7 +94,7 @@ impl std::fmt::Debug for DspWatcher {
 /// # Errors
 /// Returns an error if the file cannot be read or the FAUST code fails to compile.
 pub fn apply_reload(
-    registry: &mut soundman::registry::NodeRegistry,
+    registry: &mut soundman_core::registry::NodeRegistry,
     event: &WatchEvent,
 ) -> Result<(), String> {
     match event {

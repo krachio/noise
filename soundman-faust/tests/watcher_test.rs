@@ -2,8 +2,8 @@ use std::fs;
 use std::sync::mpsc;
 use std::time::Duration;
 
-use soundman::engine;
-use soundman::engine::config::EngineConfig;
+use soundman_core::engine;
+use soundman_core::engine::config::EngineConfig;
 use soundman_faust::loader;
 use soundman_faust::watcher::{DspWatcher, WatchEvent};
 

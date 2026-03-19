@@ -28,9 +28,9 @@
 //! # Quick start
 //!
 //! ```no_run
-//! use soundman::engine::{self, config::EngineConfig};
-//! use soundman::protocol::ClientMessage;
-//! use soundman::ir::{GraphIr, NodeInstance, ConnectionIr};
+//! use soundman_core::engine::{self, config::EngineConfig};
+//! use soundman_core::protocol::ClientMessage;
+//! use soundman_core::ir::{GraphIr, NodeInstance, ConnectionIr};
 //! use std::collections::HashMap;
 //!
 //! let config = EngineConfig::default();
@@ -64,10 +64,10 @@
 //! metadata) and a [`NodeFactory`] (instantiation).
 //!
 //! ```no_run
-//! use soundman::engine::{self, config::EngineConfig};
-//! use soundman::graph::node::{DspNode, ParamError};
-//! use soundman::ir::types::{NodeTypeDecl, PortDecl, ChannelLayout};
-//! use soundman::registry::{NodeFactory, NodeRegistry};
+//! use soundman_core::engine::{self, config::EngineConfig};
+//! use soundman_core::graph::node::{DspNode, ParamError};
+//! use soundman_core::ir::types::{NodeTypeDecl, PortDecl, ChannelLayout};
+//! use soundman_core::registry::{NodeFactory, NodeRegistry};
 //!
 //! struct MyNode;
 //! impl DspNode for MyNode {

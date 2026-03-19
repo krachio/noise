@@ -4,11 +4,11 @@ use std::path::Path;
 use std::sync::mpsc;
 
 use log::info;
-use soundman::engine::config::EngineConfig;
-use soundman::engine::{self, AudioProcessor, EngineController};
-use soundman::ir::GraphIr;
-use soundman::protocol::ClientMessage;
-use soundman::registry::NodeRegistry;
+use soundman_core::engine::config::EngineConfig;
+use soundman_core::engine::{self, AudioProcessor, EngineController};
+use soundman_core::ir::GraphIr;
+use soundman_core::protocol::ClientMessage;
+use soundman_core::registry::NodeRegistry;
 
 use crate::loader;
 use crate::watcher::{self, DspWatcher, WatchEvent};

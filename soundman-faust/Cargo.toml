@@ -12,7 +12,7 @@ pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
 
 [dependencies]
-soundman = { path = "../soundman" }
+soundman-core = { path = "../soundman-core" }
 log = "0.4"
 notify = "8.2.0"
 env_logger = "0.11"

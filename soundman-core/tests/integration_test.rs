@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use soundman::control::MockControlInput;
-use soundman::engine::{self, EngineController, AudioProcessor};
-use soundman::engine::config::EngineConfig;
-use soundman::ir::{ConnectionIr, GraphIr, NodeInstance};
-use soundman::protocol::ClientMessage;
+use soundman_core::control::MockControlInput;
+use soundman_core::engine::{self, EngineController, AudioProcessor};
+use soundman_core::engine::config::EngineConfig;
+use soundman_core::ir::{ConnectionIr, GraphIr, NodeInstance};
+use soundman_core::protocol::ClientMessage;
 
 fn osc_dac_graph(freq: f32) -> GraphIr {
     GraphIr {

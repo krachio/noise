@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 
-use soundman::engine;
-use soundman::engine::config::EngineConfig;
-use soundman::ir::{ConnectionIr, GraphIr, NodeInstance};
-use soundman::protocol::ClientMessage;
+use soundman_core::engine;
+use soundman_core::engine::config::EngineConfig;
+use soundman_core::ir::{ConnectionIr, GraphIr, NodeInstance};
+use soundman_core::protocol::ClientMessage;
 use soundman_faust::{faust_version, register_faust_node};
 
 #[test]

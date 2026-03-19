@@ -1,8 +1,8 @@
 //! `FaustFactory` — compiles FAUST code and creates `FaustNode` instances.
 
-use soundman::graph::node::DspNode;
-use soundman::ir::types::{ChannelLayout, ControlDecl, NodeTypeDecl, PortDecl, Rate};
-use soundman::registry::NodeFactory;
+use soundman_core::graph::node::DspNode;
+use soundman_core::ir::types::{ChannelLayout, ControlDecl, NodeTypeDecl, PortDecl, Rate};
+use soundman_core::registry::NodeFactory;
 
 use crate::dsp::FaustDsp;
 use crate::node::FaustNode;

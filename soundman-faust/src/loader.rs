@@ -3,7 +3,7 @@
 use std::fs;
 use std::path::Path;
 
-use soundman::registry::NodeRegistry;
+use soundman_core::registry::NodeRegistry;
 
 use crate::factory::FaustFactory;
 

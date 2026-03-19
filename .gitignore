@@ -1,0 +1,19 @@
+# Rust
+target/
+Cargo.lock.bak
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+.pytest_cache/
+.mypy_cache/
+
+# Claude / bedrock (local settings only)
+.claude/settings.local.json
+
+# OS
+.DS_Store

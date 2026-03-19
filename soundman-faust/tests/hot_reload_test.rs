@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::time::Duration;
 
-use soundman::engine::config::EngineConfig;
-use soundman::ir::{ConnectionIr, GraphIr, NodeInstance};
+use soundman_core::engine::config::EngineConfig;
+use soundman_core::ir::{ConnectionIr, GraphIr, NodeInstance};
 use soundman_faust::hot_reload::HotReloadEngine;
 
 const SINE_DSP: &str = r#"
