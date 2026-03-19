@@ -1,0 +1,11 @@
+language: python 3.13
+type_checker: pyright
+test_runner: pytest
+package_manager: uv
+pre_commit_hooks:
+  - id: pyright
+    name: pyright (strict)
+    command: uv run pyright
+  - id: pytest
+    name: pytest
+    command: uv run pytest

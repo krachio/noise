@@ -1,0 +1,1 @@
+IMPORTANT: Never jump to implementation after discussion. Always confirm the plan with the user before writing code. Discussion is not approval. An explicit user invocation (command, loop, or "go ahead") constitutes consent for the scoped task. When you identify an issue, explain it and propose a fix, then WAIT for the user to confirm before making changes.
