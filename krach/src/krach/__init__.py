@@ -94,7 +94,7 @@ def main() -> None:
             bpm=mm.tempo,
             playing=tuple(k for k, v in mm.slots.items() if v.playing),
             stopped=tuple(k for k, v in mm.slots.items() if not v.playing),
-            nodes=tuple(sm.list_nodes()),
+            nodes=tuple(_cached_nodes),
         )
 
     def set_ctrl(label: str, value: float) -> object:
@@ -113,6 +113,9 @@ def main() -> None:
         (dsp_dir / f"{name}.dsp").write_text(result.source)
         controls = [ctrl.name for ctrl in result.schema.controls]
         print(f"  {name}.dsp — controls: {controls}")
+        print("  waiting for hot-reload...")
+        time.sleep(2.5)
+        _refresh_nodes()
         return result
 
     def status() -> None:
@@ -127,6 +130,17 @@ def main() -> None:
         print(ask_claude(client, model, system, prompt))
 
     nodes = sm.list_nodes()
+
+    # Cache nodes so status() and c() don't block on an OSC round-trip.
+    _cached_nodes: list[str] = list(nodes)
+
+    def _refresh_nodes() -> list[str]:
+        nonlocal _cached_nodes
+        try:
+            _cached_nodes = sm.list_nodes(timeout=0.5)
+        except TimeoutError:
+            pass
+        return _cached_nodes
 
     print()
     print("  ██╗  ██╗██████╗  █████╗  ██████╗██╗  ██╗")
