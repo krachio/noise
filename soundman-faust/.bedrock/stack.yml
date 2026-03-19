@@ -1,0 +1,6 @@
+# Fill in with /stack or manually. /qa reads these to know what to run.
+language:
+type_checker:
+test_runner:
+package_manager:
+pre_commit_hooks:
