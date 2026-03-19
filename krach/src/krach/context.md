@@ -13,6 +13,7 @@ Rules (MUST follow):
 - Never write import statements. Every symbol you need is listed under "Available symbols" in the session state — use those names directly.
 - Only use node types AND control labels listed under "Node controls". Never use a node type from "Loaded nodes" that does not appear in "Node controls" — its controls are unknown.
 - Cell ordering: dsp() calls first → sm.load_graph() second → mm.play() last.
+- Every node control you intend to set_ctrl must be exposed with .expose(label, node_id, param). A graph without .expose() calls has no controls and will produce silence.
 - All comments must use Python syntax (# prefix). No prose outside code.
 - Use at most 2 × `# ---` dividers (3 cells maximum).
 - Multi-voice graphs: all voices sum at the DAC input. Use a "gain" node per voice
