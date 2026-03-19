@@ -10,175 +10,95 @@ If the response has multiple logical sections, separate them with a `# ---` comm
 on its own line. The user steps through each section one cell at a time.
 
 Rules (MUST follow):
-- Never write import statements. Every symbol you need is listed under "Available symbols" in the session state — use those names directly.
-- Only use node types AND control labels listed under "Node controls". Never use a node type from "Loaded nodes" that does not appear in "Node controls" — its controls are unknown.
-- Cell ordering: dsp() calls first → sm.load_graph() second → mm.play() last.
-- Every node control you intend to set_ctrl must be exposed with .expose(label, node_id, param). A graph without .expose() calls has no controls and will produce silence.
+- Never write import statements. All symbols are listed under "Available symbols".
+- Use ONLY node types listed under "Node controls" or "Active voices".
+- When modifying: KEEP existing voice names. Use mix.voice() to ADD new ones.
 - All comments must use Python syntax (# prefix). No prose outside code.
-- Use at most 2 × `# ---` dividers (3 cells maximum).
-- Multi-voice graphs: all voices sum at the DAC input. Use a "gain" node per voice
-  to set independent levels. Example for 2 voices at 0.5 each:
-  `.node("kg", "gain", gain=0.5).connect("kick", "out", "kg", "in").connect("kg", "out", "out", "in")`
-  Then call sm.gain(0.8) overall. Never connect more than one voice directly to "dac"
-  without per-voice gain nodes.
+- Use at most 2 x `# ---` dividers (3 cells maximum).
 
 ---
 
-## Pattern sequencer — `mm` (midiman-frontend)
+## Voices — `mix` (VoiceMixer)
+
+Voices are named audio instruments with stable control labels. Adding or removing
+a voice never breaks other voices' patterns.
+
+### Managing voices
+```python
+# Add a voice — string type_id (pre-existing FAUST DSP):
+mix.voice("kit",  "faust:kit",       gain=0.8)
+
+# Add a voice — Python function (transpiled to FAUST on the fly):
+mix.voice("bass", acid_bass,          gain=0.3)
+
+# Adjust gain without rebuilding the graph:
+mix.gain("bass", 0.15)
+
+# Remove a voice:
+mix.remove("bass")
+```
+
+### Building patterns with mix.hit() and mix.step()
+```python
+# Percussive trigger (trig + reset on a single control):
+mix.hit("kit", "kick")     # → kit_kick 1.0 then 0.0
+
+# Melodic trigger (set freq + optional params + gate trig/reset):
+mix.step("bass", 55.0)                      # → bass_freq=55, gate trig/reset
+mix.step("bass", 55.0, cutoff=1200.0)       # → also sets bass_cutoff=1200
+```
+
+These return Pattern objects — use `+`, `*`, `.over()`, `.every()`, etc.:
+```python
+mm.play("kick",  mix.hit("kit", "kick") * 4)
+mm.play("bass",  (mix.step("bass", 55) + mix.step("bass", 73) + rest() +
+                   mix.step("bass", 65, cutoff=1200)).over(2))
+```
+
+### Control naming convention
+Labels are always `{voice_name}_{param}`. Examples:
+- `mix.voice("kit", "faust:kit")` → labels: kit_kick, kit_hat, kit_snare, kit_bass, kit_freq
+- `mix.voice("bass", "faust:acid_bass")` → labels: bass_freq, bass_gate, bass_cutoff
+
+---
+
+## Patterns — `mm` (midiman)
 
 ### Session control
 ```python
-mm.tempo = 120          # set BPM
-mm.play("kick", pat)    # assign pattern to slot, starts immediately
-mm.hush("kick")         # silence slot, remembers pattern (resumable)
-mm.resume("kick")       # resume a hushed slot
+mm.tempo = 128
+mm.play("kick", pat)    # assign pattern to slot, starts on next cycle
+mm.hush("kick")         # silence slot (resumable)
 mm.stop()               # hush all slots
 ```
-
-### Atoms — building blocks
-```python
-note(60)                       # MIDI note, default vel=100 dur=1.0
-note(60, velocity=80, duration=0.5)
-rest()                         # silence
-cc(74, 127)                    # MIDI CC number + value
-osc("/soundman/set", "pitch", 880.0)  # OSC message
-```
-
-MIDI note numbers: C4=60, D4=62, E4=64, F4=65, G4=67, A4=69, B4=71.
-Octave shift: +12 = up one octave, -12 = down.
 
 ### Pattern algebra
 ```python
 a + b           # sequence: a then b (equal time share)
-a | b           # layer: a and b simultaneously (full cycle each)
+a | b           # layer: a and b simultaneously
 p * 4           # repeat p 4 times
-```
-
-### Pattern methods
-```python
 p.over(2)       # stretch to 2 cycles
-p.scale(2)      # double speed
-p.shift(0.25)   # shift 1/4 cycle forward
-p.reverse()     # reverse within cycle
-p.every(4, lambda p: p.reverse())   # transform every 4 cycles
+p.every(4, lambda p: p.reverse())
 p.spread(3, 8)  # euclidean: 3 hits in 8 steps
 p.thin(0.3)     # randomly drop 30% of events
-```
-
-### Examples
-```python
-# 4-on-the-floor kick
-mm.play("kick", note(36).spread(4, 4))
-
-# Snare on 2 and 4
-mm.play("snare", rest() + note(38) + rest() + note(38))
-
-# Bass melody, F minor
-bass = note(41) + note(44) + note(46) + note(41)
-mm.play("bass", bass.over(2))
-
-# Euclidean hi-hat
-mm.play("hat", note(42).spread(7, 16))
-
-# Polyrhythm: 3 against 4
-mm.play("poly", note(60).spread(3, 4) | note(64).spread(4, 4))
-
-# Reverse every 4 bars
-mm.play("fill", (note(60) + note(62) + note(64)).every(4, lambda p: p.reverse()))
+rest()          # silence atom
 ```
 
 ---
 
-## Audio graph — `sm` (soundman-frontend)
+## DSP synthesis — Python functions
 
-### Session control
+DSP functions define synths in Python. Pass them directly to `mix.voice()`:
 ```python
-sm.load_graph(graph)        # swap audio graph (with crossfade)
-sm.set("pitch", 440.0)      # set an exposed control by label
-sm.gain(0.8)                # master gain 0.0–1.0
-sm.list_nodes()             # list available node type IDs
-```
+def acid_bass() -> Signal:
+    freq = control("freq", 55.0, 20.0, 800.0)
+    gate = control("gate", 0.0, 0.0, 1.0)
+    cutoff = control("cutoff", 800.0, 100.0, 4000.0)
+    env = adsr(0.005, 0.15, 0.3, 0.08, gate)
+    filt_env = adsr(0.005, 0.2, 0.2, 0.1, gate)
+    return lowpass(saw(freq), cutoff + filt_env * 1200.0) * env * 0.55
 
-### Graph builder
-```python
-graph = (
-    Graph()
-    .node("osc1", "oscillator", freq=440.0)   # id, type_id, **initial_controls
-    .node("out", "dac")
-    .connect("osc1", "out", "out", "in")       # from_node, from_port, to_node, to_port
-    .expose("pitch", "osc1", "freq")           # label, node_id, param_name
-    .build()
-)
-sm.load_graph(graph)
-```
-
-### Built-in node types
-- `"oscillator"` — sine/saw/square, control: `freq` (Hz)
-- `"gain"` — scales audio, control: `gain` (0.0–4.0, default 1.0). Use this to set per-voice levels before mixing into the DAC.
-- `"dac"` — audio output sink, port: `in`
-
-### FAUST node types (prefix `faust:`)
-Available after loading `.dsp` files via `dsp()`. Example: `"faust:kit"`, `"faust:pluck"`.
-Check `sm.list_nodes()` for what is currently loaded.
-
-### Port naming
-- Mono node with 1 output: port `"out"`
-- Mono node with 1 input: port `"in"`
-
----
-
-## DSP synthesis — `dsp()` + faust-dsl
-
-### Hot-loading a synth
-```python
-# Define in Python, transpile to FAUST, drop into soundman
-result = dsp("mysynth", my_fn)
-# result.schema.controls → list of ControlSpec(name, init, lo, hi)
-```
-
-### Writing DSP functions
-```python
-from faust_dsl import control, Signal
-from faust_dsl.lib.oscillators import sine_osc, saw, phasor
-from faust_dsl.lib.filters import lowpass, highpass, bandpass
-from faust_dsl.lib.noise import white_noise
-from faust_dsl.music.envelopes import adsr
-from faust_dsl.music.effects import reverb
-
-def my_synth() -> Signal:
-    freq = control("freq", init=440.0, lo=20.0, hi=4000.0)
-    gate = control("gate", init=0.0, lo=0.0, hi=1.0)
-    env  = adsr(0.005, 0.1, 0.7, 0.2, gate)
-    return sine_osc(freq) * env * 0.5
-```
-
-### Triggering a FAUST synth from the REPL
-```python
-# Rising-edge trigger: set gate=0 then gate=1
-sm.set("gate", 0.0)
-time.sleep(0.015)   # one audio block gap
-sm.set("gate", 1.0)
-```
-
-### Common DSP patterns
-```python
-# Filtered oscillator
-def filtered() -> Signal:
-    freq   = control("freq", 440, 20, 4000)
-    cutoff = control("cutoff", 1000, 100, 8000)
-    return lowpass(sine_osc(freq), cutoff) * 0.5
-
-# Drum kit voice (808-style kick)
-def kick() -> Signal:
-    gate  = control("gate", 0, 0, 1)
-    trig  = gate  # use gate > gate' internally in FAUST for edge detection
-    # Note: use raw FAUST for en.ar — faust_dsl doesn't wrap it directly
-    return sine_osc(80.0) * gate * 0.8   # simplification; use raw .dsp for envelopes
-
-# Noise snare
-def snare() -> Signal:
-    gate = control("gate", 0, 0, 1)
-    return white_noise() * gate * 0.4
+mix.voice("bass", acid_bass, gain=0.3)
 ```
 
 ### Primitives reference
@@ -187,7 +107,7 @@ def snare() -> Signal:
 | `sine_osc(freq)` | Sine oscillator |
 | `saw(freq)` | Sawtooth oscillator |
 | `square(freq)` | Square oscillator |
-| `phasor(freq)` | 0→1 ramp at freq Hz |
+| `phasor(freq)` | 0-1 ramp at freq Hz |
 | `lowpass(sig, cutoff)` | Butterworth lowpass — signal first, cutoff Hz second |
 | `highpass(sig, cutoff)` | Butterworth highpass — signal first, cutoff Hz second |
 | `bandpass(sig, cutoff, q)` | Bandpass filter — signal first |
@@ -198,101 +118,44 @@ def snare() -> Signal:
 
 ---
 
-## Connecting midiman patterns to soundman
-
-`note()` emits MIDI note events — **not** audio. To drive soundman from midiman
-patterns, use `set_ctrl(label, value)` which builds an OSC atom targeting soundman.
-
-### Critical: FAUST gate controls need explicit reset
-
-FAUST detects triggers via rising-edge (`gate > gate'`). After setting `gate=1.0` it
-stays at 1.0, so the **next** `set_ctrl("kick", 1.0)` produces no edge and no sound.
-**Always pair each trigger with a reset**: `trig + rst + trig + rst`.
+## Full example
 
 ```python
-# Correct pattern — trigger+reset pairs keep the edge alive each cycle
-kick_trig  = set_ctrl("kick",  1.0)
-kick_rst   = set_ctrl("kick",  0.0)
-
-# Kick on beats 1 and 3  (4 atoms = one bar)
-mm.play("kick",  kick_trig + kick_rst + kick_trig + kick_rst)
-
-# Snare on beats 2 and 4
-snare_trig = set_ctrl("snare", 1.0)
-snare_rst  = set_ctrl("snare", 0.0)
-mm.play("snare", snare_rst + snare_trig + snare_rst + snare_trig)
-
-# Hi-hat on every 8th note  (8 atoms)
-hat_trig = set_ctrl("hat", 1.0)
-hat_rst  = set_ctrl("hat", 0.0)
-mm.play("hat", (hat_trig + hat_rst) * 4)
-
-# Bass: set freq, trigger, reset — every 3 steps (polyrhythm)
-bass_notes = [87.3, 103.8, 116.5, 87.3, 130.8, 103.8]
-bass_pat = sum(
-    (set_ctrl("freq", f) + set_ctrl("bass", 1.0) + set_ctrl("bass", 0.0)
-     for f in bass_notes),
-    set_ctrl("bass", 0.0),
-).over(3)
-mm.play("bass", bass_pat)
-```
-
-**Key rules:**
-- `set_ctrl(label, value)` → builds a soundman OSC atom (uses `OscStr`/`OscFloat` internally)
-- Always follow each trigger with a reset before the next trigger in the same pattern
-- `note()` → MIDI only, no soundman connection
-
-For percussion: `faust:kit` controls: `kick`, `hat`, `snare`, `bass`, `freq`
-For melodic lines: `faust:pluck` controls: `freq`, `gate`
-
----
-
-## Full pipeline example
-
-```python
-import time
-
-# 1. Define a synth
-def bass_synth() -> Signal:
-    freq = control("freq", 55.0, 20.0, 500.0)
+# Define a custom bass synth
+def acid_bass() -> Signal:
+    freq = control("freq", 55.0, 20.0, 800.0)
     gate = control("gate", 0.0, 0.0, 1.0)
-    env  = adsr(0.005, 0.2, 0.6, 0.3, gate)
-    return lowpass(sine_osc(freq), freq * 3) * env * 0.6
+    cutoff = control("cutoff", 800.0, 100.0, 4000.0)
+    env = adsr(0.005, 0.15, 0.3, 0.08, gate)
+    return lowpass(saw(freq), cutoff) * env * 0.55
 
-# 2. Hot-load it
-dsp("bass", bass_synth)
-time.sleep(2)  # wait for FAUST hot-reload
+# --- Set up voices
+mix.voice("kit",  "faust:kit",  gain=0.8)
+mix.voice("bass", acid_bass,    gain=0.3)
 
-# 3. Build graph and expose controls
-sm.load_graph(
-    Graph()
-    .node("b", "faust:bass", freq=55.0, gate=0.0)
-    .node("out", "dac")
-    .connect("b", "out", "out", "in")
-    .expose("freq", "b", "freq")
-    .expose("gate", "b", "gate")
-    .build()
-)
+# --- Play patterns
+mm.tempo = 128
 
-# 4. Play a pattern using midiman
-mm.tempo = 120
-mm.play("bass", note(36) + note(41) + note(43) + rest())
+mm.play("kick",  mix.hit("kit", "kick") * 4)
+mm.play("snare", rest() + mix.hit("kit", "snare") + rest() + mix.hit("kit", "snare"))
+mm.play("hat",   (mix.hit("kit", "hat") + rest()) * 8)
 
-# 5. Trigger gate manually for one-shots
-sm.set("freq", 55.0); sm.set("gate", 0.0)
-time.sleep(0.015)
-sm.set("gate", 1.0)
+mm.play("bass", (
+    mix.step("bass", 55.0, cutoff=800.0) +
+    mix.step("bass", 73.4, cutoff=1200.0) +
+    rest() +
+    mix.step("bass", 65.4, cutoff=600.0)
+).over(2))
 ```
 
 ---
 
 ## Tips
 
-- FAUST DSP hot-reloads ~1-2 seconds after writing the `.dsp` file
-- `sm.list_nodes()` shows what's available — check before building a graph
-- `mm.slots` shows current slot states (playing/stopped)
-- `mm.tempo` is readable and writable
-- Pattern `+` divides the cycle equally — `note(60) + rest()` = 2 notes per cycle
-- Use `.over(n)` to make a pattern span multiple cycles
-- F minor pentatonic (MIDI): 41, 44, 46, 48, 51 (F, Ab, Bb, C, Eb)
-- For polyrhythm: `mm.play("a", p3.over(3))` against `mm.play("b", p4.over(4))`
+- `mix.voice()` accepts Python functions — no separate dsp() step needed
+- `mix.gain("bass", 0.15)` is instant (no graph rebuild)
+- Adding a voice with `mix.voice("lead", ...)` never breaks kit/bass patterns
+- Pattern `+` divides the cycle equally — 4 atoms = 4 beats per cycle
+- Use `.over(2)` for patterns spanning multiple bars
+- F minor pentatonic (Hz): 87.3, 103.8, 116.5, 130.8, 155.6
+- A minor pentatonic (Hz): 55.0, 65.4, 73.4, 82.4, 110.0
