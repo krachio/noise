@@ -2,7 +2,10 @@
 //!
 //! Accepts newline-delimited JSON messages defined in [`protocol`].
 //! Each connection is handled sequentially on the IPC thread.
-//! Pattern compilation and slot insertion happen inline on message receipt.
+//!
+//! Pattern compilation happens here (CPU work, no lock needed). The compiled
+//! [`EngineCommand`]s are sent over a channel to the engine loop, which owns
+//! the pattern state and event heap exclusively.
 
 pub mod protocol;
 
@@ -14,11 +17,10 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+use crossbeam_channel::Sender;
+
+use crate::engine::EngineCommand;
 use crate::ir;
-use crate::pattern::CompiledPattern;
-use crate::scheduler::clock::SharedBpm;
-use crate::scheduler::hotswap::SwapSlot;
-use crate::scheduler::Slots;
 
 use protocol::{ClientMessage, ServerMessage};
 
@@ -31,6 +33,7 @@ pub struct IpcHandle {
 
 impl IpcHandle {
     /// Returns the path to the Unix domain socket.
+    #[must_use]
     pub fn socket_path(&self) -> &Path {
         &self.socket_path
     }
@@ -42,7 +45,6 @@ impl IpcHandle {
 
     fn shutdown(&mut self) {
         self.stop.store(true, Ordering::Relaxed);
-        // Connect to unblock the listener's accept()
         let _ = UnixStream::connect(&self.socket_path);
         if let Some(handle) = self.thread.take() {
             let _ = handle.join();
@@ -58,12 +60,16 @@ impl Drop for IpcHandle {
 }
 
 /// Start the IPC server on a Unix domain socket.
-/// Accepts one connection at a time, processing newline-delimited JSON messages.
-pub fn start(socket_path: PathBuf, slots: Slots, shared_bpm: SharedBpm) -> std::io::Result<IpcHandle> {
+///
+/// # Errors
+/// Returns an error if the socket cannot be bound.
+///
+/// # Panics
+/// Panics if the IPC thread cannot be spawned.
+#[allow(clippy::needless_pass_by_value)] // PathBuf cloned into IpcHandle; cmd_tx moved into thread
+pub fn start(socket_path: PathBuf, cmd_tx: Sender<EngineCommand>) -> std::io::Result<IpcHandle> {
     let _ = std::fs::remove_file(&socket_path);
-
     let listener = UnixListener::bind(&socket_path)?;
-    // Set a short timeout so accept() periodically wakes to check stop flag
     listener.set_nonblocking(false)?;
 
     let stop = Arc::new(AtomicBool::new(false));
@@ -72,41 +78,29 @@ pub fn start(socket_path: PathBuf, slots: Slots, shared_bpm: SharedBpm) -> std::
 
     let thread = thread::Builder::new()
         .name("midiman-ipc".into())
-        .spawn(move || {
-            run_server(listener, slots, stop_clone, shared_bpm);
-        })
+        .spawn(move || run_server(listener, cmd_tx, stop_clone))
         .expect("failed to spawn IPC thread");
 
-    Ok(IpcHandle {
-        socket_path: path,
-        stop,
-        thread: Some(thread),
-    })
+    Ok(IpcHandle { socket_path: path, stop, thread: Some(thread) })
 }
 
-fn run_server(listener: UnixListener, slots: Slots, stop: Arc<AtomicBool>, shared_bpm: SharedBpm) {
-    // Use a short accept timeout so we can check the stop flag
-    listener
-        .set_nonblocking(false)
-        .expect("set listener blocking");
-
+#[allow(clippy::needless_pass_by_value)] // all three are owned by the spawned thread
+fn run_server(listener: UnixListener, cmd_tx: Sender<EngineCommand>, stop: Arc<AtomicBool>) {
     for stream in listener.incoming() {
         if stop.load(Ordering::Relaxed) {
             break;
         }
         match stream {
             Ok(stream) => {
-                stream
-                    .set_read_timeout(Some(Duration::from_millis(100)))
-                    .ok();
-                handle_connection(stream, &slots, &stop, &shared_bpm);
+                stream.set_read_timeout(Some(Duration::from_millis(100))).ok();
+                handle_connection(stream, &cmd_tx, &stop);
             }
             Err(_) => break,
         }
     }
 }
 
-fn handle_connection(stream: UnixStream, slots: &Slots, stop: &AtomicBool, shared_bpm: &SharedBpm) {
+fn handle_connection(stream: UnixStream, cmd_tx: &Sender<EngineCommand>, stop: &AtomicBool) {
     let reader = BufReader::new(stream.try_clone().expect("clone stream"));
     let mut writer = stream;
 
@@ -114,24 +108,18 @@ fn handle_connection(stream: UnixStream, slots: &Slots, stop: &AtomicBool, share
         if stop.load(Ordering::Relaxed) {
             break;
         }
-
         let line = match line {
             Ok(l) => l,
             Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
             Err(_) => break,
         };
-
         if line.trim().is_empty() {
             continue;
         }
-
         let response = match serde_json::from_str::<ClientMessage>(&line) {
-            Ok(msg) => process_message(msg, slots, shared_bpm),
-            Err(e) => ServerMessage::Error {
-                msg: format!("parse error: {e}"),
-            },
+            Ok(msg) => process_message(msg, cmd_tx),
+            Err(e) => ServerMessage::Error { msg: format!("parse error: {e}") },
         };
-
         let mut json = serde_json::to_string(&response).expect("serialize response");
         json.push('\n');
         if writer.write_all(json.as_bytes()).is_err() {
@@ -140,130 +128,72 @@ fn handle_connection(stream: UnixStream, slots: &Slots, stop: &AtomicBool, share
     }
 }
 
-/// A pre-validated action ready to apply under the slots lock.
-enum BatchAction {
-    SetPattern { slot: String, compiled: CompiledPattern },
-    Hush { slot: String },
-    HushAll,
-    SetBpm { bpm: f64 },
-    Ping,
-}
-
-/// Validate and compile a single command into a `BatchAction`.
-/// Returns `Err` for compile errors or nested batches.
-fn prepare_command(msg: &ClientMessage) -> Result<BatchAction, String> {
+fn process_message(msg: ClientMessage, cmd_tx: &Sender<EngineCommand>) -> ServerMessage {
     match msg {
-        ClientMessage::SetPattern { slot, pattern } => {
-            let compiled = ir::compile(pattern).map_err(|e| format!("compile error: {e}"))?;
-            Ok(BatchAction::SetPattern { slot: slot.clone(), compiled })
-        }
-        ClientMessage::Hush { slot } => Ok(BatchAction::Hush { slot: slot.clone() }),
-        ClientMessage::HushAll => Ok(BatchAction::HushAll),
-        ClientMessage::SetBpm { bpm } => Ok(BatchAction::SetBpm { bpm: *bpm }),
-        ClientMessage::Ping => Ok(BatchAction::Ping),
-        ClientMessage::Batch { .. } => Err("nested Batch is not allowed".into()),
-    }
-}
+        ClientMessage::Ping => ServerMessage::Pong,
 
-/// Apply a prepared action. Caller holds the slots lock.
-fn apply_action(
-    action: BatchAction,
-    slots: &mut std::collections::HashMap<String, Arc<SwapSlot>>,
-    shared_bpm: &SharedBpm,
-) {
-    match action {
-        BatchAction::SetPattern { slot, compiled } => {
-            if let Some(existing) = slots.get(&slot) {
-                existing.swap(compiled);
-            } else {
-                slots.insert(slot, Arc::new(SwapSlot::new(compiled)));
-            }
-        }
-        BatchAction::Hush { slot } => {
-            if let Some(existing) = slots.get(&slot) {
-                existing.swap(CompiledPattern::silence());
-            } else {
-                slots.insert(slot, Arc::new(SwapSlot::new(CompiledPattern::silence())));
-            }
-        }
-        BatchAction::HushAll => {
-            for s in slots.values() {
-                s.swap(CompiledPattern::silence());
-            }
-        }
-        BatchAction::SetBpm { bpm } => {
-            shared_bpm.set(bpm);
-        }
-        BatchAction::Ping => {}
-    }
-}
-
-fn process_message(msg: ClientMessage, slots: &Slots, shared_bpm: &SharedBpm) -> ServerMessage {
-    match msg {
         ClientMessage::Batch { commands } => {
-            // Phase 1: validate and compile all commands (no lock held)
-            let mut actions = Vec::with_capacity(commands.len());
+            // Phase 1: compile all commands (no lock, may fail).
+            let mut compiled = Vec::with_capacity(commands.len());
             for cmd in &commands {
-                match prepare_command(cmd) {
-                    Ok(action) => actions.push(action),
+                match compile_command(cmd) {
+                    Ok(Some(engine_cmd)) => compiled.push(engine_cmd),
+                    Ok(None) => {} // Ping in a batch — skip
                     Err(e) => return ServerMessage::Error { msg: e },
                 }
             }
-
-            // Phase 2: apply all under one lock — atomic from scheduler's perspective
-            let mut guard = slots.lock().expect("slots lock");
-            for action in actions {
-                apply_action(action, &mut guard, shared_bpm);
+            // Phase 2: all compiled — send atomically (sequential channel sends
+            // are consumed in order before the engine fills the heap).
+            let n = compiled.len();
+            for engine_cmd in compiled {
+                let _ = cmd_tx.send(engine_cmd);
             }
-
-            ServerMessage::Ok {
-                msg: format!("batch applied ({} commands)", commands.len()),
-            }
+            ServerMessage::Ok { msg: format!("batch applied ({n} commands)") }
         }
 
-        // Single commands go through the same prepare → apply path
-        other => match prepare_command(&other) {
-            Ok(action) => {
-                if matches!(action, BatchAction::Ping) {
-                    return ServerMessage::Pong;
-                }
-                let mut guard = slots.lock().expect("slots lock");
-                let msg = describe_action(&action);
-                apply_action(action, &mut guard, shared_bpm);
-                ServerMessage::Ok { msg }
+        other => match compile_command(&other) {
+            Ok(Some(engine_cmd)) => {
+                let description = describe(&engine_cmd);
+                let _ = cmd_tx.send(engine_cmd);
+                ServerMessage::Ok { msg: description }
             }
+            Ok(None) => ServerMessage::Pong, // unreachable: Ping handled above
             Err(e) => ServerMessage::Error { msg: e },
         },
     }
 }
 
-fn describe_action(action: &BatchAction) -> String {
-    match action {
-        BatchAction::SetPattern { slot, .. } => format!("pattern set on {slot}"),
-        BatchAction::Hush { slot } => format!("{slot} hushed"),
-        BatchAction::HushAll => "all slots hushed".into(),
-        BatchAction::SetBpm { bpm } => format!("bpm set to {bpm}"),
-        BatchAction::Ping => "pong".into(),
+/// Compile one [`ClientMessage`] into an [`EngineCommand`].
+/// Returns `Ok(None)` for `Ping` (no engine action needed).
+/// Returns `Err` if the pattern IR fails to compile or nesting is detected.
+fn compile_command(msg: &ClientMessage) -> Result<Option<EngineCommand>, String> {
+    match msg {
+        ClientMessage::SetPattern { slot, pattern } => {
+            let compiled = ir::compile(pattern).map_err(|e| format!("compile error: {e}"))?;
+            Ok(Some(EngineCommand::SetPattern { name: slot.clone(), pattern: compiled }))
+        }
+        ClientMessage::Hush { slot } => Ok(Some(EngineCommand::Hush { name: slot.clone() })),
+        ClientMessage::HushAll => Ok(Some(EngineCommand::HushAll)),
+        ClientMessage::SetBpm { bpm } => Ok(Some(EngineCommand::SetBpm { bpm: *bpm })),
+        ClientMessage::Ping => Ok(None),
+        ClientMessage::Batch { .. } => Err("nested Batch is not allowed".into()),
+    }
+}
+
+fn describe(cmd: &EngineCommand) -> String {
+    match cmd {
+        EngineCommand::SetPattern { name, .. } => format!("pattern set on {name}"),
+        EngineCommand::Hush { name } => format!("{name} hushed"),
+        EngineCommand::HushAll => "all slots hushed".into(),
+        EngineCommand::SetBpm { bpm } => format!("bpm set to {bpm}"),
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
     use std::io::{BufRead, BufReader, Write};
     use std::os::unix::net::UnixStream;
-    use std::sync::Mutex;
-
-    use crate::scheduler::clock::SharedBpm;
-
-    fn test_slots() -> Slots {
-        Arc::new(Mutex::new(HashMap::new()))
-    }
-
-    fn test_bpm() -> SharedBpm {
-        SharedBpm::new(120.0)
-    }
 
     fn temp_socket_path(suffix: &str) -> PathBuf {
         std::env::temp_dir().join(format!(
@@ -283,29 +213,28 @@ mod tests {
         serde_json::from_str(&resp).unwrap()
     }
 
+    fn make_server(suffix: &str) -> (PathBuf, Sender<EngineCommand>, crossbeam_channel::Receiver<EngineCommand>, IpcHandle) {
+        let path = temp_socket_path(suffix);
+        let (tx, rx) = crossbeam_channel::unbounded();
+        let handle = start(path.clone(), tx.clone()).unwrap();
+        (path, tx, rx, handle)
+    }
+
     #[test]
     fn ipc_ping_pong() {
-        let path = temp_socket_path("ping");
-        let handle = start(path.clone(), test_slots(), test_bpm()).unwrap();
-
+        let (path, _tx, _rx, handle) = make_server("ping");
         let stream = UnixStream::connect(&path).unwrap();
         let mut writer = stream.try_clone().unwrap();
         let mut reader = BufReader::new(stream);
-
         let resp = send_recv(&mut writer, &mut reader, r#"{"cmd":"Ping"}"#);
         assert!(matches!(resp, ServerMessage::Pong));
-
         drop(writer);
         handle.stop();
     }
 
     #[test]
-    fn ipc_set_pattern_creates_slot() {
-        let path = temp_socket_path("setpat");
-        let slots = test_slots();
-        let slots_ref = Arc::clone(&slots);
-        let handle = start(path.clone(), slots, test_bpm()).unwrap();
-
+    fn ipc_set_pattern_sends_engine_command() {
+        let (path, _tx, rx, handle) = make_server("setpat");
         let stream = UnixStream::connect(&path).unwrap();
         let mut writer = stream.try_clone().unwrap();
         let mut reader = BufReader::new(stream);
@@ -314,42 +243,33 @@ mod tests {
         let resp = send_recv(&mut writer, &mut reader, msg);
         assert!(matches!(resp, ServerMessage::Ok { .. }));
 
-        let guard = slots_ref.lock().unwrap();
-        assert!(guard.contains_key("d1"));
+        let cmd = rx.recv_timeout(Duration::from_millis(100)).expect("engine command sent");
+        assert!(matches!(cmd, EngineCommand::SetPattern { name, .. } if name == "d1"));
 
         drop(writer);
         handle.stop();
     }
 
     #[test]
-    fn ipc_hush_silences_slot() {
-        let path = temp_socket_path("hush");
-        let handle = start(path.clone(), test_slots(), test_bpm()).unwrap();
-
+    fn ipc_hush_sends_engine_command() {
+        let (path, _tx, rx, handle) = make_server("hush");
         let stream = UnixStream::connect(&path).unwrap();
         let mut writer = stream.try_clone().unwrap();
         let mut reader = BufReader::new(stream);
 
-        send_recv(
-            &mut writer,
-            &mut reader,
-            r#"{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Atom","value":{"type":"Note","channel":0,"note":60,"velocity":100,"dur":0.5}}}"#,
-        );
-
         let resp = send_recv(&mut writer, &mut reader, r#"{"cmd":"Hush","slot":"d1"}"#);
         assert!(matches!(resp, ServerMessage::Ok { .. }));
+
+        let cmd = rx.recv_timeout(Duration::from_millis(100)).expect("engine command sent");
+        assert!(matches!(cmd, EngineCommand::Hush { name } if name == "d1"));
 
         drop(writer);
         handle.stop();
     }
 
     #[test]
-    fn ipc_batch_applies_all_commands() {
-        let path = temp_socket_path("batch");
-        let slots = test_slots();
-        let slots_ref = Arc::clone(&slots);
-        let handle = start(path.clone(), slots, test_bpm()).unwrap();
-
+    fn ipc_batch_sends_all_commands() {
+        let (path, _tx, rx, handle) = make_server("batch");
         let stream = UnixStream::connect(&path).unwrap();
         let mut writer = stream.try_clone().unwrap();
         let mut reader = BufReader::new(stream);
@@ -358,35 +278,32 @@ mod tests {
         let resp = send_recv(&mut writer, &mut reader, msg);
         assert!(matches!(resp, ServerMessage::Ok { .. }));
 
-        // Both slots should exist — applied atomically
-        let guard = slots_ref.lock().unwrap();
-        assert!(guard.contains_key("d1"), "d1 should exist after batch");
-        assert!(guard.contains_key("d2"), "d2 should exist after batch");
+        let cmd1 = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+        let cmd2 = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+        let cmd3 = rx.recv_timeout(Duration::from_millis(100)).unwrap();
+
+        assert!(matches!(cmd1, EngineCommand::SetPattern { name, .. } if name == "d1"));
+        assert!(matches!(cmd2, EngineCommand::SetPattern { name, .. } if name == "d2"));
+        assert!(matches!(cmd3, EngineCommand::SetBpm { bpm } if (bpm - 140.0).abs() < f64::EPSILON));
 
         drop(writer);
         handle.stop();
     }
 
     #[test]
-    fn ipc_batch_rolls_back_on_failure() {
-        let path = temp_socket_path("batch-fail");
-        let slots = test_slots();
-        let slots_ref = Arc::clone(&slots);
-        let handle = start(path.clone(), slots, test_bpm()).unwrap();
-
+    fn ipc_batch_sends_nothing_on_compile_failure() {
+        let (path, _tx, rx, handle) = make_server("batch-fail");
         let stream = UnixStream::connect(&path).unwrap();
         let mut writer = stream.try_clone().unwrap();
         let mut reader = BufReader::new(stream);
 
-        // First command valid, second has zero denominator — entire batch should fail
+        // Second command has zero denominator — batch should fail, send nothing.
         let msg = r#"{"cmd":"Batch","commands":[{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Atom","value":{"type":"Note","channel":0,"note":60,"velocity":100,"dur":0.5}}},{"cmd":"SetPattern","slot":"d2","pattern":{"op":"Fast","factor":[1,0],"child":{"op":"Atom","value":{"type":"Note","channel":0,"note":72,"velocity":100,"dur":0.5}}}}]}"#;
         let resp = send_recv(&mut writer, &mut reader, msg);
         assert!(matches!(resp, ServerMessage::Error { .. }));
 
-        // Neither slot should exist — all-or-nothing
-        let guard = slots_ref.lock().unwrap();
-        assert!(!guard.contains_key("d1"), "d1 should not exist after failed batch");
-        assert!(!guard.contains_key("d2"), "d2 should not exist after failed batch");
+        // No commands should have been sent.
+        assert!(rx.try_recv().is_err(), "no commands should be sent on batch failure");
 
         drop(writer);
         handle.stop();
@@ -394,21 +311,14 @@ mod tests {
 
     #[test]
     fn ipc_batch_rejects_nested_batch() {
-        let path = temp_socket_path("batch-nest");
-        let handle = start(path.clone(), test_slots(), test_bpm()).unwrap();
-
+        let (path, _tx, _rx, handle) = make_server("batch-nest");
         let stream = UnixStream::connect(&path).unwrap();
         let mut writer = stream.try_clone().unwrap();
         let mut reader = BufReader::new(stream);
 
         let msg = r#"{"cmd":"Batch","commands":[{"cmd":"Batch","commands":[{"cmd":"Ping"}]}]}"#;
         let resp = send_recv(&mut writer, &mut reader, msg);
-        match resp {
-            ServerMessage::Error { msg } => {
-                assert!(msg.contains("nested"), "error should mention nesting: {msg}");
-            }
-            other => panic!("expected Error for nested batch, got {other:?}"),
-        }
+        assert!(matches!(resp, ServerMessage::Error { msg } if msg.contains("nested")));
 
         drop(writer);
         handle.stop();
@@ -416,9 +326,7 @@ mod tests {
 
     #[test]
     fn ipc_batch_empty_succeeds() {
-        let path = temp_socket_path("batch-empty");
-        let handle = start(path.clone(), test_slots(), test_bpm()).unwrap();
-
+        let (path, _tx, _rx, handle) = make_server("batch-empty");
         let stream = UnixStream::connect(&path).unwrap();
         let mut writer = stream.try_clone().unwrap();
         let mut reader = BufReader::new(stream);
@@ -432,9 +340,7 @@ mod tests {
 
     #[test]
     fn ipc_invalid_json_returns_error() {
-        let path = temp_socket_path("invalid");
-        let handle = start(path.clone(), test_slots(), test_bpm()).unwrap();
-
+        let (path, _tx, _rx, handle) = make_server("invalid");
         let stream = UnixStream::connect(&path).unwrap();
         let mut writer = stream.try_clone().unwrap();
         let mut reader = BufReader::new(stream);

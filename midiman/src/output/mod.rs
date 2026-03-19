@@ -6,8 +6,8 @@
 pub mod midi;
 pub mod osc;
 
+use crate::engine::TimedEvent;
 use crate::event::Value;
-use crate::scheduler::TimedEvent;
 
 /// Trait for dispatching timed events to an output backend.
 pub trait OutputSink: Send {

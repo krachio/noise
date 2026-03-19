@@ -12,7 +12,7 @@
 use midir::{MidiOutput, MidiOutputConnection};
 
 use crate::event::Value;
-use crate::scheduler::TimedEvent;
+use crate::engine::TimedEvent;
 
 use super::{OutputError, OutputSink};
 

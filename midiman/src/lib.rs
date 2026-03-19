@@ -23,11 +23,12 @@
 
 #![warn(missing_docs)]
 
+pub mod engine;
 pub mod event;
 pub mod ipc;
 pub mod ir;
 pub mod output;
 pub mod pattern;
 pub mod rt;
-pub mod scheduler;
+pub mod scheduler; // clock module remains for BPM clock types
 pub mod time;

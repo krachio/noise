@@ -38,7 +38,7 @@ fn chord_arpeggio_json() -> String {
 
 #[test]
 fn midiman_sequences_soundman_set_control_over_osc() {
-    let tk = TestKernel::start("soundman-bridge");
+    let mut tk = TestKernel::start("soundman-bridge");
     let mut conn = tk.connect();
 
     // Bind a UDP listener (stand-in for soundman's OscControlInput)

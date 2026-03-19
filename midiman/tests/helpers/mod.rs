@@ -1,68 +1,82 @@
-use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
 
-use crossbeam_channel::Receiver;
+use midiman::engine::{Engine, EngineCommand, TimedEvent};
 use midiman::ipc;
 use midiman::ipc::protocol::ServerMessage;
-use midiman::scheduler::{self, SchedulerConfig, Slots, TimedEvent};
 
 /// A running midiman kernel for integration tests.
 ///
-/// Wires scheduler + IPC together with fast BPM for quick test cycles.
+/// Wires Engine + IPC together with fast BPM (6000 BPM → 1 cycle ≈ 40ms).
+/// The test thread manually drives the engine loop so tests are deterministic.
 pub struct TestKernel {
     pub socket_path: PathBuf,
-    pub slots: Slots,
-    pub event_rx: Receiver<TimedEvent>,
-    sched_handle: Option<scheduler::SchedulerHandle>,
+    cmd_rx: crossbeam_channel::Receiver<EngineCommand>,
+    engine: Engine,
     ipc_handle: Option<ipc::IpcHandle>,
 }
 
 impl TestKernel {
-    /// Start a test kernel with 6000 BPM (1 cycle ≈ 40ms).
+    /// Start a test kernel with 6000 BPM (fast cycles for quick tests).
     pub fn start(suffix: &str) -> Self {
         let socket_path = std::env::temp_dir().join(format!(
             "midiman-tk-{}-{suffix}.sock",
             std::process::id()
         ));
-
-        let (event_tx, event_rx) = crossbeam_channel::unbounded();
-
-        let config = SchedulerConfig {
-            bpm: 6000.0,
-            beats_per_cycle: 4.0,
-            lookahead_secs: 0.1,
-            tick_interval_secs: 0.001,
-        };
-
-        let (sched_handle, slots, shared_bpm) = scheduler::start(config, HashMap::new(), event_tx);
-        let ipc_handle = ipc::start(socket_path.clone(), Arc::clone(&slots), shared_bpm).unwrap();
-
-        Self {
-            socket_path,
-            slots,
-            event_rx,
-            sched_handle: Some(sched_handle),
-            ipc_handle: Some(ipc_handle),
-        }
+        let (cmd_tx, cmd_rx) = crossbeam_channel::unbounded::<EngineCommand>();
+        let engine = Engine::new(6000.0, 4.0, Duration::from_millis(200));
+        let ipc_handle = ipc::start(socket_path.clone(), cmd_tx).unwrap();
+        Self { socket_path, cmd_rx, engine, ipc_handle: Some(ipc_handle) }
     }
 
-    /// Connect to the socket, send a JSON message, read the response.
+    /// Drain pending IPC commands into the engine, fill the heap, drain due events.
+    pub fn tick(&mut self) -> Vec<TimedEvent> {
+        while let Ok(cmd) = self.cmd_rx.try_recv() {
+            self.engine.apply(cmd);
+        }
+        let now = std::time::Instant::now();
+        self.engine.fill(now);
+        self.engine.drain(now)
+    }
+
+    /// Poll the engine every 5ms for `wait`, collecting all due events.
+    ///
+    /// This mimics the real engine loop: ticking frequently ensures IPC commands
+    /// are applied promptly and events are captured as soon as they become due.
+    pub fn collect_events(&mut self, wait: Duration) -> Vec<TimedEvent> {
+        let deadline = std::time::Instant::now() + wait;
+        let mut collected = Vec::new();
+        loop {
+            collected.extend(self.tick());
+            let now = std::time::Instant::now();
+            if now >= deadline {
+                break;
+            }
+            let remaining = deadline - now;
+            std::thread::sleep(remaining.min(Duration::from_millis(5)));
+        }
+        collected
+    }
+
+    /// Tick once and return any immediately due events.
+    pub fn drain_events(&mut self) -> Vec<TimedEvent> {
+        self.tick()
+    }
+
+    /// Send a single JSON message and return the response.
     pub fn send(&self, json: &str) -> ServerMessage {
         let stream = UnixStream::connect(&self.socket_path).unwrap();
         let mut writer = stream.try_clone().unwrap();
         let mut reader = BufReader::new(stream);
-
         writeln!(writer, "{json}").unwrap();
         let mut resp = String::new();
         reader.read_line(&mut resp).unwrap();
         serde_json::from_str(&resp).unwrap()
     }
 
-    /// Open a persistent connection for sending multiple messages.
+    /// Open a persistent connection for multiple messages.
     pub fn connect(&self) -> TestConnection {
         let stream = UnixStream::connect(&self.socket_path).unwrap();
         let writer = stream.try_clone().unwrap();
@@ -70,27 +84,8 @@ impl TestKernel {
         TestConnection { writer, reader }
     }
 
-    /// Drain all events received so far.
-    pub fn drain_events(&self) -> Vec<TimedEvent> {
-        self.event_rx.try_iter().collect()
-    }
-
-    /// Wait for the given duration, then drain events.
-    pub fn collect_events(&self, wait: Duration) -> Vec<TimedEvent> {
-        std::thread::sleep(wait);
-        self.drain_events()
-    }
-
-    /// Stop scheduler and IPC server.
     pub fn stop(mut self) {
-        self.shutdown();
-    }
-
-    fn shutdown(&mut self) {
         if let Some(h) = self.ipc_handle.take() {
-            h.stop();
-        }
-        if let Some(h) = self.sched_handle.take() {
             h.stop();
         }
     }
@@ -98,7 +93,9 @@ impl TestKernel {
 
 impl Drop for TestKernel {
     fn drop(&mut self) {
-        self.shutdown();
+        if let Some(h) = self.ipc_handle.take() {
+            h.stop();
+        }
     }
 }
 

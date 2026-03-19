@@ -55,6 +55,12 @@ impl Clock {
         self.bpm
     }
 
+    /// Returns the beats per cycle.
+    #[must_use]
+    pub fn beats_per_cycle(&self) -> f64 {
+        self.beats_per_cycle
+    }
+
     /// Update the BPM (takes effect on the next tick).
     pub fn set_bpm(&mut self, bpm: f64) {
         self.bpm = bpm;

@@ -12,7 +12,7 @@ use std::net::UdpSocket;
 use rosc::{OscMessage, OscPacket, OscType, encoder};
 
 use crate::event::{OscArg, Value};
-use crate::scheduler::TimedEvent;
+use crate::engine::TimedEvent;
 
 use super::{OutputError, OutputSink};
 
