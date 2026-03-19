@@ -17,6 +17,7 @@ class SessionState:
 _CONTEXT_MD = (Path(__file__).parent / "context.md").read_text()
 
 _CODE_BLOCK_RE = re.compile(r"```(?:python)?\n(.*?)```", re.DOTALL)
+_CELL_DIVIDER_RE = re.compile(r"[ \t]*# ---[ \t]*")
 
 
 def extract_code(response: str) -> str | None:
@@ -26,6 +27,12 @@ def extract_code(response: str) -> str | None:
         return None
     code = matches[-1].strip()
     return code or None
+
+
+def split_cells(code: str) -> list[str]:
+    """Split code on '# ---' dividers into a list of non-empty cell strings."""
+    chunks = _CELL_DIVIDER_RE.split(code)
+    return [c.strip() for c in chunks if c.strip()]
 
 
 def build_context(state: SessionState) -> str:

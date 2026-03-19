@@ -1,6 +1,6 @@
 from typing import Any
 
-from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status
+from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, split_cells
 
 
 def make_state(**kwargs: object) -> SessionState:
@@ -160,3 +160,31 @@ def test_extract_code_empty_block_returns_none() -> None:
 def test_extract_code_strips_surrounding_blank_lines() -> None:
     response = "```python\n\nmm.play('hi', note(48))\n\n```"
     assert extract_code(response) == "mm.play('hi', note(48))"
+
+
+# ── split_cells ───────────────────────────────────────────────────────────────
+
+def test_split_cells_single_chunk_no_dividers() -> None:
+    code = "mm.tempo = 138\nmm.play('kick', note(36))"
+    assert split_cells(code) == [code]
+
+
+def test_split_cells_two_chunks() -> None:
+    code = "mm.tempo = 138\n# ---\nmm.play('kick', note(36))"
+    assert split_cells(code) == ["mm.tempo = 138", "mm.play('kick', note(36))"]
+
+
+def test_split_cells_three_chunks() -> None:
+    code = "a = 1\n# ---\nb = 2\n# ---\nc = 3"
+    assert split_cells(code) == ["a = 1", "b = 2", "c = 3"]
+
+
+def test_split_cells_strips_blank_lines_around_divider() -> None:
+    code = "a = 1\n\n# ---\n\nb = 2"
+    assert split_cells(code) == ["a = 1", "b = 2"]
+
+
+def test_split_cells_empty_chunk_skipped() -> None:
+    # divider at start or back-to-back dividers produce no empty chunks
+    code = "# ---\na = 1\n# ---\n# ---\nb = 2"
+    assert split_cells(code) == ["a = 1", "b = 2"]

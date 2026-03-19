@@ -83,7 +83,7 @@ def main() -> None:
 
     import anthropic
 
-    from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status
+    from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, split_cells
 
     mm = Session(socket_path=str(midiman_sock))
     mm.connect()
@@ -122,19 +122,38 @@ def main() -> None:
         """Print current session state: BPM, slots, loaded nodes."""
         print(format_status(_session_state()))
 
+    _cell_queue: list[str] = []
+
+    def _paste(cell: str) -> None:
+        import IPython
+        print(cell)
+        IPython.get_ipython().set_next_input(cell)  # type: ignore[union-attr]
+
     def c(prompt: str) -> None:
-        """Ask Claude for live-coding help; pastes the code into the next cell."""
+        """Ask Claude for help; splits response into cells, pastes the first."""
         model = os.environ.get("KRACH_MODEL", "claude-sonnet-4-6")
         client = anthropic.Anthropic()
         system = build_context(_session_state())
         response = ask_claude(client, model, system, prompt)
         code = extract_code(response)
-        if code:
-            print(code)
-            import IPython
-            IPython.get_ipython().set_next_input(code)  # type: ignore[union-attr]
-        else:
+        if not code:
             print(response)
+            return
+        cells = split_cells(code)
+        _cell_queue.clear()
+        _cell_queue.extend(cells[1:])
+        _paste(cells[0])
+        if _cell_queue:
+            print(f"\n  ({len(_cell_queue)} more cell(s) — call cn() to advance)")
+
+    def cn() -> None:
+        """Paste the next queued cell (from the last c() call)."""
+        if not _cell_queue:
+            print("cell queue empty")
+            return
+        _paste(_cell_queue.pop(0))
+        if _cell_queue:
+            print(f"\n  ({len(_cell_queue)} more cell(s) — call cn() to advance)")
 
     nodes = sm.list_nodes()
 
@@ -162,7 +181,7 @@ def main() -> None:
     print(f"  dsp dir  {dsp_dir}")
     print()
     print("  in scope: mm  sm  dsp()  note rest cc  Graph  transpile control"
-          "  status()  c()")
+          "  status()  c()  cn()")
     print()
 
     import IPython
@@ -200,6 +219,7 @@ def main() -> None:
             "dsp_dir": dsp_dir,
             "status": status,
             "c": c,
+            "cn": cn,
         },
         banner1="",
         banner2="",
