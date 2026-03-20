@@ -36,6 +36,12 @@ mix.gain("bass", 0.15)
 
 # Remove a voice:
 mix.remove("bass")
+
+# Batch multiple voices (one rebuild instead of N — use for initial setup):
+with mix.batch():
+    mix.voice("kick", kick_fn, gain=0.8)
+    mix.voice("bass", bass_fn, gain=0.3)
+    mix.voice("lead", lead_fn, gain=0.25)
 ```
 
 IMPORTANT: Only use string type_ids that appear in "Node controls" in the session state.
