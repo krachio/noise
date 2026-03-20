@@ -96,6 +96,18 @@ class TestOverMethod:
         assert isinstance(p.node, Slow)
         assert p.node.factor == (3, 2)
 
+    def test_over_non_dyadic_float_produces_bounded_rational(self) -> None:
+        """0.9 must produce (9, 10), not a huge binary fraction."""
+        p = note(60).over(0.9)
+        assert isinstance(p.node, Fast)
+        # Inverted: over(0.9) → Fast(10/9) because 0.9 < 1
+        assert p.node.factor == (10, 9)
+
+    def test_over_third_produces_bounded_rational(self) -> None:
+        p = note(60).over(1 / 3)
+        assert isinstance(p.node, Fast)
+        assert p.node.factor == (3, 1)
+
 
 class TestScaleMethod:
     def test_scale_gt_1_produces_fast(self) -> None:

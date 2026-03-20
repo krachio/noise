@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from fractions import Fraction
 
 from midiman_frontend.ir import (
     Atom,
@@ -27,7 +28,8 @@ from midiman_frontend.ir import (
 def _to_rational(value: int | float) -> tuple[int, int]:
     if isinstance(value, int):
         return (value, 1)
-    return value.as_integer_ratio()
+    f = Fraction(value).limit_denominator(256)
+    return (f.numerator, f.denominator)
 
 
 def _invert_rational(r: tuple[int, int]) -> tuple[int, int]:
