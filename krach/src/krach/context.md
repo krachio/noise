@@ -42,6 +42,24 @@ with mix.batch():
     mix.voice("kick", kick_fn, gain=0.8)
     mix.voice("bass", bass_fn, gain=0.3)
     mix.voice("lead", lead_fn, gain=0.25)
+
+# Smooth gain fade over N bars (no threading — uses the pattern engine):
+mix.fade("bass", target=0.15, bars=8)
+```
+
+### Defining DSPs with @dsp decorator
+```python
+@dsp
+def acid_bass() -> Signal:
+    freq = control("freq", 55.0, 20.0, 800.0)
+    gate = control("gate", 0.0, 0.0, 1.0)
+    cutoff = control("cutoff", 800.0, 100.0, 4000.0)
+    env = adsr(0.005, 0.15, 0.3, 0.08, gate)
+    return lowpass(saw(freq), cutoff) * env * 0.55
+
+# acid_bass is now a DspDef — pass directly to mix.voice():
+mix.voice("bass", acid_bass, gain=0.3)
+# Saves both .py (source) and .dsp (FAUST) to dsp_dir
 ```
 
 IMPORTANT: Only use string type_ids that appear in "Node controls" in the session state.
