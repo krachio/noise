@@ -7,6 +7,8 @@ Adding or removing a voice rebuilds the graph; gain updates are instant.
 
 from __future__ import annotations
 
+import inspect
+import textwrap
 from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -28,6 +30,39 @@ class Voice:
     gain: float
     controls: tuple[str, ...]
     init: tuple[tuple[str, float], ...] = ()
+
+
+@dataclass(frozen=True)
+class DspDef:
+    """A pre-transpiled DSP definition created by the ``@dsp`` decorator."""
+
+    fn: Callable[..., Any]
+    source: str
+    faust: str
+    controls: tuple[str, ...]
+
+
+def dsp(fn: Callable[..., Any]) -> DspDef:
+    """Decorator: captures Python source + pre-transpiles to FAUST.
+
+    Usage::
+
+        @dsp
+        def acid_bass() -> Signal:
+            freq = control("freq", 55.0, 20.0, 800.0)
+            gate = control("gate", 0.0, 0.0, 1.0)
+            return lowpass(saw(freq), 800.0) * adsr(...) * 0.55
+
+        mix.voice("bass", acid_bass, gain=0.3)
+    """
+    source = textwrap.dedent(inspect.getsource(fn))
+    result = _transpile(fn)  # type: ignore[arg-type]
+    return DspDef(
+        fn=fn,
+        source=source,
+        faust=result.source,
+        controls=tuple(c.name for c in result.schema.controls),
+    )
 
 
 # ── Pure builders (testable without I/O) ──────────────────────────────────────
@@ -128,16 +163,24 @@ class VoiceMixer:
     def voice(
         self,
         name: str,
-        source: str | Callable[..., Any],
+        source: str | DspDef | Callable[..., Any],
         gain: float = 0.5,
         **init: float,
     ) -> None:
         """Add or replace a voice.  Rebuilds the graph.
 
-        ``source`` is either a registered type_id string (e.g. ``"faust:kit"``)
-        or a Python DSP function that will be transpiled to FAUST on the fly.
+        ``source`` is a ``@dsp``-decorated function, a registered type_id
+        string, or a raw Python DSP function (transpiled on the fly).
         """
-        if callable(source):
+        if isinstance(source, DspDef):
+            type_id = f"faust:{name}"
+            self._dsp_dir.joinpath(f"{name}.py").write_text(source.source)
+            self._dsp_dir.joinpath(f"{name}.dsp").write_text(source.faust)
+            controls = source.controls
+            self._node_controls[type_id] = controls
+            if not self._batching:
+                self._wait_for_type(type_id)
+        elif callable(source):
             type_id = f"faust:{name}"
             result = _transpile(source)  # type: ignore[arg-type]
             self._dsp_dir.joinpath(f"{name}.dsp").write_text(result.source)

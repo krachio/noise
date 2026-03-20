@@ -162,6 +162,29 @@ def test_hit_usable_with_over() -> None:
     assert isinstance(stretched, Pattern)
 
 
+# ── @dsp decorator ────────────────────────────────────────────────────────────
+
+
+def test_dsp_decorator_captures_source_and_transpiles() -> None:
+    from faust_dsl import Signal, control
+    from faust_dsl.lib.oscillators import sine_osc
+    from faust_dsl.music.envelopes import adsr
+
+    from krach._mixer import DspDef, dsp
+
+    @dsp
+    def my_synth() -> Signal:
+        freq = control("freq", 440.0, 20.0, 4000.0)
+        gate = control("gate", 0.0, 0.0, 1.0)
+        return sine_osc(freq) * adsr(0.01, 0.1, 0.5, 0.2, gate) * 0.5
+
+    assert isinstance(my_synth, DspDef)
+    assert "def my_synth" in my_synth.source
+    assert "freq" in my_synth.controls
+    assert "gate" in my_synth.controls
+    assert 'import("stdfaust.lib")' in my_synth.faust
+
+
 # ── VoiceMixer.batch ─────────────────────────────────────────────────────────
 
 

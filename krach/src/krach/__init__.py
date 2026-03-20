@@ -64,7 +64,7 @@ def main() -> None:
     from midiman_frontend import Session
     from midiman_frontend.pattern import rest
     from soundman_frontend import SoundmanSession
-    from faust_dsl import Signal, control, transpile
+    from faust_dsl import Signal, control
     from faust_dsl.lib.filters import bandpass, highpass, lowpass
     from faust_dsl.lib.noise import white_noise
     from faust_dsl.lib.oscillators import phasor, saw, sine_osc, square
@@ -74,7 +74,7 @@ def main() -> None:
     import anthropic
 
     from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, parse_dsp_controls, split_cells
-    from krach._mixer import VoiceMixer
+    from krach._mixer import VoiceMixer, dsp
 
     mm = Session(socket_path=str(midiman_sock))
     mm.connect()
@@ -103,17 +103,7 @@ def main() -> None:
             ),
         )
 
-    def dsp(name: str, fn: object) -> object:
-        """Transpile a Python DSP function and hot-drop it into soundman."""
-        result = transpile(fn)  # type: ignore[arg-type]
-        (dsp_dir / f"{name}.dsp").write_text(result.source)
-        control_names = tuple(ctrl.name for ctrl in result.schema.controls)
-        _node_controls[f"faust:{name}"] = control_names
-        print(f"  {name}.dsp — controls: {list(control_names)}")
-        print("  waiting for hot-reload...")
-        time.sleep(2.5)
-        _refresh_nodes()
-        return result
+    # dsp decorator imported from _mixer — replaces the old dsp() function
 
     def status() -> None:
         """Print current session state: BPM, slots, loaded nodes."""
@@ -167,14 +157,6 @@ def main() -> None:
 
     # Cache nodes so status() and c() don't block on an OSC round-trip.
     _cached_nodes: list[str] = list(nodes)
-
-    def _refresh_nodes() -> list[str]:
-        nonlocal _cached_nodes
-        try:
-            _cached_nodes = sm.list_nodes(timeout=0.5)
-        except TimeoutError:
-            pass
-        return _cached_nodes
 
     print()
     print("  ██╗  ██╗██████╗  █████╗  ██████╗██╗  ██╗")
