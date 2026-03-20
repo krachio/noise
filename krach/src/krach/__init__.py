@@ -87,7 +87,7 @@ def main() -> None:
         if _controls:
             _node_controls[f"faust:{_p.stem}"] = _controls
 
-    mix = VoiceMixer(session=sm, dsp_dir=dsp_dir, node_controls=_node_controls)
+    mix = VoiceMixer(session=sm, dsp_dir=dsp_dir, node_controls=_node_controls, mm=mm)
     _user_ns_keys: tuple[str, ...] = ()  # populated after user_ns is built
 
     def _session_state() -> SessionState:

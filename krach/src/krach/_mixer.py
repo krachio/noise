@@ -19,6 +19,7 @@ from faust_dsl import transpile as _transpile
 from midiman_frontend.ir import Osc, OscFloat, OscStr
 from midiman_frontend.pattern import Pattern
 from midiman_frontend.pattern import atom_group as _atom_group
+from midiman_frontend.pattern import osc as _osc
 from soundman_frontend import Graph, GraphIr, SoundmanSession
 
 
@@ -153,12 +154,14 @@ class VoiceMixer:
         session: SoundmanSession,
         dsp_dir: Path,
         node_controls: dict[str, tuple[str, ...]] | None = None,
+        mm: Any = None,
     ) -> None:
         self._session = session
         self._dsp_dir = dsp_dir
         self._node_controls: dict[str, tuple[str, ...]] = dict(node_controls or {})
         self._voices: dict[str, Voice] = {}
         self._batching: bool = False
+        self._mm: Any = mm  # midiman Session, optional (needed for fade)
 
     def voice(
         self,
@@ -221,6 +224,33 @@ class VoiceMixer:
     def hit(self, name: str, param: str) -> Pattern:
         """Percussive trigger: trig + reset on a specific control."""
         return build_hit(name, param)
+
+    def fade(
+        self, name: str, target: float, bars: int = 4, steps_per_bar: int = 4
+    ) -> None:
+        """Smoothly fade voice gain over N bars using a midiman pattern.
+
+        No Python threads needed — schedules gain changes through the pattern
+        engine, synchronized to the beat grid.
+        """
+        if self._mm is None:
+            raise RuntimeError("fade() requires mm (midiman Session) — pass mm= to VoiceMixer")
+        current = self._voices[name].gain
+        total_steps = bars * steps_per_bar
+        atoms: list[Pattern] = []
+        for i in range(total_steps + 1):
+            t = i / total_steps
+            value = current + (target - current) * t
+            atoms.append(_osc("/soundman/set", OscStr(f"{name}_gain"), OscFloat(value)))
+        pattern = atoms[0]
+        for a in atoms[1:]:
+            pattern = pattern + a
+        self._mm.play(f"_fade_{name}", pattern.over(bars))
+        # Update stored gain to target (will be reached at end of fade)
+        old = self._voices[name]
+        self._voices[name] = Voice(
+            type_id=old.type_id, gain=target, controls=old.controls, init=old.init
+        )
 
     @contextmanager
     def batch(self) -> Generator[None]:
