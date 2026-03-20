@@ -91,9 +91,15 @@ pub fn compile_with_reuse(
 
         let node = if let Some(cached) = reusable.remove(&ir_node.id) {
             if cached.type_id == ir_node.type_id && cached.version == current_version {
-                // Reuse — DSP state (ADSR, filters, reverb) preserved
+                // Reuse — internal DSP state (filter memory, reverb tails) preserved.
+                // Apply initial controls to reset gate=0 (prevents stuck-gate silence)
+                // and update freq/cutoff to match the new IR.
                 reused += 1;
-                cached.node
+                let mut node = cached.node;
+                for (name, &value) in &ir_node.controls {
+                    let _ = node.set_param(name, value);
+                }
+                node
             } else {
                 // Type or factory changed — create fresh
                 let mut fresh = registry.create_node(&ir_node.type_id, sample_rate, block_size)?;
@@ -491,5 +497,57 @@ mod tests {
         // Should still produce audio (fresh instance)
         let energy: f32 = buf.iter().map(|s| s * s).sum();
         assert!(energy > 0.0, "fresh node after reregister should produce audio");
+    }
+
+    #[test]
+    fn compile_with_reuse_applies_initial_controls_to_reused_node() {
+        // Compile at 440 Hz, process, then recompile with reuse at 1000 Hz.
+        // The reused oscillator should produce audio at the NEW frequency (1000 Hz)
+        // because initial controls from the IR are applied on reuse.
+        // This also ensures gate=0 is applied on reuse (prevents stuck-gate silence).
+        let registry = test_registry();
+        let ir_440 = simple_graph_ir(); // freq=440
+
+        let mut graph1 = compile(&ir_440, &registry, 48000, 256).unwrap();
+        let mut buf_440 = vec![0.0_f32; 256];
+        graph1.process(&mut buf_440);
+
+        // Recompile with freq=1000
+        let ir_1000 = GraphIr {
+            nodes: vec![
+                NodeInstance {
+                    id: "osc1".into(),
+                    type_id: "oscillator".into(),
+                    controls: HashMap::from([("freq".into(), 1000.0)]),
+                },
+                NodeInstance {
+                    id: "out".into(),
+                    type_id: "dac".into(),
+                    controls: HashMap::new(),
+                },
+            ],
+            connections: vec![ConnectionIr {
+                from_node: "osc1".into(),
+                from_port: "out".into(),
+                to_node: "out".into(),
+                to_port: "in".into(),
+            }],
+            exposed_controls: HashMap::new(),
+        };
+
+        let mut graph2 = compile_with_reuse(&ir_1000, &registry, Some(graph1), 48000, 256).unwrap();
+        let mut buf_1000 = vec![0.0_f32; 256];
+        graph2.process(&mut buf_1000);
+
+        // Count zero crossings — 1000 Hz should have more than 440 Hz
+        let count_crossings = |buf: &[f32]| -> usize {
+            buf.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count()
+        };
+        let c440 = count_crossings(&buf_440);
+        let c1000 = count_crossings(&buf_1000);
+        assert!(
+            c1000 > c440,
+            "reused node should have freq=1000 applied (got {c1000} crossings vs {c440} at 440Hz)"
+        );
     }
 }
