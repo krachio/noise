@@ -46,6 +46,7 @@ impl std::error::Error for RegistryError {}
 pub struct NodeRegistry {
     types: HashMap<String, NodeTypeDecl>,
     factories: HashMap<String, Box<dyn NodeFactory>>,
+    versions: HashMap<String, u64>,
 }
 
 impl NodeRegistry {
@@ -54,6 +55,7 @@ impl NodeRegistry {
         Self {
             types: HashMap::new(),
             factories: HashMap::new(),
+            versions: HashMap::new(),
         }
     }
 
@@ -69,7 +71,8 @@ impl NodeRegistry {
         }
         let type_id = decl.type_id.clone();
         self.types.insert(type_id.clone(), decl);
-        self.factories.insert(type_id, Box::new(factory));
+        self.factories.insert(type_id.clone(), Box::new(factory));
+        *self.versions.entry(type_id).or_insert(0) += 1;
         Ok(())
     }
 
@@ -90,7 +93,8 @@ impl NodeRegistry {
         }
         let type_id = decl.type_id.clone();
         self.types.insert(type_id.clone(), decl);
-        self.factories.insert(type_id, Box::new(factory));
+        self.factories.insert(type_id.clone(), Box::new(factory));
+        *self.versions.entry(type_id).or_insert(0) += 1;
         Ok(())
     }
 
@@ -119,6 +123,13 @@ impl NodeRegistry {
     #[must_use]
     pub fn type_ids(&self) -> Vec<&str> {
         self.types.keys().map(String::as_str).collect()
+    }
+
+    /// Returns the version counter for a type. Starts at 1 on first register,
+    /// increments on each reregister. Returns 0 for unregistered types.
+    #[must_use]
+    pub fn version(&self, type_id: &str) -> u64 {
+        self.versions.get(type_id).copied().unwrap_or(0)
     }
 }
 
@@ -294,5 +305,54 @@ mod tests {
         let mut registry = NodeRegistry::new();
         let result = registry.reregister(oscillator_decl(), StubFactory);
         assert!(matches!(result, Err(RegistryError::TypeNotFound(ref id)) if id == "oscillator"));
+    }
+
+    // -- version tracking tests --
+
+    #[test]
+    fn initial_version_is_one_after_register() {
+        let mut registry = NodeRegistry::new();
+        registry.register(oscillator_decl(), StubFactory).unwrap();
+        assert_eq!(registry.version("oscillator"), 1);
+    }
+
+    #[test]
+    fn version_increments_on_reregister() {
+        let mut registry = NodeRegistry::new();
+        registry.register(oscillator_decl(), StubFactory).unwrap();
+        assert_eq!(registry.version("oscillator"), 1);
+
+        registry.reregister(oscillator_decl_stereo(), StubFactory2).unwrap();
+        assert_eq!(registry.version("oscillator"), 2);
+
+        registry.reregister(oscillator_decl_stereo(), StubFactory2).unwrap();
+        assert_eq!(registry.version("oscillator"), 3);
+    }
+
+    #[test]
+    fn versions_are_independent_per_type() {
+        let mut registry = NodeRegistry::new();
+        registry.register(oscillator_decl(), StubFactory).unwrap();
+
+        let dac_decl = NodeTypeDecl {
+            type_id: "dac".into(),
+            audio_inputs: vec![PortDecl { name: "in".into(), channels: ChannelLayout::Mono }],
+            audio_outputs: vec![],
+            controls: vec![],
+        };
+        registry.register(dac_decl, StubFactory).unwrap();
+
+        assert_eq!(registry.version("oscillator"), 1);
+        assert_eq!(registry.version("dac"), 1);
+
+        registry.reregister(oscillator_decl_stereo(), StubFactory2).unwrap();
+        assert_eq!(registry.version("oscillator"), 2);
+        assert_eq!(registry.version("dac"), 1); // unchanged
+    }
+
+    #[test]
+    fn version_of_unknown_type_is_zero() {
+        let registry = NodeRegistry::new();
+        assert_eq!(registry.version("nonexistent"), 0);
     }
 }
