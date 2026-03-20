@@ -82,6 +82,15 @@ pub struct ReusableNode {
     pub node: Box<dyn DspNode>,
 }
 
+impl std::fmt::Debug for ReusableNode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ReusableNode")
+            .field("type_id", &self.type_id)
+            .field("version", &self.version)
+            .finish_non_exhaustive()
+    }
+}
+
 impl DspGraph {
     #[must_use]
     pub fn new(
