@@ -6,6 +6,7 @@ from fractions import Fraction
 
 from midiman_frontend.ir import (
     Atom,
+    AtomGroup,
     Cat,
     Cc,
     Degrade,
@@ -120,3 +121,8 @@ def cc(controller: int, value: int, channel: int = 0) -> Pattern:
 
 def osc(address: str, *args: OscArg) -> Pattern:
     return Pattern(Atom(Osc(address=address, args=tuple(args))))
+
+
+def atom_group(values: tuple[Osc, ...], reset: Osc | None = None) -> Pattern:
+    """Multiple values at onset + optional reset at end. Counts as ONE atom."""
+    return Pattern(AtomGroup(values=values, reset=reset))

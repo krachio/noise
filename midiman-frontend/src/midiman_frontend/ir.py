@@ -57,6 +57,13 @@ class Atom:
 
 
 @dataclass(frozen=True)
+class AtomGroup:
+    """Multiple values fired at onset + optional reset at end. Counts as ONE atom."""
+    values: tuple[Value, ...]
+    reset: Value | None = None
+
+
+@dataclass(frozen=True)
 class Silence:
     pass
 
@@ -162,6 +169,7 @@ class Degrade:
 
 IrNode = (
     Atom
+    | AtomGroup
     | Silence
     | Cat
     | Stack
@@ -260,6 +268,14 @@ def ir_to_dict(node: IrNode) -> dict[str, Any]:
     match node:
         case Atom(value):
             return {"op": "Atom", "value": _value_to_dict(value)}
+        case AtomGroup(values, reset):
+            d: dict[str, Any] = {
+                "op": "AtomGroup",
+                "values": [_value_to_dict(v) for v in values],
+            }
+            if reset is not None:
+                d["reset"] = _value_to_dict(reset)
+            return d
         case Silence():
             return {"op": "Silence"}
         case Cat(children):

@@ -4,7 +4,7 @@ use super::{IrError, IrNode};
 /// Checks: no zero denominators, positive factors, non-empty children.
 pub fn validate(node: &IrNode) -> Result<(), IrError> {
     match node {
-        IrNode::Atom { .. } | IrNode::Silence => Ok(()),
+        IrNode::Atom { .. } | IrNode::AtomGroup { .. } | IrNode::Silence => Ok(()),
         IrNode::Cat { children } => {
             if children.is_empty() {
                 return Err(IrError::EmptyChildren { op: "Cat" });

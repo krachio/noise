@@ -23,6 +23,10 @@ fn compile_node(ir: &IrNode, pattern: &mut CompiledPattern) -> usize {
         IrNode::Atom { value } => pattern.push(PatternNode::Atom {
             value: value.clone(),
         }),
+        IrNode::AtomGroup { values, reset } => pattern.push(PatternNode::AtomGroup {
+            values: values.iter().cloned().collect(),
+            reset: reset.clone(),
+        }),
         IrNode::Silence => pattern.push(PatternNode::Silence),
         IrNode::Cat { children } => {
             let child_indices: SmallVec<[usize; 8]> =

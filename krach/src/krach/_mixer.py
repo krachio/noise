@@ -14,9 +14,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 from faust_dsl import transpile as _transpile
-from midiman_frontend.ir import OscFloat, OscStr
+from midiman_frontend.ir import Osc, OscFloat, OscStr
 from midiman_frontend.pattern import Pattern
-from midiman_frontend.pattern import osc as _osc
+from midiman_frontend.pattern import atom_group as _atom_group
 from soundman_frontend import Graph, GraphIr, SoundmanSession
 
 
@@ -55,43 +55,50 @@ def build_graph_ir(voices: dict[str, Voice]) -> GraphIr:
     return builder.build()
 
 
+def _make_osc(label: str, value: float) -> Osc:
+    return Osc(address="/soundman/set", args=(OscStr(label), OscFloat(value)))
+
+
 def build_step(
     voice_name: str,
     controls: tuple[str, ...],
     pitch: float | None = None,
     **params: float,
 ) -> Pattern:
-    """Build a melodic trigger atom: set freq + extra params + gate trig/reset."""
-    atoms: list[Pattern] = []
+    """Build a single compound atom: freq + params at onset, gate reset at end.
+
+    Counts as ONE atom for cycle division — ``rest() + build_step(...)`` is
+    2 atoms (not 4+), so the trigger fires at exactly 1/2 of the cycle.
+    """
+    onset_values: list[Osc] = []
 
     if pitch is not None and "freq" in controls:
-        atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}_freq"), OscFloat(pitch)))
+        onset_values.append(_make_osc(f"{voice_name}_freq", pitch))
 
     for param, value in params.items():
         if param in controls:
-            atoms.append(
-                _osc("/soundman/set", OscStr(f"{voice_name}_{param}"), OscFloat(value))
-            )
+            onset_values.append(_make_osc(f"{voice_name}_{param}", value))
 
     if "gate" in controls:
-        atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}_gate"), OscFloat(1.0)))
-        atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}_gate"), OscFloat(0.0)))
+        onset_values.append(_make_osc(f"{voice_name}_gate", 1.0))
 
-    if not atoms:
+    if not onset_values:
         raise ValueError(f"voice '{voice_name}' has no triggerable controls")
 
-    result = atoms[0]
-    for atom in atoms[1:]:
-        result = result + atom
-    return result
+    reset = _make_osc(f"{voice_name}_gate", 0.0) if "gate" in controls else None
+
+    return _atom_group(values=tuple(onset_values), reset=reset)
 
 
 def build_hit(voice_name: str, param: str) -> Pattern:
-    """Build a percussive trigger atom: trig + reset on a single control."""
+    """Build a single compound atom: trig at onset, reset at end.
+
+    Counts as ONE atom — ``rest() + build_hit(...)`` is 2 atoms, not 3.
+    """
     label = f"{voice_name}_{param}"
-    return (
-        _osc("/soundman/set", OscStr(label), OscFloat(1.0))
-        + _osc("/soundman/set", OscStr(label), OscFloat(0.0))
+    return _atom_group(
+        values=(Osc(address="/soundman/set", args=(OscStr(label), OscFloat(1.0))),),
+        reset=Osc(address="/soundman/set", args=(OscStr(label), OscFloat(0.0))),
     )
 
 
