@@ -2,38 +2,21 @@
 
 ## Current state
 
-**Milestone 1 complete + audio hardening.** 89 tests (83 unit + 6 integration), 0 unsafe, clippy clean.
+Audio engine with node reuse — 112 tests, 0 unsafe, clippy clean.
 
-### Modules
-- **IR layer** (`ir/`): `NodeTypeDecl`, `PortDecl`, `ControlDecl`, `GraphIr`, `NodeInstance`, `ConnectionIr` — serde JSON wire format
-- **Graph runtime** (`graph/`): `DspNode` trait, `DspGraph` with scratch-based processing, `BufferPool`, topological sort (Kahn's algorithm)
-- **Graph compiler** (`graph/compiler.rs`): `GraphIr` -> `DspGraph` — validate types/ports, instantiate from registry, topo-sort, allocate buffers
-- **Registry** (`registry.rs`): `NodeFactory` trait, `NodeRegistry`
-- **Built-in nodes** (`nodes/`): `Oscillator` (sine/saw/square), `DacNode`
-- **Swap** (`swap/`): `Command` enum, `GraphSwapper` with linear crossfade
-- **Engine** (`engine/`): `AudioEngine` — shadow graph, compiler, swapper, registry; handles full `ClientMessage` protocol
-- **Protocol** (`protocol.rs`): `ClientMessage`/`ServerMessage` JSON
-- **Control** (`control/`): `ControlInput` trait, `MockControlInput`, `OscControlInput` (UDP/rosc)
-- **Output** (`output/`): `AudioOutput` trait, `MockAudioOutput`, `CpalBackend` (cpal)
-- **Binary** (`main.rs`): starts 440Hz sine via cpal, OSC control on 127.0.0.1:9000
-- **Node introspection**: `/soundman/list_nodes <reply_port>` sends `/soundman/node_types` JSON reply via UDP; `EngineController::list_node_types()` exposes registry type IDs
+### Key features
+- **Graph compiler** with `compile_with_reuse()` — reuses node instances across graph swaps, preserving ADSR phase, filter memory, reverb tails for unchanged voices
+- **Return channel** — retired graphs sent from audio thread to control thread via SPSC ring buffer (RT-safe: no dealloc on audio path)
+- **Registry versioning** — per-type version counter; nodes only reused when type_id AND version match (prevents stale code after hot-reload)
+- **Fan-in mixing** with per-source NaN isolation — diverged IIR filter silences only itself
+- **Output clamping** with NaN→0 — prevents CoreAudio stream death
+- **Built-in nodes**: oscillator, dac, gain
+- **Lock-free audio**: EngineController + AudioProcessor split via rtrb SPSC
+- **GraphSwapper** with linear crossfade, pre-allocated buffers
+- **OSC control**: Float/Double/Int accepted for numeric args
 
-### M1 acceptance criteria status
-- [x] Engine starts, produces 440Hz sine through cpal
-- [x] OSC `/soundman/set pitch 880.0` changes frequency (via exposed control)
-- [x] OSC `/soundman/load_graph <json>` swaps graph with crossfade
-- [x] `cargo test` passes (90 tests)
-- [x] `cargo clippy -- -D warnings` clean
-- [x] No `unsafe` in main crate
+## Next
 
-### Post-M1 hardening
-- Lock-free audio: `EngineController` + `AudioProcessor` split, connected by `rtrb` SPSC ring buffer
-- Pre-allocated crossfade buffers (no allocation on audio thread)
-- Device sample rate query (uses native rate, not hardcoded 48000)
-- `OscType::Double` support (midiman compatibility)
-- `env_logger` integration (RUST_LOG=soundman=debug)
-
-## Next (M2: Multi-node graph)
-- Gain/mixer nodes
-- Multi-node graph (osc -> filter -> dac)
-- Graph builder API
+- Effects routing: send/return buses in the graph
+- Incremental graph mutations (AddNode/Connect without full recompile)
+- Sub-block sample splitting for ~0ms scheduling jitter
