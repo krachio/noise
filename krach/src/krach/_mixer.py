@@ -7,6 +7,8 @@ Adding or removing a voice rebuilds the graph; gain updates are instant.
 
 from __future__ import annotations
 
+from collections.abc import Generator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
@@ -114,6 +116,7 @@ class VoiceMixer:
         self._dsp_dir = dsp_dir
         self._node_controls: dict[str, tuple[str, ...]] = dict(node_controls or {})
         self._voices: dict[str, Voice] = {}
+        self._batching: bool = False
 
     def voice(
         self,
@@ -133,7 +136,8 @@ class VoiceMixer:
             self._dsp_dir.joinpath(f"{name}.dsp").write_text(result.source)
             controls = tuple(c.name for c in result.schema.controls)
             self._node_controls[type_id] = controls
-            self._wait_for_type(type_id)
+            if not self._batching:
+                self._wait_for_type(type_id)
         else:
             type_id = source
             controls = self._node_controls.get(type_id, tuple(init.keys()))
@@ -144,7 +148,8 @@ class VoiceMixer:
             controls=controls,
             init=tuple(init.items()),
         )
-        self._rebuild()
+        if not self._batching:
+            self._rebuild()
 
     def remove(self, name: str) -> None:
         """Remove a voice.  Rebuilds the graph."""
@@ -167,10 +172,31 @@ class VoiceMixer:
         """Percussive trigger: trig + reset on a specific control."""
         return build_hit(name, param)
 
+    @contextmanager
+    def batch(self) -> Generator[None]:
+        """Batch voice declarations into a single graph rebuild.
+
+        Writes all .dsp files immediately but defers hot-reload waits and
+        graph loading until the context manager exits.
+        """
+        self._batching = True
+        try:
+            yield
+        finally:
+            self._batching = False
+            self._flush()
+
     @property
     def voices(self) -> dict[str, Voice]:
         """Read-only snapshot of active voices."""
         return dict(self._voices)
+
+    def _flush(self) -> None:
+        """Wait for all pending FAUST types and rebuild the graph once."""
+        for voice in self._voices.values():
+            if voice.type_id.startswith("faust:"):
+                self._wait_for_type(voice.type_id)
+        self._rebuild()
 
     def _rebuild(self) -> None:
         ir = build_graph_ir(self._voices)

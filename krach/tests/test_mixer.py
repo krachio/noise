@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from midiman_frontend.ir import Atom, Cat, IrNode, Osc, OscFloat, OscStr
 from midiman_frontend.pattern import Pattern
 
@@ -156,3 +158,45 @@ def test_hit_usable_with_over() -> None:
     h = build_hit("kit", "kick")
     stretched = (h * 4).over(2)
     assert isinstance(stretched, Pattern)
+
+
+# ── VoiceMixer.batch ─────────────────────────────────────────────────────────
+
+
+def test_batch_defers_rebuild() -> None:
+    """Inside batch(), voice() updates state but does not rebuild.
+    After batch exits, all voices are present."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:kick": ("gate",),
+        "faust:bass": ("freq", "gate"),
+    })
+
+    with mixer.batch():
+        mixer.voice("kick", "faust:kick", gain=0.8)
+        mixer.voice("bass", "faust:bass", gain=0.3)
+        # Inside batch: voices registered but load_graph not yet called
+        assert "kick" in mixer.voices
+        assert "bass" in mixer.voices
+        assert session.load_graph.call_count == 0
+
+    # After batch: exactly one load_graph call
+    assert session.load_graph.call_count == 1
+
+
+def test_voice_outside_batch_rebuilds_immediately() -> None:
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:kick": ("gate",),
+    })
+
+    mixer.voice("kick", "faust:kick", gain=0.8)
+    assert session.load_graph.call_count == 1  # immediate rebuild
