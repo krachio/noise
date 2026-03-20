@@ -255,4 +255,60 @@ mod tests {
         assert_eq!(events[0].value, note(64));
         assert_eq!(events[1].value, note(60));
     }
+
+    #[test]
+    fn atom_group_deserializes_from_json() {
+        let json = r#"{
+            "op": "AtomGroup",
+            "values": [
+                {"type": "Osc", "address": "/soundman/set", "args": [{"Str": "gate"}, {"Float": 1.0}]}
+            ],
+            "reset": {"type": "Osc", "address": "/soundman/set", "args": [{"Str": "gate"}, {"Float": 0.0}]}
+        }"#;
+        let ir: IrNode = serde_json::from_str(json).unwrap();
+        assert!(matches!(ir, IrNode::AtomGroup { .. }));
+
+        let pat = compile(&ir).unwrap();
+        let events = query(&pat, pat.root, Arc::cycle(0));
+        // AtomGroup: 1 onset + 1 reset = 2 events
+        assert_eq!(events.len(), 2, "expected onset + reset, got {}", events.len());
+    }
+
+    #[test]
+    fn atom_group_in_cat_with_silence_from_json() {
+        // Exact JSON that Python sends for: rest() + mix.hit("clap", "gate")
+        let json = r#"{
+            "op": "Cat",
+            "children": [
+                {"op": "Silence"},
+                {
+                    "op": "AtomGroup",
+                    "values": [
+                        {"type": "Osc", "address": "/soundman/set", "args": [{"Str": "clap_gate"}, {"Float": 1.0}]}
+                    ],
+                    "reset": {"type": "Osc", "address": "/soundman/set", "args": [{"Str": "clap_gate"}, {"Float": 0.0}]}
+                }
+            ]
+        }"#;
+        let ir: IrNode = serde_json::from_str(json).unwrap();
+        let pat = compile(&ir).unwrap();
+
+        // Query 2 cycles to verify repeating pattern
+        let events = query(&pat, pat.root, Arc::new(Time::zero(), Time::whole(2)));
+        // Each cycle: 1 onset + 1 reset = 2 events. Over 2 cycles = 4.
+        assert!(
+            events.len() >= 3,
+            "expected at least 3 events over 2 cycles (onset+reset+onset), got {}",
+            events.len()
+        );
+
+        // Check all events have onset (schedulable)
+        for (i, e) in events.iter().enumerate() {
+            assert!(
+                e.has_onset(),
+                "event {i}: whole={:?}, part.start={:?} — has_onset requires whole.start == part.start",
+                e.whole, e.part.start
+            );
+        }
+    }
 }
