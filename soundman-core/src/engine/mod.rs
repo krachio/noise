@@ -207,9 +207,16 @@ impl EngineController {
 
     fn recompile_and_send(&mut self) -> Result<(), CompileError> {
         // Drain any retired graphs returned from the audio thread
+        let mut returned_count = 0;
         while let Ok(returned) = self.return_consumer.pop() {
             self.cached_graph = Some(*returned);
+            returned_count += 1;
         }
+
+        let has_cache = self.cached_graph.is_some();
+        debug!(
+            "recompile_and_send: drained {returned_count} retired graphs, cache={has_cache}"
+        );
 
         let graph = compiler::compile_with_reuse(
             &self.shadow_graph,

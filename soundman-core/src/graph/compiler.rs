@@ -1,5 +1,7 @@
 use std::collections::HashMap;
 
+use log::debug;
+
 use crate::ir::{ConnectionIr, GraphIr};
 use crate::registry::{NodeRegistry, RegistryError};
 
@@ -75,12 +77,14 @@ pub fn compile_with_reuse(
 
     // Extract reusable nodes from previous graph (if any)
     let mut reusable = previous.map_or_else(HashMap::new, DspGraph::into_reusable_nodes);
+    let reusable_count = reusable.len();
 
     // Instantiate nodes — reuse when ID + type + version match
     let mut nodes: Vec<Box<dyn super::node::DspNode>> = Vec::with_capacity(ir.nodes.len());
     let mut node_ids: Vec<String> = Vec::with_capacity(ir.nodes.len());
     let mut node_type_ids: Vec<String> = Vec::with_capacity(ir.nodes.len());
     let mut node_versions: Vec<u64> = Vec::with_capacity(ir.nodes.len());
+    let mut reused = 0_usize;
 
     for ir_node in &ir.nodes {
         let current_version = registry.version(&ir_node.type_id);
@@ -88,6 +92,7 @@ pub fn compile_with_reuse(
         let node = if let Some(cached) = reusable.remove(&ir_node.id) {
             if cached.type_id == ir_node.type_id && cached.version == current_version {
                 // Reuse — DSP state (ADSR, filters, reverb) preserved
+                reused += 1;
                 cached.node
             } else {
                 // Type or factory changed — create fresh
@@ -111,6 +116,13 @@ pub fn compile_with_reuse(
         node_type_ids.push(ir_node.type_id.clone());
         node_versions.push(current_version);
     }
+
+    debug!(
+        "compile_with_reuse: {}/{} nodes reused (from {} reusable candidates)",
+        reused,
+        ir.nodes.len(),
+        reusable_count,
+    );
 
     // Resolve connections: string IDs -> NodeId indices
     let connections = resolve_connections(&ir.connections, &id_set, &ir.nodes, registry)?;
