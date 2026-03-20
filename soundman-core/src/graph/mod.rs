@@ -62,6 +62,8 @@ type OutputBufferMap = Vec<Vec<usize>>;
 pub struct DspGraph {
     nodes: Vec<Box<dyn DspNode>>,
     node_ids: Vec<String>,
+    node_type_ids: Vec<String>,
+    node_versions: Vec<u64>,
     connections: Vec<Connection>,
     process_order: Vec<NodeId>,
     output_node: Option<NodeId>,
@@ -72,11 +74,21 @@ pub struct DspGraph {
     scratch_outputs: Vec<Vec<f32>>,
 }
 
+/// A node extracted from a consumed graph, carrying its type and version
+/// so the compiler can decide whether to reuse it.
+pub struct ReusableNode {
+    pub type_id: String,
+    pub version: u64,
+    pub node: Box<dyn DspNode>,
+}
+
 impl DspGraph {
     #[must_use]
     pub fn new(
         nodes: Vec<Box<dyn DspNode>>,
         node_ids: Vec<String>,
+        node_type_ids: Vec<String>,
+        node_versions: Vec<u64>,
         connections: Vec<Connection>,
         process_order: Vec<NodeId>,
         output_node: Option<NodeId>,
@@ -84,13 +96,14 @@ impl DspGraph {
         output_buffer_map: OutputBufferMap,
     ) -> Self {
         let block_size = buffers.block_size();
-        // Pre-compute max input/output port counts for scratch buffer sizing
         let max_inputs = nodes.iter().map(|n| n.num_inputs()).max().unwrap_or(0);
         let max_outputs = nodes.iter().map(|n| n.num_outputs()).max().unwrap_or(0);
 
         Self {
             nodes,
             node_ids,
+            node_type_ids,
+            node_versions,
             connections,
             process_order,
             output_node,
@@ -99,6 +112,20 @@ impl DspGraph {
             scratch_inputs: vec![vec![0.0; block_size]; max_inputs],
             scratch_outputs: vec![vec![0.0; block_size]; max_outputs],
         }
+    }
+
+    /// Consume the graph and extract nodes for reuse in a new compilation.
+    /// Returns a map of `node_id → ReusableNode` with type and version info.
+    #[must_use]
+    pub fn into_reusable_nodes(self) -> std::collections::HashMap<String, ReusableNode> {
+        self.node_ids
+            .into_iter()
+            .zip(self.node_type_ids.into_iter().zip(self.node_versions.into_iter()))
+            .zip(self.nodes.into_iter())
+            .map(|((id, (type_id, version)), node)| {
+                (id, ReusableNode { type_id, version, node })
+            })
+            .collect()
     }
 
     pub fn process(&mut self, output: &mut [f32]) {
@@ -315,7 +342,12 @@ mod tests {
                 ports
             })
             .collect();
-        DspGraph::new(nodes, node_ids, connections, process_order, output_node, buffers, output_buffer_map)
+        let n = node_ids.len();
+        DspGraph::new(
+            nodes, node_ids,
+            vec!["test".into(); n], vec![0; n],
+            connections, process_order, output_node, buffers, output_buffer_map,
+        )
     }
 
     #[test]
@@ -390,7 +422,6 @@ mod tests {
             Box::new(Oscillator::new(sample_rate)),
             Box::new(DacNode),
         ];
-        let node_ids = vec!["osc1".into(), "out".into()];
         let connections = vec![Connection {
             from_node: NodeId(0),
             from_port: 0,
@@ -398,13 +429,14 @@ mod tests {
             to_port: 0,
         }];
         let process_order = vec![NodeId(0), NodeId(1)];
-        // osc has 1 output buffer (index 0), dac has 1 output buffer (index 1)
         let buffers = BufferPool::new(2, block_size);
         let output_buffer_map = vec![vec![0], vec![1]];
 
         let mut graph = DspGraph::new(
             nodes,
-            node_ids,
+            vec!["osc1".into(), "out".into()],
+            vec!["oscillator".into(), "dac".into()],
+            vec![0; 2],
             connections,
             process_order,
             Some(NodeId(1)),
@@ -434,7 +466,6 @@ mod tests {
             Box::new(Oscillator::new(sample_rate)),
             Box::new(DacNode),
         ];
-        let node_ids = vec!["osc1".into(), "out".into()];
         let connections = vec![Connection {
             from_node: NodeId(0),
             from_port: 0,
@@ -447,7 +478,9 @@ mod tests {
 
         let mut graph = DspGraph::new(
             nodes,
-            node_ids,
+            vec!["osc1".into(), "out".into()],
+            vec!["oscillator".into(), "dac".into()],
+            vec![0; 2],
             connections,
             process_order,
             Some(NodeId(1)),
@@ -478,13 +511,8 @@ mod tests {
     #[test]
     fn graph_set_param_unknown_node() {
         let graph = DspGraph::new(
-            vec![],
-            vec![],
-            vec![],
-            vec![],
-            None,
-            BufferPool::new(0, 64),
-            vec![],
+            vec![], vec![], vec![], vec![],
+            vec![], vec![], None, BufferPool::new(0, 64), vec![],
         );
         // set_param requires &mut but we need to test the error path
         let mut graph = graph;

@@ -185,6 +185,8 @@ mod tests {
         Box::new(DspGraph::new(
             nodes,
             vec!["nan".into(), "out".into()],
+            vec!["nan".into(), "dac".into()],
+            vec![0; 2],
             connections,
             vec![NodeId(0), NodeId(1)],
             Some(NodeId(1)),

@@ -37,7 +37,7 @@ impl From<RegistryError> for CompileError {
     }
 }
 
-/// Compile a `GraphIr` into a runnable `DspGraph`.
+/// Compile a `GraphIr` into a runnable `DspGraph`, creating fresh node instances.
 ///
 /// # Errors
 /// Returns `CompileError` if validation fails: unknown types, missing ports,
@@ -45,6 +45,23 @@ impl From<RegistryError> for CompileError {
 pub fn compile(
     ir: &GraphIr,
     registry: &NodeRegistry,
+    sample_rate: u32,
+    block_size: usize,
+) -> Result<DspGraph, CompileError> {
+    compile_with_reuse(ir, registry, None, sample_rate, block_size)
+}
+
+/// Compile a `GraphIr`, reusing node instances from a previous graph when the
+/// node ID, type, and registry version all match. This preserves DSP state
+/// (ADSR phase, filter memory, reverb tails) for unchanged voices across
+/// graph swaps.
+///
+/// # Errors
+/// Returns `CompileError` if validation fails.
+pub fn compile_with_reuse(
+    ir: &GraphIr,
+    registry: &NodeRegistry,
+    previous: Option<DspGraph>,
     sample_rate: u32,
     block_size: usize,
 ) -> Result<DspGraph, CompileError> {
@@ -56,19 +73,43 @@ pub fn compile(
         }
     }
 
-    // Validate all type_ids exist and instantiate nodes
+    // Extract reusable nodes from previous graph (if any)
+    let mut reusable = previous.map_or_else(HashMap::new, DspGraph::into_reusable_nodes);
+
+    // Instantiate nodes — reuse when ID + type + version match
     let mut nodes: Vec<Box<dyn super::node::DspNode>> = Vec::with_capacity(ir.nodes.len());
     let mut node_ids: Vec<String> = Vec::with_capacity(ir.nodes.len());
+    let mut node_type_ids: Vec<String> = Vec::with_capacity(ir.nodes.len());
+    let mut node_versions: Vec<u64> = Vec::with_capacity(ir.nodes.len());
 
     for ir_node in &ir.nodes {
-        let mut node = registry.create_node(&ir_node.type_id, sample_rate, block_size)?;
-        // Apply initial control values
-        for (name, &value) in &ir_node.controls {
-            // Ignore errors for initial controls — allows forward-compatible IR
-            let _ = node.set_param(name, value);
-        }
+        let current_version = registry.version(&ir_node.type_id);
+
+        let node = if let Some(cached) = reusable.remove(&ir_node.id) {
+            if cached.type_id == ir_node.type_id && cached.version == current_version {
+                // Reuse — DSP state (ADSR, filters, reverb) preserved
+                cached.node
+            } else {
+                // Type or factory changed — create fresh
+                let mut fresh = registry.create_node(&ir_node.type_id, sample_rate, block_size)?;
+                for (name, &value) in &ir_node.controls {
+                    let _ = fresh.set_param(name, value);
+                }
+                fresh
+            }
+        } else {
+            // New node
+            let mut fresh = registry.create_node(&ir_node.type_id, sample_rate, block_size)?;
+            for (name, &value) in &ir_node.controls {
+                let _ = fresh.set_param(name, value);
+            }
+            fresh
+        };
+
         nodes.push(node);
         node_ids.push(ir_node.id.clone());
+        node_type_ids.push(ir_node.type_id.clone());
+        node_versions.push(current_version);
     }
 
     // Resolve connections: string IDs -> NodeId indices
@@ -102,6 +143,8 @@ pub fn compile(
     Ok(DspGraph::new(
         nodes,
         node_ids,
+        node_type_ids,
+        node_versions,
         connections,
         process_order,
         output_node,
@@ -346,5 +389,95 @@ mod tests {
             .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
             .count();
         assert!((2..=4).contains(&crossings), "expected ~3 crossings at 1000Hz, got {crossings}");
+    }
+
+    #[test]
+    fn compile_with_reuse_preserves_oscillator_phase() {
+        // Compile a graph, process a few blocks to advance oscillator phase,
+        // then recompile with reuse. The reused oscillator should continue
+        // from the same phase (not restart from zero).
+        let registry = test_registry();
+        let ir = simple_graph_ir();
+
+        let mut graph1 = compile(&ir, &registry, 48000, 64).unwrap();
+
+        // Process 10 blocks to advance phase
+        let mut buf = vec![0.0_f32; 64];
+        for _ in 0..10 {
+            graph1.process(&mut buf);
+        }
+        let last_sample_before = buf[63];
+
+        // Recompile with reuse — oscillator should keep its phase
+        let mut graph2 = compile_with_reuse(&ir, &registry, Some(graph1), 48000, 64).unwrap();
+        let mut buf2 = vec![0.0_f32; 64];
+        graph2.process(&mut buf2);
+        let first_sample_after = buf2[0];
+
+        // Phase continuity: no large discontinuity
+        let jump = (first_sample_after - last_sample_before).abs();
+        assert!(
+            jump < 0.15,
+            "reused oscillator should preserve phase: jump={jump} (before={last_sample_before}, after={first_sample_after})"
+        );
+    }
+
+    #[test]
+    fn compile_with_reuse_creates_fresh_for_new_node() {
+        let registry = test_registry();
+        let ir = simple_graph_ir();
+
+        let graph1 = compile(&ir, &registry, 48000, 64).unwrap();
+
+        // Change the graph: different node ID → can't reuse
+        let ir2 = GraphIr {
+            nodes: vec![
+                NodeInstance {
+                    id: "osc_new".into(),  // different ID
+                    type_id: "oscillator".into(),
+                    controls: HashMap::from([("freq".into(), 880.0)]),
+                },
+                NodeInstance {
+                    id: "out".into(),
+                    type_id: "dac".into(),
+                    controls: HashMap::new(),
+                },
+            ],
+            connections: vec![ConnectionIr {
+                from_node: "osc_new".into(),
+                from_port: "out".into(),
+                to_node: "out".into(),
+                to_port: "in".into(),
+            }],
+            exposed_controls: HashMap::new(),
+        };
+
+        let mut graph2 = compile_with_reuse(&ir2, &registry, Some(graph1), 48000, 64).unwrap();
+        let mut buf = vec![0.0_f32; 64];
+        graph2.process(&mut buf);
+
+        // Should produce audio (new fresh node at 880 Hz)
+        let energy: f32 = buf.iter().map(|s| s * s).sum();
+        assert!(energy > 0.0, "new node should produce audio");
+    }
+
+    #[test]
+    fn compile_with_reuse_creates_fresh_after_reregister() {
+        let mut registry = test_registry();
+        let ir = simple_graph_ir();
+
+        let graph1 = compile(&ir, &registry, 48000, 64).unwrap();
+
+        // Reregister oscillator with a different factory (simulates hot-reload)
+        registry.reregister(oscillator_type_decl(), OscillatorFactory).unwrap();
+
+        // Recompile with reuse — version mismatch, should NOT reuse
+        let mut graph2 = compile_with_reuse(&ir, &registry, Some(graph1), 48000, 64).unwrap();
+        let mut buf = vec![0.0_f32; 64];
+        graph2.process(&mut buf);
+
+        // Should still produce audio (fresh instance)
+        let energy: f32 = buf.iter().map(|s| s * s).sum();
+        assert!(energy > 0.0, "fresh node after reregister should produce audio");
     }
 }
