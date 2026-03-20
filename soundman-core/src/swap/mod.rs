@@ -23,6 +23,8 @@ enum SwapState {
 pub struct GraphSwapper {
     active: Option<Box<DspGraph>>,
     retiring: Option<Box<DspGraph>>,
+    /// Retired graph waiting to be returned to the control thread for node reuse.
+    retired_ready: Option<Box<DspGraph>>,
     state: SwapState,
     crossfade_samples: usize,
     master_gain: f32,
@@ -36,6 +38,7 @@ impl GraphSwapper {
         Self {
             active: None,
             retiring: None,
+            retired_ready: None,
             state: SwapState::Idle,
             crossfade_samples,
             master_gain: 1.0,
@@ -95,7 +98,8 @@ impl GraphSwapper {
                 let new_remaining = samples_remaining.saturating_sub(fade_len);
                 if new_remaining == 0 {
                     self.state = SwapState::Idle;
-                    self.retiring = None;
+                    // Move retired graph to return slot (for node reuse + off-audio dealloc)
+                    self.retired_ready = self.retiring.take();
                 } else {
                     self.state = SwapState::Crossfading {
                         samples_remaining: new_remaining,
@@ -130,6 +134,12 @@ impl GraphSwapper {
         self.active.is_some()
     }
 
+    /// Take the retired graph (if ready) for return to the control thread.
+    /// Called by AudioProcessor after process() to avoid deallocation on the audio path.
+    pub fn take_retired(&mut self) -> Option<Box<DspGraph>> {
+        self.retired_ready.take()
+    }
+
     #[must_use]
     pub const fn is_crossfading(&self) -> bool {
         matches!(self.state, SwapState::Crossfading { .. })
@@ -141,6 +151,7 @@ impl std::fmt::Debug for GraphSwapper {
         f.debug_struct("GraphSwapper")
             .field("has_active", &self.active.is_some())
             .field("has_retiring", &self.retiring.is_some())
+            .field("has_retired_ready", &self.retired_ready.is_some())
             .field("state", &self.state)
             .field("crossfade_samples", &self.crossfade_samples)
             .field("master_gain", &self.master_gain)
