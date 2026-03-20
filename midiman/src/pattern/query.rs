@@ -74,10 +74,14 @@ fn query_atom_group(
             events.push(Event::new(Some(whole), sub_arc, value.clone()));
         }
 
-        // Reset fires at the END of the atom's time slice
+        // Reset fires at the END of the atom's time slice.
+        // Give it a whole that starts at `end` so has_onset() returns true
+        // and the engine schedules it.
         if let Some(reset_value) = reset {
-            let end_arc = Arc::new(sub_arc.end, sub_arc.end);
-            events.push(Event::new(Some(whole), end_arc, reset_value.clone()));
+            let end = sub_arc.end;
+            let reset_whole = Arc::new(end, end + Time::one());
+            let reset_part = Arc::new(end, end);
+            events.push(Event::new(Some(reset_whole), reset_part, reset_value.clone()));
         }
     }
 
