@@ -83,11 +83,11 @@ impl PendingEvent {
 }
 
 fn resolve_dsp_dir() -> PathBuf {
-    if let Ok(dir) = std::env::var("SOUNDMAN_DSP_DIR") {
+    if let Ok(dir) = std::env::var("NOISE_DSP_DIR") {
         return PathBuf::from(dir);
     }
     std::env::var("HOME").map_or_else(
-        |_| PathBuf::from("/tmp/soundman/dsp"),
+        |_| PathBuf::from("/tmp/noise/dsp"),
         |h| PathBuf::from(h).join(".krach/dsp"),
     )
 }
@@ -198,7 +198,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
     midiman::rt::set_realtime_priority();
 
     let mut midi_sink = try_connect_midi();
-    let midi_clock_enabled = std::env::var("MIDIMAN_MIDI_CLOCK").is_ok_and(|v| v == "1");
+    let midi_clock_enabled = std::env::var("NOISE_MIDI_CLOCK").is_ok_and(|v| v == "1");
     let mut next_clock_tick: Option<Instant> = None;
     if midi_clock_enabled {
         if let Some(sink) = midi_sink.as_mut() {

@@ -17,7 +17,7 @@ ENGINE_SOCK="${TMPDIR_NATIVE}/noise-engine-test-e2e.sock"
 rm -f "$ENGINE_SOCK"
 
 NOISE_SOCKET="$ENGINE_SOCK" \
-SOUNDMAN_DSP_DIR="$HOME/.krach/dsp" \
+NOISE_DSP_DIR="$HOME/.krach/dsp" \
 RUST_LOG=warn \
   "$REPO/target/debug/noise-engine" &
 ENGINE_PID=$!

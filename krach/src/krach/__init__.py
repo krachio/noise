@@ -42,7 +42,7 @@ def main() -> None:
         env={
             **env,
             "NOISE_SOCKET": str(engine_sock),
-            "SOUNDMAN_DSP_DIR": str(dsp_dir),
+            "NOISE_DSP_DIR": str(dsp_dir),
         },
     )
 

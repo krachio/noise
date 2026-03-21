@@ -11,7 +11,7 @@ ENGINE_SOCK="${TMPDIR_NATIVE}/noise-engine-test-beat.sock"
 rm -f "$ENGINE_SOCK"
 
 NOISE_SOCKET="$ENGINE_SOCK" \
-SOUNDMAN_DSP_DIR="$HOME/.krach/dsp" \
+NOISE_DSP_DIR="$HOME/.krach/dsp" \
 RUST_LOG=warn "$REPO/target/debug/noise-engine" &
 ENGINE_PID=$!
 trap "kill $ENGINE_PID 2>/dev/null" EXIT
