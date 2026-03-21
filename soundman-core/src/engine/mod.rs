@@ -33,6 +33,10 @@ pub struct EngineController {
     registry: NodeRegistry,
     shadow_graph: GraphIr,
     exposed_controls: HashMap<String, (String, String)>,
+    /// Last-set value for each exposed control label. Applied to new graphs
+    /// after compilation so fresh nodes start with the correct state (e.g.
+    /// gate=1.0 if the pattern just triggered it).
+    control_values: HashMap<String, f32>,
     producer: Producer<Command>,
     return_consumer: Consumer<Box<DspGraph>>,
     cached_graph: Option<DspGraph>,
@@ -72,6 +76,7 @@ pub fn engine(config: &EngineConfig) -> (EngineController, AudioProcessor) {
             exposed_controls: HashMap::new(),
         },
         exposed_controls: HashMap::new(),
+        control_values: HashMap::new(),
         producer,
         return_consumer,
         cached_graph: None,
@@ -159,6 +164,7 @@ impl EngineController {
             ClientMessage::SetControl { label, value } => {
                 if let Some((node_id, control_name)) = self.exposed_controls.get(&label) {
                     debug!("set_control: {label}={value} (-> {node_id}:{control_name})");
+                    self.control_values.insert(label, value);
                     self.send_command(Command::SetParam {
                         node_id: node_id.clone(),
                         name: control_name.clone(),
@@ -226,13 +232,23 @@ impl EngineController {
             "recompile_and_send: drained {returned_count} retired graphs, cache={has_cache}"
         );
 
-        let graph = compiler::compile_with_reuse(
+        let mut graph = compiler::compile_with_reuse(
             &self.shadow_graph,
             &self.registry,
             self.cached_graph.take(),
             self.config.sample_rate,
             self.config.block_size,
         )?;
+
+        // Apply stored control values to the new graph. This ensures fresh
+        // nodes (cache miss) start with the correct state — e.g. gate=1.0 if
+        // a pattern just triggered it, freq=880 if pitch was set.
+        for (label, &value) in &self.control_values {
+            if let Some((node_id, param)) = self.exposed_controls.get(label) {
+                let _ = graph.set_param(node_id, param, value);
+            }
+        }
+
         self.send_command(Command::SwapGraph(Box::new(graph)));
         Ok(())
     }
@@ -505,5 +521,55 @@ mod tests {
         assert!(energy > 0.0, "graph should produce audio after swap with reuse");
         // Just verify no panic and audio works — phase exactness tested in compiler tests
         let _ = jump; // acknowledged but not strictly asserted here
+    }
+
+    #[test]
+    fn control_values_survive_graph_reload() {
+        // The critical live-coding scenario: set pitch=880 via exposed control,
+        // then load a new graph (e.g. adding a voice). The new graph's oscillator
+        // must start at 880, not the IR default of 440.
+        let config = EngineConfig { block_size: 256, ..Default::default() };
+        let (mut ctrl, mut proc) = engine(&config);
+
+        // Load graph, process a block so it's active.
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        let mut buf = vec![0.0_f32; 256];
+        proc.process(&mut buf);
+
+        // Set pitch to 880 via exposed control.
+        ctrl.handle_message(ClientMessage::SetControl {
+            label: "pitch".into(),
+            value: 880.0,
+        }).unwrap();
+        proc.process(&mut buf);
+        // Reload the SAME graph — simulates adding a voice (new LoadGraph).
+        // No cached retired graph available yet (first swap still crossfading).
+        // Without live control tracking, the new graph's osc would revert to 440.
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+
+        // Process enough blocks for crossfade to complete.
+        for _ in 0..40 {
+            proc.process(&mut buf);
+        }
+
+        // Count crossings at 440 for reference (baseline from IR default).
+        let config_440 = EngineConfig { block_size: 256, ..Default::default() };
+        let (mut ctrl_ref, mut proc_ref) = engine(&config_440);
+        ctrl_ref.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        let mut buf_ref = vec![0.0_f32; 256];
+        proc_ref.process(&mut buf_ref);
+        let crossings_at_440: usize = buf_ref.windows(2)
+            .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
+            .count();
+
+        // The oscillator should still be at 880 (more crossings than 440).
+        let crossings_after_reload: usize = buf.windows(2)
+            .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
+            .count();
+        assert!(
+            crossings_after_reload > crossings_at_440,
+            "after graph reload, oscillator should still be at 880 Hz (got {crossings_after_reload} \
+             crossings, but 440 Hz has {crossings_at_440})"
+        );
     }
 }
