@@ -28,17 +28,20 @@ const BEATS_PER_CYCLE: f64 = 4.0;
 const LOOKAHEAD: Duration = Duration::from_millis(100);
 const MAX_SLEEP: Duration = Duration::from_millis(1);
 
-/// Crossfade = 1/4 beat (one 16th note). Always musically proportional to BPM.
-/// | BPM | 1/4 beat |
+/// Crossfade = 1/2 beat (one 8th note). Long enough that the pattern engine
+/// triggers each voice at least once during the blend, so both old and new
+/// graphs produce audio throughout the crossfade.
+///
+/// | BPM | 1/2 beat |
 /// |-----|----------|
-/// | 60  | 250ms    |
-/// | 120 | 125ms    |
-/// | 138 | 109ms    |
-/// | 180 | 83ms     |
+/// | 60  | 500ms    |
+/// | 120 | 250ms    |
+/// | 138 | 217ms    |
+/// | 180 | 167ms    |
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn crossfade_samples(bpm: f64, sample_rate: u32) -> usize {
-    let quarter_beat_secs = 60.0 / bpm / 4.0;
-    (quarter_beat_secs * f64::from(sample_rate)) as usize
+    let half_beat_secs = 60.0 / bpm / 2.0;
+    (half_beat_secs * f64::from(sample_rate)) as usize
 }
 
 /// Commands routed from the IPC thread to the main loop.
@@ -489,30 +492,29 @@ mod tests {
     // ── crossfade_samples ───────────────────────────────────────────────
 
     #[test]
-    fn crossfade_at_120_bpm_is_one_sixteenth_note() {
-        // 120 BPM → 1 beat = 500ms → 1/4 beat = 125ms → 6000 samples at 48kHz
-        assert_eq!(crossfade_samples(120.0, 48000), 6000);
+    fn crossfade_at_120_bpm_is_one_eighth_note() {
+        // 120 BPM → 1 beat = 500ms → 1/2 beat = 250ms → 12000 samples at 48kHz
+        assert_eq!(crossfade_samples(120.0, 48000), 12000);
     }
 
     #[test]
     fn crossfade_at_60_bpm() {
-        // 60 BPM → 1 beat = 1000ms → 1/4 beat = 250ms → 12000 samples at 48kHz
-        assert_eq!(crossfade_samples(60.0, 48000), 12000);
+        // 60 BPM → 1 beat = 1000ms → 1/2 beat = 500ms → 24000 samples at 48kHz
+        assert_eq!(crossfade_samples(60.0, 48000), 24000);
     }
 
     #[test]
     fn crossfade_at_180_bpm() {
-        // 180 BPM → 1 beat = 333ms → 1/4 beat = 83.3ms → 4000 samples at 48kHz
-        assert_eq!(crossfade_samples(180.0, 48000), 4000);
+        // 180 BPM → 1 beat = 333ms → 1/2 beat = 167ms → 8000 samples at 48kHz
+        assert_eq!(crossfade_samples(180.0, 48000), 8000);
     }
 
     #[test]
     fn crossfade_scales_with_sample_rate() {
-        // Same BPM, different sample rate
         let at_48k = crossfade_samples(120.0, 48000);
         let at_44k = crossfade_samples(120.0, 44100);
         assert!(at_48k > at_44k);
-        assert_eq!(at_44k, 5512); // 125ms * 44100 = 5512.5 → truncated
+        assert_eq!(at_44k, 11025); // 250ms * 44100 = 11025
     }
 
 }

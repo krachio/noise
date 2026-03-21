@@ -242,24 +242,28 @@ impl EngineController {
             "recompile_and_send: drained {returned_count} retired graphs, cache={has_cache}"
         );
 
+        // Compile fresh — don't reuse from stale cache. The return-channel
+        // cache is always one generation behind the active graph, so reused
+        // nodes have stale oscillator phase causing audible artifacts.
+        // Fresh nodes + crossfade + trigger forwarding handle the transition.
+        let _ = self.cached_graph.take(); // drain return channel but don't reuse
+        while let Ok(_) = self.return_consumer.pop() {}
         let result = compiler::compile_with_reuse(
             &self.shadow_graph,
             &self.registry,
-            self.cached_graph.take(),
+            None,
             self.config.sample_rate,
             self.config.block_size,
         )?;
         let mut graph = result.graph;
 
-        // Apply stored control values ONLY to fresh nodes (not reused).
-        // Reused nodes already have correct DSP state. Setting gate=1.0 on a
-        // reused node that was at gate=0.0 would cause a spurious ADSR trigger.
+        // Restore continuous controls (freq, cutoff, gain) so fresh nodes
+        // start at the right pitch/timbre. Skip gate — it's a trigger that
+        // must transition 0→1 to fire ADSR, restoring it causes spurious hits.
         for (label, &value) in &self.control_values {
             if let Some((node_id, param)) = self.exposed_controls.get(label) {
-                if result.fresh_ids.iter().any(|id| id == node_id) {
-                    if let Err(e) = graph.set_param(node_id, param, value) {
-                        warn!("restore control {label} ({node_id}/{param}={value}): {e}");
-                    }
+                if param != "gate" {
+                    let _ = graph.set_param(node_id, param, value);
                 }
             }
         }
