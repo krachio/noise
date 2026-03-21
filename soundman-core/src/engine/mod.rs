@@ -245,7 +245,9 @@ impl EngineController {
         // a pattern just triggered it, freq=880 if pitch was set.
         for (label, &value) in &self.control_values {
             if let Some((node_id, param)) = self.exposed_controls.get(label) {
-                let _ = graph.set_param(node_id, param, value);
+                if let Err(e) = graph.set_param(node_id, param, value) {
+                    warn!("restore control {label} ({node_id}/{param}={value}): {e}");
+                }
             }
         }
 
