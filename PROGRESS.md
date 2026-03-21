@@ -4,14 +4,18 @@
 
 Live coding audio system — monorepo at `krachio/noise`, Cargo workspace.
 
-- **soundman-core** (Rust): Audio engine — graph runtime with node reuse + return channel, gain smoothing, fan-in with NaN isolation, output clamping, registry versioning — 114 tests.
+- **soundman-core** (Rust): Audio engine — graph runtime with node reuse + return channel, gain smoothing, fan-in with NaN isolation, output clamping, registry versioning, pre-computed connection map — 118 tests.
 - **soundman-faust** (Rust): FAUST LLVM JIT plugin — hot reload of `.dsp` files — 14 tests.
-- **soundman** (Rust binary): soundman-core + soundman-faust. Watches `~/.krach/dsp/`, OSC on port 9001.
-- **midiman** (Rust): Pattern sequencer — AtomGroup compound atoms, single-loop engine with min-heap, sample-accurate OSC — 116 tests.
-- **midiman-frontend** (Python 3.13): Pattern DSL with AtomGroup, limit_denominator(256) — 122 tests.
-- **soundman-frontend** (Python 3.13): OSC client — `Graph`, `SoundmanSession` — 28 tests.
+- **midiman** (Rust lib): Pattern sequencer — Freeze compound atoms, single-loop engine with min-heap, slot index (no string clone on hot path) — 114 tests.
+- **noise-engine** (Rust binary): Unified binary — merges midiman + soundman-core + soundman-faust. Single process, direct event dispatch (no OSC), BPM-relative crossfade (1/4 beat), dual-protocol IPC (pattern + graph commands on one Unix socket).
+- **midiman-frontend** (Python 3.13): Pattern DSL + Graph IR + unified Session (patterns, graph, controls) — 122 tests.
 - **faust-dsl** (Python 3.13): Python → Faust transpiler — 68 tests.
-- **krach** (Python 3.13): Live coding REPL — VoiceMixer with @dsp, batch(), fade(), copilot — 48 tests.
+- **krach** (Python 3.13): Live coding REPL — VoiceMixer with @dsp, batch(), fade(), copilot. Starts one binary (noise-engine), one socket — 48 tests.
+
+### Removed
+
+- **soundman** (Rust binary): Replaced by noise-engine. OSC control input eliminated.
+- **soundman-frontend** (Python): OSC client. Graph/Session merged into midiman-frontend.
 
 ## Usage
 
@@ -37,8 +41,9 @@ mix.fade("bass", target=0.15, bars=8)
 
 ## Next
 
-- Unified binary: merge midiman + soundman → noise-engine (eliminate OSC overhead)
+- Follow-up PR: rename soundman-core → audio-engine, soundman-faust → audio-faust, midiman → pattern-engine, midiman-frontend → noise-client (zero functional changes, clean git-blame)
 - Effects routing: mix.bus() / mix.send() for reverb/delay
 - Extended pattern IR: Choose, Seq, Map, Interpolate
 - Polyphony: FAUST nvoices + voice allocator
 - Scenes: mm.scene() for pattern snapshot switching
+- Profile collect() in DspGraph::process() — may be a non-issue with small-vec optimization
