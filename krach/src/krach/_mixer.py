@@ -214,8 +214,21 @@ class VoiceMixer:
 
     def remove(self, name: str) -> None:
         """Remove a voice.  Rebuilds the graph."""
+        self.hush(name)
         del self._voices[name]
         self._rebuild()
+
+    def hush(self, name: str) -> None:
+        """Stop the pattern and release the gate for a voice."""
+        self._session.hush(name)
+        voice = self._voices.get(name)
+        if voice and "gate" in voice.controls:
+            self._session.set_ctrl(f"{name}_gate", 0.0)
+
+    def stop(self) -> None:
+        """Hush all voices and release all gates."""
+        for name in self._voices:
+            self.hush(name)
 
     def gain(self, name: str, value: float) -> None:
         """Update a voice's gain.  Instant — no graph rebuild."""
