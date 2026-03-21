@@ -23,11 +23,11 @@ fn compile_node(ir: &IrNode, pattern: &mut CompiledPattern) -> usize {
         IrNode::Atom { value } => pattern.push(PatternNode::Atom {
             value: value.clone(),
         }),
-        IrNode::AtomGroup { values, reset } => pattern.push(PatternNode::AtomGroup {
-            values: values.iter().cloned().collect(),
-            reset: reset.clone(),
-        }),
         IrNode::Silence => pattern.push(PatternNode::Silence),
+        IrNode::Freeze { child } => {
+            let child_idx = compile_node(child, pattern);
+            pattern.push(PatternNode::Freeze { child: child_idx })
+        }
         IrNode::Cat { children } => {
             let child_indices: SmallVec<[usize; 8]> =
                 children.iter().map(|c| compile_node(c, pattern)).collect();
@@ -257,58 +257,50 @@ mod tests {
     }
 
     #[test]
-    fn atom_group_deserializes_from_json() {
+    fn freeze_deserializes_from_json() {
         let json = r#"{
-            "op": "AtomGroup",
-            "values": [
-                {"type": "Osc", "address": "/soundman/set", "args": [{"Str": "gate"}, {"Float": 1.0}]}
-            ],
-            "reset": {"type": "Osc", "address": "/soundman/set", "args": [{"Str": "gate"}, {"Float": 0.0}]}
+            "op": "Freeze",
+            "child": {"op": "Atom", "value": {"type": "Note", "channel": 0, "note": 60, "velocity": 100, "dur": 0.5}}
         }"#;
         let ir: IrNode = serde_json::from_str(json).unwrap();
-        assert!(matches!(ir, IrNode::AtomGroup { .. }));
+        assert!(matches!(ir, IrNode::Freeze { .. }));
 
         let pat = compile(&ir).unwrap();
         let events = query(&pat, pat.root, Arc::cycle(0));
-        // AtomGroup: 1 onset + 1 reset = 2 events
-        assert_eq!(events.len(), 2, "expected onset + reset, got {}", events.len());
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].value, note(60));
     }
 
     #[test]
-    fn atom_group_in_cat_with_silence_from_json() {
-        // Exact JSON that Python sends for: rest() + mix.hit("clap", "gate")
+    fn freeze_hit_compound_from_json() {
+        // What Python sends for: rest() + mix.hit("clap", "gate")
+        // = Cat([Silence, Freeze(Cat([trig, reset]))])
         let json = r#"{
             "op": "Cat",
             "children": [
                 {"op": "Silence"},
                 {
-                    "op": "AtomGroup",
-                    "values": [
-                        {"type": "Osc", "address": "/soundman/set", "args": [{"Str": "clap_gate"}, {"Float": 1.0}]}
-                    ],
-                    "reset": {"type": "Osc", "address": "/soundman/set", "args": [{"Str": "clap_gate"}, {"Float": 0.0}]}
+                    "op": "Freeze",
+                    "child": {
+                        "op": "Cat",
+                        "children": [
+                            {"op": "Atom", "value": {"type": "Osc", "address": "/set", "args": [{"Str": "gate"}, {"Float": 1.0}]}},
+                            {"op": "Atom", "value": {"type": "Osc", "address": "/set", "args": [{"Str": "gate"}, {"Float": 0.0}]}}
+                        ]
+                    }
                 }
             ]
         }"#;
         let ir: IrNode = serde_json::from_str(json).unwrap();
         let pat = compile(&ir).unwrap();
 
-        // Query 2 cycles to verify repeating pattern
+        // Query 2 cycles — each cycle: trig + reset = 2. Over 2 cycles = 4.
         let events = query(&pat, pat.root, Arc::new(Time::zero(), Time::whole(2)));
-        // Each cycle: 1 onset + 1 reset = 2 events. Over 2 cycles = 4.
-        assert!(
-            events.len() >= 3,
-            "expected at least 3 events over 2 cycles (onset+reset+onset), got {}",
-            events.len()
-        );
+        assert_eq!(events.len(), 4, "expected 4 events over 2 cycles, got {}", events.len());
 
-        // Check all events have onset (schedulable)
+        // All events must be schedulable
         for (i, e) in events.iter().enumerate() {
-            assert!(
-                e.has_onset(),
-                "event {i}: whole={:?}, part.start={:?} — has_onset requires whole.start == part.start",
-                e.whole, e.part.start
-            );
+            assert!(e.has_onset(), "event {i} should have onset");
         }
     }
 }

@@ -44,10 +44,10 @@ pub struct CompiledPattern {
 pub enum PatternNode {
     /// A leaf node that produces a single event.
     Atom { value: Value },
-    /// Multiple values at onset + optional reset at end. Counts as one atom for timing.
-    AtomGroup { values: SmallVec<[Value; 4]>, reset: Option<Value> },
     /// Produces no events.
     Silence,
+    /// Transparent wrapper — delegates to child. Marks a compound as indivisible.
+    Freeze { child: usize },
     /// Speed up a child pattern by `factor`.
     Fast { factor: Time, child: usize },
     /// Slow down a child pattern by `factor`.

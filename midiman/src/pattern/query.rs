@@ -18,8 +18,8 @@ use super::{CompiledPattern, PatternNode};
 pub fn query(pattern: &CompiledPattern, node_idx: usize, arc: Arc) -> Vec<Event<Value>> {
     match &pattern.nodes[node_idx] {
         PatternNode::Atom { value } => query_atom(value, arc),
-        PatternNode::AtomGroup { values, reset } => query_atom_group(values, reset.as_ref(), arc),
         PatternNode::Silence => vec![],
+        PatternNode::Freeze { child } => query(pattern, *child, arc),
         PatternNode::Cat { children } => query_cat(pattern, children, arc),
         PatternNode::Stack { children } => query_stack(pattern, children, arc),
         PatternNode::Fast { factor, child } => query_fast(pattern, *factor, *child, arc),
@@ -54,39 +54,6 @@ fn query_atom(value: &Value, arc: Arc) -> Vec<Event<Value>> {
             Event::new(Some(whole), sub_arc, value.clone())
         })
         .collect()
-}
-
-/// An AtomGroup fires all `values` at the onset of each cycle arc, plus an
-/// optional `reset` at the end. Counts as ONE atom for Cat cycle division.
-fn query_atom_group(
-    values: &[Value],
-    reset: Option<&Value>,
-    arc: Arc,
-) -> Vec<Event<Value>> {
-    let mut events = Vec::new();
-
-    for sub_arc in arc.split_cycles() {
-        let cycle = sub_arc.start.floor();
-        let whole = Arc::cycle(cycle);
-
-        // All values fire at onset (same whole/part as a regular atom)
-        for value in values {
-            events.push(Event::new(Some(whole), sub_arc, value.clone()));
-        }
-
-        // Reset fires at the END of the atom's time slice.
-        // has_onset() requires whole.start >= part.start && whole.start < part.end,
-        // so the part must have non-zero width. Use a tiny arc at `end`.
-        if let Some(reset_value) = reset {
-            let end = sub_arc.end;
-            let tiny = Time::new(1, 10000); // 1/10000 cycle ≈ negligible
-            let reset_whole = Arc::new(end, end + tiny);
-            let reset_part = Arc::new(end, end + tiny);
-            events.push(Event::new(Some(reset_whole), reset_part, reset_value.clone()));
-        }
-    }
-
-    events
 }
 
 /// Cat interleaves children across one cycle. Each child gets an equal
@@ -1001,48 +968,23 @@ mod tests {
         assert_eq!(p, vec![false, false, false, false]);
     }
 
-    // -- AtomGroup --
+    // -- Freeze --
 
     #[test]
-    fn atom_group_fires_all_values_at_onset() {
-        use crate::event::OscArg;
-
-        let freq = Value::Osc {
-            address: "/set".into(),
-            args: vec![OscArg::Str("freq".into()), OscArg::Float(55.0)],
-        };
-        let gate_on = Value::Osc {
-            address: "/set".into(),
-            args: vec![OscArg::Str("gate".into()), OscArg::Float(1.0)],
-        };
-        let gate_off = Value::Osc {
-            address: "/set".into(),
-            args: vec![OscArg::Str("gate".into()), OscArg::Float(0.0)],
-        };
-
+    fn freeze_is_transparent_in_query() {
+        // Freeze wraps a pattern without changing its behavior
         let mut pat = CompiledPattern { nodes: Vec::new(), root: 0 };
-        let root = pat.push(PatternNode::AtomGroup {
-            values: smallvec![freq.clone(), gate_on.clone()],
-            reset: Some(gate_off.clone()),
-        });
-        pat.root = root;
+        let atom = pat.push(PatternNode::Atom { value: note(60) });
+        let frozen = pat.push(PatternNode::Freeze { child: atom });
+        pat.root = frozen;
 
         let events = query(&pat, pat.root, cycle_0());
-        // 2 onset events + 1 reset = 3 total
-        assert_eq!(events.len(), 3, "expected 2 onset + 1 reset events");
-
-        // Onset events fire at the start (have onset)
-        assert!(events[0].has_onset(), "freq should fire at onset");
-        assert!(events[1].has_onset(), "gate_on should fire at onset");
-        assert_eq!(events[0].value, freq);
-        assert_eq!(events[1].value, gate_on);
-
-        // Reset fires at the end
-        assert_eq!(events[2].value, gate_off);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].value, note(60));
     }
 
     #[test]
-    fn atom_group_in_cat_counts_as_one_atom() {
+    fn freeze_hit_compound_in_cat_counts_as_one_atom() {
         use crate::event::OscArg;
 
         let gate_on = Value::Osc {
@@ -1054,26 +996,35 @@ mod tests {
             args: vec![OscArg::Str("gate".into()), OscArg::Float(0.0)],
         };
 
-        // Cat of [Silence, AtomGroup(gate_on, reset=gate_off)]
-        // Should be 2 atoms → each gets 1/2 of the cycle
+        // Build: Freeze(Cat([trig, reset]))
+        // This is what mix.hit() produces — Freeze prevents Cat flattening
         let mut pat = CompiledPattern { nodes: Vec::new(), root: 0 };
+        let trig = pat.push(PatternNode::Atom { value: gate_on.clone() });
+        let reset = pat.push(PatternNode::Atom { value: gate_off.clone() });
+        let inner_cat = pat.push(PatternNode::Cat { children: smallvec![trig, reset] });
+        let frozen = pat.push(PatternNode::Freeze { child: inner_cat });
+
+        // Cat([Silence, Freeze(...)]) — 2 top-level atoms
         let silence = pat.push(PatternNode::Silence);
-        let group = pat.push(PatternNode::AtomGroup {
-            values: smallvec![gate_on.clone()],
-            reset: Some(gate_off.clone()),
-        });
         let root = pat.push(PatternNode::Cat {
-            children: smallvec![silence, group],
+            children: smallvec![silence, frozen],
         });
         pat.root = root;
 
         let events = query(&pat, pat.root, cycle_0());
-        // Silence produces 0 events. AtomGroup produces 2 (onset + reset).
-        assert_eq!(events.len(), 2);
+        // Silence slot [0, 0.5) = 0 events.
+        // Hit slot [0.5, 1.0): Freeze(Fast(2, Cat([trig, reset]))) = 2 events.
+        // Fast(2) queries child over [0, 1) within the slot, getting trig + reset.
+        // Freeze(Cat([trig, reset])) in a 1/2-cycle slot:
+        // trig at [1/2, 3/4), reset at [3/4, 1)
+        assert_eq!(events.len(), 2, "expected trig + reset");
 
-        // The onset should fire at 1/2 (start of second half of cycle)
-        let onset = &events[0];
-        assert!(onset.has_onset());
-        assert_eq!(onset.part.start, Time::new(1, 2), "onset should fire at 1/2 cycle");
+        assert!(events[0].has_onset(), "trig should have onset");
+        assert_eq!(events[0].part.start, Time::new(1, 2), "trig at 1/2 cycle");
+        assert_eq!(events[0].value, gate_on);
+
+        assert!(events[1].has_onset(), "reset should have onset");
+        assert_eq!(events[1].part.start, Time::new(3, 4), "reset at 3/4 cycle");
+        assert_eq!(events[1].value, gate_off);
     }
 }

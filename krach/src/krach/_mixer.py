@@ -16,9 +16,9 @@ from pathlib import Path
 from typing import Any, Callable
 
 from faust_dsl import transpile as _transpile
-from midiman_frontend.ir import Osc, OscFloat, OscStr
+from midiman_frontend.ir import OscFloat, OscStr
 from midiman_frontend.pattern import Pattern
-from midiman_frontend.pattern import atom_group as _atom_group
+from midiman_frontend.pattern import freeze as _freeze
 from midiman_frontend.pattern import osc as _osc
 from soundman_frontend import Graph, GraphIr, SoundmanSession
 
@@ -91,51 +91,61 @@ def build_graph_ir(voices: dict[str, Voice]) -> GraphIr:
     return builder.build()
 
 
-def _make_osc(label: str, value: float) -> Osc:
-    return Osc(address="/soundman/set", args=(OscStr(label), OscFloat(value)))
-
-
 def build_step(
     voice_name: str,
     controls: tuple[str, ...],
     pitch: float | None = None,
     **params: float,
 ) -> Pattern:
-    """Build a single compound atom: freq + params at onset, gate reset at end.
+    """Build a frozen trigger compound: onset values stacked + reset sequenced.
 
-    Counts as ONE atom for cycle division — ``rest() + build_step(...)`` is
-    2 atoms (not 4+), so the trigger fires at exactly 1/2 of the cycle.
+    Uses ``Freeze(Cat([onset_stack, reset]))`` so this counts as ONE atom
+    for cycle division (Freeze prevents Cat flattening). The trigger fires
+    at the first half, reset at the second half, leaving a gap before the
+    next atom's onset for FAUST to detect the rising edge.
     """
-    onset_values: list[Osc] = []
+    onset_atoms: list[Pattern] = []
 
     if pitch is not None and "freq" in controls:
-        onset_values.append(_make_osc(f"{voice_name}_freq", pitch))
+        onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}_freq"), OscFloat(pitch)))
 
     for param, value in params.items():
         if param in controls:
-            onset_values.append(_make_osc(f"{voice_name}_{param}", value))
+            onset_atoms.append(
+                _osc("/soundman/set", OscStr(f"{voice_name}_{param}"), OscFloat(value))
+            )
 
     if "gate" in controls:
-        onset_values.append(_make_osc(f"{voice_name}_gate", 1.0))
+        onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}_gate"), OscFloat(1.0)))
 
-    if not onset_values:
+    if not onset_atoms:
         raise ValueError(f"voice '{voice_name}' has no triggerable controls")
 
-    reset = _make_osc(f"{voice_name}_gate", 0.0) if "gate" in controls else None
+    # Stack all onset values (fire simultaneously)
+    onset = onset_atoms[0]
+    for a in onset_atoms[1:]:
+        onset = onset | a  # Stack: fire simultaneously
 
-    return _atom_group(values=tuple(onset_values), reset=reset)
+    if "gate" in controls:
+        reset = _osc("/soundman/set", OscStr(f"{voice_name}_gate"), OscFloat(0.0))
+        # Cat([onset, reset]) = trig at first half, reset at second half
+        # Freeze prevents flatten — counts as 1 atom in any outer Cat
+        return _freeze(onset + reset)
+    return _freeze(onset)
 
 
 def build_hit(voice_name: str, param: str) -> Pattern:
-    """Build a single compound atom: trig at onset, reset at end.
+    """Build a frozen trigger compound: trig + reset with guaranteed gap.
 
-    Counts as ONE atom — ``rest() + build_hit(...)`` is 2 atoms, not 3.
+    Uses ``Freeze(Cat([trig, reset]))`` so this counts as ONE atom.
+    ``rest() + build_hit(...)`` is 2 top-level atoms (not 3). The trig fires
+    at the first half of the slot, reset at the second half, leaving a gap
+    before the next atom's onset for FAUST to detect the rising edge.
     """
     label = f"{voice_name}_{param}"
-    return _atom_group(
-        values=(Osc(address="/soundman/set", args=(OscStr(label), OscFloat(1.0))),),
-        reset=Osc(address="/soundman/set", args=(OscStr(label), OscFloat(0.0))),
-    )
+    trig = _osc("/soundman/set", OscStr(label), OscFloat(1.0))
+    reset = _osc("/soundman/set", OscStr(label), OscFloat(0.0))
+    return _freeze(trig + reset)
 
 
 # ── VoiceMixer ────────────────────────────────────────────────────────────────

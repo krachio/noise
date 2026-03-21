@@ -6,7 +6,6 @@ from fractions import Fraction
 
 from midiman_frontend.ir import (
     Atom,
-    AtomGroup,
     Cat,
     Cc,
     Degrade,
@@ -123,6 +122,7 @@ def osc(address: str, *args: OscArg) -> Pattern:
     return Pattern(Atom(Osc(address=address, args=tuple(args))))
 
 
-def atom_group(values: tuple[Osc, ...], reset: Osc | None = None) -> Pattern:
-    """Multiple values at onset + optional reset at end. Counts as ONE atom."""
-    return Pattern(AtomGroup(values=values, reset=reset))
+def freeze(pat: Pattern) -> Pattern:
+    """Mark a pattern as an indivisible unit — transforms won't descend."""
+    from midiman_frontend.ir import Freeze
+    return Pattern(Freeze(child=pat.node))

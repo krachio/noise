@@ -1,17 +1,9 @@
 from pathlib import Path
 
-from midiman_frontend.ir import AtomGroup, Cat, Osc, OscFloat, OscStr
+from midiman_frontend.ir import Cat, Freeze
 from midiman_frontend.pattern import Pattern
 
 from krach._mixer import Voice, build_graph_ir, build_hit, build_step
-
-
-def _osc_label_value(value: object) -> tuple[str, float]:
-    """Extract (label, value) from an Osc for concise assertions."""
-    assert isinstance(value, Osc)
-    assert isinstance(value.args[0], OscStr)
-    assert isinstance(value.args[1], OscFloat)
-    return (value.args[0].value, value.args[1].value)
 
 
 # ── build_graph_ir ────────────────────────────────────────────────────────────
@@ -82,38 +74,26 @@ def test_build_graph_ir_with_init_values() -> None:
 # ── build_step ────────────────────────────────────────────────────────────────
 
 
-def test_build_step_is_single_atom_group() -> None:
-    """build_step returns ONE AtomGroup, not a Cat of multiple atoms."""
+def test_build_step_returns_frozen_compound() -> None:
+    """build_step returns Freeze(Fast(2, Cat([Stack(onset), reset])))."""
     pat = build_step("bass", ("freq", "gate"), pitch=55.0)
     assert isinstance(pat, Pattern)
-    assert isinstance(pat.node, AtomGroup)
-    # Onset: freq + gate_on
-    assert len(pat.node.values) == 2
-    assert _osc_label_value(pat.node.values[0]) == ("bass_freq", 55.0)
-    assert _osc_label_value(pat.node.values[1]) == ("bass_gate", 1.0)
-    # Reset: gate_off
-    assert pat.node.reset is not None
-    assert _osc_label_value(pat.node.reset) == ("bass_gate", 0.0)
+    assert isinstance(pat.node, Freeze), f"expected Freeze, got {type(pat.node).__name__}"
 
 
 def test_build_step_with_extra_params() -> None:
     pat = build_step("bass", ("freq", "gate", "cutoff"), pitch=55.0, cutoff=800.0)
-    assert isinstance(pat.node, AtomGroup)
-    # Onset: freq + cutoff + gate_on
-    assert len(pat.node.values) == 3
-    assert _osc_label_value(pat.node.values[1]) == ("bass_cutoff", 800.0)
+    assert isinstance(pat.node, Freeze)
 
 
 def test_build_step_skips_unknown_controls() -> None:
     pat = build_step("bass", ("freq", "gate"), pitch=55.0, reverb=0.8)
-    assert isinstance(pat.node, AtomGroup)
-    assert len(pat.node.values) == 2  # freq + gate_on, no reverb
+    assert isinstance(pat.node, Freeze)
 
 
 def test_build_step_gate_only_voice() -> None:
     pat = build_step("pad", ("gate",), pitch=440.0)
-    assert isinstance(pat.node, AtomGroup)
-    assert len(pat.node.values) == 1  # gate_on only (no freq control)
+    assert isinstance(pat.node, Freeze)
 
 
 def test_build_step_no_triggerable_controls_raises() -> None:
@@ -125,27 +105,24 @@ def test_build_step_no_triggerable_controls_raises() -> None:
 # ── build_hit ─────────────────────────────────────────────────────────────────
 
 
-def test_build_hit_is_single_atom_group() -> None:
+def test_build_hit_returns_frozen_compound() -> None:
+    """build_hit returns Freeze(Fast(2, Cat([trig, reset])))."""
     pat = build_hit("kit", "kick")
     assert isinstance(pat, Pattern)
-    assert isinstance(pat.node, AtomGroup)
-    assert len(pat.node.values) == 1
-    assert _osc_label_value(pat.node.values[0]) == ("kit_kick", 1.0)
-    assert pat.node.reset is not None
-    assert _osc_label_value(pat.node.reset) == ("kit_kick", 0.0)
+    assert isinstance(pat.node, Freeze)
 
 
 # ── Pattern algebra compatibility ─────────────────────────────────────────────
 
 
 def test_step_combinable_with_add() -> None:
-    """Two steps combined = Cat of 2 AtomGroups (not 6 flat atoms)."""
+    """Two steps combined = Cat of 2 Freeze compounds (not flat atoms)."""
     s1 = build_step("bass", ("freq", "gate"), pitch=55.0)
     s2 = build_step("bass", ("freq", "gate"), pitch=73.0)
     combined = s1 + s2
     assert isinstance(combined, Pattern)
     assert isinstance(combined.node, Cat)
-    assert len(combined.node.children) == 2  # 2 AtomGroups, not 6 atoms
+    assert len(combined.node.children) == 2  # 2 Freeze compounds
 
 
 def test_rest_plus_hit_is_two_atoms() -> None:
@@ -153,7 +130,7 @@ def test_rest_plus_hit_is_two_atoms() -> None:
     from midiman_frontend.pattern import rest
     pat = rest() + build_hit("kit", "kick")
     assert isinstance(pat.node, Cat)
-    assert len(pat.node.children) == 2  # Silence + AtomGroup
+    assert len(pat.node.children) == 2  # Silence + Freeze
 
 
 def test_hit_usable_with_over() -> None:

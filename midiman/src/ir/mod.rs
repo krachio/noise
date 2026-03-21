@@ -58,11 +58,12 @@ pub use validate::validate;
 pub enum IrNode {
     /// A leaf node holding a concrete value (note, CC, or OSC).
     Atom { value: Value },
-    /// Multiple values that fire simultaneously at onset, with optional reset at end.
-    /// Counts as ONE atom for cycle division (unlike a Cat of individual Atoms).
-    AtomGroup { values: Vec<Value>, reset: Option<Value> },
     /// Produces no events for its time span.
     Silence,
+    /// Marks a sub-pattern as an indivisible unit. Transparent in query
+    /// (delegates to child), but signals to transforms that this compound
+    /// should be treated as a single atomic event.
+    Freeze { child: Box<IrNode> },
     /// Sequential concatenation: children share the cycle equally.
     Cat { children: Vec<IrNode> },
     /// Parallel layering: all children occupy the full cycle.
