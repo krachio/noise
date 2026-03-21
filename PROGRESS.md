@@ -4,10 +4,10 @@
 
 Live coding audio system — monorepo at `krachio/noise`, Cargo workspace.
 
-- **soundman-core** (Rust): Audio engine — graph runtime with node reuse + return channel, gain smoothing, fan-in with NaN isolation, output clamping, registry versioning, pre-computed connection map — 118 tests.
+- **soundman-core** (Rust): Audio engine — graph runtime with node reuse + return channel, gain smoothing, fan-in with NaN isolation, output clamping, registry versioning, pre-computed connection map, live control tracking across graph swaps — 115 tests.
 - **soundman-faust** (Rust): FAUST LLVM JIT plugin — hot reload of `.dsp` files — 14 tests.
-- **midiman** (Rust lib): Pattern sequencer — Freeze compound atoms, single-loop engine with min-heap, slot index (no string clone on hot path) — 114 tests.
-- **noise-engine** (Rust binary): Unified binary — merges midiman + soundman-core + soundman-faust. Single process, direct event dispatch (no OSC), BPM-relative crossfade (1/4 beat), dual-protocol IPC (pattern + graph commands on one Unix socket).
+- **midiman** (Rust lib): Pattern sequencer — Freeze compound atoms, single-loop engine with min-heap, slot index (no string clone on hot path), SetBpm no-op guard — 119 tests.
+- **noise-engine** (Rust binary): Unified binary — merges midiman + soundman-core + soundman-faust. Single process, direct event dispatch (no OSC), BPM-relative crossfade (1/4 beat), dual-protocol IPC (pattern + graph commands on one Unix socket) — 22 tests.
 - **midiman-frontend** (Python 3.13): Pattern DSL + Graph IR + unified Session (patterns, graph, controls) — 122 tests.
 - **faust-dsl** (Python 3.13): Python → Faust transpiler — 68 tests.
 - **krach** (Python 3.13): Live coding REPL — VoiceMixer with @dsp, batch(), fade(), copilot. Starts one binary (noise-engine), one socket — 48 tests.
@@ -38,6 +38,11 @@ mm.play("kick", mix.hit("kick", "gate") * 4)
 mm.play("bass", (mix.step("bass", 55) + rest() + mix.step("bass", 73)).over(2))
 mix.fade("bass", target=0.15, bars=8)
 ```
+
+## Recent fixes
+
+- **Live control tracking**: EngineController records last-set value for each exposed control. Applied to new graphs after compilation — fresh nodes start with correct state (gate/freq/cutoff preserved across graph swaps).
+- **SetBpm no-op guard**: Same-BPM set no longer nukes the event heap. Python tempo setter also skips redundant sends.
 
 ## Next
 
