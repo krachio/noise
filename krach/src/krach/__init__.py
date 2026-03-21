@@ -21,49 +21,42 @@ def _wait_for_socket(path: Path, timeout: float = 5.0) -> bool:
 
 def main() -> None:
     repo = _repo_root()
-    midiman_bin = repo / "target" / "debug" / "midiman"
-    soundman_bin = repo / "target" / "debug" / "soundman"
+    engine_bin = repo / "target" / "debug" / "noise-engine"
 
-    print("building binaries...")
+    print("building noise-engine...")
     subprocess.run(
-        ["cargo", "build", "--bin", "midiman", "--bin", "soundman", "-q"],
+        ["cargo", "build", "--bin", "noise-engine", "-q"],
         cwd=repo,
         check=True,
     )
 
-    midiman_sock = Path(tempfile.gettempdir()) / "midiman.sock"
+    engine_sock = Path(tempfile.gettempdir()) / "noise-engine.sock"
     dsp_dir = Path.home() / ".krach" / "dsp"
     dsp_dir.mkdir(parents=True, exist_ok=True)
 
-    midiman_sock.unlink(missing_ok=True)
+    engine_sock.unlink(missing_ok=True)
     env = {**os.environ, "RUST_LOG": os.environ.get("RUST_LOG", "warn")}
 
-    midiman_proc = subprocess.Popen(
-        [str(midiman_bin)],
+    engine_proc = subprocess.Popen(
+        [str(engine_bin)],
         env={
             **env,
-            "MIDIMAN_SOCKET": str(midiman_sock),
-            "MIDIMAN_OSC_TARGET": "127.0.0.1:9001",  # route OSC atoms to soundman
+            "NOISE_SOCKET": str(engine_sock),
+            "SOUNDMAN_DSP_DIR": str(dsp_dir),
         },
-    )
-    soundman_proc = subprocess.Popen(
-        [str(soundman_bin)],
-        env={**env, "SOUNDMAN_DSP_DIR": str(dsp_dir)},
     )
 
     def _cleanup() -> None:
-        midiman_proc.terminate()
-        soundman_proc.terminate()
+        engine_proc.terminate()
 
     atexit.register(_cleanup)
 
-    if not _wait_for_socket(midiman_sock):
-        raise RuntimeError("midiman socket not ready after 5s")
+    if not _wait_for_socket(engine_sock):
+        raise RuntimeError("noise-engine socket not ready after 5s")
 
     # ── imports ──────────────────────────────────────────────────────────────
     from midiman_frontend import Session
     from midiman_frontend.pattern import rest
-    from soundman_frontend import SoundmanSession
     from faust_dsl import Signal, control
     from faust_dsl.lib.filters import bandpass, highpass, lowpass
     from faust_dsl.lib.noise import white_noise
@@ -76,9 +69,8 @@ def main() -> None:
     from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, parse_dsp_controls, split_cells
     from krach._mixer import VoiceMixer, dsp
 
-    mm = Session(socket_path=str(midiman_sock))
+    mm = Session(socket_path=str(engine_sock))
     mm.connect()
-    sm = SoundmanSession(host="127.0.0.1", port=9001)
 
     # Pre-populate controls from DSP files already on disk (previous sessions).
     _node_controls: dict[str, tuple[str, ...]] = {}
@@ -87,7 +79,7 @@ def main() -> None:
         if _controls:
             _node_controls[f"faust:{_p.stem}"] = _controls
 
-    mix = VoiceMixer(session=sm, dsp_dir=dsp_dir, node_controls=_node_controls, mm=mm)
+    mix = VoiceMixer(session=mm, dsp_dir=dsp_dir, node_controls=_node_controls)
     _user_ns_keys: tuple[str, ...] = ()  # populated after user_ns is built
 
     def _session_state() -> SessionState:
@@ -142,18 +134,16 @@ def main() -> None:
         if _cell_queue:
             print(f"\n  ({len(_cell_queue)} more cell(s) — call cn() to advance)")
 
-    # Wait for soundman to finish loading DSP files (hot-reload at startup).
-    _soundman_deadline = time.monotonic() + 10.0
-    while time.monotonic() < _soundman_deadline:
+    # Wait for engine to finish loading DSP files (hot-reload at startup).
+    _engine_deadline = time.monotonic() + 10.0
+    while time.monotonic() < _engine_deadline:
         try:
-            sm.list_nodes(timeout=0.5)
+            nodes = mm.list_nodes()
             break
-        except TimeoutError:
+        except (TimeoutError, ConnectionError):
             time.sleep(0.1)
     else:
-        raise RuntimeError("soundman not ready after 10s")
-
-    nodes = sm.list_nodes()
+        raise RuntimeError("noise-engine not ready after 10s")
 
     # Cache nodes so status() and c() don't block on an OSC round-trip.
     _cached_nodes: list[str] = list(nodes)
@@ -166,8 +156,8 @@ def main() -> None:
     print("  ██║  ██╗██║  ██║██║  ██║╚██████╗██║  ██║")
     print("  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝")
     print()
-    print(f"  midiman  {midiman_sock}")
-    print(f"  soundman 127.0.0.1:9001  nodes: {nodes}")
+    print(f"  engine   {engine_sock}")
+    print(f"  nodes    {nodes}")
     print(f"  dsp dir  {dsp_dir}")
     print()
     print("  in scope: mix  mm  dsp()  rest  status()  c()  cn()"

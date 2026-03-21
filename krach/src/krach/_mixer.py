@@ -13,14 +13,14 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable  # Any still used for DspDef.fn
 
 from faust_dsl import transpile as _transpile
+from midiman_frontend import Graph, GraphIr, Session
 from midiman_frontend.ir import OscFloat, OscStr
 from midiman_frontend.pattern import Pattern
 from midiman_frontend.pattern import freeze as _freeze
 from midiman_frontend.pattern import osc as _osc
-from soundman_frontend import Graph, GraphIr, SoundmanSession
 
 
 @dataclass(frozen=True)
@@ -161,17 +161,15 @@ class VoiceMixer:
 
     def __init__(
         self,
-        session: SoundmanSession,
+        session: Session,
         dsp_dir: Path,
         node_controls: dict[str, tuple[str, ...]] | None = None,
-        mm: Any = None,
     ) -> None:
         self._session = session
         self._dsp_dir = dsp_dir
         self._node_controls: dict[str, tuple[str, ...]] = dict(node_controls or {})
         self._voices: dict[str, Voice] = {}
         self._batching: bool = False
-        self._mm: Any = mm  # midiman Session, optional (needed for fade)
 
     def voice(
         self,
@@ -225,7 +223,7 @@ class VoiceMixer:
         self._voices[name] = Voice(
             type_id=old.type_id, gain=value, controls=old.controls, init=old.init
         )
-        self._session.set(f"{name}_gain", float(value))
+        self._session.set_ctrl(f"{name}_gain", float(value))
 
     def step(self, name: str, pitch: float | None = None, **params: float) -> Pattern:
         """Melodic trigger: set freq + optional params + gate trig/reset."""
@@ -243,8 +241,6 @@ class VoiceMixer:
         No Python threads needed — schedules gain changes through the pattern
         engine, synchronized to the beat grid.
         """
-        if self._mm is None:
-            raise RuntimeError("fade() requires mm (midiman Session) — pass mm= to VoiceMixer")
         current = self._voices[name].gain
         total_steps = bars * steps_per_bar
         atoms: list[Pattern] = []
@@ -255,7 +251,7 @@ class VoiceMixer:
         pattern = atoms[0]
         for a in atoms[1:]:
             pattern = pattern + a
-        self._mm.play(f"_fade_{name}", pattern.over(bars))
+        self._session.play(f"_fade_{name}", pattern.over(bars))
         # Update stored gain to target (will be reached at end of fade)
         old = self._voices[name]
         self._voices[name] = Voice(
@@ -293,14 +289,14 @@ class VoiceMixer:
         self._session.load_graph(ir)
 
     def _wait_for_type(self, type_id: str) -> None:
-        """Poll until soundman has loaded the given FAUST type."""
+        """Poll until the engine has loaded the given FAUST type."""
         import time
 
         deadline = time.monotonic() + 10.0
         while time.monotonic() < deadline:
             try:
-                if type_id in self._session.list_nodes(timeout=0.5):
+                if type_id in self._session.list_nodes():
                     return
-            except TimeoutError:
+            except (TimeoutError, ConnectionError):
                 pass
             time.sleep(0.1)

@@ -16,6 +16,7 @@ from midiman_frontend.ir import (
     SetPattern,
     command_to_json,
 )
+from midiman_frontend.graph import GraphIr
 from midiman_frontend.pattern import Pattern
 
 
@@ -33,12 +34,13 @@ def _default_socket_path() -> str:
     return os.environ.get("MIDIMAN_SOCKET", "/tmp/midiman.sock")
 
 
-def _parse_response(line: bytes) -> None:
+def _parse_response(line: bytes) -> dict[str, Any]:
     if not line:
         raise ConnectionError("kernel closed connection")
     data: dict[str, Any] = json.loads(line)
     if data.get("status") == "Error":
         raise KernelError(data.get("msg", "unknown error"))
+    return data
 
 
 @dataclass
@@ -135,6 +137,38 @@ class Session:
         data = command_to_json(msg) + "\n"
         self._sock.sendall(data.encode())
         _parse_response(self._reader.readline())
+
+    # ── Graph commands (soundman-style, via unified binary) ──────────────
+
+    def _send_json(self, obj: dict[str, Any]) -> dict[str, Any]:
+        """Send raw JSON to the unified binary and return the parsed response."""
+        if self._sock is None or self._reader is None:
+            raise RuntimeError("not connected — call connect() or use context manager")
+        data = json.dumps(obj, separators=(",", ":")) + "\n"
+        self._sock.sendall(data.encode())
+        return _parse_response(self._reader.readline())
+
+    def load_graph(self, graph: GraphIr) -> None:
+        """Load an audio graph via the unified binary."""
+        ir = json.loads(graph.to_json())
+        self._send_json({"type": "load_graph", **ir})
+
+    def set_ctrl(self, label: str, value: float) -> None:
+        """Set an exposed control parameter on the audio engine."""
+        self._send_json({"type": "set_control", "label": label, "value": value})
+
+    def master_gain(self, value: float) -> None:
+        """Set the master output gain (0.0–1.0)."""
+        self._send_json({"type": "set_master_gain", "gain": value})
+
+    def list_nodes(self) -> list[str]:
+        """Query registered node type IDs from the audio engine."""
+        resp = self._send_json({"type": "list_nodes", "reply_port": 0})
+        return list(resp.get("types", []))
+
+    def shutdown(self) -> None:
+        """Shut down the unified binary."""
+        self._send_json({"type": "shutdown"})
 
     # ── Repr ─────────────────────────────────────────────────────────────
 

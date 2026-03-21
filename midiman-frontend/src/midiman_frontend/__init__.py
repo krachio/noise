@@ -1,3 +1,4 @@
+from midiman_frontend.graph import ConnectionIr, Graph, GraphIr, NodeInstance
 from midiman_frontend.pattern import Pattern, cc, note, osc, rest
 from midiman_frontend.session import KernelError, Session, SlotState
 from midiman_frontend.transform import (
@@ -11,7 +12,11 @@ from midiman_frontend.transform import (
 )
 
 __all__ = [
+    "ConnectionIr",
+    "Graph",
+    "GraphIr",
     "KernelError",
+    "NodeInstance",
     "Pattern",
     "Session",
     "SlotState",
