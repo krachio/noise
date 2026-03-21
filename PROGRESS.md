@@ -41,8 +41,8 @@ mix.fade("bass", target=0.15, bars=8)
 
 ## Recent fixes
 
-- **Fresh-only control restore**: compile_with_reuse returns fresh node IDs. Control values only applied to fresh nodes — reused nodes keep undisturbed DSP state (no spurious ADSR triggers).
-- **Instant swap for additive changes**: Adding voices uses 1-sample crossfade (instant). Node reuse preserves DSP state. BPM-relative crossfade only for breaking changes.
+- **Per-slot heap management**: Adding/modifying a pattern slot only clears that slot's events. Other slots continue uninterrupted. Per-slot cycle tracking in Engine.
+- **Fresh-only control restore**: compile_with_reuse returns fresh node IDs. Control values only applied to fresh nodes — reused nodes keep undisturbed DSP state.
 - **Crossfade trigger forwarding**: SetParam reaches both active AND retiring graphs during crossfade.
 - **Live control tracking**: EngineController records last-set value for each exposed control.
 - **SetBpm no-op guard**: Same-BPM set no longer nukes the event heap.
