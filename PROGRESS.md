@@ -4,7 +4,7 @@
 
 Live coding audio system — monorepo at `krachio/noise`, Cargo workspace.
 
-- **soundman-core** (Rust): Audio engine — graph runtime with node reuse + return channel, gain smoothing, fan-in with NaN isolation, output clamping, registry versioning, pre-computed connection map, live control tracking, crossfade trigger forwarding, additive-swap detection — 119 tests.
+- **soundman-core** (Rust): Audio engine — graph runtime with node reuse + return channel, gain smoothing, fan-in with NaN isolation, output clamping, registry versioning, pre-computed connection map, live control tracking, crossfade trigger forwarding, additive-swap detection, fresh-only control restore — 120 tests.
 - **soundman-faust** (Rust): FAUST LLVM JIT plugin — hot reload of `.dsp` files — 14 tests.
 - **midiman** (Rust lib): Pattern sequencer — Freeze compound atoms, single-loop engine with min-heap, slot index (no string clone on hot path), SetBpm no-op guard — 119 tests.
 - **noise-engine** (Rust binary): Unified binary — merges midiman + soundman-core + soundman-faust. Single process, direct event dispatch (no OSC), BPM-relative crossfade (1/4 beat), dual-protocol IPC (pattern + graph commands on one Unix socket) — 22 tests.
@@ -41,11 +41,11 @@ mix.fade("bass", target=0.15, bars=8)
 
 ## Recent fixes
 
-- **Instant swap for additive changes**: Adding voices uses 1-sample crossfade (instant). Node reuse preserves DSP state. BPM-relative crossfade only for breaking changes (voice removal/type change).
+- **Fresh-only control restore**: compile_with_reuse returns fresh node IDs. Control values only applied to fresh nodes — reused nodes keep undisturbed DSP state (no spurious ADSR triggers).
+- **Instant swap for additive changes**: Adding voices uses 1-sample crossfade (instant). Node reuse preserves DSP state. BPM-relative crossfade only for breaking changes.
 - **Crossfade trigger forwarding**: SetParam reaches both active AND retiring graphs during crossfade.
-- **Live control tracking**: EngineController records last-set value for each exposed control. Applied to new graphs after compilation.
+- **Live control tracking**: EngineController records last-set value for each exposed control.
 - **SetBpm no-op guard**: Same-BPM set no longer nukes the event heap.
-- **Division-by-zero guard**: crossfade_samples=0 no longer produces NaN.
 
 ## Next
 
