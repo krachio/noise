@@ -81,10 +81,11 @@ pub struct Engine {
     // Pattern state — hot path iterates the Vec, cold path looks up by name.
     slots: Vec<CompiledPattern>,
     names: HashMap<String, usize>,
+    // Per-slot cycle frontier: next_cycle[idx] is the next cycle to query for slot idx.
+    next_cycle: Vec<i64>,
 
     // Scheduling state.
     clock: Clock,
-    next_cycle: i64,
     heap: BinaryHeap<Reverse<TimedEvent>>,
     lookahead: Duration,
 }
@@ -96,8 +97,8 @@ impl Engine {
         Self {
             slots: Vec::new(),
             names: HashMap::new(),
+            next_cycle: Vec::new(),
             clock: Clock::new(bpm, beats_per_cycle),
-            next_cycle: 0,
             heap: BinaryHeap::new(),
             lookahead,
         }
@@ -109,29 +110,25 @@ impl Engine {
             EngineCommand::SetPattern { name, pattern } => {
                 let now = Instant::now();
                 if let Some(&idx) = self.names.get(&name) {
-                    // Hot-swap: re-query from the current bar position so the
-                    // new pattern starts within the same cycle — no full-cycle
-                    // gap. Past atoms in the current cycle are filtered by
-                    // fire_at >= now inside fill().
+                    // Hot-swap: clear only THIS slot's events, re-query from
+                    // current cycle. Other slots' events are preserved.
                     self.slots[idx] = pattern;
-                    self.heap.clear();
-                    self.next_cycle = self.current_cycle(now);
+                    self.clear_slot_events(idx);
+                    self.next_cycle[idx] = self.current_cycle(now);
                 } else {
-                    // New slot: start from the next full cycle so we never
-                    // burst-dispatch events from cycles that elapsed before
-                    // this slot existed.
+                    // New slot: no heap clear needed — new slot has no events.
+                    // Start from next full cycle to avoid past-due burst.
                     let idx = self.slots.len();
                     self.slots.push(pattern);
                     self.names.insert(name, idx);
-                    self.heap.clear();
-                    self.next_cycle = self.first_future_cycle(now);
+                    self.next_cycle.push(self.first_future_cycle(now));
                 }
             }
             EngineCommand::Hush { name } => {
                 if let Some(&idx) = self.names.get(&name) {
                     self.slots[idx] = CompiledPattern::silence();
-                    self.heap.clear();
-                    self.next_cycle = self.current_cycle(Instant::now());
+                    self.clear_slot_events(idx);
+                    self.next_cycle[idx] = self.current_cycle(Instant::now());
                 }
             }
             EngineCommand::HushAll => {
@@ -139,22 +136,28 @@ impl Engine {
                     *slot = CompiledPattern::silence();
                 }
                 self.heap.clear();
-                self.next_cycle = self.first_future_cycle(Instant::now());
+                let future = self.first_future_cycle(Instant::now());
+                self.next_cycle.fill(future);
             }
             EngineCommand::SetBpm { bpm } => {
                 if (bpm - self.clock.bpm()).abs() < f64::EPSILON {
-                    return; // no-op: same BPM, don't nuke the heap
+                    return;
                 }
                 self.clock = Clock::new(bpm, self.clock.beats_per_cycle());
                 self.heap.clear();
-                self.next_cycle = 0;
+                self.next_cycle.fill(0);
             }
         }
     }
 
-    /// The first cycle number whose start instant is strictly after `now`.
-    /// Used after a reset to skip already-elapsed cycles without filtering
-    /// individual events inside `fill()`.
+    /// Remove all heap events belonging to a specific slot.
+    fn clear_slot_events(&mut self, slot_idx: usize) {
+        let old = std::mem::take(&mut self.heap);
+        self.heap = old.into_iter()
+            .filter(|Reverse(e)| e.slot_idx != slot_idx)
+            .collect();
+    }
+
     /// The cycle that contains `now`.
     fn current_cycle(&self, now: Instant) -> i64 {
         let start = self.clock.cycle_start_instant(0);
@@ -183,17 +186,14 @@ impl Engine {
     /// `whole` arc (which the evaluator contract guarantees never happens).
     pub fn fill(&mut self, now: Instant) {
         let horizon = now + self.lookahead;
-        while self.clock.cycle_start_instant(self.next_cycle) <= horizon {
-            let query_arc = time::Arc::cycle(self.next_cycle);
-            for (_name, &idx) in &self.names {
+        for (_name, &idx) in &self.names {
+            while self.clock.cycle_start_instant(self.next_cycle[idx]) <= horizon {
+                let query_arc = time::Arc::cycle(self.next_cycle[idx]);
                 let pattern = &self.slots[idx];
                 for event in query(pattern, pattern.root, query_arc) {
                     if event.has_onset() {
                         let onset = event.whole.expect("onset implies whole").start;
                         let fire_at = self.clock.onset_to_instant(onset);
-                        // Drop events that have already passed (can occur when
-                        // next_cycle is reset to current_cycle on a hot-swap
-                        // mid-cycle — past atoms of that cycle are discarded).
                         if fire_at >= now {
                             self.heap.push(Reverse(TimedEvent {
                                 fire_at,
@@ -203,8 +203,8 @@ impl Engine {
                         }
                     }
                 }
+                self.next_cycle[idx] += 1;
             }
-            self.next_cycle += 1;
         }
     }
 
@@ -353,7 +353,7 @@ mod tests {
         assert_eq!(e.heap.len(), 0, "BPM change should clear heap");
         // next_cycle resets to 0 for a fresh clock (not first_future_cycle,
         // since the new clock's epoch is now).
-        assert_eq!(e.next_cycle, 0, "BPM change should reset cycle counter");
+        assert!(e.next_cycle.iter().all(|&c| c == 0), "BPM change should reset cycle counters");
     }
 
     #[test]
@@ -366,7 +366,7 @@ mod tests {
         e.fill(Instant::now());
         let before = e.heap.len();
         assert!(before > 0, "heap should have events after fill");
-        let before_cycle = e.next_cycle;
+        let before_cycle = e.next_cycle.clone();
 
         // Same BPM as fast_engine() — should be a no-op.
         e.apply(EngineCommand::SetBpm { bpm: 6000.0 });
@@ -383,9 +383,9 @@ mod tests {
             name: "s".into(),
             pattern: CompiledPattern::atom(note(60)),
         });
-        let before = e.next_cycle;
+        let before = e.next_cycle[0];
         e.fill(Instant::now());
-        assert!(e.next_cycle > before, "fill should advance next_cycle");
+        assert!(e.next_cycle[0] > before, "fill should advance next_cycle");
     }
 
     #[test]

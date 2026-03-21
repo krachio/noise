@@ -52,13 +52,13 @@ impl GraphSwapper {
             match cmd {
                 Command::SwapGraph(new_graph) => self.begin_swap(new_graph),
                 Command::SetParam { node_id, name, value } => {
+                    // Audio thread: silently ignore unknown nodes/params.
+                    // New voices' controls may arrive before/after the graph
+                    // that contains them. The retiring graph may not have
+                    // nodes that exist in the active graph.
                     if let Some(graph) = &mut self.active {
-                        let result = graph.set_param(&node_id, &name, value);
-                        debug_assert!(result.is_ok(), "set_param failed: {node_id}/{name}={value}");
+                        let _ = graph.set_param(&node_id, &name, value);
                     }
-                    // Forward to retiring graph during crossfade so it keeps
-                    // receiving pattern triggers. Without this, the old graph's
-                    // ADSR envelopes decay to silence during the blend.
                     if let Some(graph) = &mut self.retiring {
                         let _ = graph.set_param(&node_id, &name, value);
                     }
