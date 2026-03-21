@@ -32,11 +32,11 @@ class TestSessionConnection:
         s = Session()
         s.connect()
         mock_cls.assert_called_once_with(socket.AF_UNIX, socket.SOCK_STREAM)
-        mock_cls.return_value.connect.assert_called_once_with("/tmp/midiman.sock")
+        mock_cls.return_value.connect.assert_called_once_with("/tmp/noise-engine.sock")
 
     @patch("midiman_frontend.session.socket.socket")
     def test_env_var_override(self, mock_cls: MagicMock) -> None:
-        with patch.dict("os.environ", {"MIDIMAN_SOCKET": "/tmp/custom.sock"}):
+        with patch.dict("os.environ", {"NOISE_SOCKET": "/tmp/custom.sock"}):
             s = Session()
         s.connect()
         mock_cls.return_value.connect.assert_called_once_with("/tmp/custom.sock")

@@ -31,7 +31,7 @@ class SlotState:
 
 
 def _default_socket_path() -> str:
-    return os.environ.get("MIDIMAN_SOCKET", "/tmp/midiman.sock")
+    return os.environ.get("NOISE_SOCKET", "/tmp/noise-engine.sock")
 
 
 def _parse_response(line: bytes) -> dict[str, Any]:
@@ -152,8 +152,14 @@ class Session:
 
     def load_graph(self, graph: GraphIr) -> None:
         """Load an audio graph via the unified binary."""
-        ir = json.loads(graph.to_json())
-        self._send_json({"type": "load_graph", **ir})
+        if self._sock is None or self._reader is None:
+            raise RuntimeError("not connected — call connect() or use context manager")
+        # GraphIr.to_json() already produces the inner JSON; wrap with type tag
+        # in a single pass (avoids serialize → parse → re-serialize).
+        inner = graph.to_json()
+        msg = f'{{"type":"load_graph",{inner[1:]}'  # replace leading '{' with '{"type":"load_graph",'
+        self._sock.sendall((msg + "\n").encode())
+        _parse_response(self._reader.readline())
 
     def set_ctrl(self, label: str, value: float) -> None:
         """Set an exposed control parameter on the audio engine."""
