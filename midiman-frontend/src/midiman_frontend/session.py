@@ -123,6 +123,8 @@ class Session:
 
     @tempo.setter
     def tempo(self, bpm: float) -> None:
+        if bpm == self._tempo:
+            return
         self._tempo = bpm
         self.send(SetBpm(bpm=bpm))
 

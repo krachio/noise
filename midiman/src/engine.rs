@@ -142,10 +142,12 @@ impl Engine {
                 self.next_cycle = self.first_future_cycle(Instant::now());
             }
             EngineCommand::SetBpm { bpm } => {
-                // Rebuild the clock at the new BPM; clear stale events.
+                if (bpm - self.clock.bpm()).abs() < f64::EPSILON {
+                    return; // no-op: same BPM, don't nuke the heap
+                }
                 self.clock = Clock::new(bpm, self.clock.beats_per_cycle());
                 self.heap.clear();
-                self.next_cycle = 0; // fresh clock — start from cycle 0
+                self.next_cycle = 0;
             }
         }
     }
@@ -352,6 +354,24 @@ mod tests {
         // next_cycle resets to 0 for a fresh clock (not first_future_cycle,
         // since the new clock's epoch is now).
         assert_eq!(e.next_cycle, 0, "BPM change should reset cycle counter");
+    }
+
+    #[test]
+    fn apply_set_bpm_same_value_preserves_heap() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetPattern {
+            name: "kick".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+        e.fill(Instant::now());
+        let before = e.heap.len();
+        assert!(before > 0, "heap should have events after fill");
+        let before_cycle = e.next_cycle;
+
+        // Same BPM as fast_engine() — should be a no-op.
+        e.apply(EngineCommand::SetBpm { bpm: 6000.0 });
+        assert_eq!(e.heap.len(), before, "same BPM should preserve heap");
+        assert_eq!(e.next_cycle, before_cycle, "same BPM should preserve cycle counter");
     }
 
     // ── fill ─────────────────────────────────────────────────────────────────
