@@ -213,6 +213,16 @@ impl EngineController {
         self.registry.type_ids().into_iter().map(str::to_owned).collect()
     }
 
+    /// True if `new_ir` is a strict superset of the current shadow graph —
+    /// all existing node IDs are present with the same type. Additive changes
+    /// (adding voices) can skip the crossfade for instant swap.
+    #[must_use]
+    pub fn is_additive_change(&self, new_ir: &GraphIr) -> bool {
+        self.shadow_graph.nodes.iter().all(|old| {
+            new_ir.nodes.iter().any(|n| n.id == old.id && n.type_id == old.type_id)
+        })
+    }
+
     /// Update the crossfade duration for subsequent graph swaps.
     /// Sent to the audio thread via the lock-free command channel.
     pub fn set_crossfade_samples(&mut self, samples: usize) {
@@ -573,5 +583,64 @@ mod tests {
             "after graph reload, oscillator should still be at 880 Hz (got {crossings_after_reload} \
              crossings, but 440 Hz has {crossings_at_440})"
         );
+    }
+
+    #[test]
+    fn is_additive_change_detects_voice_addition() {
+        let config = EngineConfig::default();
+        let (mut ctrl, _proc) = engine(&config);
+
+        // Load graph with osc + dac.
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+
+        // Same graph → additive (superset of itself).
+        assert!(ctrl.is_additive_change(&simple_graph_ir()));
+
+        // Add a gain node → still additive (all old nodes present).
+        let mut extended = simple_graph_ir();
+        extended.nodes.push(NodeInstance {
+            id: "g1".into(),
+            type_id: "gain".into(),
+            controls: HashMap::new(),
+        });
+        assert!(ctrl.is_additive_change(&extended));
+
+        // Remove osc1 → NOT additive.
+        let reduced = GraphIr {
+            nodes: vec![NodeInstance {
+                id: "out".into(),
+                type_id: "dac".into(),
+                controls: HashMap::new(),
+            }],
+            connections: vec![],
+            exposed_controls: HashMap::new(),
+        };
+        assert!(!ctrl.is_additive_change(&reduced));
+    }
+
+    #[test]
+    fn is_additive_change_false_on_type_change() {
+        let config = EngineConfig::default();
+        let (mut ctrl, _proc) = engine(&config);
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+
+        // Change osc1's type → NOT additive (same ID, different type).
+        let changed_type = GraphIr {
+            nodes: vec![
+                NodeInstance { id: "osc1".into(), type_id: "gain".into(), controls: HashMap::new() },
+                NodeInstance { id: "out".into(), type_id: "dac".into(), controls: HashMap::new() },
+            ],
+            connections: vec![],
+            exposed_controls: HashMap::new(),
+        };
+        assert!(!ctrl.is_additive_change(&changed_type));
+    }
+
+    #[test]
+    fn empty_shadow_graph_is_always_additive() {
+        let config = EngineConfig::default();
+        let (ctrl, _proc) = engine(&config);
+        // No graph loaded yet — shadow is empty → any new graph is additive.
+        assert!(ctrl.is_additive_change(&simple_graph_ir()));
     }
 }

@@ -228,11 +228,13 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                             return Ok(());
                         }
                         ClientMessage::LoadGraph(ir) => {
-                            // Set BPM-relative crossfade before loading the graph.
-                            let cf = crossfade_samples(
-                                pattern_engine.bpm(),
-                                config.sample_rate,
-                            );
+                            // Additive change (adding voices): instant swap.
+                            // Breaking change (removing/changing voices): BPM-relative crossfade.
+                            let cf = if audio_engine.controller_mut().is_additive_change(&ir) {
+                                1
+                            } else {
+                                crossfade_samples(pattern_engine.bpm(), config.sample_rate)
+                            };
                             audio_engine.controller_mut().set_crossfade_samples(cf);
                             if let Err(e) = audio_engine.load_graph(ir) {
                                 warn!("load_graph: {e}");
