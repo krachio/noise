@@ -4,10 +4,11 @@
 //! Eliminates OSC overhead between the two — pattern events are dispatched
 //! directly to the audio engine's control thread via function calls.
 
+mod ipc;
+
 use std::cmp::Reverse;
 use std::collections::BinaryHeap;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
 
@@ -186,7 +187,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
     let (cmd_tx, cmd_rx) = crossbeam_channel::unbounded::<LoopCommand>();
 
     let sock = socket_path();
-    let ipc_handle = start_ipc(sock, cmd_tx, Arc::clone(&node_types))?;
+    let ipc_handle = ipc::start(sock, cmd_tx, Arc::clone(&node_types))?;
 
     info!("noise-engine ready");
     info!("  socket: {}", ipc_handle.socket_path.display());
@@ -213,13 +214,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
     // dispatched to audio engine when due). Small n — linear scan + swap_remove.
     let mut pending: Vec<PendingEvent> = Vec::new();
 
-    let stop = Arc::new(AtomicBool::new(false));
-
     loop {
-        if stop.load(Ordering::Relaxed) {
-            break;
-        }
-
         let now = Instant::now();
 
         // ① Drain IPC commands (single channel, sum type).
@@ -356,8 +351,6 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
             spin_sleep::sleep(sleep);
         }
     }
-
-    Ok(())
 }
 
 fn earliest_deadline(
@@ -397,251 +390,6 @@ fn try_connect_midi() -> Option<Box<dyn OutputSink>> {
             None
         }
     }
-}
-
-// ── IPC ─────────────────────────────────────────────────────────────────────
-
-/// Handle to the IPC server thread.
-struct IpcHandle {
-    socket_path: PathBuf,
-    stop: Arc<AtomicBool>,
-    _thread: std::thread::JoinHandle<()>,
-}
-
-impl Drop for IpcHandle {
-    fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
-        // Wake the blocking accept() by connecting.
-        let _ = std::os::unix::net::UnixStream::connect(&self.socket_path);
-        let _ = std::fs::remove_file(&self.socket_path);
-    }
-}
-
-/// Start the unified IPC server.
-///
-/// Handles both midiman pattern commands and soundman graph commands.
-/// ListNodes is handled directly (no round-trip through main loop).
-fn start_ipc(
-    socket_path: PathBuf,
-    cmd_tx: crossbeam_channel::Sender<LoopCommand>,
-    node_types: Arc<RwLock<Vec<String>>>,
-) -> Result<IpcHandle, String> {
-    let _ = std::fs::remove_file(&socket_path);
-    let listener = std::os::unix::net::UnixListener::bind(&socket_path)
-        .map_err(|e| format!("bind {}: {e}", socket_path.display()))?;
-    listener
-        .set_nonblocking(false)
-        .map_err(|e| e.to_string())?;
-
-    let stop = Arc::new(AtomicBool::new(false));
-    let stop_clone = Arc::clone(&stop);
-    let path = socket_path.clone();
-
-    let thread = std::thread::Builder::new()
-        .name("noise-ipc".into())
-        .spawn(move || ipc_server(listener, cmd_tx, node_types, stop_clone))
-        .expect("failed to spawn IPC thread");
-
-    Ok(IpcHandle {
-        socket_path: path,
-        stop,
-        _thread: thread,
-    })
-}
-
-fn ipc_server(
-    listener: std::os::unix::net::UnixListener,
-    cmd_tx: crossbeam_channel::Sender<LoopCommand>,
-    node_types: Arc<RwLock<Vec<String>>>,
-    stop: Arc<AtomicBool>,
-) {
-    for stream in listener.incoming() {
-        if stop.load(Ordering::Relaxed) {
-            break;
-        }
-        match stream {
-            Ok(stream) => {
-                stream
-                    .set_read_timeout(Some(Duration::from_millis(100)))
-                    .ok();
-                ipc_handle_connection(stream, &cmd_tx, &node_types, &stop);
-            }
-            Err(_) => break,
-        }
-    }
-}
-
-/// Wire protocol: the unified binary accepts BOTH midiman and soundman message
-/// formats on a single socket. Discrimination is by the tag field:
-///
-/// - midiman messages use `"cmd"` tag: SetPattern, Hush, HushAll, SetBpm, Batch, Ping
-/// - soundman messages use `"type"` tag: load_graph, set_control, set_master_gain, list_nodes, shutdown, ping
-///
-/// This lets both the pattern frontend and the graph frontend talk to the same socket.
-fn ipc_handle_connection(
-    stream: std::os::unix::net::UnixStream,
-    cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
-    node_types: &Arc<RwLock<Vec<String>>>,
-    stop: &AtomicBool,
-) {
-    use std::io::{BufRead, BufReader, Write};
-
-    let reader = BufReader::new(stream.try_clone().expect("clone stream"));
-    let mut writer = stream;
-
-    for line in reader.lines() {
-        if stop.load(Ordering::Relaxed) {
-            break;
-        }
-        let line = match line {
-            Ok(l) => l,
-            Err(ref e) if e.kind() == std::io::ErrorKind::WouldBlock => continue,
-            Err(_) => break,
-        };
-        if line.trim().is_empty() {
-            continue;
-        }
-
-        let response = dispatch_ipc_message(&line, cmd_tx, node_types);
-        let mut json = serde_json::to_string(&response).expect("serialize response");
-        json.push('\n');
-        if writer.write_all(json.as_bytes()).is_err() {
-            break;
-        }
-    }
-}
-
-/// Try to parse as a midiman message first (has "cmd" field), then as a
-/// soundman message (has "type" field).
-fn dispatch_ipc_message(
-    line: &str,
-    cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
-    node_types: &Arc<RwLock<Vec<String>>>,
-) -> IpcResponse {
-    // Try midiman protocol first (pattern commands).
-    if let Ok(msg) = serde_json::from_str::<midiman::ipc::protocol::ClientMessage>(line) {
-        return handle_midiman_message(msg, cmd_tx);
-    }
-
-    // Try soundman protocol (graph commands).
-    if let Ok(msg) = serde_json::from_str::<ClientMessage>(line) {
-        return handle_soundman_message(msg, cmd_tx, node_types);
-    }
-
-    IpcResponse::Error {
-        msg: format!("unrecognized message: {line}"),
-    }
-}
-
-fn handle_midiman_message(
-    msg: midiman::ipc::protocol::ClientMessage,
-    cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
-) -> IpcResponse {
-    use midiman::ipc::protocol::ClientMessage as MidimanMsg;
-
-    match msg {
-        MidimanMsg::Ping => IpcResponse::Pong,
-        MidimanMsg::Batch { commands } => {
-            // Phase 1: compile all (fail-safe).
-            let mut compiled = Vec::with_capacity(commands.len());
-            for cmd in &commands {
-                match compile_midiman_command(cmd) {
-                    Ok(Some(engine_cmd)) => compiled.push(engine_cmd),
-                    Ok(None) => {}
-                    Err(e) => return IpcResponse::Error { msg: e },
-                }
-            }
-            // Phase 2: send atomically.
-            let n = compiled.len();
-            for engine_cmd in compiled {
-                let _ = cmd_tx.send(LoopCommand::Pattern(engine_cmd));
-            }
-            IpcResponse::Ok {
-                msg: format!("batch applied ({n} commands)"),
-            }
-        }
-        other => match compile_midiman_command(&other) {
-            Ok(Some(engine_cmd)) => {
-                let description = describe_engine_command(&engine_cmd);
-                let _ = cmd_tx.send(LoopCommand::Pattern(engine_cmd));
-                IpcResponse::Ok { msg: description }
-            }
-            Ok(None) => IpcResponse::Pong,
-            Err(e) => IpcResponse::Error { msg: e },
-        },
-    }
-}
-
-fn compile_midiman_command(
-    msg: &midiman::ipc::protocol::ClientMessage,
-) -> Result<Option<EngineCommand>, String> {
-    use midiman::ipc::protocol::ClientMessage as MidimanMsg;
-
-    match msg {
-        MidimanMsg::SetPattern { slot, pattern } => {
-            let compiled =
-                midiman::ir::compile(pattern).map_err(|e| format!("compile error: {e}"))?;
-            Ok(Some(EngineCommand::SetPattern {
-                name: slot.clone(),
-                pattern: compiled,
-            }))
-        }
-        MidimanMsg::Hush { slot } => Ok(Some(EngineCommand::Hush { name: slot.clone() })),
-        MidimanMsg::HushAll => Ok(Some(EngineCommand::HushAll)),
-        MidimanMsg::SetBpm { bpm } => Ok(Some(EngineCommand::SetBpm { bpm: *bpm })),
-        MidimanMsg::Ping => Ok(None),
-        MidimanMsg::Batch { .. } => Err("nested Batch is not allowed".into()),
-    }
-}
-
-fn handle_soundman_message(
-    msg: ClientMessage,
-    cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
-    node_types: &Arc<RwLock<Vec<String>>>,
-) -> IpcResponse {
-    match msg {
-        ClientMessage::Ping => IpcResponse::Pong,
-        ClientMessage::ListNodes { .. } => {
-            // Handled directly — no round-trip through main loop.
-            let types = node_types.read().map_or_else(
-                |_| vec![],
-                |guard| guard.clone(),
-            );
-            IpcResponse::NodeTypes { types }
-        }
-        ClientMessage::Shutdown => {
-            let _ = cmd_tx.send(LoopCommand::Graph(ClientMessage::Shutdown));
-            IpcResponse::Ok {
-                msg: "shutting down".into(),
-            }
-        }
-        other => {
-            let _ = cmd_tx.send(LoopCommand::Graph(other));
-            IpcResponse::Ok {
-                msg: "ok".into(),
-            }
-        }
-    }
-}
-
-fn describe_engine_command(cmd: &EngineCommand) -> String {
-    match cmd {
-        EngineCommand::SetPattern { name, .. } => format!("pattern set on {name}"),
-        EngineCommand::Hush { name } => format!("{name} hushed"),
-        EngineCommand::HushAll => "all slots hushed".into(),
-        EngineCommand::SetBpm { bpm } => format!("bpm set to {bpm}"),
-    }
-}
-
-/// Unified IPC response type.
-/// Compatible with both midiman and soundman response formats.
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[serde(tag = "status")]
-enum IpcResponse {
-    Ok { msg: String },
-    Error { msg: String },
-    Pong,
-    NodeTypes { types: Vec<String> },
 }
 
 // ── Tests ───────────────────────────────────────────────────────────────────
@@ -768,44 +516,6 @@ mod tests {
         assert_eq!(at_44k, 5512); // 125ms * 44100 = 5512.5 → truncated
     }
 
-    // ── IpcResponse serde ───────────────────────────────────────────────
-
-    #[test]
-    fn ipc_response_ok_roundtrip() {
-        let resp = IpcResponse::Ok { msg: "done".into() };
-        let json = serde_json::to_string(&resp).unwrap();
-        assert!(json.contains(r#""status":"Ok"#));
-        let parsed: IpcResponse = serde_json::from_str(&json).unwrap();
-        assert!(matches!(parsed, IpcResponse::Ok { msg } if msg == "done"));
-    }
-
-    #[test]
-    fn ipc_response_error_roundtrip() {
-        let resp = IpcResponse::Error { msg: "bad".into() };
-        let json = serde_json::to_string(&resp).unwrap();
-        let parsed: IpcResponse = serde_json::from_str(&json).unwrap();
-        assert!(matches!(parsed, IpcResponse::Error { msg } if msg == "bad"));
-    }
-
-    #[test]
-    fn ipc_response_pong_roundtrip() {
-        let json = serde_json::to_string(&IpcResponse::Pong).unwrap();
-        let parsed: IpcResponse = serde_json::from_str(&json).unwrap();
-        assert!(matches!(parsed, IpcResponse::Pong));
-    }
-
-    #[test]
-    fn ipc_response_node_types_roundtrip() {
-        let resp = IpcResponse::NodeTypes { types: vec!["osc".into(), "dac".into()] };
-        let json = serde_json::to_string(&resp).unwrap();
-        let parsed: IpcResponse = serde_json::from_str(&json).unwrap();
-        match parsed {
-            IpcResponse::NodeTypes { types } => {
-                assert_eq!(types, vec!["osc", "dac"]);
-            }
-            other => panic!("expected NodeTypes, got {other:?}"),
-        }
-    }
 }
 
 // ── Entry point ─────────────────────────────────────────────────────────────

@@ -166,7 +166,7 @@ fn process_message(msg: ClientMessage, cmd_tx: &Sender<EngineCommand>) -> Server
 /// Compile one [`ClientMessage`] into an [`EngineCommand`].
 /// Returns `Ok(None)` for `Ping` (no engine action needed).
 /// Returns `Err` if the pattern IR fails to compile or nesting is detected.
-fn compile_command(msg: &ClientMessage) -> Result<Option<EngineCommand>, String> {
+pub fn compile_command(msg: &ClientMessage) -> Result<Option<EngineCommand>, String> {
     match msg {
         ClientMessage::SetPattern { slot, pattern } => {
             let compiled = ir::compile(pattern).map_err(|e| format!("compile error: {e}"))?;
@@ -180,7 +180,8 @@ fn compile_command(msg: &ClientMessage) -> Result<Option<EngineCommand>, String>
     }
 }
 
-fn describe(cmd: &EngineCommand) -> String {
+/// Human-readable description of an engine command (for IPC responses).
+pub fn describe(cmd: &EngineCommand) -> String {
     match cmd {
         EngineCommand::SetPattern { name, .. } => format!("pattern set on {name}"),
         EngineCommand::Hush { name } => format!("{name} hushed"),
