@@ -1,3 +1,3 @@
 [workspace]
-members = ["soundman-core", "soundman-faust", "soundman", "midiman", "noise-engine"]
+members = ["soundman-core", "soundman-faust", "midiman", "noise-engine"]
 resolver = "2"

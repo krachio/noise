@@ -1,36 +1,44 @@
 #!/usr/bin/env bash
-# Quick integration smoke test — starts soundman, plays a beat, exits.
+# Quick integration smoke test — starts noise-engine, plays a beat, exits.
 # Usage: ./bin/test-beat
 set -e
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
-cargo build --bin soundman -q --manifest-path "$REPO/Cargo.toml"
+cargo build --bin noise-engine -q --manifest-path "$REPO/Cargo.toml"
 
+TMPDIR_NATIVE="$(python3 -c 'import tempfile; print(tempfile.gettempdir())')"
+ENGINE_SOCK="${TMPDIR_NATIVE}/noise-engine-test-beat.sock"
+rm -f "$ENGINE_SOCK"
+
+NOISE_SOCKET="$ENGINE_SOCK" \
 SOUNDMAN_DSP_DIR="$HOME/.krach/dsp" \
-SOUNDMAN_OSC_ADDR="127.0.0.1:9001" \
-RUST_LOG=warn "$REPO/target/debug/soundman" &
-SOUNDMAN_PID=$!
-trap "kill $SOUNDMAN_PID 2>/dev/null" EXIT
-sleep 1.5
+RUST_LOG=warn "$REPO/target/debug/noise-engine" &
+ENGINE_PID=$!
+trap "kill $ENGINE_PID 2>/dev/null" EXIT
 
-PYTHON="$REPO/soundman-frontend/.venv/bin/python"
+# Wait for socket
+for i in $(seq 1 50); do [ -S "$ENGINE_SOCK" ] && break; sleep 0.1; done
+[ -S "$ENGINE_SOCK" ] || { echo "engine socket not ready"; exit 1; }
+
+PYTHON="$REPO/midiman-frontend/.venv/bin/python"
 [ -f "$PYTHON" ] || PYTHON=python3
 
 exec "$PYTHON" -c "
-import sys, time, threading
-sys.path.insert(0, '${REPO}/soundman-frontend/src')
-from soundman_frontend import Graph, SoundmanSession
+import sys, time, threading, tempfile, os
+sys.path.insert(0, '${REPO}/midiman-frontend/src')
+from midiman_frontend import Graph, Session
 
-sm = SoundmanSession(host='127.0.0.1', port=9001)
+mm = Session(socket_path='${ENGINE_SOCK}')
+mm.connect()
 
 # ── Step 1: connectivity ──────────────────────────────────────────────────
-nodes = sm.list_nodes()
+nodes = mm.list_nodes()
 print(f'step 1 — nodes: {nodes}')
-assert 'dac' in nodes, 'soundman not responding'
-assert 'faust:kit' in nodes, 'faust:kit not loaded — did you run the smoke test before?'
+assert 'dac' in nodes, 'engine not responding'
+assert 'faust:kit' in nodes, 'faust:kit not loaded — did you run a session first?'
 
 # ── Step 2: load drum kit graph ───────────────────────────────────────────
-sm.load_graph(
+mm.load_graph(
     Graph()
     .node('kit', 'faust:kit', kick=0, hat=0, snare=0, freq=55.0, bass=0)
     .node('out', 'dac')
@@ -45,9 +53,9 @@ sm.load_graph(
 print('step 2 — graph loaded')
 time.sleep(0.2)
 
-# ── Step 3: play beat via direct sm.set() (no midiman) ───────────────────
+# ── Step 3: play beat via direct set_ctrl (no OSC) ───────────────────────
 def trig(ctrl):
-    sm.set(ctrl, 0.0); time.sleep(0.012); sm.set(ctrl, 1.0)
+    mm.set_ctrl(ctrl, 0.0); time.sleep(0.012); mm.set_ctrl(ctrl, 1.0)
 
 BPM   = 120
 TICK  = 60 / BPM / 4   # 16th note
@@ -73,7 +81,7 @@ def bass_loop():
     t0 = time.perf_counter()
     i  = 0
     while not stop.is_set():
-        sm.set('freq', bass_line[i % len(bass_line)])
+        mm.set_ctrl('freq', bass_line[i % len(bass_line)])
         trig('bass')
         time.sleep(max(0, t0 + (i + 1) * TICK * 3 - time.perf_counter()))
         i += 1
@@ -83,6 +91,7 @@ t1 = threading.Thread(target=drum_loop, daemon=True)
 t2 = threading.Thread(target=bass_loop, daemon=True)
 t1.start(); t2.start(); t1.join()
 
-sm.shutdown()
+mm.shutdown()
+mm.disconnect()
 print('done')
 "

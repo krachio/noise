@@ -1,71 +1,67 @@
 #!/usr/bin/env bash
-# End-to-end integration test: midiman + soundman + FAUST kit
-# Verifies the full pipeline: IPC → Engine → OSC → soundman → FAUST → audio
+# End-to-end integration test: noise-engine (unified binary)
+# Verifies the full pipeline: IPC → Pattern Engine → Audio Engine → FAUST → audio
 #
 # What this tests:
-#   1. midiman engine loop accepts patterns and schedules events
-#   2. Events arrive at soundman via OSC at the correct times
+#   1. Unified binary accepts both pattern and graph commands on one socket
+#   2. Pattern events dispatch directly to the audio engine
 #   3. Multiple slots (kick/snare/hat) fire without burst
 #   4. You should hear ~4 bars of drums + bass
 
 set -e
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-cargo build --bin midiman --bin soundman -q --manifest-path "$REPO/Cargo.toml"
+cargo build --bin noise-engine -q --manifest-path "$REPO/Cargo.toml"
 
 TMPDIR_NATIVE="$(python3 -c 'import tempfile; print(tempfile.gettempdir())')"
-MIDIMAN_SOCK="${TMPDIR_NATIVE}/midiman.sock"
-rm -f "$MIDIMAN_SOCK"
+ENGINE_SOCK="${TMPDIR_NATIVE}/noise-engine-test-e2e.sock"
+rm -f "$ENGINE_SOCK"
 
-MIDIMAN_SOCKET="$MIDIMAN_SOCK" \
-MIDIMAN_OSC_TARGET="127.0.0.1:9001" \
-RUST_LOG=warn \
-  "$REPO/target/debug/midiman" &
-MIDIMAN_PID=$!
-
+NOISE_SOCKET="$ENGINE_SOCK" \
 SOUNDMAN_DSP_DIR="$HOME/.krach/dsp" \
-SOUNDMAN_OSC_ADDR="127.0.0.1:9001" \
 RUST_LOG=warn \
-  "$REPO/target/debug/soundman" &
-SOUNDMAN_PID=$!
+  "$REPO/target/debug/noise-engine" &
+ENGINE_PID=$!
 
-cleanup() { kill $MIDIMAN_PID $SOUNDMAN_PID 2>/dev/null; wait 2>/dev/null; }
+cleanup() { kill $ENGINE_PID 2>/dev/null; wait 2>/dev/null; }
 trap cleanup EXIT INT TERM
-sleep 1
 
-PYTHON="$REPO/soundman-frontend/.venv/bin/python"
+# Wait for socket
+for i in $(seq 1 50); do [ -S "$ENGINE_SOCK" ] && break; sleep 0.1; done
+[ -S "$ENGINE_SOCK" ] || { echo "engine socket not ready"; exit 1; }
+
+PYTHON="$REPO/midiman-frontend/.venv/bin/python"
 [ -f "$PYTHON" ] || PYTHON=python3
 
 exec "$PYTHON" - <<'PYEOF'
-import sys, time, tempfile, os
+import sys, time, os
 sys.path.insert(0, "/Users/jonkhler/dev/noise/midiman-frontend/src")
-sys.path.insert(0, "/Users/jonkhler/dev/noise/soundman-frontend/src")
-from midiman_frontend import Session
+from midiman_frontend import Graph, Session
 from midiman_frontend.ir import OscFloat, OscStr
 from midiman_frontend.pattern import osc as midi_osc
-from soundman_frontend import Graph, SoundmanSession
 
-sm = SoundmanSession(host="127.0.0.1", port=9001)
-mm = Session(socket_path=os.path.join(tempfile.gettempdir(), "midiman.sock"))
+engine_sock = os.environ.get("ENGINE_SOCK", os.path.join(
+    __import__("tempfile").gettempdir(), "noise-engine-test-e2e.sock"))
+mm = Session(socket_path=engine_sock)
 mm.connect()
 
-# ── step 1: verify connectivity (retry until soundman is ready) ───────────
+# ── step 1: verify connectivity ──────────────────────────────────────────
 nodes = []
 for attempt in range(20):
     try:
-        nodes = sm.list_nodes(timeout=0.5)
+        nodes = mm.list_nodes()
         if "dac" in nodes:
             break
-    except TimeoutError:
+    except (TimeoutError, ConnectionError):
         pass
     time.sleep(0.5)
 else:
-    raise RuntimeError("soundman did not respond after 10s")
+    raise RuntimeError("engine did not respond after 10s")
 
-print(f"step 1 — soundman nodes: {nodes}")
-assert "faust:kit" in nodes, "faust:kit not loaded (run bin/test-beat first to write the DSP file)"
+print(f"step 1 — engine nodes: {nodes}")
+assert "faust:kit" in nodes, "faust:kit not loaded (run bin/test-beat first)"
 
-# ── step 2: load kit graph ────────────────────────────────────────────────
-sm.load_graph(
+# ── step 2: load kit graph ───────────────────────────────────────────────
+mm.load_graph(
     Graph()
     .node("kit", "faust:kit", kick=0.0, hat=0.0, snare=0.0, freq=55.0, bass=0.0)
     .node("out", "dac")
@@ -80,13 +76,12 @@ sm.load_graph(
 time.sleep(0.2)
 print("step 2 — kit graph loaded")
 
-# ── step 3: send patterns via midiman ────────────────────────────────────
+# ── step 3: send patterns ───────────────────────────────────────────────
 def sc(label, value):
     return midi_osc("/soundman/set", OscStr(label), OscFloat(value))
 
 mm.tempo = 120
 
-# trigger+reset pairs for FAUST rising-edge detection
 mm.launch({
     "kick":  sc("kick", 1.0) + sc("kick", 0.0) + sc("kick", 1.0) + sc("kick", 0.0),
     "snare": sc("snare",0.0) + sc("snare",1.0) + sc("snare",0.0) + sc("snare",1.0),
@@ -95,14 +90,13 @@ mm.launch({
 
 BPM  = 120
 BARS = 4
-BAR_DUR = 4 * 60 / BPM  # seconds
+BAR_DUR = 4 * 60 / BPM
 print(f"step 3 — playing {BARS} bars at {BPM} BPM (you should hear kick+snare+hat)")
 time.sleep(BARS * BAR_DUR)
 
-# ── step 4: add a polyrhythmic bass line ──────────────────────────────────
-bass_line = [43.7, 55.0, 65.4, 43.7, 55.0, 87.3, 65.4, 55.0,
-             43.7, 55.0, 65.4, 87.3]
-bass_atoms = sc("bass", 0.0)  # start with reset
+# ── step 4: add bass ────────────────────────────────────────────────────
+bass_line = [43.7, 55.0, 65.4, 43.7, 55.0, 87.3, 65.4, 55.0, 43.7, 55.0, 65.4, 87.3]
+bass_atoms = sc("bass", 0.0)
 for freq in bass_line:
     bass_atoms = bass_atoms + sc("freq", freq) + sc("bass", 1.0) + sc("bass", 0.0)
 
@@ -110,14 +104,14 @@ mm.launch({
     "kick":  sc("kick", 1.0) + sc("kick", 0.0) + sc("kick", 1.0) + sc("kick", 0.0),
     "snare": sc("snare",0.0) + sc("snare",1.0) + sc("snare",0.0) + sc("snare",1.0),
     "hat":   (sc("hat", 1.0) + sc("hat", 0.0)) * 4,
-    "bass":  bass_atoms.over(3),  # 3-against-4 polyrhythm
+    "bass":  bass_atoms.over(3),
 })
 
 print("step 4 — added polyrhythmic bass (3-against-4)")
 time.sleep(BARS * BAR_DUR)
 
 mm.stop()
-sm.shutdown()
+mm.shutdown()
 mm.disconnect()
 print("done — all steps passed")
 PYEOF
