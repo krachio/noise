@@ -33,13 +33,15 @@ pub struct EngineController {
     registry: NodeRegistry,
     shadow_graph: GraphIr,
     exposed_controls: HashMap<String, (String, String)>,
-    /// Last-set value for each exposed control label. Applied to new graphs
-    /// after compilation so fresh nodes start with the correct state (e.g.
-    /// gate=1.0 if the pattern just triggered it).
+    /// Last-set value for each exposed control label. On graph reload,
+    /// continuous controls (freq, cutoff, gain) are restored so fresh nodes
+    /// start at the right pitch/timbre. Gate is skipped (must transition 0→1).
     control_values: HashMap<String, f32>,
     producer: Producer<Command>,
+    /// Receives retired graphs from the audio thread. Drained on recompile
+    /// to prevent unbounded growth. (The return channel exists to move
+    /// deallocation off the audio thread — RT safety.)
     return_consumer: Consumer<Box<DspGraph>>,
-    cached_graph: Option<DspGraph>,
 }
 
 /// Audio-thread half of the engine.
@@ -79,7 +81,6 @@ pub fn engine(config: &EngineConfig) -> (EngineController, AudioProcessor) {
         control_values: HashMap::new(),
         producer,
         return_consumer,
-        cached_graph: None,
     };
 
     let processor = AudioProcessor {
@@ -213,16 +214,6 @@ impl EngineController {
         self.registry.type_ids().into_iter().map(str::to_owned).collect()
     }
 
-    /// True if `new_ir` is a strict superset of the current shadow graph —
-    /// all existing node IDs are present with the same type. Additive changes
-    /// (adding voices) can skip the crossfade for instant swap.
-    #[must_use]
-    pub fn is_additive_change(&self, new_ir: &GraphIr) -> bool {
-        self.shadow_graph.nodes.iter().all(|old| {
-            new_ir.nodes.iter().any(|n| n.id == old.id && n.type_id == old.type_id)
-        })
-    }
-
     /// Update the crossfade duration for subsequent graph swaps.
     /// Sent to the audio thread via the lock-free command channel.
     pub fn set_crossfade_samples(&mut self, samples: usize) {
@@ -230,36 +221,18 @@ impl EngineController {
     }
 
     fn recompile_and_send(&mut self) -> Result<(), CompileError> {
-        // Drain any retired graphs returned from the audio thread
-        let mut returned_count = 0;
-        while let Ok(returned) = self.return_consumer.pop() {
-            self.cached_graph = Some(*returned);
-            returned_count += 1;
-        }
+        // Drain retired graphs (frees them off the audio thread — RT safety).
+        while self.return_consumer.pop().is_ok() {}
 
-        let has_cache = self.cached_graph.is_some();
-        debug!(
-            "recompile_and_send: drained {returned_count} retired graphs, cache={has_cache}"
-        );
-
-        // Compile fresh — don't reuse from stale cache. The return-channel
-        // cache is always one generation behind the active graph, so reused
-        // nodes have stale oscillator phase causing audible artifacts.
-        // Fresh nodes + crossfade + trigger forwarding handle the transition.
-        let _ = self.cached_graph.take(); // drain return channel but don't reuse
-        while let Ok(_) = self.return_consumer.pop() {}
-        let result = compiler::compile_with_reuse(
+        let mut graph = compiler::compile(
             &self.shadow_graph,
             &self.registry,
-            None,
             self.config.sample_rate,
             self.config.block_size,
         )?;
-        let mut graph = result.graph;
 
-        // Restore continuous controls (freq, cutoff, gain) so fresh nodes
-        // start at the right pitch/timbre. Skip gate — it's a trigger that
-        // must transition 0→1 to fire ADSR, restoring it causes spurious hits.
+        // Restore continuous controls so fresh nodes start at the right
+        // pitch/timbre. Skip gate — must transition 0→1 to fire ADSR.
         for (label, &value) in &self.control_values {
             if let Some((node_id, param)) = self.exposed_controls.get(label) {
                 if param != "gate" {
@@ -592,104 +565,4 @@ mod tests {
         );
     }
 
-    #[test]
-    fn is_additive_change_detects_voice_addition() {
-        let config = EngineConfig::default();
-        let (mut ctrl, _proc) = engine(&config);
-
-        // Load graph with osc + dac.
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
-
-        // Same graph → additive (superset of itself).
-        assert!(ctrl.is_additive_change(&simple_graph_ir()));
-
-        // Add a gain node → still additive (all old nodes present).
-        let mut extended = simple_graph_ir();
-        extended.nodes.push(NodeInstance {
-            id: "g1".into(),
-            type_id: "gain".into(),
-            controls: HashMap::new(),
-        });
-        assert!(ctrl.is_additive_change(&extended));
-
-        // Remove osc1 → NOT additive.
-        let reduced = GraphIr {
-            nodes: vec![NodeInstance {
-                id: "out".into(),
-                type_id: "dac".into(),
-                controls: HashMap::new(),
-            }],
-            connections: vec![],
-            exposed_controls: HashMap::new(),
-        };
-        assert!(!ctrl.is_additive_change(&reduced));
-    }
-
-    #[test]
-    fn is_additive_change_false_on_type_change() {
-        let config = EngineConfig::default();
-        let (mut ctrl, _proc) = engine(&config);
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
-
-        // Change osc1's type → NOT additive (same ID, different type).
-        let changed_type = GraphIr {
-            nodes: vec![
-                NodeInstance { id: "osc1".into(), type_id: "gain".into(), controls: HashMap::new() },
-                NodeInstance { id: "out".into(), type_id: "dac".into(), controls: HashMap::new() },
-            ],
-            connections: vec![],
-            exposed_controls: HashMap::new(),
-        };
-        assert!(!ctrl.is_additive_change(&changed_type));
-    }
-
-    #[test]
-    fn control_restore_does_not_retrigger_reused_nodes() {
-        // The live-coding scenario: kick is playing, user adds a snare voice.
-        // The graph reload must NOT re-trigger the kick (spurious ADSR attack).
-        // Control values should only be applied to FRESH nodes, not reused ones.
-        let config = EngineConfig { block_size: 256, ..Default::default() };
-        let (mut ctrl, mut proc) = engine(&config);
-
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
-        let mut buf = vec![0.0_f32; 256];
-
-        // Simulate pattern: set pitch=880, then let it play for several blocks.
-        ctrl.handle_message(ClientMessage::SetControl {
-            label: "pitch".into(),
-            value: 880.0,
-        }).unwrap();
-        for _ in 0..10 {
-            proc.process(&mut buf);
-        }
-
-        // Capture the steady-state output BEFORE reload.
-        proc.process(&mut buf);
-        let energy_before: f32 = buf.iter().map(|s| s * s).sum();
-        // Now do a SECOND load to populate the cache, then a THIRD to get reuse.
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
-        for _ in 0..20 { proc.process(&mut buf); } // crossfade completes, graph returned
-
-        // THIRD load — now cached_graph is populated, osc1 will be REUSED.
-        // The reused osc1 must NOT have its state disturbed by control_values.
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
-        proc.process(&mut buf);
-
-        // With reuse, the oscillator continues from its current phase.
-        // The output energy should be similar to before (no dip from re-trigger).
-        let energy_after: f32 = buf.iter().map(|s| s * s).sum();
-        assert!(
-            energy_after > energy_before * 0.5,
-            "reused node output should not dip after graph reload \
-             (before={energy_before}, after={energy_after})"
-        );
-    }
-
-    #[test]
-    fn empty_shadow_graph_is_always_additive() {
-        let config = EngineConfig::default();
-        let (ctrl, _proc) = engine(&config);
-        // No graph loaded yet — shadow is empty → any new graph is additive.
-        assert!(ctrl.is_additive_change(&simple_graph_ir()));
-    }
 }
