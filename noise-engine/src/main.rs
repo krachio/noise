@@ -286,14 +286,16 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                                 channel: *channel,
                                 note: *note,
                             }));
-                            let _ =
-                                output::dispatch(&timed_event, &mut midi_sink, &mut None);
+                            if let Err(e) = output::dispatch(&timed_event, &mut midi_sink, &mut None) {
+                                warn!("midi dispatch: {e}");
+                            }
                         }
                     }
                     _ => {
                         if timed_event.fire_at <= now {
-                            let _ =
-                                output::dispatch(&timed_event, &mut midi_sink, &mut None);
+                            if let Err(e) = output::dispatch(&timed_event, &mut midi_sink, &mut None) {
+                                warn!("midi dispatch: {e}");
+                            }
                         }
                     }
                 }

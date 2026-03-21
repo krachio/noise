@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use log::warn;
 use midiman::ipc::{compile_command, describe};
 use midiman::ipc::protocol::ClientMessage as MidimanMsg;
 use soundman_core::protocol::ClientMessage;
@@ -151,14 +152,18 @@ fn handle_pattern(
             }
             let n = compiled.len();
             for engine_cmd in compiled {
-                let _ = cmd_tx.send(LoopCommand::Pattern(engine_cmd));
+                if cmd_tx.send(LoopCommand::Pattern(engine_cmd)).is_err() {
+                    warn!("main loop disconnected");
+                }
             }
             IpcResponse::Ok { msg: format!("batch applied ({n} commands)") }
         }
         other => match compile_command(&other) {
             Ok(Some(engine_cmd)) => {
                 let description = describe(&engine_cmd);
-                let _ = cmd_tx.send(LoopCommand::Pattern(engine_cmd));
+                if cmd_tx.send(LoopCommand::Pattern(engine_cmd)).is_err() {
+                    warn!("main loop disconnected");
+                }
                 IpcResponse::Ok { msg: description }
             }
             Ok(None) => IpcResponse::Pong,
@@ -179,11 +184,15 @@ fn handle_graph(
             IpcResponse::NodeTypes { types }
         }
         ClientMessage::Shutdown => {
-            let _ = cmd_tx.send(LoopCommand::Graph(ClientMessage::Shutdown));
+            if cmd_tx.send(LoopCommand::Graph(ClientMessage::Shutdown)).is_err() {
+                warn!("main loop disconnected");
+            }
             IpcResponse::Ok { msg: "shutting down".into() }
         }
         other => {
-            let _ = cmd_tx.send(LoopCommand::Graph(other));
+            if cmd_tx.send(LoopCommand::Graph(other)).is_err() {
+                warn!("main loop disconnected");
+            }
             IpcResponse::Ok { msg: "ok".into() }
         }
     }
