@@ -645,6 +645,170 @@ enum IpcResponse {
     NodeTypes { types: Vec<String> },
 }
 
+// ── Tests ───────────────────────────────────────────────────────────────────
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use midiman::engine::TimedEvent;
+    use midiman::event::{Event, OscArg, Value};
+    use midiman::time::{Arc, Time};
+
+    fn make_osc_event(address: &str, args: Vec<OscArg>) -> TimedEvent {
+        TimedEvent {
+            fire_at: Instant::now(),
+            event: Event::new(
+                Some(Arc::new(Time::zero(), Time::one())),
+                Arc::new(Time::zero(), Time::one()),
+                Value::Osc { address: address.into(), args },
+            ),
+            slot_idx: 0,
+        }
+    }
+
+    // ── parse_set_control ───────────────────────────────────────────────
+
+    #[test]
+    fn parse_set_control_extracts_label_and_value() {
+        let event = make_osc_event(
+            "/soundman/set",
+            vec![OscArg::Str("pitch".into()), OscArg::Float(440.0)],
+        );
+        let (label, value) = parse_set_control(&event).unwrap();
+        assert_eq!(label, "pitch");
+        assert!((value - 440.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn parse_set_control_accepts_int_value() {
+        let event = make_osc_event(
+            "/soundman/set",
+            vec![OscArg::Str("gate".into()), OscArg::Int(1)],
+        );
+        let (label, value) = parse_set_control(&event).unwrap();
+        assert_eq!(label, "gate");
+        assert!((value - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn parse_set_control_returns_none_for_wrong_address() {
+        let event = make_osc_event(
+            "/other/set",
+            vec![OscArg::Str("pitch".into()), OscArg::Float(440.0)],
+        );
+        assert!(parse_set_control(&event).is_none());
+    }
+
+    #[test]
+    fn parse_set_control_returns_none_for_missing_args() {
+        let event = make_osc_event("/soundman/set", vec![]);
+        assert!(parse_set_control(&event).is_none());
+    }
+
+    #[test]
+    fn parse_set_control_returns_none_for_midi_note() {
+        let event = TimedEvent {
+            fire_at: Instant::now(),
+            event: Event::new(
+                Some(Arc::new(Time::zero(), Time::one())),
+                Arc::new(Time::zero(), Time::one()),
+                Value::Note { channel: 0, note: 60, velocity: 100, dur: 0.5 },
+            ),
+            slot_idx: 0,
+        };
+        assert!(parse_set_control(&event).is_none());
+    }
+
+    // ── parse_set_gain ──────────────────────────────────────────────────
+
+    #[test]
+    fn parse_set_gain_extracts_float() {
+        let event = make_osc_event("/soundman/gain", vec![OscArg::Float(0.75)]);
+        let gain = parse_set_gain(&event).unwrap();
+        assert!((gain - 0.75).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn parse_set_gain_returns_none_for_wrong_address() {
+        let event = make_osc_event("/soundman/set", vec![OscArg::Float(0.5)]);
+        assert!(parse_set_gain(&event).is_none());
+    }
+
+    #[test]
+    fn parse_set_gain_returns_none_for_empty_args() {
+        let event = make_osc_event("/soundman/gain", vec![]);
+        assert!(parse_set_gain(&event).is_none());
+    }
+
+    // ── crossfade_samples ───────────────────────────────────────────────
+
+    #[test]
+    fn crossfade_at_120_bpm_is_one_sixteenth_note() {
+        // 120 BPM → 1 beat = 500ms → 1/4 beat = 125ms → 6000 samples at 48kHz
+        assert_eq!(crossfade_samples(120.0, 48000), 6000);
+    }
+
+    #[test]
+    fn crossfade_at_60_bpm() {
+        // 60 BPM → 1 beat = 1000ms → 1/4 beat = 250ms → 12000 samples at 48kHz
+        assert_eq!(crossfade_samples(60.0, 48000), 12000);
+    }
+
+    #[test]
+    fn crossfade_at_180_bpm() {
+        // 180 BPM → 1 beat = 333ms → 1/4 beat = 83.3ms → 4000 samples at 48kHz
+        assert_eq!(crossfade_samples(180.0, 48000), 4000);
+    }
+
+    #[test]
+    fn crossfade_scales_with_sample_rate() {
+        // Same BPM, different sample rate
+        let at_48k = crossfade_samples(120.0, 48000);
+        let at_44k = crossfade_samples(120.0, 44100);
+        assert!(at_48k > at_44k);
+        assert_eq!(at_44k, 5512); // 125ms * 44100 = 5512.5 → truncated
+    }
+
+    // ── IpcResponse serde ───────────────────────────────────────────────
+
+    #[test]
+    fn ipc_response_ok_roundtrip() {
+        let resp = IpcResponse::Ok { msg: "done".into() };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains(r#""status":"Ok"#));
+        let parsed: IpcResponse = serde_json::from_str(&json).unwrap();
+        assert!(matches!(parsed, IpcResponse::Ok { msg } if msg == "done"));
+    }
+
+    #[test]
+    fn ipc_response_error_roundtrip() {
+        let resp = IpcResponse::Error { msg: "bad".into() };
+        let json = serde_json::to_string(&resp).unwrap();
+        let parsed: IpcResponse = serde_json::from_str(&json).unwrap();
+        assert!(matches!(parsed, IpcResponse::Error { msg } if msg == "bad"));
+    }
+
+    #[test]
+    fn ipc_response_pong_roundtrip() {
+        let json = serde_json::to_string(&IpcResponse::Pong).unwrap();
+        let parsed: IpcResponse = serde_json::from_str(&json).unwrap();
+        assert!(matches!(parsed, IpcResponse::Pong));
+    }
+
+    #[test]
+    fn ipc_response_node_types_roundtrip() {
+        let resp = IpcResponse::NodeTypes { types: vec!["osc".into(), "dac".into()] };
+        let json = serde_json::to_string(&resp).unwrap();
+        let parsed: IpcResponse = serde_json::from_str(&json).unwrap();
+        match parsed {
+            IpcResponse::NodeTypes { types } => {
+                assert_eq!(types, vec!["osc", "dac"]);
+            }
+            other => panic!("expected NodeTypes, got {other:?}"),
+        }
+    }
+}
+
 // ── Entry point ─────────────────────────────────────────────────────────────
 
 fn main() {
