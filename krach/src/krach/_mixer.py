@@ -185,23 +185,21 @@ class VoiceMixer:
         """
         if isinstance(source, DspDef):
             type_id = f"faust:{name}"
+            faust_code, controls = source.faust, source.controls
             self._dsp_dir.joinpath(f"{name}.py").write_text(source.source)
-            self._dsp_dir.joinpath(f"{name}.dsp").write_text(source.faust)
-            controls = source.controls
-            self._node_controls[type_id] = controls
-            if not self._batching:
-                self._wait_for_type(type_id)
         elif callable(source):
             type_id = f"faust:{name}"
             result = _transpile(source)  # type: ignore[arg-type]
-            self._dsp_dir.joinpath(f"{name}.dsp").write_text(result.source)
-            controls = tuple(c.name for c in result.schema.controls)
+            faust_code, controls = result.source, tuple(c.name for c in result.schema.controls)
+        else:
+            type_id = source
+            faust_code, controls = None, self._node_controls.get(type_id, tuple(init.keys()))
+
+        if faust_code is not None:
+            self._dsp_dir.joinpath(f"{name}.dsp").write_text(faust_code)
             self._node_controls[type_id] = controls
             if not self._batching:
                 self._wait_for_type(type_id)
-        else:
-            type_id = source
-            controls = self._node_controls.get(type_id, tuple(init.keys()))
 
         self._voices[name] = Voice(
             type_id=type_id,
