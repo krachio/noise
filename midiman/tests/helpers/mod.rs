@@ -84,6 +84,11 @@ impl TestKernel {
         TestConnection { writer, reader }
     }
 
+    /// Resolve a slot index to its name.
+    pub fn slot_name(&self, idx: usize) -> &str {
+        self.engine.slot_name(idx)
+    }
+
     pub fn stop(mut self) {
         if let Some(h) = self.ipc_handle.take() {
             h.stop();

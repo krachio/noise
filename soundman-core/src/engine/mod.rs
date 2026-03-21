@@ -184,7 +184,9 @@ impl EngineController {
     pub fn poll_control(&mut self, control: &mut dyn ControlInput) {
         let messages = control.poll();
         for msg in messages {
-            let _ = self.handle_message(msg);
+            if let Err(e) = self.handle_message(msg) {
+                warn!("poll_control: {e}");
+            }
         }
     }
 

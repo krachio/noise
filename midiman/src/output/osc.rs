@@ -127,7 +127,7 @@ mod tests {
                     args: vec![OscArg::Float(42.0), OscArg::Str("world".into())],
                 },
             ),
-            slot_name: "d1".into(),
+            slot_idx: 0,
         };
 
         sink.send(&event).unwrap();
@@ -173,7 +173,7 @@ mod tests {
                     dur: 0.5,
                 },
             ),
-            slot_name: "d1".into(),
+            slot_idx: 0,
         };
 
         // Should succeed but not send anything

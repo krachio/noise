@@ -31,8 +31,8 @@ pub struct TimedEvent {
     pub fire_at: Instant,
     /// The pattern event (value, whole arc, part arc).
     pub event: Event<Value>,
-    /// Name of the slot that produced this event (e.g. `"kick"`).
-    pub slot_name: String,
+    /// Index into the engine's slot table. Use [`Engine::slot_name`] to resolve.
+    pub slot_idx: usize,
 }
 
 impl PartialEq for TimedEvent {
@@ -183,7 +183,7 @@ impl Engine {
         let horizon = now + self.lookahead;
         while self.clock.cycle_start_instant(self.next_cycle) <= horizon {
             let query_arc = time::Arc::cycle(self.next_cycle);
-            for (name, &idx) in &self.names {
+            for (_name, &idx) in &self.names {
                 let pattern = &self.slots[idx];
                 for event in query(pattern, pattern.root, query_arc) {
                     if event.has_onset() {
@@ -196,7 +196,7 @@ impl Engine {
                             self.heap.push(Reverse(TimedEvent {
                                 fire_at,
                                 event,
-                                slot_name: name.clone(),
+                                slot_idx: idx,
                             }));
                         }
                     }
@@ -234,6 +234,15 @@ impl Engine {
     #[must_use]
     pub fn bpm(&self) -> f64 {
         self.clock.bpm()
+    }
+
+    /// Resolve a slot index to its name. Returns `"?"` for unknown indices.
+    #[must_use]
+    pub fn slot_name(&self, idx: usize) -> &str {
+        self.names
+            .iter()
+            .find_map(|(name, &i)| if i == idx { Some(name.as_str()) } else { None })
+            .unwrap_or("?")
     }
 
     /// Number of named slots (including silenced ones).
@@ -416,8 +425,8 @@ mod tests {
                 window[0].fire_at <= window[1].fire_at,
                 "events must be in fire_at order — burst detected: \
                  slot={} t={:?} then slot={} t={:?}",
-                window[0].slot_name, window[0].fire_at,
-                window[1].slot_name, window[1].fire_at,
+                window[0].slot_idx, window[0].fire_at,
+                window[1].slot_idx, window[1].fire_at,
             );
         }
     }
@@ -466,8 +475,8 @@ mod tests {
             assert!(
                 window[0].fire_at <= window[1].fire_at,
                 "multi-slot burst: {} fire_at={:?} then {} fire_at={:?}",
-                window[0].slot_name, window[0].fire_at,
-                window[1].slot_name, window[1].fire_at,
+                window[0].slot_idx, window[0].fire_at,
+                window[1].slot_idx, window[1].fire_at,
             );
         }
     }

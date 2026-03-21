@@ -53,7 +53,11 @@ impl GraphSwapper {
                 Command::SwapGraph(new_graph) => self.begin_swap(new_graph),
                 Command::SetParam { node_id, name, value } => {
                     if let Some(graph) = &mut self.active {
-                        let _ = graph.set_param(&node_id, &name, value);
+                        // Audio thread: no logging/allocation on hot path.
+                        // set_param only fails for unknown node/param — a programming
+                        // error caught by debug_assert in dev builds.
+                        let result = graph.set_param(&node_id, &name, value);
+                        debug_assert!(result.is_ok(), "set_param failed: {node_id}/{name}={value}");
                     }
                 }
                 Command::SetMasterGain(gain) => self.master_gain = gain,

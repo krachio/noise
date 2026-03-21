@@ -26,7 +26,7 @@ fn end_to_end_set_pattern_via_ipc() {
     // Wait for engine to emit events
     let events = tk.collect_events(Duration::from_millis(100));
     assert!(!events.is_empty(), "scheduler should have emitted events");
-    assert_eq!(events[0].slot_name, "d1");
+    assert_eq!(tk.slot_name(events[0].slot_idx), "d1");
 
     // Hush
     let resp = conn.send(r#"{"cmd":"Hush","slot":"d1"}"#);
@@ -93,8 +93,8 @@ fn e2e_multi_slot() {
     assert!(matches!(conn.send(d2), ServerMessage::Ok { .. }));
 
     let events = tk.collect_events(Duration::from_millis(150));
-    let has_d1 = events.iter().any(|e| e.slot_name == "d1");
-    let has_d2 = events.iter().any(|e| e.slot_name == "d2");
+    let has_d1 = events.iter().any(|e| tk.slot_name(e.slot_idx) == "d1");
+    let has_d2 = events.iter().any(|e| tk.slot_name(e.slot_idx) == "d2");
     assert!(has_d1, "expected events from d1");
     assert!(has_d2, "expected events from d2");
 
@@ -166,7 +166,7 @@ fn e2e_combinators() {
     // Pattern correctness (event counts) is covered by pattern unit tests.
     let events = tk.collect_events(Duration::from_millis(100));
     assert!(!events.is_empty(), "combinators pattern should produce events");
-    assert_eq!(events[0].slot_name, "d1");
+    assert_eq!(tk.slot_name(events[0].slot_idx), "d1");
 
     tk.stop();
 }

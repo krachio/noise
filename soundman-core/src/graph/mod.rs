@@ -59,6 +59,10 @@ impl std::fmt::Debug for BufferPool {
 /// `output_buffers[node_index][port_index]` = buffer index.
 type OutputBufferMap = Vec<Vec<usize>>;
 
+/// Pre-computed input wiring for a single node: (source_buffer_index, target_port).
+/// Built once at graph construction, avoids O(nodes × connections) scan per block.
+type InputMap = Vec<Vec<(usize, usize)>>;
+
 pub struct DspGraph {
     nodes: Vec<Box<dyn DspNode>>,
     node_ids: Vec<String>,
@@ -69,6 +73,8 @@ pub struct DspGraph {
     output_node: Option<NodeId>,
     buffers: BufferPool,
     output_buffer_map: OutputBufferMap,
+    /// Per-node input map: `input_map[node_idx]` = vec of `(src_buf_idx, to_port)`.
+    input_map: InputMap,
     // Reusable scratch buffers to avoid per-block allocations
     scratch_inputs: Vec<Vec<f32>>,
     scratch_outputs: Vec<Vec<f32>>,
@@ -108,6 +114,14 @@ impl DspGraph {
         let max_inputs = nodes.iter().map(|n| n.num_inputs()).max().unwrap_or(0);
         let max_outputs = nodes.iter().map(|n| n.num_outputs()).max().unwrap_or(0);
 
+        // Pre-compute per-node input map: for each node, which source buffers
+        // feed which input ports. Turns O(nodes × connections) into O(connections).
+        let mut input_map: InputMap = vec![vec![]; nodes.len()];
+        for conn in &connections {
+            let src_buf_idx = output_buffer_map[conn.from_node.0][conn.from_port];
+            input_map[conn.to_node.0].push((src_buf_idx, conn.to_port));
+        }
+
         Self {
             nodes,
             node_ids,
@@ -118,6 +132,7 @@ impl DspGraph {
             output_node,
             buffers,
             output_buffer_map,
+            input_map,
             scratch_inputs: vec![vec![0.0; block_size]; max_inputs],
             scratch_outputs: vec![vec![0.0; block_size]; max_outputs],
         }
@@ -147,15 +162,12 @@ impl DspGraph {
             let num_outputs = self.nodes[idx].num_outputs();
 
             // Zero scratch inputs, then sum all sources into their target port (fan-in mixing).
-            // Using conn.to_port as the port index ensures correct routing even when
-            // connections are not listed in port-index order.
+            // Uses pre-computed input_map: O(connections_to_this_node) not O(all_connections).
             for i in 0..num_inputs {
                 self.scratch_inputs[i].fill(0.0);
             }
-            for conn in &self.connections {
-                if conn.to_node == node_id && conn.to_port < num_inputs {
-                    let to_port = conn.to_port;
-                    let src_buf_idx = self.output_buffer_map[conn.from_node.0][conn.from_port];
+            for &(src_buf_idx, to_port) in &self.input_map[idx] {
+                if to_port < num_inputs {
                     for (d, s) in self.scratch_inputs[to_port]
                         .iter_mut()
                         .zip(self.buffers.buffers[src_buf_idx].iter())

@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use log::debug;
+use log::{debug, warn};
 
 use crate::ir::{ConnectionIr, GraphIr};
 use crate::registry::{NodeRegistry, RegistryError};
@@ -97,14 +97,18 @@ pub fn compile_with_reuse(
                 reused += 1;
                 let mut node = cached.node;
                 for (name, &value) in &ir_node.controls {
-                    let _ = node.set_param(name, value);
+                    if let Err(e) = node.set_param(name, value) {
+                        warn!("set_param on reused {}/{name}: {e}", ir_node.id);
+                    }
                 }
                 node
             } else {
                 // Type or factory changed — create fresh
                 let mut fresh = registry.create_node(&ir_node.type_id, sample_rate, block_size)?;
                 for (name, &value) in &ir_node.controls {
-                    let _ = fresh.set_param(name, value);
+                    if let Err(e) = fresh.set_param(name, value) {
+                        warn!("set_param on fresh {}/{name}: {e}", ir_node.id);
+                    }
                 }
                 fresh
             }
@@ -112,7 +116,9 @@ pub fn compile_with_reuse(
             // New node
             let mut fresh = registry.create_node(&ir_node.type_id, sample_rate, block_size)?;
             for (name, &value) in &ir_node.controls {
-                let _ = fresh.set_param(name, value);
+                if let Err(e) = fresh.set_param(name, value) {
+                    warn!("set_param on new {}/{name}: {e}", ir_node.id);
+                }
             }
             fresh
         };
