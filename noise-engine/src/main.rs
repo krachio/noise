@@ -67,11 +67,18 @@ impl PartialOrd for PendingNoteOff {
     }
 }
 
-/// A pending SetControl event scheduled for future dispatch.
-struct PendingControl {
-    fire_at: Instant,
-    label: String,
-    value: f32,
+/// A timed audio-engine command waiting for its scheduled dispatch time.
+enum PendingEvent {
+    Control { fire_at: Instant, label: String, value: f32 },
+    Gain { fire_at: Instant, value: f32 },
+}
+
+impl PendingEvent {
+    const fn fire_at(&self) -> Instant {
+        match self {
+            Self::Control { fire_at, .. } | Self::Gain { fire_at, .. } => *fire_at,
+        }
+    }
 }
 
 fn resolve_dsp_dir() -> PathBuf {
@@ -204,7 +211,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
 
     // Pending SetControl events (drained from pattern engine with lookahead,
     // dispatched to audio engine when due). Small n — linear scan + swap_remove.
-    let mut pending: Vec<PendingControl> = Vec::new();
+    let mut pending: Vec<PendingEvent> = Vec::new();
 
     let stop = Arc::new(AtomicBool::new(false));
 
@@ -258,16 +265,15 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
         //    MIDI notes/CC: dispatch immediately when due (no lookahead for MIDI).
         for timed_event in pattern_engine.drain(now + LOOKAHEAD) {
             if let Some((label, value)) = parse_set_control(&timed_event) {
-                pending.push(PendingControl {
+                pending.push(PendingEvent::Control {
                     fire_at: timed_event.fire_at,
                     label: label.to_owned(),
                     value,
                 });
-            } else if let Some(gain) = parse_set_gain(&timed_event) {
-                pending.push(PendingControl {
+            } else if let Some(value) = parse_set_gain(&timed_event) {
+                pending.push(PendingEvent::Gain {
                     fire_at: timed_event.fire_at,
-                    label: String::new(), // empty label = master gain
-                    value: gain,
+                    value,
                 });
             } else {
                 // MIDI note/CC — dispatch when due.
@@ -297,27 +303,20 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
             }
         }
 
-        // ④ Dispatch pending SetControl events that are now due.
+        // ④ Dispatch pending events that are now due.
         let mut i = 0;
         while i < pending.len() {
-            if pending[i].fire_at <= now {
-                let ctrl = pending.swap_remove(i);
-                if ctrl.label.is_empty() {
-                    // Master gain.
-                    if let Err(e) = audio_engine
-                        .controller_mut()
-                        .handle_message(ClientMessage::SetMasterGain { gain: ctrl.value })
-                    {
-                        warn!("set_master_gain: {e}");
+            if pending[i].fire_at() <= now {
+                let msg = match pending.swap_remove(i) {
+                    PendingEvent::Control { label, value, .. } => {
+                        ClientMessage::SetControl { label, value }
                     }
-                } else if let Err(e) = audio_engine
-                    .controller_mut()
-                    .handle_message(ClientMessage::SetControl {
-                        label: ctrl.label,
-                        value: ctrl.value,
-                    })
-                {
-                    warn!("set_control: {e}");
+                    PendingEvent::Gain { value, .. } => {
+                        ClientMessage::SetMasterGain { gain: value }
+                    }
+                };
+                if let Err(e) = audio_engine.controller_mut().handle_message(msg) {
+                    warn!("dispatch pending: {e}");
                 }
             } else {
                 i += 1;
@@ -350,7 +349,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
             pattern_engine.next_deadline(),
             note_offs.peek().map(|Reverse(n)| n.fire_at),
             next_clock_tick,
-            pending.iter().map(|p| p.fire_at).min(),
+            pending.iter().map(|p| p.fire_at()).min(),
         );
         let sleep = deadline.saturating_duration_since(Instant::now()).min(MAX_SLEEP);
         if sleep > Duration::ZERO {
