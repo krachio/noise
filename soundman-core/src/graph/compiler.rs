@@ -50,7 +50,7 @@ pub fn compile(
     sample_rate: u32,
     block_size: usize,
 ) -> Result<DspGraph, CompileError> {
-    compile_with_reuse(ir, registry, None, sample_rate, block_size)
+    compile_with_reuse(ir, registry, None, sample_rate, block_size).map(|r| r.graph)
 }
 
 /// Compile a `GraphIr`, reusing node instances from a previous graph when the
@@ -60,13 +60,21 @@ pub fn compile(
 ///
 /// # Errors
 /// Returns `CompileError` if validation fails.
+/// Result of compilation: the graph plus the set of node IDs that were
+/// created fresh (not reused from the previous graph).
+#[derive(Debug)]
+pub struct CompileResult {
+    pub graph: DspGraph,
+    pub fresh_ids: Vec<String>,
+}
+
 pub fn compile_with_reuse(
     ir: &GraphIr,
     registry: &NodeRegistry,
     previous: Option<DspGraph>,
     sample_rate: u32,
     block_size: usize,
-) -> Result<DspGraph, CompileError> {
+) -> Result<CompileResult, CompileError> {
     // Check for duplicate node IDs
     let mut id_set = HashMap::with_capacity(ir.nodes.len());
     for (idx, node) in ir.nodes.iter().enumerate() {
@@ -85,6 +93,7 @@ pub fn compile_with_reuse(
     let mut node_type_ids: Vec<String> = Vec::with_capacity(ir.nodes.len());
     let mut node_versions: Vec<u64> = Vec::with_capacity(ir.nodes.len());
     let mut reused = 0_usize;
+    let mut fresh_ids: Vec<String> = Vec::new();
 
     for ir_node in &ir.nodes {
         let current_version = registry.version(&ir_node.type_id);
@@ -104,6 +113,7 @@ pub fn compile_with_reuse(
                 node
             } else {
                 // Type or factory changed — create fresh
+                fresh_ids.push(ir_node.id.clone());
                 let mut fresh = registry.create_node(&ir_node.type_id, sample_rate, block_size)?;
                 for (name, &value) in &ir_node.controls {
                     if let Err(e) = fresh.set_param(name, value) {
@@ -114,6 +124,7 @@ pub fn compile_with_reuse(
             }
         } else {
             // New node
+            fresh_ids.push(ir_node.id.clone());
             let mut fresh = registry.create_node(&ir_node.type_id, sample_rate, block_size)?;
             for (name, &value) in &ir_node.controls {
                 if let Err(e) = fresh.set_param(name, value) {
@@ -164,17 +175,20 @@ pub fn compile_with_reuse(
         .find(|(_, n)| n.type_id == "dac")
         .map(|(i, _)| NodeId(i));
 
-    Ok(DspGraph::new(
-        nodes,
-        node_ids,
-        node_type_ids,
-        node_versions,
-        connections,
-        process_order,
-        output_node,
-        buffers,
-        output_buffer_map,
-    ))
+    Ok(CompileResult {
+        graph: DspGraph::new(
+            nodes,
+            node_ids,
+            node_type_ids,
+            node_versions,
+            connections,
+            process_order,
+            output_node,
+            buffers,
+            output_buffer_map,
+        ),
+        fresh_ids,
+    })
 }
 
 fn resolve_connections(
@@ -433,7 +447,7 @@ mod tests {
         let last_sample_before = buf[63];
 
         // Recompile with reuse — oscillator should keep its phase
-        let mut graph2 = compile_with_reuse(&ir, &registry, Some(graph1), 48000, 64).unwrap();
+        let mut graph2 = compile_with_reuse(&ir, &registry, Some(graph1), 48000, 64).unwrap().graph;
         let mut buf2 = vec![0.0_f32; 64];
         graph2.process(&mut buf2);
         let first_sample_after = buf2[0];
@@ -476,7 +490,7 @@ mod tests {
             exposed_controls: HashMap::new(),
         };
 
-        let mut graph2 = compile_with_reuse(&ir2, &registry, Some(graph1), 48000, 64).unwrap();
+        let mut graph2 = compile_with_reuse(&ir2, &registry, Some(graph1), 48000, 64).unwrap().graph;
         let mut buf = vec![0.0_f32; 64];
         graph2.process(&mut buf);
 
@@ -496,7 +510,7 @@ mod tests {
         registry.reregister(oscillator_type_decl(), OscillatorFactory).unwrap();
 
         // Recompile with reuse — version mismatch, should NOT reuse
-        let mut graph2 = compile_with_reuse(&ir, &registry, Some(graph1), 48000, 64).unwrap();
+        let mut graph2 = compile_with_reuse(&ir, &registry, Some(graph1), 48000, 64).unwrap().graph;
         let mut buf = vec![0.0_f32; 64];
         graph2.process(&mut buf);
 
@@ -541,7 +555,7 @@ mod tests {
             exposed_controls: HashMap::new(),
         };
 
-        let mut graph2 = compile_with_reuse(&ir_1000, &registry, Some(graph1), 48000, 256).unwrap();
+        let mut graph2 = compile_with_reuse(&ir_1000, &registry, Some(graph1), 48000, 256).unwrap().graph;
         let mut buf_1000 = vec![0.0_f32; 256];
         graph2.process(&mut buf_1000);
 

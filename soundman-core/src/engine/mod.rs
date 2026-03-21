@@ -242,21 +242,24 @@ impl EngineController {
             "recompile_and_send: drained {returned_count} retired graphs, cache={has_cache}"
         );
 
-        let mut graph = compiler::compile_with_reuse(
+        let result = compiler::compile_with_reuse(
             &self.shadow_graph,
             &self.registry,
             self.cached_graph.take(),
             self.config.sample_rate,
             self.config.block_size,
         )?;
+        let mut graph = result.graph;
 
-        // Apply stored control values to the new graph. This ensures fresh
-        // nodes (cache miss) start with the correct state — e.g. gate=1.0 if
-        // a pattern just triggered it, freq=880 if pitch was set.
+        // Apply stored control values ONLY to fresh nodes (not reused).
+        // Reused nodes already have correct DSP state. Setting gate=1.0 on a
+        // reused node that was at gate=0.0 would cause a spurious ADSR trigger.
         for (label, &value) in &self.control_values {
             if let Some((node_id, param)) = self.exposed_controls.get(label) {
-                if let Err(e) = graph.set_param(node_id, param, value) {
-                    warn!("restore control {label} ({node_id}/{param}={value}): {e}");
+                if result.fresh_ids.iter().any(|id| id == node_id) {
+                    if let Err(e) = graph.set_param(node_id, param, value) {
+                        warn!("restore control {label} ({node_id}/{param}={value}): {e}");
+                    }
                 }
             }
         }
@@ -634,6 +637,48 @@ mod tests {
             exposed_controls: HashMap::new(),
         };
         assert!(!ctrl.is_additive_change(&changed_type));
+    }
+
+    #[test]
+    fn control_restore_does_not_retrigger_reused_nodes() {
+        // The live-coding scenario: kick is playing, user adds a snare voice.
+        // The graph reload must NOT re-trigger the kick (spurious ADSR attack).
+        // Control values should only be applied to FRESH nodes, not reused ones.
+        let config = EngineConfig { block_size: 256, ..Default::default() };
+        let (mut ctrl, mut proc) = engine(&config);
+
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        let mut buf = vec![0.0_f32; 256];
+
+        // Simulate pattern: set pitch=880, then let it play for several blocks.
+        ctrl.handle_message(ClientMessage::SetControl {
+            label: "pitch".into(),
+            value: 880.0,
+        }).unwrap();
+        for _ in 0..10 {
+            proc.process(&mut buf);
+        }
+
+        // Capture the steady-state output BEFORE reload.
+        proc.process(&mut buf);
+        let energy_before: f32 = buf.iter().map(|s| s * s).sum();
+        // Now do a SECOND load to populate the cache, then a THIRD to get reuse.
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        for _ in 0..20 { proc.process(&mut buf); } // crossfade completes, graph returned
+
+        // THIRD load — now cached_graph is populated, osc1 will be REUSED.
+        // The reused osc1 must NOT have its state disturbed by control_values.
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        proc.process(&mut buf);
+
+        // With reuse, the oscillator continues from its current phase.
+        // The output energy should be similar to before (no dip from re-trigger).
+        let energy_after: f32 = buf.iter().map(|s| s * s).sum();
+        assert!(
+            energy_after > energy_before * 0.5,
+            "reused node output should not dip after graph reload \
+             (before={energy_before}, after={energy_after})"
+        );
     }
 
     #[test]
