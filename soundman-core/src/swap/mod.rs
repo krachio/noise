@@ -61,6 +61,7 @@ impl GraphSwapper {
                     }
                 }
                 Command::SetMasterGain(gain) => self.master_gain = gain,
+                Command::SetCrossfade(samples) => self.crossfade_samples = samples,
                 Command::Shutdown => {}
             }
         }

@@ -207,6 +207,12 @@ impl EngineController {
         self.registry.type_ids().into_iter().map(str::to_owned).collect()
     }
 
+    /// Update the crossfade duration for subsequent graph swaps.
+    /// Sent to the audio thread via the lock-free command channel.
+    pub fn set_crossfade_samples(&mut self, samples: usize) {
+        self.send_command(Command::SetCrossfade(samples));
+    }
+
     fn recompile_and_send(&mut self) -> Result<(), CompileError> {
         // Drain any retired graphs returned from the audio thread
         let mut returned_count = 0;

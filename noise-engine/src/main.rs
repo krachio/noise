@@ -27,6 +27,19 @@ const BEATS_PER_CYCLE: f64 = 4.0;
 const LOOKAHEAD: Duration = Duration::from_millis(100);
 const MAX_SLEEP: Duration = Duration::from_millis(1);
 
+/// Crossfade = 1/4 beat (one 16th note). Always musically proportional to BPM.
+/// | BPM | 1/4 beat |
+/// |-----|----------|
+/// | 60  | 250ms    |
+/// | 120 | 125ms    |
+/// | 138 | 109ms    |
+/// | 180 | 83ms     |
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn crossfade_samples(bpm: f64, sample_rate: u32) -> usize {
+    let quarter_beat_secs = 60.0 / bpm / 4.0;
+    (quarter_beat_secs * f64::from(sample_rate)) as usize
+}
+
 /// Commands routed from the IPC thread to the main loop.
 /// Single channel, single try_recv(), single match.
 enum LoopCommand {
@@ -213,6 +226,12 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                             return Ok(());
                         }
                         ClientMessage::LoadGraph(ir) => {
+                            // Set BPM-relative crossfade before loading the graph.
+                            let cf = crossfade_samples(
+                                pattern_engine.bpm(),
+                                config.sample_rate,
+                            );
+                            audio_engine.controller_mut().set_crossfade_samples(cf);
                             if let Err(e) = audio_engine.load_graph(ir) {
                                 warn!("load_graph: {e}");
                             }

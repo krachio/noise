@@ -9,6 +9,8 @@ pub enum Command {
     SetParam { node_id: String, name: String, value: f32 },
     /// Set the master output gain.
     SetMasterGain(f32),
+    /// Update the crossfade duration (in samples) for subsequent graph swaps.
+    SetCrossfade(usize),
     /// Signal engine shutdown.
     Shutdown,
 }
@@ -21,6 +23,7 @@ impl std::fmt::Debug for Command {
                 write!(f, "Command::SetParam({node_id}/{name} = {value})")
             }
             Self::SetMasterGain(gain) => write!(f, "Command::SetMasterGain({gain})"),
+            Self::SetCrossfade(samples) => write!(f, "Command::SetCrossfade({samples})"),
             Self::Shutdown => write!(f, "Command::Shutdown"),
         }
     }
