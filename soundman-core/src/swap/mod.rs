@@ -53,11 +53,14 @@ impl GraphSwapper {
                 Command::SwapGraph(new_graph) => self.begin_swap(new_graph),
                 Command::SetParam { node_id, name, value } => {
                     if let Some(graph) = &mut self.active {
-                        // Audio thread: no logging/allocation on hot path.
-                        // set_param only fails for unknown node/param — a programming
-                        // error caught by debug_assert in dev builds.
                         let result = graph.set_param(&node_id, &name, value);
                         debug_assert!(result.is_ok(), "set_param failed: {node_id}/{name}={value}");
+                    }
+                    // Forward to retiring graph during crossfade so it keeps
+                    // receiving pattern triggers. Without this, the old graph's
+                    // ADSR envelopes decay to silence during the blend.
+                    if let Some(graph) = &mut self.retiring {
+                        let _ = graph.set_param(&node_id, &name, value);
                     }
                 }
                 Command::SetMasterGain(gain) => self.master_gain = gain,
@@ -91,8 +94,8 @@ impl GraphSwapper {
                     new_graph.process(&mut self.fade_buf_new[..len]);
                 }
 
-                // Linear crossfade
-                let total = self.crossfade_samples as f32;
+                // Linear crossfade (guard: total=0 → skip blend, use new graph only)
+                let total = self.crossfade_samples.max(1) as f32;
                 for (i, sample) in output.iter_mut().enumerate() {
                     let remaining_f = (samples_remaining as f32 - i as f32).max(0.0);
                     let fade_out = remaining_f / total;
@@ -425,6 +428,59 @@ mod tests {
         assert!(
             count_crossings(&buf2) > count_crossings(&buf1),
             "880 Hz should have more crossings than 440 Hz"
+        );
+    }
+
+    #[test]
+    fn set_param_reaches_retiring_graph_during_crossfade() {
+        // During crossfade, SetParam must reach BOTH active and retiring graphs.
+        // Test: set freq=880 during crossfade. The retiring graph (started at 440)
+        // must change to 880. If SetParam only goes to active, the retiring graph
+        // stays at 440 and the crossfade blend has mismatched frequencies.
+        let registry = test_registry();
+        let block_size = 256;
+        let crossfade_samples = 512; // 2 blocks
+
+        let graph1 = make_graph(&registry, 440.0, block_size);
+        let graph2 = make_graph(&registry, 440.0, block_size);
+
+        let mut swapper = GraphSwapper::new(crossfade_samples, block_size);
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(graph1)));
+
+        let mut buf = vec![0.0_f32; block_size];
+        swapper.process(&mut buf); // establish oscillator
+
+        // Trigger crossfade: graph1 → retiring, graph2 → active.
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(graph2)));
+        assert!(swapper.is_crossfading());
+
+        // Set freq=880 during crossfade. Must affect BOTH graphs.
+        swapper.drain_commands(std::iter::once(Command::SetParam {
+            node_id: "osc1".into(),
+            name: "freq".into(),
+            value: 880.0,
+        }));
+
+        // Process during crossfade.
+        swapper.process(&mut buf);
+        let crossings_during: usize = buf.windows(2)
+            .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
+            .count();
+
+        // After crossfade completes, process at 880Hz for reference.
+        swapper.process(&mut buf); // finishes crossfade
+        swapper.process(&mut buf); // pure 880Hz
+        let crossings_after: usize = buf.windows(2)
+            .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
+            .count();
+
+        // If retiring graph got the SetParam, crossings_during ≈ crossings_after
+        // (both graphs at 880). If not, crossings_during is a blend of 440+880.
+        // The blend would have ~fewer clear crossings due to interference.
+        assert!(
+            crossings_during >= crossings_after / 2,
+            "retiring graph should have received SetParam during crossfade \
+             (during={crossings_during}, after={crossings_after})"
         );
     }
 }
