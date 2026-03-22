@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from krach.patterns.pattern import Pattern, rest
 
-from krach._mixer import hit, note
+from krach._mixer import VoiceMixer, hit, note
 
 
 def p(notation: str, **kwargs: float) -> Pattern:
@@ -76,3 +76,7 @@ def _parse_token(token: str | list[str], **kwargs: float) -> Pattern:
 
     # Note name
     return note(token, **kwargs)
+
+
+# Attach p() onto VoiceMixer (deferred to avoid circular import at _mixer level).
+VoiceMixer.p = staticmethod(p)  # type: ignore[assignment]

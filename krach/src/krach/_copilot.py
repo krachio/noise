@@ -68,7 +68,7 @@ def build_context(state: SessionState) -> str:
         f"- Loaded nodes: {list(state.nodes)}",
     ]
     if state.active_voices:
-        lines.append("- Active voices (use mix.note/mix.hit/mix.seq with these):")
+        lines.append("- Active voices (use kr.note/kr.hit/kr.seq with these):")
         for vname, type_id, gain, params in state.active_voices:
             labels = ", ".join(f"{vname}_{p}" for p in params)
             lines.append(f"  - {vname} ({type_id}, gain={gain}): {labels}")

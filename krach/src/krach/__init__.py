@@ -5,6 +5,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from krach._mixer import VoiceMixer
+
 
 def _repo_root() -> Path:
     return Path(__file__).parent.parent.parent.parent
@@ -19,16 +21,26 @@ def _wait_for_socket(path: Path, timeout: float = 5.0) -> bool:
     return False
 
 
-def main() -> None:
+def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> VoiceMixer:
+    """Start krach-engine and return a connected VoiceMixer.
+
+    ``bpm``: initial tempo.
+    ``master``: master output gain (0.0-1.0).
+    ``build``: if True, build krach-engine before starting.
+    """
+    from krach.patterns import Session
+    from krach._copilot import parse_dsp_controls
+
     repo = _repo_root()
     engine_bin = repo / "target" / "debug" / "krach-engine"
 
-    print("building krach-engine...")
-    subprocess.run(
-        ["cargo", "build", "--bin", "krach-engine", "-q"],
-        cwd=repo,
-        check=True,
-    )
+    if build:
+        print("building krach-engine...")
+        subprocess.run(
+            ["cargo", "build", "--bin", "krach-engine", "-q"],
+            cwd=repo,
+            check=True,
+        )
 
     engine_sock = Path(tempfile.gettempdir()) / "krach-engine.sock"
     dsp_dir = Path.home() / ".krach" / "dsp"
@@ -66,54 +78,61 @@ def main() -> None:
     if not _wait_for_socket(engine_sock):
         raise RuntimeError("krach-engine socket not ready after 5s")
 
-    # ── imports ──────────────────────────────────────────────────────────────
-    from krach.patterns import Session
-    from krach.patterns.pattern import rest
-    from faust_dsl import Signal, control
-    from faust_dsl.lib.filters import bandpass, highpass, lowpass
-    from faust_dsl.lib.noise import white_noise
-    from faust_dsl.lib.oscillators import phasor, saw, sine_osc, square
-    from faust_dsl.music.effects import reverb
-    from faust_dsl.music.envelopes import adsr
-
-    import anthropic
-
-    from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, parse_dsp_controls, split_cells
-    from krach._mininotation import p
-    from krach._mixer import (
-        VoiceMixer, dsp, hit, mod_exp, mod_ramp,
-        mod_ramp_down, mod_sine, mod_square, mod_tri, note, ramp, seq,
-    )
-    from krach._pitch import NOTES as _NOTES, ftom, mtof, parse_note
-
     mm = Session(socket_path=str(engine_sock))
     mm.connect()
 
     # Pre-populate controls from DSP files already on disk (previous sessions).
-    _node_controls: dict[str, tuple[str, ...]] = {}
+    node_controls: dict[str, tuple[str, ...]] = {}
     for _p in dsp_dir.rglob("*.dsp"):
-        _controls = parse_dsp_controls(_p.read_text())
-        if _controls:
+        controls = parse_dsp_controls(_p.read_text())
+        if controls:
             _rel = _p.relative_to(dsp_dir).with_suffix("")
-            _node_controls[f"faust:{_rel}"] = _controls
+            node_controls[f"faust:{_rel}"] = controls
 
-    mix = VoiceMixer(session=mm, dsp_dir=dsp_dir, node_controls=_node_controls)
+    kr = VoiceMixer(session=mm, dsp_dir=dsp_dir, node_controls=node_controls)
+    kr.tempo = bpm
+    kr.master = master
+
+    # Ensure _mininotation is imported (attaches VoiceMixer.p at import time).
+    import krach._mininotation  # type: ignore[reportUnusedImport]  # attaches VoiceMixer.p
+
+    # Wait for engine to finish loading DSP files (hot-reload at startup).
+    deadline = time.monotonic() + 10.0
+    while time.monotonic() < deadline:
+        try:
+            mm.list_nodes()
+            break
+        except (TimeoutError, ConnectionError):
+            time.sleep(0.1)
+    else:
+        raise RuntimeError("krach-engine not ready after 10s")
+
+    return kr
+
+
+def main() -> None:
+    import anthropic
+
+    from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, split_cells
+    from krach._pitch import NOTES as _NOTES
+    import krach.dsp as krs
+
+    kr = connect()
+
     _user_ns_keys: tuple[str, ...] = ()  # populated after user_ns is built
 
     def _session_state() -> SessionState:
         return SessionState(
-            bpm=mix.tempo,
-            playing=tuple(k for k, v in mix.slots.items() if v.playing),
-            stopped=tuple(k for k, v in mix.slots.items() if not v.playing),
-            nodes=tuple(mix.node_controls.keys()),
-            node_controls=tuple(mix.node_controls.items()),
+            bpm=kr.tempo,
+            playing=tuple(k for k, v in kr.slots.items() if v.playing),
+            stopped=tuple(k for k, v in kr.slots.items() if not v.playing),
+            nodes=tuple(kr.node_controls.keys()),
+            node_controls=tuple(kr.node_controls.items()),
             in_scope=_user_ns_keys,
             active_voices=tuple(
-                (name, v.type_id, v.gain, v.controls) for name, v in mix.voice_data.items()
+                (name, v.type_id, v.gain, v.controls) for name, v in kr.voice_data.items()
             ),
         )
-
-    # dsp decorator imported from _mixer — replaces the old dsp() function
 
     def status() -> None:
         """Print current session state: BPM, slots, loaded nodes."""
@@ -152,77 +171,31 @@ def main() -> None:
         if _cell_queue:
             print(f"\n  ({len(_cell_queue)} more cell(s) — call cn() to advance)")
 
-    # Wait for engine to finish loading DSP files (hot-reload at startup).
-    _engine_deadline = time.monotonic() + 10.0
-    while time.monotonic() < _engine_deadline:
-        try:
-            nodes = mm.list_nodes()
-            break
-        except (TimeoutError, ConnectionError):
-            time.sleep(0.1)
-    else:
-        raise RuntimeError("krach-engine not ready after 10s")
-
-    # nodes list used for the banner only; status() reads live from mix._node_controls.
+    # Bind session helpers onto kr instance
+    kr.status = status  # type: ignore[attr-defined]
+    kr.c = c  # type: ignore[attr-defined]
+    kr.cn = cn  # type: ignore[attr-defined]
 
     print()
-    print("  ██╗  ██╗██████╗  █████╗  ██████╗██╗  ██╗")
-    print("  ██║ ██╔╝██╔══██╗██╔══██╗██╔════╝██║  ██║")
-    print("  █████╔╝ ██████╔╝███████║██║     ███████║")
-    print("  ██╔═██╗ ██╔══██╗██╔══██║██║     ██╔══██║")
-    print("  ██║  ██╗██║  ██║██║  ██║╚██████╗██║  ██║")
-    print("  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝")
+    print("  \u2588\u2588\u2557  \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557  \u2588\u2588\u2557")
+    print("  \u2588\u2588\u2551 \u2588\u2588\u2554\u255d\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2550\u2550\u255d\u2588\u2588\u2551  \u2588\u2588\u2551")
+    print("  \u2588\u2588\u2588\u2588\u2588\u2554\u255d \u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551\u2588\u2588\u2551     \u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551")
+    print("  \u2588\u2588\u2554\u2550\u2588\u2588\u2557 \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551\u2588\u2588\u2551     \u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551")
+    print("  \u2588\u2588\u2551  \u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551")
+    print("  \u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d")
     print()
-    print(f"  engine   {engine_sock}")
-    print(f"  log      {log_path}")
-    print(f"  nodes    {nodes}")
-    print(f"  dsp dir  {dsp_dir}")
-    print()
-    print("  in scope: mix  dsp()  note()  hit()  seq()  p()  rest  ramp()  mtof  ftom  parse_note"
-          "  C0..B8  status()  c()  cn()"
-          "  mod_sine  mod_tri  mod_ramp  mod_ramp_down  mod_square  mod_exp"
-          "  + faust-dsl: control sine_osc saw lowpass adsr ...")
+    print(f"  kr    VoiceMixer — kr.voice(), kr.play(), kr.note(), kr.hit(), ...")
+    print(f"  krs   krach.dsp  — krs.Signal, krs.control(), krs.saw(), krs.lowpass(), ...")
     print()
 
     import IPython
 
-    user_ns = {
-        # Primary API — voices and patterns
-        "mix": mix,
-        "rest": rest,
-        # Free pattern builders (shadow krach.patterns.pattern.note)
-        "note": note,
-        "hit": hit,
-        "seq": seq,
-        "p": p,
-        "ramp": ramp,
-        # Pitch utilities
-        "mtof": mtof,
-        "ftom": ftom,
-        "parse_note": parse_note,
+    user_ns: dict[str, object] = {
+        "kr": kr,
+        "krs": krs,
+        # Note constants for convenience (C0..B8)
         **_NOTES,
-        # Synth design (faust-dsl)
-        "dsp": dsp,
-        "control": control,
-        "Signal": Signal,
-        "sine_osc": sine_osc,
-        "phasor": phasor,
-        "saw": saw,
-        "square": square,
-        "lowpass": lowpass,
-        "highpass": highpass,
-        "bandpass": bandpass,
-        "white_noise": white_noise,
-        "adsr": adsr,
-        "reverb": reverb,
-        # Mod patterns
-        "mod_sine": mod_sine,
-        "mod_tri": mod_tri,
-        "mod_ramp": mod_ramp,
-        "mod_ramp_down": mod_ramp_down,
-        "mod_square": mod_square,
-        "mod_exp": mod_exp,
-        # Session
+        # Compat aliases (will be removed in future)
         "status": status,
         "c": c,
         "cn": cn,
@@ -235,4 +208,4 @@ def main() -> None:
         banner2="",
     )
 
-    mm.disconnect()
+    kr.disconnect()

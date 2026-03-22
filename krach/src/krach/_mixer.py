@@ -24,6 +24,7 @@ from krach.patterns.pattern import ctrl as _ctrl
 from krach.patterns.pattern import freeze as _freeze
 from krach.patterns.pattern import rest as _rest
 
+from krach._pitch import ftom as _ftom
 from krach._pitch import mtof as _mtof
 from krach._pitch import parse_note as _parse_note
 
@@ -621,7 +622,29 @@ class VoiceMixer:
     Each voice is a FAUST DSP node (string type_id or Python function) with
     an independent gain stage.  Adding/removing voices rebuilds the soundman
     graph transparently.  ``gain()`` updates are instant (no rebuild).
+
+    Pattern builders and pitch utilities are exposed as static methods so
+    that ``kr.note()``, ``kr.hit()``, etc. work when ``kr`` is an instance.
     """
+
+    # ── Pattern builders (static — no instance state) ─────────────────────
+    note = staticmethod(note)
+    hit = staticmethod(hit)
+    seq = staticmethod(seq)
+    rest = staticmethod(_rest)
+    ramp = staticmethod(ramp)
+    mod_sine = staticmethod(mod_sine)
+    mod_tri = staticmethod(mod_tri)
+    mod_ramp = staticmethod(mod_ramp)
+    mod_ramp_down = staticmethod(mod_ramp_down)
+    mod_square = staticmethod(mod_square)
+    mod_exp = staticmethod(mod_exp)
+    dsp = staticmethod(dsp)
+
+    # ── Pitch utilities (static) ──────────────────────────────────────────
+    mtof = staticmethod(_mtof)
+    ftom = staticmethod(_ftom)
+    parse_note = staticmethod(_parse_note)
 
     def __init__(
         self,
@@ -949,12 +972,12 @@ class VoiceMixer:
         return list(self._scenes.keys())
 
     def load(self, path: str) -> None:
-        """Load and execute a Python file with ``mix`` in scope."""
+        """Load and execute a Python file with ``kr`` (and ``mix`` compat) in scope."""
         p = Path(path)
         if not p.exists():
             raise FileNotFoundError(f"scene file not found: {path}")
         code = p.read_text()
-        ns: dict[str, object] = {"mix": self}
+        ns: dict[str, object] = {"kr": self, "mix": self}
         exec(compile(code, path, "exec"), ns)  # noqa: S102
 
     def _is_voice_or_bus(self, name: str) -> bool:
@@ -1293,6 +1316,10 @@ class VoiceMixer:
                 lines.append(f"    {bname}: {b.type_id}  gain={b.gain:.2f}")
 
         return "\n".join(lines)
+
+    def disconnect(self) -> None:
+        """Disconnect from the audio engine."""
+        self._session.disconnect()
 
     @property
     def master(self) -> float:
