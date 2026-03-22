@@ -74,6 +74,7 @@ def main() -> None:
 
     from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, parse_dsp_controls, split_cells
     from krach._mixer import VoiceMixer, dsp
+    from krach._pitch import NOTES as _NOTES, ftom, mtof
 
     mm = Session(socket_path=str(engine_sock))
     mm.connect()
@@ -93,8 +94,8 @@ def main() -> None:
             bpm=mm.tempo,
             playing=tuple(k for k, v in mm.slots.items() if v.playing),
             stopped=tuple(k for k, v in mm.slots.items() if not v.playing),
-            nodes=tuple(mix._node_controls.keys()),
-            node_controls=tuple(mix._node_controls.items()),
+            nodes=tuple(mix.node_controls.keys()),
+            node_controls=tuple(mix.node_controls.items()),
             in_scope=_user_ns_keys,
             active_voices=tuple(
                 (name, v.type_id, v.gain, v.controls) for name, v in mix.voices.items()
@@ -165,7 +166,7 @@ def main() -> None:
     print(f"  nodes    {nodes}")
     print(f"  dsp dir  {dsp_dir}")
     print()
-    print("  in scope: mix  mm  dsp()  rest  status()  c()  cn()"
+    print("  in scope: mix  mm  dsp()  rest  mtof  ftom  C0..B8  status()  c()  cn()"
           "  + faust-dsl: control sine_osc saw lowpass adsr ...")
     print()
 
@@ -176,6 +177,10 @@ def main() -> None:
         "mix": mix,
         "mm": mm,
         "rest": rest,
+        # Pitch utilities
+        "mtof": mtof,
+        "ftom": ftom,
+        **_NOTES,
         # Synth design (faust-dsl)
         "dsp": dsp,
         "control": control,

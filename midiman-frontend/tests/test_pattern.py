@@ -109,19 +109,19 @@ class TestOverMethod:
         assert p.node.factor == (3, 1)
 
 
-class TestScaleMethod:
-    def test_scale_gt_1_produces_fast(self) -> None:
-        p = note(60).scale(2)
+class TestFastMethod:
+    def test_fast_gt_1_produces_fast(self) -> None:
+        p = note(60).fast(2)
         assert isinstance(p.node, Fast)
         assert p.node.factor == (2, 1)
 
-    def test_scale_lt_1_produces_slow(self) -> None:
-        p = note(60).scale(0.5)
+    def test_fast_lt_1_produces_slow(self) -> None:
+        p = note(60).fast(0.5)
         assert isinstance(p.node, Slow)
         assert p.node.factor == (2, 1)
 
-    def test_scale_float(self) -> None:
-        p = note(60).scale(1.5)
+    def test_fast_float(self) -> None:
+        p = note(60).fast(1.5)
         assert isinstance(p.node, Fast)
         assert p.node.factor == (3, 2)
 
@@ -170,10 +170,10 @@ class TestTransformMethods:
 
 
 class TestImmutability:
-    def test_scale_does_not_mutate(self) -> None:
+    def test_fast_does_not_mutate(self) -> None:
         p = note(60)
         original_node = p.node
-        _ = p.scale(2)
+        _ = p.fast(2)
         assert p.node is original_node
 
     def test_add_does_not_mutate(self) -> None:
@@ -184,9 +184,31 @@ class TestImmutability:
         assert a.node is original
 
 
+class TestOverZeroValidation:
+    def test_over_zero_raises(self) -> None:
+        import pytest
+        with pytest.raises(ValueError, match="positive cycles"):
+            note(60).over(0)
+
+    def test_over_negative_raises(self) -> None:
+        import pytest
+        with pytest.raises(ValueError, match="positive cycles"):
+            note(60).over(-1)
+
+    def test_fast_zero_raises(self) -> None:
+        import pytest
+        with pytest.raises(ValueError, match="positive factor"):
+            note(60).fast(0)
+
+    def test_fast_negative_raises(self) -> None:
+        import pytest
+        with pytest.raises(ValueError, match="positive factor"):
+            note(60).fast(-0.5)
+
+
 class TestChaining:
     def test_chain_builds_nested_tree(self) -> None:
-        p = note(60).scale(2).reverse().thin(0.1)
+        p = note(60).fast(2).reverse().thin(0.1)
         assert isinstance(p.node, Degrade)
         assert isinstance(p.node.child, Rev)
         rev_child = p.node.child

@@ -109,10 +109,11 @@ def build_graph_ir(voices: dict[str, Voice]) -> GraphIr:
     return builder.build()
 
 
-def build_step(
+def build_note(
     voice_name: str,
     controls: tuple[str, ...],
     pitch: float | None = None,
+    vel: float = 1.0,
     **params: float,
 ) -> Pattern:
     """Build a frozen trigger compound: onset values stacked + reset sequenced.
@@ -126,11 +127,16 @@ def build_step(
         raise ValueError(f"voice '{voice_name}' has no 'freq' control — pitch argument ignored")
     if pitch is not None:
         _check_finite(pitch, f"pitch for '{voice_name}'")
+    if vel != 1.0:
+        _check_finite(vel, f"vel for '{voice_name}'")
 
     onset_atoms: list[Pattern] = []
 
     if pitch is not None and "freq" in controls:
         onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}_freq"), OscFloat(pitch)))
+
+    if vel != 1.0 and "vel" in controls:
+        onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}_vel"), OscFloat(vel)))
 
     for param, value in params.items():
         if param in controls:
@@ -151,8 +157,6 @@ def build_step(
 
     if "gate" in controls:
         reset = _osc("/soundman/set", OscStr(f"{voice_name}_gate"), OscFloat(0.0))
-        # Cat([onset, reset]) = trig at first half, reset at second half
-        # Freeze prevents flatten — counts as 1 atom in any outer Cat
         return _freeze(onset + reset)
     return _freeze(onset)
 
@@ -194,6 +198,7 @@ class VoiceMixer:
         self._voices: dict[str, Voice] = {}
         self._poly: dict[str, PolyVoice] = {}
         self._poly_alloc: dict[str, int] = {}  # round-robin counter per poly name
+        self._muted: dict[str, float] = {}  # name → gain before mute
         self._batching: bool = False
         self._graph_loaded: bool = False
 
@@ -270,8 +275,8 @@ class VoiceMixer:
         Raises ValueError if voices < 1.
 
         Each instance is named ``{name}_v0``, ``{name}_v1``, etc.
-        Use ``mix.step(name, freq)`` to trigger the next available instance
-        (round-robin), or ``mix.chord(name, f1, f2, f3)`` for simultaneous notes.
+        Use ``mix.note(name, freq)`` to trigger the next available instance
+        (round-robin), or ``mix.note(name, f1, f2, f3)`` for simultaneous notes.
         """
         if voices < 1:
             raise ValueError("poly requires at least 1 voice")
@@ -370,13 +375,74 @@ class VoiceMixer:
             )
             self._session.set_ctrl(f"{name}_gain", float(value))
 
-    def step(self, name: str, pitch: float | None = None, **params: float) -> Pattern:
-        """Melodic trigger: set freq + optional params + gate trig/reset.
+    def mute(self, name: str) -> None:
+        """Mute a voice — stores current gain, sets gain to 0."""
+        if name not in self._voices and name not in self._poly:
+            raise ValueError(f"voice '{name}' not found")
+        if name in self._poly:
+            self._muted[name] = self._poly[name].gain
+        else:
+            self._muted[name] = self._voices[name].gain
+        self.gain(name, 0.0)
 
-        For poly voices, allocates the next instance (round-robin).
+    def unmute(self, name: str) -> None:
+        """Unmute a voice — restores gain saved by mute()."""
+        if name not in self._muted:
+            return
+        self.gain(name, self._muted.pop(name))
+
+    def solo(self, name: str) -> None:
+        """Solo a voice — mutes all others, unmutes target."""
+        if name not in self._voices and name not in self._poly:
+            raise ValueError(f"voice '{name}' not found")
+        # Collect all top-level names (mono voices + poly parents)
+        all_names: set[str] = set()
+        for vname in self._voices:
+            all_names.add(vname)
+        for pname in self._poly:
+            all_names.add(pname)
+            # Remove poly instances from the set — they're managed via parent
+            pv = self._poly[pname]
+            for i in range(pv.count):
+                all_names.discard(f"{pname}_v{i}")
+        for n in all_names:
+            if n != name:
+                self.mute(n)
+        self.unmute(name)
+
+    def note(self, name: str, *pitches: float, vel: float = 1.0, **params: float) -> Pattern:
+        """Unified melodic trigger: single note, chord, or gate-only.
+
+        - 0 pitches: gate-only trigger (no freq set)
+        - 1 pitch: single note on mono or next poly instance
+        - N pitches on poly: simultaneous notes (one per instance), frozen stack
+        - N pitches on mono: raises ValueError
         """
+        if len(pitches) > 1:
+            if name not in self._poly:
+                raise ValueError(
+                    f"'{name}' is not a poly voice — cannot play {len(pitches)} pitches"
+                )
+            pv = self._poly[name]
+            if len(pitches) > pv.count:
+                raise ValueError(
+                    f"more pitches ({len(pitches)}) than voices ({pv.count}) for '{name}'"
+                )
+            atoms: list[Pattern] = []
+            for pitch in pitches:
+                inst = self._alloc_voice(name)
+                atoms.append(build_note(inst, self._voices[inst].controls, pitch, vel=vel, **params))
+            result = atoms[0]
+            for a in atoms[1:]:
+                result = result | a
+            return _freeze(result)
+        pitch = pitches[0] if pitches else None
         inst = self._alloc_voice(name)
-        return build_step(inst, self._voices[inst].controls, pitch, **params)
+        return build_note(inst, self._voices[inst].controls, pitch, vel=vel, **params)
+
+    def play(self, name: str, pattern: Pattern) -> None:
+        """Play a pattern on a named slot — delegates to the underlying Session."""
+        self._session.play(name, pattern)
 
     def hit(self, name: str, param: str) -> Pattern:
         """Percussive trigger: trig + reset on a specific control.
@@ -399,38 +465,15 @@ class VoiceMixer:
         if not notes:
             raise ValueError("seq requires at least one note")
         atoms: list[Pattern] = []
-        for note in notes:
-            if note is None:
+        for pitch in notes:
+            if pitch is None:
                 atoms.append(_rest())
             else:
-                atoms.append(self.step(name, note, **params))
+                atoms.append(self.note(name, pitch, **params))
         result = atoms[0]
         for a in atoms[1:]:
             result = result + a
         return result
-
-    def chord(self, name: str, *pitches: float, **params: float) -> Pattern:
-        """Simultaneous notes on a poly voice — one pitch per instance.
-
-        Returns a frozen stack so it counts as one atom for cycle division.
-        """
-        if name not in self._poly:
-            raise ValueError(f"'{name}' is not a poly voice — use mix.poly() first")
-        pv = self._poly[name]
-        if len(pitches) > pv.count:
-            raise ValueError(
-                f"more pitches ({len(pitches)}) than voices ({pv.count}) for '{name}'"
-            )
-        atoms: list[Pattern] = []
-        for pitch in pitches:
-            inst = self._alloc_voice(name)
-            atoms.append(build_step(inst, self._voices[inst].controls, pitch, **params))
-        if not atoms:
-            raise ValueError("chord requires at least one pitch")
-        result = atoms[0]
-        for a in atoms[1:]:
-            result = result | a  # Stack: fire simultaneously
-        return _freeze(result)
 
     def _alloc_voice(self, name: str) -> str:
         """Resolve a voice name to a concrete instance. For poly voices,
@@ -474,6 +517,7 @@ class VoiceMixer:
         self, name: str, target: float, bars: int, steps_per_bar: int
     ) -> None:
         """Schedule a gain fade for a single voice instance."""
+        self._session.hush(f"_fade_{name}")
         current = self._voices[name].gain
         total_steps = bars * steps_per_bar
         atoms: list[Pattern] = []
@@ -498,16 +542,24 @@ class VoiceMixer:
         graph loading until the context manager exits.
         """
         self._batching = True
+        ok = False
         try:
             yield
+            ok = True
         finally:
             self._batching = False
-            self._flush()
+            if ok:
+                self._flush()
 
     @property
     def voices(self) -> dict[str, Voice]:
         """Read-only snapshot of active voices."""
         return dict(self._voices)
+
+    @property
+    def node_controls(self) -> dict[str, tuple[str, ...]]:
+        """Read-only snapshot of known node type controls."""
+        return dict(self._node_controls)
 
     def _flush(self) -> None:
         """Wait for all pending FAUST types and rebuild the graph once."""

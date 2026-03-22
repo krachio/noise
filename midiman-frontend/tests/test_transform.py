@@ -2,13 +2,13 @@ from __future__ import annotations
 
 from midiman_frontend.ir import Degrade, Fast, Rev
 from midiman_frontend.pattern import note
-from midiman_frontend.transform import reverse, scale, thin
+from midiman_frontend.transform import reverse, fast, thin
 
 
 class TestTransformApplication:
-    def test_scale_matches_method(self) -> None:
+    def test_fast_matches_method(self) -> None:
         p = note(60)
-        assert scale(2)(p).node == p.scale(2).node
+        assert fast(2)(p).node == p.fast(2).node
 
     def test_reverse_matches_method(self) -> None:
         p = note(60)
@@ -22,14 +22,14 @@ class TestTransformApplication:
 class TestTransformComposition:
     def test_rshift_composes(self) -> None:
         p = note(60)
-        fx = scale(2) >> thin(0.1)
+        fx = fast(2) >> thin(0.1)
         result = fx(p)
-        expected = p.scale(2).thin(0.1)
+        expected = p.fast(2).thin(0.1)
         assert result.node == expected.node
 
     def test_triple_compose(self) -> None:
         p = note(60)
-        fx = scale(2) >> reverse >> thin(0.1)
+        fx = fast(2) >> reverse >> thin(0.1)
         result = fx(p)
         assert isinstance(result.node, Degrade)
         assert isinstance(result.node.child, Rev)
@@ -40,7 +40,7 @@ class TestTransformComposition:
 
 class TestTransformImmutability:
     def test_compose_returns_new(self) -> None:
-        a = scale(2)
+        a = fast(2)
         b = thin(0.1)
         c = a >> b
         p = note(60)

@@ -123,9 +123,9 @@ class TestBatchValidation:
 
 
 class TestPatternMethodValidation:
-    def test_scale_zero_raises(self) -> None:
+    def test_fast_zero_raises(self) -> None:
         with pytest.raises(ValueError):
-            note(60).scale(0)
+            note(60).fast(0)
 
     def test_spread_pulses_exceed_steps_raises(self) -> None:
         with pytest.raises(ValueError):

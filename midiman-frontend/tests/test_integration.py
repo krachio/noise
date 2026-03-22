@@ -4,7 +4,7 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from midiman_frontend import Session, note, rest, scale, thin
+from midiman_frontend import Session, note, rest, fast, thin
 
 
 def _stub_ok_response(mock_cls: MagicMock) -> None:
@@ -33,7 +33,7 @@ class TestPublicImports:
             note,
             rest,
             reverse,
-            scale,
+            fast,
             shift,
             spread,
             thin,
@@ -43,7 +43,7 @@ class TestPublicImports:
             x is not None
             for x in [
                 KernelError, Pattern, Session, SlotState, note, rest, cc,
-                scale, reverse, shift, spread, thin,
+                fast, reverse, shift, spread, thin,
             ]
         )
 
@@ -96,7 +96,7 @@ class TestEndToEnd:
     def test_composable_transforms(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
-            fx = scale(2) >> thin(0.1)
+            fx = fast(2) >> thin(0.1)
             s.play("drums", fx(note(36) + rest() + note(38) + rest()))
 
         msgs = _parse_sent(mock_cls.return_value)

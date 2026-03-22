@@ -66,12 +66,16 @@ class Pattern:
     # ── Time transforms ──────────────────────────────────────────────────
 
     def over(self, cycles: int | float) -> Pattern:
+        if cycles <= 0:
+            raise ValueError(f"over() requires positive cycles, got {cycles}")
         r = _to_rational(cycles)
         if r[0] * r[1] > 0 and r[0] >= r[1]:
             return Pattern(Slow(factor=r, child=self.node))
         return Pattern(Fast(factor=_invert_rational(r), child=self.node))
 
-    def scale(self, factor: int | float) -> Pattern:
+    def fast(self, factor: int | float) -> Pattern:
+        if factor <= 0:
+            raise ValueError(f"fast() requires a positive factor, got {factor}")
         r = _to_rational(factor)
         if r[0] * r[1] > 0 and r[0] >= r[1]:
             return Pattern(Fast(factor=r, child=self.node))

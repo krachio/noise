@@ -65,11 +65,15 @@ mix.voice("bass", acid_bass, gain=0.3)
 IMPORTANT: Only use string type_ids that appear in "Node controls" in the session state.
 If a type is not listed, define it as a Python function instead.
 
-### Building patterns with mix.hit() and mix.step()
+### Building patterns with mix.note() and mix.hit()
 ```python
 # Melodic trigger (set freq + optional params + gate trig/reset):
-mix.step("bass", 55.0)                      # → bass_freq=55, gate trig/reset
-mix.step("bass", 55.0, cutoff=1200.0)       # → also sets bass_cutoff=1200
+mix.note("bass", mtof(A2))                       # → bass_freq, gate trig/reset
+mix.note("bass", mtof(A2), cutoff=1200.0)        # → also sets bass_cutoff=1200
+mix.note("bass", mtof(A2), vel=0.7)              # → also sets bass_vel=0.7
+
+# Chord on poly voice (multiple pitches → one per instance):
+mix.note("pad", mtof(C4), mtof(E4), mtof(G4))    # → 3-note chord
 
 # Percussive trigger (trig + reset on a single control like "gate"):
 mix.hit("kick", "gate")    # → kick_gate 1.0 then 0.0
@@ -77,9 +81,9 @@ mix.hit("kick", "gate")    # → kick_gate 1.0 then 0.0
 
 These return Pattern objects — use `+`, `*`, `.over()`, `.every()`, etc.:
 ```python
-mm.play("kick",  mix.hit("kick", "gate") * 4)
-mm.play("bass",  (mix.step("bass", 55) + mix.step("bass", 73) + rest() +
-                   mix.step("bass", 65, cutoff=1200)).over(2))
+mix.play("kick",  mix.hit("kick", "gate") * 4)
+mix.play("bass",  (mix.note("bass", mtof(A2)) + mix.note("bass", mtof(D3)) + rest() +
+                    mix.note("bass", mtof(E2), cutoff=1200)).over(2))
 ```
 
 ### Control naming convention
@@ -94,9 +98,9 @@ Labels are always `{voice_name}_{param}`. Example:
 ### Session control
 ```python
 mm.tempo = 128
-mm.play("kick", pat)    # assign pattern to slot, starts on next cycle
-mm.hush("kick")         # silence slot (resumable)
-mm.stop()               # hush all slots
+mix.play("kick", pat)   # assign pattern to slot, starts on next cycle
+mix.hush("kick")        # silence slot (resumable)
+mix.stop()              # hush all slots
 ```
 
 ### Pattern algebra
@@ -174,14 +178,9 @@ mix.voice("bass", acid_bass, gain=0.3)
 # --- Play patterns
 mm.tempo = 128
 
-mm.play("kick", mix.hit("kick", "gate") * 4)
-mm.play("hat",  (mix.hit("hat", "gate") + rest()) * 8)
-mm.play("bass", (
-    mix.step("bass", 55.0, cutoff=800.0) +
-    mix.step("bass", 73.4, cutoff=1200.0) +
-    rest() +
-    mix.step("bass", 65.4, cutoff=600.0)
-).over(2))
+mix.play("kick", mix.hit("kick", "gate") * 4)
+mix.play("hat",  (mix.hit("hat", "gate") + rest()) * 8)
+mix.play("bass", mix.seq("bass", mtof(A2), mtof(D3), None, mtof(E2)).over(2))
 ```
 
 ---
@@ -193,5 +192,6 @@ mm.play("bass", (
 - Adding a voice with `mix.voice("lead", ...)` never breaks kit/bass patterns
 - Pattern `+` divides the cycle equally — 4 atoms = 4 beats per cycle
 - Use `.over(2)` for patterns spanning multiple bars
-- F minor pentatonic (Hz): 87.3, 103.8, 116.5, 130.8, 155.6
-- A minor pentatonic (Hz): 55.0, 65.4, 73.4, 82.4, 110.0
+- Use `mtof(note)` to convert MIDI note numbers to Hz — e.g. `mtof(A2)` = 110.0
+- Note constants: C0–B8 (C4=60, A4=69). Sharps: Cs4, Ds4, Fs4, etc.
+- A minor pentatonic: A2, C3, D3, E3, A3 (mtof converts to Hz)

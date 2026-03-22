@@ -18,8 +18,8 @@ class Transform:
         return Transform(lambda p: right(left(p)))
 
 
-def scale(factor: int | float) -> Transform:
-    return Transform(lambda p: p.scale(factor))
+def fast(factor: int | float) -> Transform:
+    return Transform(lambda p: p.fast(factor))
 
 
 reverse: Transform = Transform(lambda p: p.reverse())
