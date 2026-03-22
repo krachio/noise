@@ -11,11 +11,12 @@ Engine logs to `~/.krach/engine.log`.
 ### Completed
 - ✅ Stage 1: Stability (master gain, bpm alias, voice/bus handles, copilot context)
 - ✅ Stage 2: Automation lanes (AutoShape, GraphSwapper integration, IPC, Python mod/fade)
-- ✅ Stage 3: Scenes + music-as-code (save/recall, mix.load())
-- ✅ Stage 5.1: Mini-notation parser (`p("x . x . x . . x")`)
+- ✅ Stage 3: Scenes + music-as-code (save/recall, kr.load())
+- ✅ Stage 5.1: Mini-notation parser (`kr.p("x . x . x . . x")`)
 - ✅ Stage 5.2: Library restructure (midiman-frontend merged into krach, Rust crates renamed)
 - ✅ Stage 5.3: Typed Control IR (Control(label, value) replaces Osc convention)
-- ✅ Stage 4.1: ADC input node (AdcNode + mix.input())
+- ✅ Stage 5.4: kr/krs namespace (two-symbol API, krach.connect(), staticmethod builders)
+- ✅ Stage 4.1: ADC input node (AdcNode + kr.input())
 - ✅ Stage 4.2: MIDI controller input (midi_map + CC→SetControl)
 
 ---
@@ -376,7 +377,7 @@ Stage 2.5  VoiceMixer mod/fade → automation (Python: use native automation)
 ─────────────────────────────────────────────────────────────
 Stage 3.1  Scene snapshots                (Python: save/recall)
 Stage 3.2  Scene serialization            (Python: export/load)
-Stage 3.3  Music as Python modules        (Python: mix.load())
+Stage 3.3  Music as Python modules        (Python: kr.load())
 ─────────────────────────────────────────────────────────────
 Stage 4.1  ADC input node                 (Rust: new node + CoreAudio input)
 Stage 4.2  MIDI controller input          (Rust + Python: CC mapping)
