@@ -912,28 +912,37 @@ class VoiceMixer:
         for name in list(self._muted):
             self.unmute(name)
 
+    def _is_voice_or_bus(self, name: str) -> bool:
+        """Check if name is a known voice, poly parent, or bus."""
+        return name in self._voices or name in self._poly or name in self._buses
+
     def play(self, target: str, pattern: Pattern) -> None:
         """Play a pattern on a voice or control path.
 
-        - Plain name (no ``/``): voice name — rewrites bare params to ``voice/param``
-        - Poly name: round-robin allocates instances (``pad_v0``, ``pad_v1``, ...)
-        - Path with ``/``: control path — rewrites ``"ctrl"`` placeholder to the label
+        - Known voice/bus name (exact match): binds bare params to ``voice/param``
+        - Poly voice: round-robin allocates instances
+        - Otherwise with ``/``: control path — rewrites ``"ctrl"`` placeholder
+        - Otherwise without ``/``: mono voice binding (may be a new slot)
         """
-        if "/" in target:
-            # Control path: rewrite "ctrl" placeholder to full path label
-            label = self._resolve_path(target)
-            bound = Pattern(_bind_ctrl(pattern.node, label))
-            slot = f"_ctrl_{target.replace('/', '_')}"
-            self._session.play(slot, bound)
-        elif target in self._poly:
+        if target in self._poly:
             # Poly voice: round-robin allocate instances during rewrite
             pv = self._poly[target]
             alloc = self._poly_alloc.get(target, 0)
             bound_node, alloc = _bind_voice_poly(pattern.node, target, pv.count, alloc)
             self._poly_alloc[target] = alloc
             self._session.play(target, Pattern(bound_node))
+        elif self._is_voice_or_bus(target):
+            # Known mono voice or bus: rewrite bare params to voice/param
+            bound = Pattern(_bind_voice(pattern.node, target))
+            self._session.play(target, bound)
+        elif "/" in target:
+            # Control path: rewrite "ctrl" placeholder to full path label
+            label = self._resolve_path(target)
+            bound = Pattern(_bind_ctrl(pattern.node, label))
+            slot = f"_ctrl_{target.replace('/', '_')}"
+            self._session.play(slot, bound)
         else:
-            # Mono voice: rewrite bare params to voice/param
+            # Unknown target without /: bind as voice name anyway
             bound = Pattern(_bind_voice(pattern.node, target))
             self._session.play(target, bound)
 
