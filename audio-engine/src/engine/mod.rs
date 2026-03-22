@@ -203,7 +203,11 @@ impl EngineController {
             }
             ClientMessage::SetAutomation { id, label, shape, lo, hi, period_secs, one_shot } => {
                 if let Some((node_id, param)) = self.exposed_controls.get(&label) {
-                    let period_samples = (period_secs * self.config.sample_rate as f64) as usize;
+                    let period_samples = if period_secs.is_finite() && period_secs > 0.0 {
+                        (period_secs * self.config.sample_rate as f64) as usize
+                    } else {
+                        0
+                    };
                     let auto_shape = parse_auto_shape(&shape);
                     let automation = Automation {
                         node_id: node_id.clone(),

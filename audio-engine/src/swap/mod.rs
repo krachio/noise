@@ -83,7 +83,11 @@ impl GraphSwapper {
 
     #[allow(clippy::cast_precision_loss)]
     pub fn process(&mut self, output: &mut [f32]) {
-        self.tick_automations(output.len());
+        // Clamp to pre-allocated buffer size — OS can deliver oversized buffers.
+        let len = output.len().min(self.fade_buf_old.len());
+        let output = &mut output[..len];
+
+        self.tick_automations(len);
         output.fill(0.0);
 
         match self.state {
@@ -93,8 +97,7 @@ impl GraphSwapper {
                 }
             }
             SwapState::Crossfading { samples_remaining } => {
-                let fade_len = output.len().min(samples_remaining);
-                let len = output.len();
+                let fade_len = len.min(samples_remaining);
 
                 self.fade_buf_old[..len].fill(0.0);
                 if let Some(old_graph) = &mut self.retiring {

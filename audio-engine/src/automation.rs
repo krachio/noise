@@ -82,10 +82,14 @@ impl Automation {
 
     /// Advance phase by `samples`. Wraps for looping, clamps for one-shot.
     pub fn advance(&mut self, samples: usize) {
+        if self.period_samples == 0 {
+            self.active = false;
+            return;
+        }
         self.phase += samples;
         if self.phase >= self.period_samples {
             if self.one_shot {
-                self.phase = self.period_samples.saturating_sub(1);
+                self.phase = self.period_samples - 1;
                 self.active = false;
             } else {
                 self.phase %= self.period_samples;
@@ -213,7 +217,7 @@ mod tests {
     }
 
     #[test]
-    fn test_automation_zero_period() {
+    fn test_automation_zero_period_eval_returns_lo() {
         let auto = Automation {
             node_id: "n".into(),
             param: "p".into(),
@@ -226,5 +230,22 @@ mod tests {
             one_shot: false,
         };
         assert!((auto.eval() - 42.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_automation_zero_period_advance_deactivates() {
+        let mut auto = Automation {
+            node_id: "n".into(),
+            param: "p".into(),
+            shape: AutoShape::Sine,
+            lo: 0.0,
+            hi: 1.0,
+            period_samples: 0,
+            phase: 0,
+            active: true,
+            one_shot: false,
+        };
+        auto.advance(256); // must not panic
+        assert!(!auto.active, "zero-period automation should deactivate");
     }
 }
