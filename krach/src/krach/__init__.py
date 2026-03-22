@@ -108,7 +108,7 @@ def main() -> None:
             node_controls=tuple(mix.node_controls.items()),
             in_scope=_user_ns_keys,
             active_voices=tuple(
-                (name, v.type_id, v.gain, v.controls) for name, v in mix.voices.items()
+                (name, v.type_id, v.gain, v.controls) for name, v in mix.voice_data.items()
             ),
         )
 

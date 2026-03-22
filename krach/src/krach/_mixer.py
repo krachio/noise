@@ -618,6 +618,8 @@ class VoiceMixer:
         self._patterns: dict[str, Pattern] = {}  # target → last unbound pattern
         self._batching: bool = False
         self._graph_loaded: bool = False
+        self._master_gain: float = 0.7
+        self._session.master_gain(self._master_gain)
 
     def _resolve_source(
         self,
@@ -1151,6 +1153,17 @@ class VoiceMixer:
         return "\n".join(lines)
 
     @property
+    def master(self) -> float:
+        """Master output gain (0.0-1.0)."""
+        return self._master_gain
+
+    @master.setter
+    def master(self, value: float) -> None:
+        _check_finite(value, "master gain")
+        self._master_gain = value
+        self._session.master_gain(value)
+
+    @property
     def tempo(self) -> float:
         """Current tempo (BPM), delegated to session."""
         return self._session.tempo
@@ -1158,6 +1171,15 @@ class VoiceMixer:
     @tempo.setter
     def tempo(self, bpm: float) -> None:
         self._session.tempo = bpm
+
+    @property
+    def bpm(self) -> float:
+        """Alias for tempo."""
+        return self._session.tempo
+
+    @bpm.setter
+    def bpm(self, value: float) -> None:
+        self._session.tempo = value
 
     @property
     def meter(self) -> float:
@@ -1186,9 +1208,19 @@ class VoiceMixer:
         return self._buses.get(name)
 
     @property
-    def voices(self) -> dict[str, Voice]:
-        """Read-only snapshot of active voices."""
+    def voice_data(self) -> dict[str, Voice]:
+        """Read-only snapshot of active voices as raw Voice structs."""
         return dict(self._voices)
+
+    @property
+    def voices(self) -> dict[str, VoiceHandle]:
+        """Active voices as name → VoiceHandle."""
+        return {name: VoiceHandle(self, name) for name in self._voices}
+
+    @property
+    def buses(self) -> dict[str, BusHandle]:
+        """Active buses as name → BusHandle."""
+        return {name: BusHandle(self, name) for name in self._buses}
 
     @property
     def node_controls(self) -> dict[str, tuple[str, ...]]:

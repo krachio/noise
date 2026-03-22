@@ -90,6 +90,22 @@ hit("kick")          # custom param
 # Sequence of notes/rests:
 seq(55.0, 73.0, None, 65.0)   # None = rest
 seq("C4", "E4", "G4")         # string pitches
+
+# seq() accepts both pitches AND note() objects:
+seq(note(220.0, cutoff=800.0), note(330.0, cutoff=1200.0), None, note(440.0))
+seq("A2", "D3", note("E2", vel=0.5), None)  # mix freely
+```
+
+### Common pattern recipes
+```python
+# 4-on-the-floor kick
+mix.play("kick", hit() * 4)
+
+# Offbeat hi-hat
+mix.play("hat", (rest() + hit()) * 4)
+
+# Simple bass line (A minor)
+mix.play("bass", seq("A2", "C3", "D3", "E3").over(2))
 ```
 
 ### Playing patterns

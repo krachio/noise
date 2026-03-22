@@ -600,7 +600,7 @@ def test_voice_over_poly_cleans_up_poly() -> None:
     # Replace poly with mono voice
     mixer.voice("pad", "faust:mono", gain=0.3)
 
-    v = mixer.voices
+    v = mixer.voice_data
     assert "pad" in v
     assert v["pad"].count == 1
 
@@ -761,7 +761,7 @@ def test_mute_sets_gain_to_zero() -> None:
 
     mixer.mute("bass")
 
-    assert mixer.voices["bass"].gain == 0.0
+    assert mixer.voice_data["bass"].gain == 0.0
     session.set_ctrl.assert_called_with("bass/gain", 0.0)
 
 
@@ -779,7 +779,7 @@ def test_unmute_restores_gain() -> None:
     mixer.mute("bass")
     mixer.unmute("bass")
 
-    assert mixer.voices["bass"].gain == 0.7
+    assert mixer.voice_data["bass"].gain == 0.7
     session.set_ctrl.assert_called_with("bass/gain", 0.7)
 
 
@@ -818,7 +818,7 @@ def test_solo_mutes_others() -> None:
 
     mixer.solo("bass")
 
-    v = mixer.voices
+    v = mixer.voice_data
     assert v["bass"].gain == 0.5  # unchanged
     assert v["pad"].gain == 0.0   # muted
     assert v["kit"].gain == 0.0   # muted
@@ -841,7 +841,7 @@ def test_solo_poly_voice() -> None:
 
     mixer.solo("pad")
 
-    v = mixer.voices
+    v = mixer.voice_data
     assert v["bass"].gain == 0.0  # muted
     # Poly parent gain should remain
     assert v["pad"].gain > 0.0
@@ -1023,8 +1023,8 @@ def test_double_mute_preserves_original_gain() -> None:
     mixer.mute("bass")  # second mute should be no-op
     mixer.unmute("bass")
 
-    assert mixer.voices["bass"].gain == 0.5, (
-        f"double mute lost original gain: got {mixer.voices['bass'].gain}"
+    assert mixer.voice_data["bass"].gain == 0.5, (
+        f"double mute lost original gain: got {mixer.voice_data['bass'].gain}"
     )
 
 
@@ -1046,8 +1046,8 @@ def test_solo_does_not_clobber_previously_muted_voice() -> None:
     mixer.mute("pad")
     mixer.solo("bass")
     mixer.unmute("pad")
-    assert mixer.voices["pad"].gain == 0.4, (
-        f"solo clobbered pad's saved gain: got {mixer.voices['pad'].gain}"
+    assert mixer.voice_data["pad"].gain == 0.4, (
+        f"solo clobbered pad's saved gain: got {mixer.voice_data['pad'].gain}"
     )
 
 
@@ -1095,7 +1095,7 @@ def test_remove_cleans_muted_state() -> None:
 
     mixer.voice("bass", "faust:bass", gain=0.8)
     mixer.unmute("bass")
-    assert mixer.voices["bass"].gain == 0.8
+    assert mixer.voice_data["bass"].gain == 0.8
 
 
 def test_voice_replace_cleans_muted_state() -> None:
@@ -1113,7 +1113,7 @@ def test_voice_replace_cleans_muted_state() -> None:
     mixer.voice("bass", "faust:bass2", gain=0.7)
 
     mixer.unmute("bass")
-    assert mixer.voices["bass"].gain == 0.7
+    assert mixer.voice_data["bass"].gain == 0.7
 
 
 def test_poly_replace_cleans_muted_state() -> None:
@@ -1132,7 +1132,7 @@ def test_poly_replace_cleans_muted_state() -> None:
     mixer.voice("pad", "faust:pad", count=3, gain=0.9)
 
     mixer.unmute("pad")
-    assert mixer.voices["pad"].gain == 0.9
+    assert mixer.voice_data["pad"].gain == 0.9
 
 
 # ── Sprint 13: UNSOLO ─────────────────────────────────────────────────────
@@ -1156,7 +1156,7 @@ def test_unsolo_restores_all_muted_voices() -> None:
     mixer.solo("bass")
     mixer.unsolo()
 
-    v = mixer.voices
+    v = mixer.voice_data
     assert v["bass"].gain == 0.5
     assert v["pad"].gain == 0.3
     assert v["kit"].gain == 0.8
@@ -1317,7 +1317,7 @@ def test_revoice_cleans_instance_muted_entries() -> None:
 
     # unsolo() should NOT restore stale muted state
     mixer.unsolo()
-    assert mixer.voices["pad"].gain == 0.9
+    assert mixer.voice_data["pad"].gain == 0.9
 
 
 def test_revoice_fewer_voices_no_crash() -> None:
@@ -2258,7 +2258,7 @@ def test_fade_path_gain() -> None:
     mixer.fade("bass/gain", target=0.1, bars=4)
 
     assert session.play_from_zero.call_count >= 1
-    assert mixer.voices["bass"].gain == 0.1
+    assert mixer.voice_data["bass"].gain == 0.1
 
 
 def test_fade_path_cutoff() -> None:
@@ -2315,7 +2315,7 @@ def test_voice_count_1_is_mono() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
 
-    v = mixer.voices
+    v = mixer.voice_data
     assert "bass" in v
     assert v["bass"].count == 1
 
@@ -2333,7 +2333,7 @@ def test_voice_count_gt1_is_poly() -> None:
     })
     mixer.voice("pad", "faust:pad", count=4, gain=0.5)
 
-    v = mixer.voices
+    v = mixer.voice_data
     assert "pad" in v
     assert v["pad"].count == 4
 
@@ -2385,7 +2385,7 @@ def test_voice_dict_has_no_instances() -> None:
     })
     mixer.voice("pad", "faust:pad", count=4, gain=0.5)
 
-    v = mixer.voices
+    v = mixer.voice_data
     # Only "pad" — no "pad_v0", "pad_v1", etc.
     assert "pad" in v
     assert "pad_v0" not in v
@@ -2776,3 +2776,147 @@ def test_handle_pattern_retrieval() -> None:
     handle.play(pat)
 
     assert handle.pattern() is pat
+
+
+# ── Stage 1: add_voice slash labels (1.1) ────────────────────────────────────
+
+
+def test_add_voice_uses_slash_labels() -> None:
+    """Incremental add_voice sends /‑separated exposed control labels."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:kick": ("gate",),
+        "faust:bass": ("freq", "gate"),
+    })
+
+    # Load initial graph so graph is loaded (enables incremental add_voice)
+    mixer.voice("kick", "faust:kick", gain=0.8)
+    assert session.load_graph.call_count == 1
+
+    # Adding a second mono voice triggers add_voice (incremental path)
+    session.reset_mock()
+    mixer.voice("bass", "faust:bass", gain=0.3)
+
+    session.add_voice.assert_called_once_with(
+        "bass", "faust:bass", ("freq", "gate"), 0.3,
+    )
+
+
+# ── Stage 1: master gain (1.2) ───────────────────────────────────────────────
+
+
+def test_master_property_delegates_to_session() -> None:
+    """mix.master = X calls session.master_gain(X)."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    session.reset_mock()
+    mixer.master = 0.6
+    session.master_gain.assert_called_once_with(0.6)
+
+
+def test_master_default_value() -> None:
+    """VoiceMixer starts with master=0.7 and sends it on construction."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    assert mixer.master == 0.7
+    session.master_gain.assert_called_once_with(0.7)
+
+
+def test_master_nan_raises() -> None:
+    """Setting master to NaN raises ValueError."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    with pytest.raises(ValueError, match="finite"):
+        mixer.master = float("nan")
+
+
+def test_master_inf_raises() -> None:
+    """Setting master to Inf raises ValueError."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    with pytest.raises(ValueError, match="finite"):
+        mixer.master = float("inf")
+
+
+# ── Stage 1: convenience properties (1.3) ────────────────────────────────────
+
+
+def test_bpm_alias_for_tempo() -> None:
+    """bpm property reads and writes tempo."""
+    from unittest.mock import MagicMock, PropertyMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    type(session).tempo = PropertyMock(return_value=128.0)
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    assert mixer.bpm == 128.0
+    mixer.bpm = 140.0
+    type(session).tempo = PropertyMock(return_value=140.0)
+    assert mixer.bpm == 140.0
+
+
+def test_voices_returns_handles() -> None:
+    """voices property returns dict of VoiceHandles."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceHandle, VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    result = mixer.voices
+    assert isinstance(result, dict)
+    assert "bass" in result
+    assert isinstance(result["bass"], VoiceHandle)
+
+
+def test_buses_returns_handles() -> None:
+    """buses property returns dict of BusHandles."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import BusHandle, VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:verb": ("room",),
+    })
+    mixer.bus("verb", "faust:verb", gain=0.3)
+
+    result = mixer.buses
+    assert isinstance(result, dict)
+    assert "verb" in result
+    assert isinstance(result["verb"], BusHandle)
