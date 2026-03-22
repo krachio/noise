@@ -2166,3 +2166,119 @@ def test_mod_send_param_label() -> None:
     assert session.play.call_count == 1
     slot = session.play.call_args.args[0]
     assert slot == "_mod_bass_verb_send"
+
+
+# ── Free functions: note(), hit(), seq() ─────────────────────────────────────
+
+
+def test_free_note_returns_freeze_with_bare_params() -> None:
+    """Free note() produces Freeze pattern with bare param names (no voice prefix)."""
+    from midiman_frontend.ir import ir_to_dict
+
+    from krach._mixer import note
+
+    pat = note(440.0)
+    assert isinstance(pat, Pattern)
+    assert isinstance(pat.node, Freeze)
+    ir_str = str(ir_to_dict(pat.node))
+    # Should have bare "freq" and "gate", not voice-prefixed
+    assert "'Str': 'freq'" in ir_str
+    assert "'Str': 'gate'" in ir_str
+
+
+def test_free_note_string_pitch() -> None:
+    """Free note() with string pitch uses parse_note()."""
+    from midiman_frontend.ir import ir_to_dict
+
+    from krach._mixer import note
+
+    pat = note("C4")
+    ir_str = str(ir_to_dict(pat.node))
+    assert "'Str': 'freq'" in ir_str
+
+
+def test_free_note_int_pitch() -> None:
+    """Free note() with int pitch uses mtof()."""
+    from midiman_frontend.ir import ir_to_dict
+
+    from krach._mixer import note
+
+    pat = note(60)  # MIDI note 60 = C4
+    ir_str = str(ir_to_dict(pat.node))
+    assert "'Str': 'freq'" in ir_str
+
+
+def test_free_note_chord() -> None:
+    """Free note() with multiple pitches builds a frozen stack."""
+    from midiman_frontend.ir import Stack
+
+    from krach._mixer import note
+
+    pat = note(220.0, 330.0, 440.0)
+    assert isinstance(pat.node, Freeze)
+    inner = pat.node.child
+    assert isinstance(inner, Stack)
+
+
+def test_free_note_vel() -> None:
+    """Free note() with vel != 1.0 includes vel param."""
+    from midiman_frontend.ir import ir_to_dict
+
+    from krach._mixer import note
+
+    pat = note(440.0, vel=0.7)
+    ir_str = str(ir_to_dict(pat.node))
+    assert "'Str': 'vel'" in ir_str
+
+
+def test_free_hit_returns_freeze_with_bare_param() -> None:
+    """Free hit() produces Freeze with bare param name."""
+    from midiman_frontend.ir import ir_to_dict
+
+    from krach._mixer import hit
+
+    pat = hit()
+    assert isinstance(pat, Pattern)
+    assert isinstance(pat.node, Freeze)
+    ir_str = str(ir_to_dict(pat.node))
+    assert "'Str': 'gate'" in ir_str
+
+
+def test_free_hit_custom_param() -> None:
+    """Free hit() with custom param uses that param."""
+    from midiman_frontend.ir import ir_to_dict
+
+    from krach._mixer import hit
+
+    pat = hit("kick")
+    ir_str = str(ir_to_dict(pat.node))
+    assert "'Str': 'kick'" in ir_str
+
+
+def test_free_seq_returns_cat() -> None:
+    """Free seq() builds a Cat of note patterns."""
+    from krach._mixer import seq
+
+    pat = seq(440.0, 330.0, 220.0)
+    assert isinstance(pat.node, Cat)
+    assert len(pat.node.children) == 3
+
+
+def test_free_seq_with_none_rest() -> None:
+    """Free seq() with None produces rests."""
+    from midiman_frontend.ir import Silence
+
+    from krach._mixer import seq
+
+    pat = seq(440.0, None, 220.0)
+    assert isinstance(pat.node, Cat)
+    assert isinstance(pat.node.children[1], Silence)
+
+
+def test_free_seq_string_pitches() -> None:
+    """Free seq() with string pitches uses parse_note()."""
+    from krach._mixer import seq
+
+    pat = seq("C4", "E4", "G4")
+    assert isinstance(pat.node, Cat)
+    assert len(pat.node.children) == 3

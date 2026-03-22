@@ -24,6 +24,9 @@ from midiman_frontend.pattern import freeze as _freeze
 from midiman_frontend.pattern import osc as _osc
 from midiman_frontend.pattern import rest as _rest
 
+from krach._pitch import mtof as _mtof
+from krach._pitch import parse_note as _parse_note
+
 
 @dataclass(frozen=True)
 class Voice:
@@ -268,6 +271,100 @@ def build_hit(voice_name: str, param: str) -> Pattern:
     trig = _osc("/soundman/set", OscStr(label), OscFloat(1.0))
     reset = _osc("/soundman/set", OscStr(label), OscFloat(0.0))
     return _freeze(trig + reset)
+
+
+# ── Free pattern builders (voice-free, bare param names) ──────────────────────
+
+
+def _resolve_pitch(p: str | int | float) -> float:
+    """Convert a pitch value to Hz: str → parse_note, int → mtof, float → passthrough."""
+    if isinstance(p, str):
+        return _parse_note(p)
+    if isinstance(p, int):
+        return _mtof(p)
+    return p
+
+
+def note(*pitches: str | int | float, vel: float = 1.0, **params: float) -> Pattern:
+    """Build a note trigger pattern with bare param names.
+
+    Bind to a voice at play time via ``_bind_voice()``.
+
+    - str pitch: parsed via ``parse_note()`` (e.g. ``"C4"``)
+    - int pitch: converted via ``mtof()`` (MIDI note number)
+    - float pitch: used directly as Hz
+
+    Multiple pitches produce a frozen stack (chord).
+    """
+    if not pitches:
+        # Gate-only trigger
+        onset: Pattern = _osc("/soundman/set", OscStr("gate"), OscFloat(1.0))
+        reset = _osc("/soundman/set", OscStr("gate"), OscFloat(0.0))
+        return _freeze(onset + reset)
+
+    atoms: list[Pattern] = []
+    for p in pitches:
+        hz = _resolve_pitch(p)
+        onset_parts: list[Pattern] = []
+        onset_parts.append(_osc("/soundman/set", OscStr("freq"), OscFloat(hz)))
+        if vel != 1.0:
+            onset_parts.append(_osc("/soundman/set", OscStr("vel"), OscFloat(vel)))
+        for param, value in params.items():
+            onset_parts.append(_osc("/soundman/set", OscStr(param), OscFloat(value)))
+        onset_parts.append(_osc("/soundman/set", OscStr("gate"), OscFloat(1.0)))
+
+        onset_stack = onset_parts[0]
+        for a in onset_parts[1:]:
+            onset_stack = onset_stack | a
+
+        reset = _osc("/soundman/set", OscStr("gate"), OscFloat(0.0))
+        atoms.append(_freeze(onset_stack + reset))
+
+    if len(atoms) == 1:
+        return atoms[0]
+
+    # Chord: stack all notes, freeze the whole thing
+    result = atoms[0]
+    for a in atoms[1:]:
+        result = result | a
+    return _freeze(result)
+
+
+def hit(param: str = "gate", **kwargs: float) -> Pattern:
+    """Build a trigger pattern with bare param name.
+
+    Bind to a voice at play time via ``_bind_voice()``.
+    Default param is ``"gate"``.
+    """
+    onset_parts: list[Pattern] = [_osc("/soundman/set", OscStr(param), OscFloat(1.0))]
+    for k, v in kwargs.items():
+        onset_parts.append(_osc("/soundman/set", OscStr(k), OscFloat(v)))
+
+    onset = onset_parts[0]
+    for a in onset_parts[1:]:
+        onset = onset | a
+
+    reset = _osc("/soundman/set", OscStr(param), OscFloat(0.0))
+    return _freeze(onset + reset)
+
+
+def seq(*notes: str | int | float | None, vel: float = 1.0, **params: float) -> Pattern:
+    """Build a sequence of notes/rests with bare param names.
+
+    Bind to a voice at play time via ``_bind_voice()``.
+    """
+    if not notes:
+        raise ValueError("seq requires at least one note")
+    atoms: list[Pattern] = []
+    for n in notes:
+        if n is None:
+            atoms.append(_rest())
+        else:
+            atoms.append(note(n, vel=vel, **params))
+    result = atoms[0]
+    for a in atoms[1:]:
+        result = result + a
+    return result
 
 
 # ── VoiceMixer ────────────────────────────────────────────────────────────────
