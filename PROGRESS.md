@@ -16,14 +16,14 @@ noise/
 ```
 
 ### Test counts
-- soundman-core: 122 Rust tests
+- soundman-core: 142 Rust tests
 - soundman-faust: 14 Rust tests
-- midiman: 129 Rust tests
-- noise-engine: 24 Rust tests
-- midiman-frontend: 139 Python tests
+- midiman: 130 Rust tests
+- noise-engine: 25 Rust tests
+- midiman-frontend: 143 Python tests
 - faust-dsl: 68 Python tests
-- krach: 218 Python tests
-- **Total: ~714 tests**, all green. Pyright strict clean.
+- krach: 257 Python tests
+- **Total: 817 tests**, all green. Pyright strict clean.
 
 ## Usage
 
@@ -62,19 +62,24 @@ mix.mute("drums")
 - **`/` path addressing**: `mix.set("bass/cutoff", 1200)`, `mix.fade("verb/room", 0.8, bars=8)`
 - **Voice handles**: `bass = mix.voice(...)` returns proxy — `bass.play()`, `bass.set()`, `bass.mute()`
 - **Effect routing**: `mix.bus()`, `mix.send()`, `mix.wire()` — shared reverb, sidechain, multi-input
-- **Modulation as patterns**: `mod_sine(lo, hi).over(bars)` — compose with pattern algebra
+- **Native automation lanes**: block-rate modulation on audio thread (AutoShape + GraphSwapper)
+- **Typed Control IR**: `Control(label, value)` replaces OSC string convention
+- **Mini-notation**: `p("x . x . x . . x")` for fast pattern entry
+- **Scenes**: `mix.save("verse")` / `mix.recall("chorus")` — snapshot + restore
+- **Music as code**: `mix.load("songs/verse.py")` — exec Python files as scenes
+- **Master gain**: `mix.master = 0.7` — prevents CoreAudio clipping
 - **Group operations**: `mix.mute("drums")` — prefix matching for `/`-grouped voices
 - **Phase-reset**: fades/mods start from beat 1 via `SetPatternFromZero`
 - **Meter**: `mix.meter = 3` for waltz, 7 for 7/8
-- **Pattern retrieval**: `mix.pattern("kick")` returns unbound pattern for modification
+- **Pattern retrieval**: `mix.pattern("kick")` returns unbound pattern
 - **Unified Voice model**: `Voice(count=N)` — no separate poly concept
 - **One user object**: `mix` handles everything (tempo, play, set, fade, mod, mute, solo)
 
 ## Next
 
-- **Pattern JIT**: Compile pattern IR to native automation nodes on audio thread. Same model as `@dsp` → FAUST. Zero IPC for steady-state modulation.
-- **Scenes**: `mix.save("verse")` / `mix.recall("chorus", bars=4)` — snapshot + crossfade
-- **Music as Python repos**: Songs as importable modules, git-versioned
+- **Live audio input**: `mix.input(channel=0)` — ADC node for mic/instruments
+- **MIDI controller mapping**: `mix.midi_map(cc=74, path="bass/cutoff", lo=200, hi=4000)`
+- **Library restructure**: Merge midiman-frontend into krach, rename Rust crates
 - **Live audio input**: `mix.input(channel=0)` — mic/instruments in the graph
 - **Mini-notation**: `p("x . x . x . . x")` shorthand
 - **Library restructure**: Merge midiman-frontend into krach, rename Rust crates
