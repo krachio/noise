@@ -314,7 +314,6 @@ dependencies = [
     { name = "anthropic" },
     { name = "faust-dsl" },
     { name = "ipython" },
-    { name = "midiman-frontend" },
 ]
 
 [package.dev-dependencies]
@@ -329,7 +328,6 @@ requires-dist = [
     { name = "anthropic", specifier = ">=0.86.0" },
     { name = "faust-dsl", editable = "../faust-dsl" },
     { name = "ipython", specifier = ">=8" },
-    { name = "midiman-frontend", editable = "../midiman-frontend" },
 ]
 
 [package.metadata.requires-dev]
@@ -349,20 +347,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/c7/74/97e72a36efd4ae2bccb3463284300f8953f199b5ffbc04cbbb0ec78f74b1/matplotlib_inline-0.2.1.tar.gz", hash = "sha256:e1ee949c340d771fc39e241ea75683deb94762c8fa5f2927ec57c83c4dffa9fe", size = 8110 }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/af/33/ee4519fa02ed11a94aef9559552f3b17bb863f2ecfe1a35dc7f548cde231/matplotlib_inline-0.2.1-py3-none-any.whl", hash = "sha256:d56ce5156ba6085e00a9d54fead6ed29a9c47e215cd1bba2e976ef39f5710a76", size = 9516 },
-]
-
-[[package]]
-name = "midiman-frontend"
-version = "0.1.0"
-source = { editable = "../midiman-frontend" }
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pre-commit" },
-    { name = "pyright" },
-    { name = "pytest" },
 ]
 
 [[package]]

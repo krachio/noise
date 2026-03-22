@@ -1,1 +1,0 @@
-# midiman-frontend

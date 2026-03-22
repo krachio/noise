@@ -5,7 +5,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 
-from midiman_frontend.ir import (
+from krach.patterns.ir import (
     Atom,
     Cat,
     Cc,
@@ -139,5 +139,5 @@ def ctrl(label: str, value: float) -> Pattern:
 
 def freeze(pat: Pattern) -> Pattern:
     """Mark a pattern as an indivisible unit — transforms won't descend."""
-    from midiman_frontend.ir import Freeze
+    from krach.patterns.ir import Freeze
     return Pattern(Freeze(child=pat.node))

@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from midiman_frontend.ir import Degrade, Fast, Rev
-from midiman_frontend.pattern import note
-from midiman_frontend.transform import reverse, fast, thin
+from krach.patterns.ir import Degrade, Fast, Rev
+from krach.patterns.pattern import note
+from krach.patterns.transform import reverse, fast, thin
 
 
 class TestTransformApplication:

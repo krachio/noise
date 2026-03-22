@@ -1,7 +1,0 @@
-language: python 3.13
-type_checker: pyright --pythonversion 3.13
-test_runner: pytest
-package_manager: uv
-pre_commit_hooks:
-  - pyright --pythonversion 3.13
-  - pytest

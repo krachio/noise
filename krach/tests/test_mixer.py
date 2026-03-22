@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from midiman_frontend.ir import Atom, Cat, Control, Freeze, IrNode, Osc, Silence, Stack
-from midiman_frontend.pattern import Pattern
+from krach.patterns.ir import Atom, Cat, Control, Freeze, IrNode, Osc, Silence, Stack
+from krach.patterns.pattern import Pattern
 
 from krach._mixer import Bus, Voice, build_graph_ir, build_hit, build_note
 
@@ -218,7 +218,7 @@ def test_step_combinable_with_add() -> None:
 
 def test_rest_plus_hit_is_two_atoms() -> None:
     """rest() + hit() should be 2 atoms — hit fires at 1/2, not 1/3."""
-    from midiman_frontend.pattern import rest
+    from krach.patterns.pattern import rest
     pat = rest() + build_hit("kit", "kick")
     assert isinstance(pat.node, Cat)
     assert len(pat.node.children) == 2  # Silence + Freeze
@@ -638,7 +638,7 @@ def test_build_note_raises_when_pitch_but_no_freq() -> None:
 
 def test_seq_builds_cat_of_steps() -> None:
     """Free seq() returns a Cat pattern with correct number of children."""
-    from midiman_frontend.ir import Cat
+    from krach.patterns.ir import Cat
 
     from krach._mixer import seq
 
@@ -650,7 +650,7 @@ def test_seq_builds_cat_of_steps() -> None:
 
 def test_seq_with_none_inserts_rest() -> None:
     """None entries in free seq() produce Silence nodes."""
-    from midiman_frontend.ir import Cat, Silence
+    from krach.patterns.ir import Cat, Silence
 
     from krach._mixer import seq
 
@@ -671,7 +671,7 @@ def test_seq_raises_on_empty() -> None:
 
 def test_seq_produces_bare_params() -> None:
     """Free seq() produces notes with bare param names for later binding."""
-    from midiman_frontend.ir import Cat, ir_to_dict
+    from krach.patterns.ir import Cat, ir_to_dict
 
     from krach._mixer import seq
 
@@ -978,7 +978,7 @@ def test_note_gate_only_returns_freeze() -> None:
 
 
 def test_note_chord_returns_frozen_stack() -> None:
-    from midiman_frontend.ir import Stack
+    from krach.patterns.ir import Stack
 
     from krach._mixer import note
 
@@ -994,7 +994,7 @@ def test_note_vel_kwarg_sends_vel_control() -> None:
 
 
 def test_note_vel_default_not_sent() -> None:
-    from midiman_frontend.ir import ir_to_dict
+    from krach.patterns.ir import ir_to_dict
 
     pat = build_note("bass", ("freq", "gate", "vel"), pitch=55.0)
     ir_json = str(ir_to_dict(pat.node))
@@ -1838,7 +1838,7 @@ def test_remove_voice_cleans_wires() -> None:
 
 
 def test_mod_shapes_range() -> None:
-    from midiman_frontend.ir import Cat
+    from krach.patterns.ir import Cat
 
     from krach._mixer import mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square, mod_tri
 
@@ -1940,7 +1940,7 @@ def test_mod_send_param_label() -> None:
 
 
 def test_free_note_returns_freeze_with_bare_params() -> None:
-    from midiman_frontend.ir import ir_to_dict
+    from krach.patterns.ir import ir_to_dict
 
     from krach._mixer import note
 
@@ -1953,7 +1953,7 @@ def test_free_note_returns_freeze_with_bare_params() -> None:
 
 
 def test_free_note_string_pitch() -> None:
-    from midiman_frontend.ir import ir_to_dict
+    from krach.patterns.ir import ir_to_dict
 
     from krach._mixer import note
 
@@ -1963,7 +1963,7 @@ def test_free_note_string_pitch() -> None:
 
 
 def test_free_note_int_pitch() -> None:
-    from midiman_frontend.ir import ir_to_dict
+    from krach.patterns.ir import ir_to_dict
 
     from krach._mixer import note
 
@@ -1973,7 +1973,7 @@ def test_free_note_int_pitch() -> None:
 
 
 def test_free_note_chord() -> None:
-    from midiman_frontend.ir import Stack
+    from krach.patterns.ir import Stack
 
     from krach._mixer import note
 
@@ -1984,7 +1984,7 @@ def test_free_note_chord() -> None:
 
 
 def test_free_note_vel() -> None:
-    from midiman_frontend.ir import ir_to_dict
+    from krach.patterns.ir import ir_to_dict
 
     from krach._mixer import note
 
@@ -1994,7 +1994,7 @@ def test_free_note_vel() -> None:
 
 
 def test_free_hit_returns_freeze_with_bare_param() -> None:
-    from midiman_frontend.ir import ir_to_dict
+    from krach.patterns.ir import ir_to_dict
 
     from krach._mixer import hit
 
@@ -2006,7 +2006,7 @@ def test_free_hit_returns_freeze_with_bare_param() -> None:
 
 
 def test_free_hit_custom_param() -> None:
-    from midiman_frontend.ir import ir_to_dict
+    from krach.patterns.ir import ir_to_dict
 
     from krach._mixer import hit
 
@@ -2024,7 +2024,7 @@ def test_free_seq_returns_cat() -> None:
 
 
 def test_free_seq_with_none_rest() -> None:
-    from midiman_frontend.ir import Silence
+    from krach.patterns.ir import Silence
 
     from krach._mixer import seq
 
@@ -2045,7 +2045,7 @@ def test_free_seq_string_pitches() -> None:
 
 
 def test_bind_voice_rewrites_bare_params() -> None:
-    from midiman_frontend.ir import ir_to_dict
+    from krach.patterns.ir import ir_to_dict
 
     from krach._mixer import _bind_voice, note  # pyright: ignore[reportPrivateUsage]
 
@@ -2059,7 +2059,7 @@ def test_bind_voice_rewrites_bare_params() -> None:
 
 
 def test_bind_voice_skips_already_bound() -> None:
-    from midiman_frontend.ir import Atom, Osc, OscFloat, OscStr, ir_to_dict
+    from krach.patterns.ir import Atom, Osc, OscFloat, OscStr, ir_to_dict
 
     from krach._mixer import _bind_voice  # pyright: ignore[reportPrivateUsage]
 
@@ -2070,7 +2070,7 @@ def test_bind_voice_skips_already_bound() -> None:
 
 
 def test_bind_voice_walks_nested_tree() -> None:
-    from midiman_frontend.ir import ir_to_dict
+    from krach.patterns.ir import ir_to_dict
 
     from krach._mixer import _bind_voice, seq  # pyright: ignore[reportPrivateUsage]
 
@@ -2088,7 +2088,7 @@ def test_bind_voice_walks_nested_tree() -> None:
 def test_play_voice_binds_pattern() -> None:
     from unittest.mock import MagicMock
 
-    from midiman_frontend.ir import ir_to_dict
+    from krach.patterns.ir import ir_to_dict
 
     from krach._mixer import VoiceMixer, note
 
@@ -2113,8 +2113,8 @@ def test_play_voice_binds_pattern() -> None:
 def test_play_control_path_binds_ctrl() -> None:
     from unittest.mock import MagicMock
 
-    from midiman_frontend.ir import OscFloat, OscStr, ir_to_dict
-    from midiman_frontend.pattern import osc
+    from krach.patterns.ir import OscFloat, OscStr, ir_to_dict
+    from krach.patterns.pattern import osc
 
     from krach._mixer import VoiceMixer
 
@@ -2175,7 +2175,7 @@ def test_set_validates_finite() -> None:
 
 
 def test_ramp_pattern_values() -> None:
-    from midiman_frontend.ir import Cat
+    from krach.patterns.ir import Cat
 
     from krach._mixer import ramp
 
@@ -2186,7 +2186,7 @@ def test_ramp_pattern_values() -> None:
 
 
 def test_mod_sine_pattern_length() -> None:
-    from midiman_frontend.ir import Cat
+    from krach.patterns.ir import Cat
 
     from krach._mixer import mod_sine
 
@@ -2225,7 +2225,7 @@ def test_mod_tri_returns_pattern() -> None:
 
 
 def test_mod_ramp_same_as_ramp() -> None:
-    from midiman_frontend.ir import Cat
+    from krach.patterns.ir import Cat
 
     from krach._mixer import mod_ramp
 

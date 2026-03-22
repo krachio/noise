@@ -67,8 +67,8 @@ def main() -> None:
         raise RuntimeError("noise-engine socket not ready after 5s")
 
     # ── imports ──────────────────────────────────────────────────────────────
-    from midiman_frontend import Session
-    from midiman_frontend.pattern import rest
+    from krach.patterns import Session
+    from krach.patterns.pattern import rest
     from faust_dsl import Signal, control
     from faust_dsl.lib.filters import bandpass, highpass, lowpass
     from faust_dsl.lib.noise import white_noise
@@ -190,7 +190,7 @@ def main() -> None:
         # Primary API — voices and patterns
         "mix": mix,
         "rest": rest,
-        # Free pattern builders (shadow midiman_frontend.pattern.note)
+        # Free pattern builders (shadow krach.patterns.pattern.note)
         "note": note,
         "hit": hit,
         "seq": seq,

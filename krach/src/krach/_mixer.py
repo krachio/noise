@@ -17,12 +17,12 @@ from pathlib import Path
 from typing import Any, Callable  # Any still used for DspDef.fn
 
 from faust_dsl import transpile as _transpile
-from midiman_frontend import Graph, GraphIr, Session
-from midiman_frontend.ir import IrNode, OscStr
-from midiman_frontend.pattern import Pattern
-from midiman_frontend.pattern import ctrl as _ctrl
-from midiman_frontend.pattern import freeze as _freeze
-from midiman_frontend.pattern import rest as _rest
+from krach.patterns import Graph, GraphIr, Session
+from krach.patterns.ir import IrNode, OscStr
+from krach.patterns.pattern import Pattern
+from krach.patterns.pattern import ctrl as _ctrl
+from krach.patterns.pattern import freeze as _freeze
+from krach.patterns.pattern import rest as _rest
 
 from krach._pitch import mtof as _mtof
 from krach._pitch import parse_note as _parse_note
@@ -409,7 +409,7 @@ def _bind_voice(node: IrNode, voice: str) -> IrNode:
     A param is "bare" if it does not contain ``/``.  Already-bound params
     (containing ``/``) are left unchanged.  Walks the full IR tree.
     """
-    from midiman_frontend.ir import (
+    from krach.patterns.ir import (
         Atom,
         Cat,
         Control,
@@ -474,7 +474,7 @@ def _bind_voice_poly(
     Each Freeze compound (note/hit event) binds to the next instance.
     Returns (rewritten_node, updated_alloc_counter).
     """
-    from midiman_frontend.ir import (
+    from krach.patterns.ir import (
         Cat,
         Degrade,
         Early,
@@ -555,7 +555,7 @@ def _bind_ctrl(node: IrNode, label: str) -> IrNode:
     Similar to ``_bind_voice()`` but replaces the specific placeholder
     ``"ctrl"`` rather than prepending a prefix.
     """
-    from midiman_frontend.ir import (
+    from krach.patterns.ir import (
         Atom,
         Cat,
         Control,

@@ -6,7 +6,7 @@ import socket
 from dataclasses import dataclass, field
 from typing import IO, Any
 
-from midiman_frontend.ir import (
+from krach.patterns.ir import (
     Batch,
     ClientMessage,
     Hush,
@@ -18,8 +18,8 @@ from midiman_frontend.ir import (
     SetPatternFromZero,
     command_to_json,
 )
-from midiman_frontend.graph import GraphIr
-from midiman_frontend.pattern import Pattern
+from krach.patterns.graph import GraphIr
+from krach.patterns.pattern import Pattern
 
 
 class KernelError(Exception):

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from midiman_frontend.ir import (
+from krach.patterns.ir import (
     Atom,
     Cat,
     Degrade,
@@ -15,7 +15,7 @@ from midiman_frontend.ir import (
     Slow,
     Stack,
 )
-from midiman_frontend.pattern import cc, note, rest
+from krach.patterns.pattern import cc, note, rest
 
 
 class TestAtomConstructors:
@@ -32,7 +32,7 @@ class TestAtomConstructors:
         assert p.node == Silence()
 
     def test_cc(self) -> None:
-        from midiman_frontend.ir import Cc
+        from krach.patterns.ir import Cc
 
         p = cc(74, 127, channel=1)
         assert p.node == Atom(Cc(channel=1, controller=74, value=127))

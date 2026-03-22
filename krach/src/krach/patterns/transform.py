@@ -3,7 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from midiman_frontend.pattern import Pattern
+from krach.patterns.pattern import Pattern
 
 
 @dataclass(frozen=True)

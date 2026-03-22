@@ -1,6 +1,6 @@
 import pytest
-from midiman_frontend.ir import Cat, Silence, Stack
-from midiman_frontend.pattern import Pattern
+from krach.patterns.ir import Cat, Silence, Stack
+from krach.patterns.pattern import Pattern
 
 from krach._mininotation import p
 

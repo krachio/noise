@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from midiman_frontend.ir import (
+from krach.patterns.ir import (
     Atom,
     Batch,
     Cat,
@@ -18,7 +18,7 @@ from midiman_frontend.ir import (
     Slow,
     Stack,
 )
-from midiman_frontend.pattern import note
+from krach.patterns.pattern import note
 
 
 _ATOM = Atom(Note(channel=0, note=60, velocity=100, dur=1.0))

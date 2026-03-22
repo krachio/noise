@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from midiman_frontend.pattern import Pattern, rest
+from krach.patterns.pattern import Pattern, rest
 
 from krach._mixer import hit, note
 

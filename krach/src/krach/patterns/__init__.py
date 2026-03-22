@@ -1,7 +1,7 @@
-from midiman_frontend.graph import ConnectionIr, Graph, GraphIr, NodeInstance
-from midiman_frontend.pattern import Pattern, cc, note, osc, rest
-from midiman_frontend.session import KernelError, Session, SlotState
-from midiman_frontend.transform import (
+from krach.patterns.graph import ConnectionIr, Graph, GraphIr, NodeInstance
+from krach.patterns.pattern import Pattern, cc, note, osc, rest
+from krach.patterns.session import KernelError, Session, SlotState
+from krach.patterns.transform import (
     Transform,
     every,
     reverse,

@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from midiman_frontend.ir import (
+from krach.patterns.ir import (
     Atom,
     Batch,
     Cat,

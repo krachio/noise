@@ -4,7 +4,6 @@ version = "0.1.0"
 requires-python = ">=3.13"
 dependencies = [
     "ipython>=8",
-    "midiman-frontend",
     "faust-dsl",
     "anthropic>=0.86.0",
 ]
@@ -17,7 +16,6 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.uv.sources]
-midiman-frontend = { path = "../midiman-frontend", editable = true }
 faust-dsl = { path = "../faust-dsl", editable = true }
 
 [tool.hatch.build.targets.wheel]
