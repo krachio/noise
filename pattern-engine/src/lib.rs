@@ -1,8 +1,8 @@
-//! Tidal Cycles-inspired live coding kernel for MIDI and OSC.
+//! Tidal Cycles-inspired live coding pattern engine.
 //!
-//! Midiman evaluates composable patterns over rational time and outputs
+//! Evaluates composable patterns over rational time and outputs
 //! control signals (MIDI notes, CC, OSC messages) in real time. A separate
-//! frontend sends pattern IR as JSON over a Unix socket; the kernel compiles,
+//! frontend sends pattern IR as JSON over a Unix socket; the engine compiles,
 //! schedules, and dispatches events.
 //!
 //! # Core pipeline

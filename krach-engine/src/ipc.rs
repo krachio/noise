@@ -11,7 +11,7 @@ use std::time::Duration;
 
 use log::warn;
 use pattern_engine::ipc::{compile_command, describe};
-use pattern_engine::ipc::protocol::ClientMessage as MidimanMsg;
+use pattern_engine::ipc::protocol::ClientMessage as PatternMsg;
 use audio_engine::protocol::ClientMessage;
 
 use crate::LoopCommand;
@@ -126,7 +126,7 @@ fn dispatch(
     cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
     node_types: &Arc<RwLock<Vec<String>>>,
 ) -> IpcResponse {
-    if let Ok(msg) = serde_json::from_str::<MidimanMsg>(line) {
+    if let Ok(msg) = serde_json::from_str::<PatternMsg>(line) {
         return handle_pattern(msg, cmd_tx);
     }
     if let Ok(msg) = serde_json::from_str::<ClientMessage>(line) {
@@ -136,12 +136,12 @@ fn dispatch(
 }
 
 fn handle_pattern(
-    msg: MidimanMsg,
+    msg: PatternMsg,
     cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
 ) -> IpcResponse {
     match msg {
-        MidimanMsg::Ping => IpcResponse::Pong,
-        MidimanMsg::Batch { commands } => {
+        PatternMsg::Ping => IpcResponse::Pong,
+        PatternMsg::Batch { commands } => {
             let mut compiled = Vec::with_capacity(commands.len());
             for cmd in &commands {
                 match compile_command(cmd) {
