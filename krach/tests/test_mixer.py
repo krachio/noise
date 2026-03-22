@@ -23,6 +23,11 @@ def _collect_values(node: IrNode) -> list[object]:
             return []
 
 
+def _collect_control_labels(node: IrNode) -> set[str]:
+    """Walk an IR tree and collect all Control labels."""
+    return {v.label for v in _collect_values(node) if isinstance(v, Control)}
+
+
 # ── build_graph_ir ────────────────────────────────────────────────────────────
 
 
@@ -175,11 +180,15 @@ def test_build_note_returns_frozen_compound() -> None:
 def test_build_note_with_extra_params() -> None:
     pat = build_note("bass", ("freq", "gate", "cutoff"), pitch=55.0, cutoff=800.0)
     assert isinstance(pat.node, Freeze)
+    labels = _collect_control_labels(pat.node)
+    assert "bass/cutoff" in labels, "cutoff kwarg should appear as bass/cutoff in IR"
 
 
 def test_build_note_skips_unknown_controls() -> None:
     pat = build_note("bass", ("freq", "gate"), pitch=55.0, reverb=0.8)
     assert isinstance(pat.node, Freeze)
+    labels = _collect_control_labels(pat.node)
+    assert not any("reverb" in l for l in labels), "unknown control should not appear in IR"
 
 
 def test_build_note_gate_only_voice() -> None:
@@ -991,6 +1000,8 @@ def test_note_chord_returns_frozen_stack() -> None:
 def test_note_vel_kwarg_sends_vel_control() -> None:
     pat = build_note("bass", ("freq", "gate", "vel"), pitch=55.0, vel=0.7)
     assert isinstance(pat.node, Freeze)
+    labels = _collect_control_labels(pat.node)
+    assert "bass/vel" in labels, "vel kwarg should produce bass/vel Control in IR"
 
 
 def test_note_vel_default_not_sent() -> None:

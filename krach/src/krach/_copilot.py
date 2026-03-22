@@ -70,10 +70,10 @@ def build_context(state: SessionState) -> str:
     if state.active_voices:
         lines.append("- Active voices (use kr.note/kr.hit/kr.seq with these):")
         for vname, type_id, gain, params in state.active_voices:
-            labels = ", ".join(f"{vname}_{p}" for p in params)
+            labels = ", ".join(f"{vname}/{p}" for p in params)
             lines.append(f"  - {vname} ({type_id}, gain={gain}): {labels}")
     if state.node_controls:
-        lines.append("- Node controls (use ONLY these labels with set_ctrl):")
+        lines.append("- Node controls (use ONLY these labels with kr.set):")
         for node_id, controls in state.node_controls:
             lines.append(f"  - {node_id}: {', '.join(controls)}")
     if state.in_scope:
