@@ -413,3 +413,70 @@ def test_repoly_hushes_old_instance_fades() -> None:
     assert "_fade_pad_v0" in hushed_names, (
         f"re-poly must hush old instance fades, but only hushed: {hushed_names}"
     )
+
+
+# ── fade() edge cases ───────────────────────────────────────────────────────
+
+
+def test_fade_poly_parent_fades_all_instances() -> None:
+    """fade() on a poly parent name should fade all instances proportionally,
+    not crash with KeyError."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.6)
+
+    # Should not crash — fades all instances
+    mixer.fade("pad", target=0.2, bars=4)
+
+
+def test_fade_zero_bars_raises() -> None:
+    """fade() with bars=0 should raise ValueError, not divide by zero."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    session = MagicMock()
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    with pytest.raises(ValueError, match="bars.*must be"):
+        mixer.fade("bass", target=0.1, bars=0)
+
+
+# ── hush() completeness for poly instances ───────────────────────────────────
+
+
+def test_hush_poly_stops_instance_patterns() -> None:
+    """hush() on a poly parent must also hush individual instance pattern slots."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+
+    session.reset_mock()
+    mixer.hush("pad")
+
+    hushed_names = {c.args[0] for c in session.hush.call_args_list}
+    assert "pad_v0" in hushed_names, (
+        f"hush('pad') must hush instance 'pad_v0', but only hushed: {hushed_names}"
+    )
+    assert "pad_v1" in hushed_names, (
+        f"hush('pad') must hush instance 'pad_v1', but only hushed: {hushed_names}"
+    )

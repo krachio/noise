@@ -292,6 +292,7 @@ class VoiceMixer:
             pv = self._poly[name]
             for i in range(pv.count):
                 inst = f"{name}_v{i}"
+                self._session.hush(inst)
                 self._session.hush(f"_fade_{inst}")
                 if "gate" in pv.controls:
                     self._session.set_ctrl(f"{inst}_gate", 0.0)
@@ -375,9 +376,29 @@ class VoiceMixer:
     ) -> None:
         """Smoothly fade voice gain over N bars using a midiman pattern.
 
+        For poly voices, fades all instances proportionally.
         No Python threads needed — schedules gain changes through the pattern
         engine, synchronized to the beat grid.
         """
+        if bars < 1 or steps_per_bar < 1:
+            raise ValueError("bars and steps_per_bar must be >= 1")
+
+        if name in self._poly:
+            pv = self._poly[name]
+            for i in range(pv.count):
+                inst = f"{name}_v{i}"
+                self._fade_voice(inst, target / pv.count, bars, steps_per_bar)
+            # Update poly gain for bookkeeping
+            self._poly[name] = PolyVoice(
+                type_id=pv.type_id, count=pv.count, gain=target, controls=pv.controls,
+            )
+        else:
+            self._fade_voice(name, target, bars, steps_per_bar)
+
+    def _fade_voice(
+        self, name: str, target: float, bars: int, steps_per_bar: int
+    ) -> None:
+        """Schedule a gain fade for a single voice instance."""
         current = self._voices[name].gain
         total_steps = bars * steps_per_bar
         atoms: list[Pattern] = []
@@ -389,7 +410,6 @@ class VoiceMixer:
         for a in atoms[1:]:
             pattern = pattern + a
         self._session.play(f"_fade_{name}", pattern.over(bars))
-        # Update stored gain to target (will be reached at end of fade)
         old = self._voices[name]
         self._voices[name] = Voice(
             type_id=old.type_id, gain=target, controls=old.controls, init=old.init
