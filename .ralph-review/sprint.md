@@ -1,9 +1,7 @@
 # Ralph Review Sprint 14
 
 ## Sprint 14 — crossfade artifacts (user-reported)
-- [ ] LOADGRAPH_REUSE — engine/mod.rs:111 — LoadGraph uses reuse=false; all fresh nodes → phase artifacts on add-voice
-- [ ] MUTED_INSTANCE_LEAK_2 — found by adversarial in sprint 13 (already fixed above)
-- [ ] LOAD_GRAPH_TIMEOUT_2 — found by adversarial in sprint 13 (already fixed above)
+- [x] LOADGRAPH_REUSE — engine/mod.rs:111 — LoadGraph now uses reuse=true; preserves DSP state for existing voices
 
 ---
 
