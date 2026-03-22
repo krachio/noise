@@ -69,6 +69,13 @@ pub enum EngineCommand {
     },
     /// Silence all active slots.
     HushAll,
+    /// Assign a compiled pattern to a named slot, resetting phase to start from 0.
+    SetPatternFromZero {
+        /// Slot name.
+        name: String,
+        /// Pre-compiled pattern to assign.
+        pattern: CompiledPattern,
+    },
     /// Change the global BPM.
     SetBpm {
         /// New beats per minute.
@@ -83,6 +90,9 @@ pub struct Engine {
     names: HashMap<String, usize>,
     // Per-slot cycle frontier: next_cycle[idx] is the next cycle to query for slot idx.
     next_cycle: Vec<i64>,
+    // Per-slot phase offset: added to next_cycle when querying patterns.
+    // 0 = absolute positioning (default). -current_cycle = start from 0.
+    phase_offset: Vec<i64>,
 
     // Scheduling state.
     clock: Clock,
@@ -98,6 +108,7 @@ impl Engine {
             slots: Vec::new(),
             names: HashMap::new(),
             next_cycle: Vec::new(),
+            phase_offset: Vec::new(),
             clock: Clock::new(bpm, beats_per_cycle),
             heap: BinaryHeap::new(),
             lookahead,
@@ -110,18 +121,32 @@ impl Engine {
             EngineCommand::SetPattern { name, pattern } => {
                 let now = Instant::now();
                 if let Some(&idx) = self.names.get(&name) {
-                    // Hot-swap: clear only THIS slot's events, re-query from
-                    // current cycle. Other slots' events are preserved.
                     self.slots[idx] = pattern;
                     self.clear_slot_events(idx);
                     self.next_cycle[idx] = self.current_cycle(now);
+                    self.phase_offset[idx] = 0;
                 } else {
-                    // New slot: no heap clear needed — new slot has no events.
-                    // Start from next full cycle to avoid past-due burst.
                     let idx = self.slots.len();
                     self.slots.push(pattern);
                     self.names.insert(name, idx);
                     self.next_cycle.push(self.first_future_cycle(now));
+                    self.phase_offset.push(0);
+                }
+            }
+            EngineCommand::SetPatternFromZero { name, pattern } => {
+                let now = Instant::now();
+                let offset = -self.current_cycle(now);
+                if let Some(&idx) = self.names.get(&name) {
+                    self.slots[idx] = pattern;
+                    self.clear_slot_events(idx);
+                    self.next_cycle[idx] = self.current_cycle(now);
+                    self.phase_offset[idx] = offset;
+                } else {
+                    let idx = self.slots.len();
+                    self.slots.push(pattern);
+                    self.names.insert(name, idx);
+                    self.next_cycle.push(self.first_future_cycle(now));
+                    self.phase_offset.push(offset);
                 }
             }
             EngineCommand::Hush { name } => {
@@ -138,6 +163,7 @@ impl Engine {
                 self.heap.clear();
                 let future = self.first_future_cycle(Instant::now());
                 self.next_cycle.fill(future);
+                self.phase_offset.fill(0);
             }
             EngineCommand::SetBpm { bpm } => {
                 if !bpm.is_finite() || bpm <= 0.0
@@ -148,6 +174,7 @@ impl Engine {
                 self.clock = Clock::new(bpm, self.clock.beats_per_cycle());
                 self.heap.clear();
                 self.next_cycle.fill(0);
+                self.phase_offset.fill(0);
             }
         }
     }
@@ -190,7 +217,7 @@ impl Engine {
         let horizon = now + self.lookahead;
         for (_name, &idx) in &self.names {
             while self.clock.cycle_start_instant(self.next_cycle[idx]) <= horizon {
-                let query_arc = time::Arc::cycle(self.next_cycle[idx]);
+                let query_arc = time::Arc::cycle(self.next_cycle[idx] + self.phase_offset[idx]);
                 let pattern = &self.slots[idx];
                 for event in query(pattern, pattern.root, query_arc) {
                     if event.has_onset() {
@@ -526,6 +553,85 @@ mod tests {
             "newly added slot produced a burst of {} past-due events",
             burst.len()
         );
+    }
+
+    #[test]
+    fn test_set_pattern_from_zero_starts_at_beginning() {
+        // A pattern set with SetPatternFromZero should evaluate from cycle 0
+        // regardless of how many real cycles have elapsed.
+        let mut e = fast_engine();
+
+        // Let the clock run for a few cycles.
+        std::thread::sleep(Duration::from_millis(120));
+
+        let now = Instant::now();
+        let current = e.current_cycle(now);
+        assert!(current > 0, "clock should have advanced past cycle 0");
+
+        e.apply(EngineCommand::SetPatternFromZero {
+            name: "mod".into(),
+            pattern: CompiledPattern::atom(note(60)),
+        });
+
+        // The phase_offset should be set so that effective cycle = next_cycle + offset starts near 0.
+        // For a new slot, next_cycle = first_future_cycle = current+1,
+        // offset = -current_cycle => effective = (current+1) + (-current) = 1
+        // The key point: the effective cycle is near 0, not near `current`.
+        let idx = *e.names.get("mod").unwrap();
+        let effective = e.next_cycle[idx] + e.phase_offset[idx];
+        assert!(effective.abs() <= 1, "effective cycle should be near 0, got {effective}");
+    }
+
+    #[test]
+    fn test_set_pattern_from_zero_existing_slot() {
+        // SetPatternFromZero on an existing slot resets phase offset.
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetPattern {
+            name: "s".into(),
+            pattern: CompiledPattern::atom(note(60)),
+        });
+
+        std::thread::sleep(Duration::from_millis(120));
+
+        e.apply(EngineCommand::SetPatternFromZero {
+            name: "s".into(),
+            pattern: CompiledPattern::atom(note(64)),
+        });
+
+        let idx = *e.names.get("s").unwrap();
+        assert!(e.phase_offset[idx] < 0, "phase_offset should be negative (= -current_cycle)");
+    }
+
+    #[test]
+    fn test_normal_set_pattern_keeps_zero_offset() {
+        // Normal SetPattern should always set phase_offset = 0.
+        let mut e = fast_engine();
+        std::thread::sleep(Duration::from_millis(80));
+        e.apply(EngineCommand::SetPattern {
+            name: "s".into(),
+            pattern: CompiledPattern::atom(note(60)),
+        });
+
+        let idx = *e.names.get("s").unwrap();
+        assert_eq!(e.phase_offset[idx], 0, "normal SetPattern should have offset 0");
+    }
+
+    #[test]
+    fn test_fill_uses_phase_offset() {
+        // SetPatternFromZero should cause fill() to query from effective cycle 0,
+        // not the real cycle. We verify by checking that events are produced.
+        let mut e = fast_engine();
+
+        std::thread::sleep(Duration::from_millis(80));
+
+        e.apply(EngineCommand::SetPatternFromZero {
+            name: "mod".into(),
+            pattern: CompiledPattern::atom(note(60)),
+        });
+
+        e.fill(Instant::now());
+        // Should have events — the pattern starts from effective cycle 0.
+        assert!(e.heap.len() > 0, "fill with phase offset should produce events");
     }
 
     #[test]

@@ -192,6 +192,12 @@ class SetPattern:
 
 
 @dataclass(frozen=True)
+class SetPatternFromZero:
+    slot: str
+    pattern: IrNode
+
+
+@dataclass(frozen=True)
 class Hush:
     slot: str
 
@@ -211,7 +217,7 @@ class Ping:
     pass
 
 
-SimpleCommand = SetPattern | Hush | HushAll | SetBpm | Ping
+SimpleCommand = SetPattern | SetPatternFromZero | Hush | HushAll | SetBpm | Ping
 
 
 @dataclass(frozen=True)
@@ -321,6 +327,8 @@ def _command_to_dict(msg: ClientMessage) -> dict[str, Any]:
     match msg:
         case SetPattern(slot, pattern):
             return {"cmd": "SetPattern", "slot": slot, "pattern": ir_to_dict(pattern)}
+        case SetPatternFromZero(slot, pattern):
+            return {"cmd": "SetPatternFromZero", "slot": slot, "pattern": ir_to_dict(pattern)}
         case Hush(slot):
             return {"cmd": "Hush", "slot": slot}
         case HushAll():

@@ -1854,8 +1854,8 @@ def test_mod_plays_pattern() -> None:
 
     mixer.mod("bass/cutoff", mod_sine(200.0, 2000.0), bars=4)
 
-    assert session.play.call_count == 1
-    slot = session.play.call_args.args[0]
+    assert session.play_from_zero.call_count == 1
+    slot = session.play_from_zero.call_args.args[0]
     assert slot == "_ctrl_bass_cutoff"
 
 
@@ -1914,8 +1914,8 @@ def test_mod_send_param_label() -> None:
 
     mixer.mod("bass_send_verb/gain", mod_sine(0.0, 1.0), bars=4)
 
-    assert session.play.call_count == 1
-    slot = session.play.call_args.args[0]
+    assert session.play_from_zero.call_count == 1
+    slot = session.play_from_zero.call_args.args[0]
     assert slot == "_ctrl_bass_send_verb_gain"
 
 
@@ -2257,7 +2257,7 @@ def test_fade_path_gain() -> None:
 
     mixer.fade("bass/gain", target=0.1, bars=4)
 
-    assert session.play.call_count >= 1
+    assert session.play_from_zero.call_count >= 1
     assert mixer.voices["bass"].gain == 0.1
 
 
@@ -2273,7 +2273,7 @@ def test_fade_path_cutoff() -> None:
     mixer.voice("bass", "faust:bass", gain=0.5)
 
     mixer.fade("bass/cutoff", target=800.0, bars=4)
-    assert session.play.call_count >= 1
+    assert session.play_from_zero.call_count >= 1
 
 
 def test_fade_oneshot_hold() -> None:
@@ -2291,7 +2291,7 @@ def test_fade_oneshot_hold() -> None:
 
     mixer.fade("bass/gain", target=0.0, bars=2)
 
-    played_pattern = session.play.call_args.args[1]
+    played_pattern = session.play_from_zero.call_args.args[1]
     inner = played_pattern.node
     if isinstance(inner, Slow):
         inner = inner.child
@@ -2657,3 +2657,47 @@ def test_bus_handle_repr() -> None:
     assert "verb" in r
     assert "faust:verb" in r
     assert "gain=0.50" in r
+
+
+# ── Phase-Reset: fade/mod use play_from_zero ──────────────────────────────
+
+
+def test_fade_uses_play_from_zero() -> None:
+    """fade() should use play_from_zero for control path patterns so they start from phase 0."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    session.reset_mock()
+
+    mixer.fade("bass/cutoff", target=2000.0, bars=4)
+
+    # The fade control path should use play_from_zero, not play
+    assert session.play_from_zero.call_count == 1
+    assert session.play.call_count == 0
+    slot = session.play_from_zero.call_args.args[0]
+    assert slot == "_ctrl_bass_cutoff"
+
+
+def test_mod_uses_play_from_zero() -> None:
+    """mod() should use play_from_zero so modulations start from phase 0."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer, mod_sine
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    session.reset_mock()
+
+    mixer.mod("bass/cutoff", mod_sine(200.0, 2000.0), bars=4)
+
+    assert session.play_from_zero.call_count == 1
+    assert session.play.call_count == 0

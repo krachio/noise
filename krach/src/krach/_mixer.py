@@ -833,36 +833,36 @@ class VoiceMixer:
         """Check if name is a known voice or bus."""
         return name in self._voices or name in self._buses
 
-    def play(self, target: str, pattern: Pattern) -> None:
+    def play(self, target: str, pattern: Pattern, *, from_zero: bool = False) -> None:
         """Play a pattern on a voice or control path.
 
         - Known voice name (exact match): binds bare params to ``voice/param``
         - Poly voice (count>1): round-robin allocates instances
         - Otherwise with ``/``: control path — rewrites ``"ctrl"`` placeholder
         - Otherwise without ``/``: mono voice binding (may be a new slot)
+
+        ``from_zero``: if True, uses ``play_from_zero`` so the pattern phase
+        starts at 0 regardless of the current cycle position.
         """
+        send = self._session.play_from_zero if from_zero else self._session.play
         voice = self._voices.get(target)
         if voice is not None and voice.count > 1:
-            # Poly voice: round-robin allocate instances during rewrite
             bound_node, new_alloc = _bind_voice_poly(
                 pattern.node, target, voice.count, voice.alloc
             )
             voice.alloc = new_alloc
-            self._session.play(target, Pattern(bound_node))
+            send(target, Pattern(bound_node))
         elif self._is_voice_or_bus(target):
-            # Known mono voice or bus: rewrite bare params to voice/param
             bound = Pattern(_bind_voice(pattern.node, target))
-            self._session.play(target, bound)
+            send(target, bound)
         elif "/" in target:
-            # Control path: rewrite "ctrl" placeholder to full path label
             label = self._resolve_path(target)
             bound = Pattern(_bind_ctrl(pattern.node, label))
             slot = f"_ctrl_{target.replace('/', '_')}"
-            self._session.play(slot, bound)
+            send(slot, bound)
         else:
-            # Unknown target without /: bind as voice name anyway
             bound = Pattern(_bind_voice(pattern.node, target))
-            self._session.play(target, bound)
+            send(target, bound)
 
     def set(self, path: str, value: float) -> None:
         """Set a control value by path. Instant — no pattern scheduling."""
@@ -935,7 +935,7 @@ class VoiceMixer:
             self._session.hush(ctrl_slot)
             effective_spb = max(steps_per_bar, 16)
             pattern = self._build_fade_pattern(current, target, bars, effective_spb)
-            self.play(path, pattern)
+            self.play(path, pattern, from_zero=True)
             self._ctrl_values[path] = target
 
             # Update gain bookkeeping if applicable
@@ -1092,8 +1092,8 @@ class VoiceMixer:
         self._rebuild()
 
     def mod(self, path: str, pattern: Pattern, bars: int = 1) -> None:
-        """Sugar for ``play(path, pattern.over(bars))``."""
-        self.play(path, pattern.over(bars))
+        """Sugar for ``play(path, pattern.over(bars), from_zero=True)``."""
+        self.play(path, pattern.over(bars), from_zero=True)
 
     @contextmanager
     def batch(self) -> Generator[None]:

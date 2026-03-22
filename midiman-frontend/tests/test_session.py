@@ -265,6 +265,29 @@ class TestTempo:
             assert s.tempo == 140.0
 
 
+class TestPlayFromZero:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_play_from_zero_sends_correct_command(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.play_from_zero("mod_slot", note(60))
+        msgs = _parse_sent(mock_cls.return_value)
+        pat_msgs = [m for m in msgs if m["cmd"] == "SetPatternFromZero"]
+        assert len(pat_msgs) == 1
+        assert pat_msgs[0]["slot"] == "mod_slot"
+        assert pat_msgs[0]["pattern"]["op"] == "Atom"
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_play_from_zero_tracks_slot_state(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        pat = note(60)
+        with Session() as s:
+            s.play_from_zero("mod_slot", pat)
+            state = s.slots["mod_slot"]
+            assert state.pattern == pat
+            assert state.playing is True
+
+
 class TestSlotStateImmutable:
     def test_slot_state_is_frozen(self) -> None:
         state = SlotState(pattern=note(36), playing=True)

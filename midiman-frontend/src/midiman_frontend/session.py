@@ -14,6 +14,7 @@ from midiman_frontend.ir import (
     Ping,
     SetBpm,
     SetPattern,
+    SetPatternFromZero,
     command_to_json,
 )
 from midiman_frontend.graph import GraphIr
@@ -81,6 +82,11 @@ class Session:
     def play(self, slot: str, pattern: Pattern) -> None:
         self._slots[slot] = SlotState(pattern=pattern, playing=True)
         self.send(SetPattern(slot=slot, pattern=pattern.node))
+
+    def play_from_zero(self, slot: str, pattern: Pattern) -> None:
+        """Like play(), but resets phase so the pattern starts from cycle 0."""
+        self._slots[slot] = SlotState(pattern=pattern, playing=True)
+        self.send(SetPatternFromZero(slot=slot, pattern=pattern.node))
 
     def hush(self, slot: str) -> None:
         if slot in self._slots:

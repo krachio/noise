@@ -172,6 +172,10 @@ pub fn compile_command(msg: &ClientMessage) -> Result<Option<EngineCommand>, Str
             let compiled = ir::compile(pattern).map_err(|e| format!("compile error: {e}"))?;
             Ok(Some(EngineCommand::SetPattern { name: slot.clone(), pattern: compiled }))
         }
+        ClientMessage::SetPatternFromZero { slot, pattern } => {
+            let compiled = ir::compile(pattern).map_err(|e| format!("compile error: {e}"))?;
+            Ok(Some(EngineCommand::SetPatternFromZero { name: slot.clone(), pattern: compiled }))
+        }
         ClientMessage::Hush { slot } => Ok(Some(EngineCommand::Hush { name: slot.clone() })),
         ClientMessage::HushAll => Ok(Some(EngineCommand::HushAll)),
         ClientMessage::SetBpm { bpm } => Ok(Some(EngineCommand::SetBpm { bpm: *bpm })),
@@ -184,6 +188,7 @@ pub fn compile_command(msg: &ClientMessage) -> Result<Option<EngineCommand>, Str
 pub fn describe(cmd: &EngineCommand) -> String {
     match cmd {
         EngineCommand::SetPattern { name, .. } => format!("pattern set on {name}"),
+        EngineCommand::SetPatternFromZero { name, .. } => format!("pattern set on {name} (from zero)"),
         EngineCommand::Hush { name } => format!("{name} hushed"),
         EngineCommand::HushAll => "all slots hushed".into(),
         EngineCommand::SetBpm { bpm } => format!("bpm set to {bpm}"),

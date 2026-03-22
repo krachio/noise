@@ -33,6 +33,8 @@ use crate::ir::IrNode;
 pub enum ClientMessage {
     /// Set a pattern on a named slot (e.g., "d1").
     SetPattern { slot: String, pattern: IrNode },
+    /// Set a pattern on a named slot, resetting phase so it starts from cycle 0.
+    SetPatternFromZero { slot: String, pattern: IrNode },
     /// Silence a named slot.
     Hush { slot: String },
     /// Silence all slots.
@@ -104,6 +106,37 @@ mod tests {
         match decoded {
             ClientMessage::Hush { slot } => assert_eq!(slot, "d2"),
             _ => panic!("expected Hush"),
+        }
+    }
+
+    #[test]
+    fn client_message_set_pattern_from_zero_roundtrip() {
+        let msg = ClientMessage::SetPatternFromZero {
+            slot: "mod1".into(),
+            pattern: IrNode::Atom {
+                value: Value::Note {
+                    channel: 0,
+                    note: 60,
+                    velocity: 100,
+                    dur: 0.5,
+                },
+            },
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""cmd":"SetPatternFromZero"#));
+        let decoded: ClientMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            ClientMessage::SetPatternFromZero { slot, pattern } => {
+                assert_eq!(slot, "mod1");
+                match pattern {
+                    IrNode::Atom { value } => match value {
+                        Value::Note { note, .. } => assert_eq!(note, 60),
+                        _ => panic!("expected Note"),
+                    },
+                    _ => panic!("expected Atom"),
+                }
+            }
+            _ => panic!("expected SetPatternFromZero"),
         }
     }
 
