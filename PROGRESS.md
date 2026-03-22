@@ -15,13 +15,13 @@ noise/
 ```
 
 ### Test counts
-- audio-engine: 160 Rust tests
+- audio-engine: 161 Rust tests
 - audio-faust: 22 Rust tests
-- pattern-engine: 141 Rust tests
+- pattern-engine: 154 Rust tests
 - krach-engine: 25 Rust tests
 - faust-dsl: 68 Python tests
 - krach: 442 Python tests (includes patterns module, namespace tests)
-- **Total: 858 tests**, all green. Pyright strict clean.
+- **Total: 872 tests**, all green. Pyright strict clean.
 
 ## Usage
 

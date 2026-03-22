@@ -297,7 +297,7 @@ Hi-hat triplets layered with a Euclidean kick — 3-against-5 polyrhythm.
 With `audio-engine` (sibling in this monorepo) running on port 9000:
 
 ```bash
-MIDIMAN_OSC_TARGET=127.0.0.1:9000 cargo run
+PATTERN_ENGINE_OSC_TARGET=127.0.0.1:9000 cargo run
 ```
 
 ```json

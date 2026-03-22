@@ -86,7 +86,7 @@ Load a graph via OSC or programmatically:
 cargo run
 
 # Terminal 2: pattern sequencer
-cd ../pattern-engine && MIDIMAN_OSC_TARGET=127.0.0.1:9000 cargo run
+cd ../pattern-engine && PATTERN_ENGINE_OSC_TARGET=127.0.0.1:9000 cargo run
 
 # Terminal 3: send a C major 7th arpeggio
 echo '{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Cat","children":[{"op":"Atom","value":{"type":"Osc","address":"/audio/set","args":[{"Str":"pitch"},{"Float":261.63}]}},{"op":"Atom","value":{"type":"Osc","address":"/audio/set","args":[{"Str":"pitch"},{"Float":329.63}]}},{"op":"Atom","value":{"type":"Osc","address":"/audio/set","args":[{"Str":"pitch"},{"Float":392.0}]}},{"op":"Atom","value":{"type":"Osc","address":"/audio/set","args":[{"Str":"pitch"},{"Float":493.88}]}}]}}' | socat - UNIX-CONNECT:/tmp/krach.sock

@@ -99,7 +99,7 @@ audio-faust provides DSP nodes to `audio-engine`. `pattern-engine` sequences con
 # (binary wiring is up to your application)
 
 # Terminal 2: run pattern-engine
-cd ../pattern-engine && MIDIMAN_OSC_TARGET=127.0.0.1:9000 cargo run
+cd ../pattern-engine && PATTERN_ENGINE_OSC_TARGET=127.0.0.1:9000 cargo run
 
 # Terminal 3: sequence a FAUST node's parameters
 echo '{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Cat","children":[

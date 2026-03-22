@@ -45,5 +45,5 @@ src/faust_dsl/
 
 ## Next
 
-- Wire `ControlSchema` into soundman-frontend `exposed_controls`
+- Wire `ControlSchema` into krach `exposed_controls`
 - Consider adding `transpile(optimize=True)` as default once optimization is battle-tested

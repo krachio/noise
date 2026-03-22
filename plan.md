@@ -2,7 +2,7 @@
 
 ## Current State
 
-858 tests (442 krach, 68 faust-dsl, 348 Rust). Pyright strict clean.
+872 tests (442 krach, 68 faust-dsl, 362 Rust). Pyright strict clean.
 Two-symbol API: `kr` (VoiceMixer) + `krs` (krach.dsp). Voice handles, voice-free patterns,
 `/` path addressing, effect routing, native automation lanes (block-rate on audio thread),
 unified Voice model, phase-reset, meter, pattern retrieval, scenes, kr.load().
