@@ -1099,7 +1099,7 @@ def test_note_vel_default_not_sent() -> None:
 
 
 def test_play_delegates_to_session() -> None:
-    """mix.play() delegates to session.play()."""
+    """mix.play() binds pattern and delegates to session.play()."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1112,7 +1112,10 @@ def test_play_delegates_to_session() -> None:
 
     pat = mixer.hit("kick", "gate") * 4
     mixer.play("kick", pat)
-    session.play.assert_called_once_with("kick", pat)
+    # play() binds the pattern (no-op for already-bound params) then delegates
+    call_args = session.play.call_args
+    assert call_args.args[0] == "kick"
+    assert session.play.call_count == 1
 
 
 # ── Sprint 12 adversarial: mute/unmute/solo bugs ─────────────────────────────
@@ -2329,3 +2332,61 @@ def test_bind_voice_walks_nested_tree() -> None:
     assert "'Str': 'pad/freq'" in ir_str
     assert "'Str': 'pad/gate'" in ir_str
     assert "'Str': 'freq'" not in ir_str
+
+
+# ── mix.play() path dispatch ─────────────────────────────────────────────────
+
+
+def test_play_voice_binds_pattern() -> None:
+    """play() with a plain voice name rewrites bare params to voice/param."""
+    from unittest.mock import MagicMock
+
+    from midiman_frontend.ir import ir_to_dict
+
+    from krach._mixer import VoiceMixer, note
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    pat = note(440.0)
+    mixer.play("bass", pat)
+
+    # Should have called session.play with bound params
+    call_args = session.play.call_args
+    played_name = call_args.args[0]
+    played_pattern = call_args.args[1]
+    assert played_name == "bass"
+    ir_str = str(ir_to_dict(played_pattern.node))
+    assert "'Str': 'bass/freq'" in ir_str
+    assert "'Str': 'bass/gate'" in ir_str
+
+
+def test_play_control_path_binds_ctrl() -> None:
+    """play() with a / path rewrites 'ctrl' placeholder to full label."""
+    from unittest.mock import MagicMock
+
+    from midiman_frontend.ir import OscFloat, OscStr, ir_to_dict
+    from midiman_frontend.pattern import osc
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    # Create a control pattern with "ctrl" placeholder
+    ctrl_pat = osc("/soundman/set", OscStr("ctrl"), OscFloat(800.0))
+    mixer.play("bass/cutoff", ctrl_pat)
+
+    call_args = session.play.call_args
+    played_name = call_args.args[0]
+    played_pattern = call_args.args[1]
+    # Slot name should be mangled for the control path
+    assert played_name == "_ctrl_bass_cutoff"
+    ir_str = str(ir_to_dict(played_pattern.node))
+    assert "'Str': 'bass/cutoff'" in ir_str

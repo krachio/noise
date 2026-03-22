@@ -797,9 +797,29 @@ class VoiceMixer:
         inst = self._alloc_voice(name)
         return build_note(inst, self._voices[inst].controls, pitch, vel=vel, **params)
 
-    def play(self, name: str, pattern: Pattern) -> None:
-        """Play a pattern on a named slot — delegates to the underlying Session."""
-        self._session.play(name, pattern)
+    def play(self, target: str, pattern: Pattern) -> None:
+        """Play a pattern on a voice or control path.
+
+        - Plain name (no ``/``): voice name — rewrites bare params to ``voice/param``
+        - Path with ``/``: control path — rewrites ``"ctrl"`` placeholder to the label
+        """
+        if "/" in target:
+            # Control path: rewrite "ctrl" placeholder to full path label
+            label = self._resolve_path(target)
+            bound = Pattern(_bind_ctrl(pattern.node, label))
+            slot = f"_ctrl_{target.replace('/', '_')}"
+            self._session.play(slot, bound)
+        else:
+            # Voice name: rewrite bare params to voice/param
+            bound = Pattern(_bind_voice(pattern.node, target))
+            self._session.play(target, bound)
+
+    def _resolve_path(self, path: str) -> str:
+        """Convert a ``/``-separated path to the exposed control label.
+
+        Since labels are now also ``/``-separated (commit 2), the path IS the label.
+        """
+        return path
 
     def hit(self, name: str, param: str) -> Pattern:
         """Percussive trigger: trig + reset on a specific control.
