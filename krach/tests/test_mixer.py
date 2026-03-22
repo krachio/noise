@@ -171,6 +171,7 @@ def test_batch_defers_rebuild() -> None:
     from unittest.mock import MagicMock
 
     session = MagicMock()
+    session.list_nodes.return_value = ["faust:kick", "faust:bass", "dac", "gain"]
     from krach._mixer import VoiceMixer
 
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={

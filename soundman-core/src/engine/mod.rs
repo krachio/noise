@@ -249,7 +249,9 @@ impl EngineController {
             ClientMessage::ExposeControl { label, node_id, control_name } => {
                 self.exposed_controls.insert(label, (node_id, control_name));
             }
-            _ => {} // non-mutation messages ignored in batch
+            other => {
+                warn!("GraphBatch: ignoring non-mutation message: {other:?}");
+            }
         }
     }
 

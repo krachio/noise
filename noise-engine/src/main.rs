@@ -216,6 +216,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
     // Pending SetControl events (drained from pattern engine with lookahead,
     // dispatched to audio engine when due). Small n — linear scan + swap_remove.
     let mut pending: Vec<PendingEvent> = Vec::new();
+    let mut pending_midi: Vec<midiman::engine::TimedEvent> = Vec::new();
 
     loop {
         let now = Instant::now();
@@ -273,32 +274,8 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                     value,
                 });
             } else {
-                // MIDI note/CC — dispatch when due.
-                match &timed_event.event.value {
-                    Value::Note { channel, note, dur, .. } => {
-                        if timed_event.fire_at <= now {
-                            let cycle_dur_secs =
-                                BEATS_PER_CYCLE * 60.0 / pattern_engine.bpm();
-                            let note_off_at = timed_event.fire_at
-                                + Duration::from_secs_f64(dur * cycle_dur_secs);
-                            note_offs.push(Reverse(PendingNoteOff {
-                                fire_at: note_off_at,
-                                channel: *channel,
-                                note: *note,
-                            }));
-                            if let Err(e) = output::dispatch(&timed_event, &mut midi_sink, &mut None) {
-                                warn!("midi dispatch: {e}");
-                            }
-                        }
-                    }
-                    _ => {
-                        if timed_event.fire_at <= now {
-                            if let Err(e) = output::dispatch(&timed_event, &mut midi_sink, &mut None) {
-                                warn!("midi dispatch: {e}");
-                            }
-                        }
-                    }
-                }
+                // MIDI note/CC — hold in pending_midi until fire_at.
+                pending_midi.push(timed_event);
             }
         }
 
@@ -322,12 +299,36 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
             }
         }
 
-        // ⑤ Check FAUST background reload (non-blocking).
+        // ⑤ Dispatch pending MIDI events that are now due.
+        let mut m = 0;
+        while m < pending_midi.len() {
+            if pending_midi[m].fire_at <= now {
+                let ev = pending_midi.swap_remove(m);
+                match &ev.event.value {
+                    Value::Note { channel, note, dur, .. } => {
+                        let cycle_dur = BEATS_PER_CYCLE * 60.0 / pattern_engine.bpm();
+                        note_offs.push(Reverse(PendingNoteOff {
+                            fire_at: ev.fire_at + Duration::from_secs_f64(dur * cycle_dur),
+                            channel: *channel,
+                            note: *note,
+                        }));
+                    }
+                    _ => {}
+                }
+                if let Err(e) = output::dispatch(&ev, &mut midi_sink, &mut None) {
+                    warn!("midi dispatch: {e}");
+                }
+            } else {
+                m += 1;
+            }
+        }
+
+        // ⑥ Check FAUST background reload (non-blocking).
         if let Err(e) = audio_engine.poll_reload() {
             warn!("poll_reload: {e}");
         }
 
-        // ⑥ Drain any note-offs that are now due.
+        // ⑦ Drain any note-offs that are now due.
         drain_note_offs(&mut note_offs, &mut midi_sink);
 
         // ⑦ MIDI clock ticks.
@@ -344,11 +345,13 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
         }
 
         // ⑧ Sleep until next event (capped at 1ms for command responsiveness).
+        let midi_deadline = pending_midi.iter().map(|e| e.fire_at).min();
+        let ctrl_deadline = pending.iter().map(|p| p.fire_at()).min();
         let deadline = earliest_deadline(
             pattern_engine.next_deadline(),
             note_offs.peek().map(|Reverse(n)| n.fire_at),
             next_clock_tick,
-            pending.iter().map(|p| p.fire_at()).min(),
+            [midi_deadline, ctrl_deadline].into_iter().flatten().min(),
         );
         let sleep = deadline.saturating_duration_since(Instant::now()).min(MAX_SLEEP);
         if sleep > Duration::ZERO {

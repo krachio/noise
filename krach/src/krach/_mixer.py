@@ -184,6 +184,30 @@ class VoiceMixer:
         self._batching: bool = False
         self._graph_loaded: bool = False
 
+    def _resolve_source(
+        self,
+        name: str,
+        source: str | DspDef | Callable[..., Any],
+        fallback_controls: tuple[str, ...] = (),
+    ) -> tuple[str, tuple[str, ...]]:
+        """Resolve a source to (type_id, controls). Writes .dsp and waits for JIT if needed."""
+        if isinstance(source, DspDef):
+            type_id = f"faust:{name}"
+            self._dsp_dir.joinpath(f"{name}.py").write_text(source.source)
+            faust_code, controls = source.faust, source.controls
+        elif callable(source):
+            type_id = f"faust:{name}"
+            result = _transpile(source)  # type: ignore[arg-type]
+            faust_code, controls = result.source, tuple(c.name for c in result.schema.controls)
+        else:
+            return source, self._node_controls.get(source, fallback_controls)
+
+        self._dsp_dir.joinpath(f"{name}.dsp").write_text(faust_code)
+        self._node_controls[type_id] = controls
+        if not self._batching:
+            self._wait_for_type(type_id)
+        return type_id, controls
+
     def voice(
         self,
         name: str,
@@ -196,23 +220,7 @@ class VoiceMixer:
         ``source`` is a ``@dsp``-decorated function, a registered type_id
         string, or a raw Python DSP function (transpiled on the fly).
         """
-        if isinstance(source, DspDef):
-            type_id = f"faust:{name}"
-            faust_code, controls = source.faust, source.controls
-            self._dsp_dir.joinpath(f"{name}.py").write_text(source.source)
-        elif callable(source):
-            type_id = f"faust:{name}"
-            result = _transpile(source)  # type: ignore[arg-type]
-            faust_code, controls = result.source, tuple(c.name for c in result.schema.controls)
-        else:
-            type_id = source
-            faust_code, controls = None, self._node_controls.get(type_id, tuple(init.keys()))
-
-        if faust_code is not None:
-            self._dsp_dir.joinpath(f"{name}.dsp").write_text(faust_code)
-            self._node_controls[type_id] = controls
-            if not self._batching:
-                self._wait_for_type(type_id)
+        type_id, controls = self._resolve_source(name, source, tuple(init.keys()))
 
         is_new = name not in self._voices
         self._voices[name] = Voice(
@@ -240,29 +248,17 @@ class VoiceMixer:
         Use ``mix.step(name, freq)`` to trigger the next available instance
         (round-robin), or ``mix.chord(name, f1, f2, f3)`` for simultaneous notes.
         """
-        # Resolve type_id and controls via the same logic as voice().
-        if isinstance(source, DspDef):
-            type_id = f"faust:{name}"
-            faust_code, controls = source.faust, source.controls
-            self._dsp_dir.joinpath(f"{name}.py").write_text(source.source)
-        elif callable(source):
-            type_id = f"faust:{name}"
-            result = _transpile(source)  # type: ignore[arg-type]
-            faust_code, controls = result.source, tuple(c.name for c in result.schema.controls)
-        else:
-            type_id = source
-            faust_code, controls = None, self._node_controls.get(type_id, ())
+        type_id, controls = self._resolve_source(name, source)
 
-        if faust_code is not None:
-            self._dsp_dir.joinpath(f"{name}.dsp").write_text(faust_code)
-            self._node_controls[type_id] = controls
-            if not self._batching:
-                self._wait_for_type(type_id)
+        # Clean up old instances if re-registering.
+        if name in self._poly:
+            old = self._poly[name]
+            for i in range(old.count):
+                self._voices.pop(f"{name}_v{i}", None)
 
         self._poly[name] = PolyVoice(type_id=type_id, count=voices, gain=gain, controls=controls)
         self._poly_alloc[name] = 0
 
-        # Create N individual voice instances.
         per_voice_gain = gain / voices
         for i in range(voices):
             inst = f"{name}_v{i}"
@@ -272,9 +268,15 @@ class VoiceMixer:
             self._rebuild()
 
     def remove(self, name: str) -> None:
-        """Remove a voice.  Rebuilds the graph."""
+        """Remove a voice or poly voice. Rebuilds the graph."""
         self.hush(name)
-        del self._voices[name]
+        if name in self._poly:
+            pv = self._poly.pop(name)
+            self._poly_alloc.pop(name, None)
+            for i in range(pv.count):
+                self._voices.pop(f"{name}_v{i}", None)
+        else:
+            del self._voices[name]
         self._rebuild()
 
     def hush(self, name: str) -> None:
@@ -404,11 +406,14 @@ class VoiceMixer:
         self._session.load_graph(ir)
         self._graph_loaded = True
 
-    def _wait_for_type(self, type_id: str) -> None:
-        """Poll until the engine has loaded the given FAUST type."""
+    def _wait_for_type(self, type_id: str, timeout: float = 10.0) -> None:
+        """Poll until the engine has loaded the given FAUST type.
+
+        Raises TimeoutError if the type doesn't appear within `timeout` seconds.
+        """
         import time
 
-        deadline = time.monotonic() + 10.0
+        deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             try:
                 if type_id in self._session.list_nodes():
@@ -416,3 +421,4 @@ class VoiceMixer:
             except (TimeoutError, ConnectionError):
                 pass
             time.sleep(0.1)
+        raise TimeoutError(f"FAUST type '{type_id}' not ready after {timeout}s")
