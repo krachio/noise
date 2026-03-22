@@ -59,5 +59,6 @@ Pattern:        Python traces → Pattern IR → compile   → native Automation
 - [ ] Rename Rust crates: soundman-core → audio-engine, midiman → pattern-engine
 
 ## Known Issues
+- [ ] **gain() not working in some sessions** — `mix.gain("stab", 0.0)` and `mix.set("stab/gain", 0.0)` don't reduce volume. Suspected: exposed_controls label mismatch after graph rebuild. Needs investigation with engine WARN logs enabled (`RUST_LOG=warn`). CoreAudio can crash if total voice gain >1.0.
 - [ ] Fade starts at arbitrary cycle position (phase-reset implemented but needs testing in REPL)
 - [ ] Copilot sometimes generates `seq(note("A1"), ...)` instead of `seq("A1", ...)` — validation added but copilot context should be clearer
