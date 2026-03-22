@@ -2250,6 +2250,8 @@ def test_fade_path_gain() -> None:
     from krach._mixer import VoiceMixer
 
     session = MagicMock()
+    session.tempo = 120.0
+    session.meter = 4.0
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
@@ -2257,7 +2259,10 @@ def test_fade_path_gain() -> None:
 
     mixer.fade("bass/gain", target=0.1, bars=4)
 
-    assert session.play_from_zero.call_count >= 1
+    session.set_automation.assert_called_once()
+    args = session.set_automation.call_args
+    assert args[0][1] == "ramp"  # shape
+    assert args[1]["one_shot"] is True
     assert mixer.voice_data["bass"].gain == 0.1
 
 
@@ -2267,23 +2272,26 @@ def test_fade_path_cutoff() -> None:
     from krach._mixer import VoiceMixer
 
     session = MagicMock()
+    session.tempo = 120.0
+    session.meter = 4.0
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
 
     mixer.fade("bass/cutoff", target=800.0, bars=4)
-    assert session.play_from_zero.call_count >= 1
+    session.set_automation.assert_called_once()
 
 
 def test_fade_oneshot_hold() -> None:
+    """fade() sends a one-shot ramp automation (holds at target)."""
     from unittest.mock import MagicMock
-
-    from midiman_frontend.ir import Cat, Slow
 
     from krach._mixer import VoiceMixer
 
     session = MagicMock()
+    session.tempo = 120.0
+    session.meter = 4.0
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
@@ -2291,13 +2299,13 @@ def test_fade_oneshot_hold() -> None:
 
     mixer.fade("bass/gain", target=0.0, bars=2)
 
-    played_pattern = session.play_from_zero.call_args.args[1]
-    inner = played_pattern.node
-    if isinstance(inner, Slow):
-        inner = inner.child
-    assert isinstance(inner, Cat)
-    ramp_steps = 2 * 4  # bars * steps_per_bar default
-    assert len(inner.children) > ramp_steps
+    session.set_automation.assert_called_once()
+    args = session.set_automation.call_args
+    assert args[0][0] == "bass/gain"  # label
+    assert args[0][1] == "ramp"  # shape
+    assert args[0][2] == 0.5  # lo (current gain)
+    assert args[0][3] == 0.0  # hi (target)
+    assert args[1]["one_shot"] is True
 
 
 # ── voice() with count parameter ─────────────────────────────────────────────
@@ -2683,13 +2691,15 @@ def test_meter_property() -> None:
 # ── Phase-Reset: fade/mod use play_from_zero ──────────────────────────────
 
 
-def test_fade_uses_play_from_zero() -> None:
-    """fade() should use play_from_zero for control path patterns so they start from phase 0."""
+def test_fade_uses_native_automation() -> None:
+    """fade() with a path sends a native one-shot ramp automation."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
 
     session = MagicMock()
+    session.tempo = 120.0
+    session.meter = 4.0
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
@@ -2698,11 +2708,14 @@ def test_fade_uses_play_from_zero() -> None:
 
     mixer.fade("bass/cutoff", target=2000.0, bars=4)
 
-    # The fade control path should use play_from_zero, not play
-    assert session.play_from_zero.call_count == 1
-    assert session.play.call_count == 0
-    slot = session.play_from_zero.call_args.args[0]
-    assert slot == "_ctrl_bass_cutoff"
+    # Should use native automation, not pattern-based play
+    session.set_automation.assert_called_once()
+    args = session.set_automation.call_args
+    assert args[0][0] == "bass/cutoff"  # label
+    assert args[0][1] == "ramp"  # shape
+    assert args[1]["one_shot"] is True
+    session.play_from_zero.assert_not_called()
+    session.play.assert_not_called()
 
 
 def test_mod_uses_play_from_zero() -> None:
@@ -2920,3 +2933,102 @@ def test_buses_returns_handles() -> None:
     assert isinstance(result, dict)
     assert "verb" in result
     assert isinstance(result["verb"], BusHandle)
+
+
+# ── mod() with native automation ─────────────────────────────────────────────
+
+
+def test_mod_string_shape_sends_automation() -> None:
+    """mod() with a string shape sends set_automation to the session."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.tempo = 120.0
+    session.meter = 4.0
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.3)
+
+    mixer.mod("bass/cutoff", "sine", lo=200.0, hi=2000.0, bars=2)
+
+    session.set_automation.assert_called_once()
+    args = session.set_automation.call_args
+    assert args[0][0] == "bass/cutoff"  # label
+    assert args[0][1] == "sine"  # shape
+    assert args[0][2] == 200.0  # lo
+    assert args[0][3] == 2000.0  # hi
+    # period_secs = 2 bars * 4 beats * 60 / 120 = 4.0
+    assert abs(args[0][4] - 4.0) < 1e-6  # period_secs
+
+
+def test_mod_pattern_still_works() -> None:
+    """mod() with a Pattern still uses the legacy play path."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer, mod_sine
+
+    session = MagicMock()
+    session.tempo = 120.0
+    session.meter = 4.0
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.3)
+
+    pat = mod_sine(200.0, 2000.0)
+    mixer.mod("bass/cutoff", pat, bars=2)
+
+    # Should NOT call set_automation (uses play path instead)
+    session.set_automation.assert_not_called()
+    # Should call play_from_zero (the from_zero path in play())
+    session.play_from_zero.assert_called_once()
+
+
+def test_fade_path_sends_automation() -> None:
+    """fade() with a path sends a one-shot ramp automation."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.tempo = 120.0
+    session.meter = 4.0
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.3)
+
+    mixer.fade("bass/cutoff", 1000.0, bars=4)
+
+    session.set_automation.assert_called_once()
+    args = session.set_automation.call_args
+    assert args[0][0] == "bass/cutoff"  # label
+    assert args[0][1] == "ramp"  # shape
+    assert args[0][2] == 0.0  # lo (default start)
+    assert args[0][3] == 1000.0  # hi (target)
+    # period_secs = 4 bars * 4 beats * 60 / 120 = 8.0
+    assert abs(args[0][4] - 8.0) < 1e-6  # period_secs
+    assert args[1]["one_shot"] is True
+
+
+def test_fade_gain_path_updates_bookkeeping() -> None:
+    """fade() on gain path updates Voice.gain."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.tempo = 120.0
+    session.meter = 4.0
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    mixer.fade("bass/gain", 0.8, bars=2)
+
+    assert mixer.get_voice("bass") is not None
+    assert mixer.get_voice("bass").gain == 0.8  # type: ignore[union-attr]

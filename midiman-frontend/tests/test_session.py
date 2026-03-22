@@ -413,3 +413,44 @@ class TestSendJsonTimeout:
         mock_cls.return_value.makefile.return_value.readline.side_effect = socket.timeout("timed out")
         with pytest.raises(ConnectionError, match="engine"):
             s.set_ctrl("bass_gain", 0.5)
+
+
+class TestSetAutomation:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_set_automation_sends_json(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        s = Session()
+        s.connect()
+        s.set_automation("bass/cutoff", "sine", 200.0, 2000.0, 2.0)
+        msgs = _parse_sent(mock_cls.return_value)
+        auto_msgs = [m for m in msgs if m.get("type") == "set_automation"]
+        assert len(auto_msgs) == 1
+        msg = auto_msgs[0]
+        assert msg["id"] == "bass/cutoff"
+        assert msg["label"] == "bass/cutoff"
+        assert msg["shape"] == "sine"
+        assert msg["lo"] == 200.0
+        assert msg["hi"] == 2000.0
+        assert msg["period_secs"] == 2.0
+        assert msg["one_shot"] is False
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_set_automation_one_shot(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        s = Session()
+        s.connect()
+        s.set_automation("bass/gain", "ramp", 0.0, 1.0, 4.0, one_shot=True)
+        msgs = _parse_sent(mock_cls.return_value)
+        auto_msgs = [m for m in msgs if m.get("type") == "set_automation"]
+        assert auto_msgs[0]["one_shot"] is True
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_clear_automation_sends_json(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        s = Session()
+        s.connect()
+        s.clear_automation("bass/cutoff")
+        msgs = _parse_sent(mock_cls.return_value)
+        clear_msgs = [m for m in msgs if m.get("type") == "clear_automation"]
+        assert len(clear_msgs) == 1
+        assert clear_msgs[0]["id"] == "bass/cutoff"

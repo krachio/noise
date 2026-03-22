@@ -942,12 +942,17 @@ class VoiceMixer:
             else:
                 current = 0.0
 
-            # Hush any existing control pattern on this path
+            # Clear any existing pattern-based control on this path
             ctrl_slot = f"_ctrl_{path.replace('/', '_')}"
             self._session.hush(ctrl_slot)
-            effective_spb = max(steps_per_bar, 16)
-            pattern = self._build_fade_pattern(current, target, bars, effective_spb)
-            self.play(path, pattern, from_zero=True)
+
+            # Use native automation (one-shot ramp)
+            label = self._resolve_path(path)
+            beats = bars * self._session.meter
+            period_secs = beats * 60.0 / self.tempo
+            self._session.set_automation(
+                label, "ramp", current, target, period_secs, one_shot=True
+            )
             self._ctrl_values[path] = target
 
             # Update gain bookkeeping if applicable
@@ -1103,9 +1108,23 @@ class VoiceMixer:
             del self._wires[key]
         self._rebuild()
 
-    def mod(self, path: str, pattern: Pattern, bars: int = 1) -> None:
-        """Sugar for ``play(path, pattern.over(bars), from_zero=True)``."""
-        self.play(path, pattern.over(bars), from_zero=True)
+    def mod(
+        self, path: str, pattern_or_shape: Pattern | str,
+        lo: float = 0.0, hi: float = 1.0, bars: int = 1,
+    ) -> None:
+        """Modulate a control parameter.
+
+        If ``pattern_or_shape`` is a ``Pattern``, schedules it as a timed
+        pattern (legacy path).  If it is a ``str`` (e.g. ``"sine"``,
+        ``"tri"``), sends a native automation to the audio engine.
+        """
+        if isinstance(pattern_or_shape, str):
+            label = self._resolve_path(path)
+            beats = bars * self._session.meter
+            period_secs = beats * 60.0 / self.tempo
+            self._session.set_automation(label, pattern_or_shape, lo, hi, period_secs)
+        else:
+            self.play(path, pattern_or_shape.over(bars), from_zero=True)
 
     @contextmanager
     def batch(self) -> Generator[None]:

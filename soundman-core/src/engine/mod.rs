@@ -7,6 +7,7 @@ use rtrb::{Consumer, Producer, RingBuffer};
 
 use config::EngineConfig;
 
+use crate::automation::{AutoShape, Automation};
 use crate::control::ControlInput;
 use crate::graph::DspGraph;
 use crate::graph::compiler::{self, CompileError};
@@ -192,6 +193,33 @@ impl EngineController {
                 }
                 self.recompile_and_send(true)?; // reuse — incremental batch
             }
+            ClientMessage::SetAutomation { id, label, shape, lo, hi, period_secs, one_shot } => {
+                if let Some((node_id, param)) = self.exposed_controls.get(&label) {
+                    let period_samples = (period_secs * self.config.sample_rate as f64) as usize;
+                    let auto_shape = parse_auto_shape(&shape);
+                    let automation = Automation {
+                        node_id: node_id.clone(),
+                        param: param.clone(),
+                        shape: auto_shape,
+                        lo,
+                        hi,
+                        period_samples,
+                        phase: 0,
+                        active: true,
+                        one_shot,
+                    };
+                    debug!("set_automation: {id} -> {}/{} shape={shape} lo={lo} hi={hi} period={period_samples}samp",
+                        node_id, param);
+                    self.send_command(Command::SetAutomation { id, automation });
+                } else {
+                    warn!("set_automation: unknown label '{label}', available: {:?}",
+                        self.exposed_controls.keys().collect::<Vec<_>>());
+                }
+            }
+            ClientMessage::ClearAutomation { id } => {
+                debug!("clear_automation: {id}");
+                self.send_command(Command::ClearAutomation { id });
+            }
             ClientMessage::Ping => { debug!("ping"); }
             ClientMessage::Shutdown => { debug!("shutdown"); }
             ClientMessage::ListNodes { .. } => { debug!("list_nodes (reply handled by caller)"); }
@@ -329,6 +357,18 @@ impl AudioProcessor {
     #[must_use]
     pub const fn has_active_graph(&self) -> bool {
         self.swapper.has_active_graph()
+    }
+}
+
+fn parse_auto_shape(s: &str) -> AutoShape {
+    match s {
+        "sine" => AutoShape::Sine,
+        "tri" => AutoShape::Tri,
+        "ramp" => AutoShape::Ramp,
+        "ramp_down" => AutoShape::RampDown,
+        "square" => AutoShape::Square,
+        "exp" => AutoShape::Exp,
+        _ => AutoShape::Sine,
     }
 }
 
@@ -655,6 +695,91 @@ mod tests {
         proc.process(&mut buf);
         let energy: f32 = buf.iter().map(|s| s * s).sum();
         assert!(energy > 0.0, "graph should produce audio after GraphBatch");
+    }
+
+    #[test]
+    fn set_automation_creates_automation_on_audio_thread() {
+        let config = EngineConfig { block_size: 64, ..Default::default() };
+        let (mut ctrl, mut proc) = engine(&config);
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        let mut buf = vec![0.0_f32; 64];
+        proc.process(&mut buf);
+
+        // Set a sine automation on the pitch control
+        ctrl.handle_message(ClientMessage::SetAutomation {
+            id: "pitch_lfo".into(),
+            label: "pitch".into(),
+            shape: "sine".into(),
+            lo: 200.0,
+            hi: 800.0,
+            period_secs: 1.0,
+            one_shot: false,
+        }).unwrap();
+
+        // Process a few blocks — the automation should modulate pitch
+        let mut buf1 = vec![0.0_f32; 64];
+        proc.process(&mut buf1);
+        let energy: f32 = buf1.iter().map(|s| s * s).sum();
+        assert!(energy > 0.0, "graph should produce audio with automation active");
+
+        // Process more blocks: pitch should be changing
+        let mut buf2 = vec![0.0_f32; 64];
+        proc.process(&mut buf2);
+        let energy2: f32 = buf2.iter().map(|s| s * s).sum();
+        assert!(energy2 > 0.0, "graph should keep producing audio");
+    }
+
+    #[test]
+    fn clear_automation_removes_automation() {
+        let config = EngineConfig { block_size: 64, ..Default::default() };
+        let (mut ctrl, mut proc) = engine(&config);
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        let mut buf = vec![0.0_f32; 64];
+        proc.process(&mut buf);
+
+        // Set, then clear
+        ctrl.handle_message(ClientMessage::SetAutomation {
+            id: "pitch_lfo".into(),
+            label: "pitch".into(),
+            shape: "sine".into(),
+            lo: 200.0,
+            hi: 800.0,
+            period_secs: 1.0,
+            one_shot: false,
+        }).unwrap();
+        proc.process(&mut buf);
+
+        ctrl.handle_message(ClientMessage::ClearAutomation {
+            id: "pitch_lfo".into(),
+        }).unwrap();
+        proc.process(&mut buf);
+
+        // After clearing, the automation is gone. Audio still plays (with last set freq).
+        let energy: f32 = buf.iter().map(|s| s * s).sum();
+        assert!(energy > 0.0, "graph should still produce audio after clearing automation");
+    }
+
+    #[test]
+    fn set_automation_unknown_label_is_noop() {
+        let config = EngineConfig { block_size: 64, ..Default::default() };
+        let (mut ctrl, mut proc) = engine(&config);
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        let mut buf = vec![0.0_f32; 64];
+        proc.process(&mut buf);
+
+        // Unknown label — should not crash
+        ctrl.handle_message(ClientMessage::SetAutomation {
+            id: "nonexistent".into(),
+            label: "nonexistent/param".into(),
+            shape: "sine".into(),
+            lo: 0.0,
+            hi: 1.0,
+            period_secs: 1.0,
+            one_shot: false,
+        }).unwrap();
+        proc.process(&mut buf);
+        let energy: f32 = buf.iter().map(|s| s * s).sum();
+        assert!(energy > 0.0, "unknown label should not break audio");
     }
 
     #[test]

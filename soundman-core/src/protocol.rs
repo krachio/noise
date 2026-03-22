@@ -63,6 +63,20 @@ pub enum ClientMessage {
     GraphBatch { commands: Vec<ClientMessage> },
     /// Health check — engine responds with `ServerMessage::Pong`.
     Ping,
+    /// Add or replace a parameter automation. The engine resolves `label` via
+    /// `exposed_controls` to find the target node + param.
+    SetAutomation {
+        id: String,
+        label: String,
+        shape: String,
+        lo: f32,
+        hi: f32,
+        period_secs: f64,
+        #[serde(default)]
+        one_shot: bool,
+    },
+    /// Remove a parameter automation by id.
+    ClearAutomation { id: String },
     /// Shut down the engine.
     Shutdown,
 }
@@ -157,6 +171,52 @@ mod tests {
             ClientMessage::GraphBatch { commands } => assert_eq!(commands.len(), 2),
             other => panic!("expected GraphBatch, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn set_automation_serde_roundtrip() {
+        let msg = ClientMessage::SetAutomation {
+            id: "bass/cutoff".into(),
+            label: "bass/cutoff".into(),
+            shape: "sine".into(),
+            lo: 200.0,
+            hi: 2000.0,
+            period_secs: 2.0,
+            one_shot: false,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("set_automation"));
+        assert!(json.contains("bass/cutoff"));
+
+        let parsed: ClientMessage = serde_json::from_str(&json).unwrap();
+        match parsed {
+            ClientMessage::SetAutomation { id, label, shape, lo, hi, period_secs, one_shot } => {
+                assert_eq!(id, "bass/cutoff");
+                assert_eq!(label, "bass/cutoff");
+                assert_eq!(shape, "sine");
+                assert!((lo - 200.0).abs() < f32::EPSILON);
+                assert!((hi - 2000.0).abs() < f32::EPSILON);
+                assert!((period_secs - 2.0).abs() < f64::EPSILON);
+                assert!(!one_shot);
+            }
+            other => panic!("expected SetAutomation, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn set_automation_from_json() {
+        let json = r#"{"type":"set_automation","id":"bass/cutoff","label":"bass/cutoff","shape":"tri","lo":0.0,"hi":1.0,"period_secs":4.0,"one_shot":true}"#;
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        assert!(matches!(msg, ClientMessage::SetAutomation { ref shape, one_shot: true, .. } if shape == "tri"));
+    }
+
+    #[test]
+    fn clear_automation_serde_roundtrip() {
+        let msg = ClientMessage::ClearAutomation { id: "bass/cutoff".into() };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("clear_automation"));
+        let parsed: ClientMessage = serde_json::from_str(&json).unwrap();
+        assert!(matches!(parsed, ClientMessage::ClearAutomation { ref id } if id == "bass/cutoff"));
     }
 
     #[test]

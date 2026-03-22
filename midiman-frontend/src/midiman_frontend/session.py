@@ -227,6 +227,35 @@ class Session:
         resp = self._send_json({"type": "list_nodes", "reply_port": 0})
         return list(resp.get("types", []))
 
+    def set_automation(
+        self,
+        label: str,
+        shape: str,
+        lo: float,
+        hi: float,
+        period_secs: float,
+        one_shot: bool = False,
+    ) -> None:
+        """Set a parameter automation on the audio engine.
+
+        The engine resolves ``label`` via ``exposed_controls`` to find the
+        target node + param, then drives it with the given shape.
+        """
+        self._send_json({
+            "type": "set_automation",
+            "id": label,
+            "label": label,
+            "shape": shape,
+            "lo": lo,
+            "hi": hi,
+            "period_secs": period_secs,
+            "one_shot": one_shot,
+        })
+
+    def clear_automation(self, id: str) -> None:
+        """Remove a parameter automation by id."""
+        self._send_json({"type": "clear_automation", "id": id})
+
     def shutdown(self) -> None:
         """Shut down the unified binary."""
         self._send_json({"type": "shutdown"})
