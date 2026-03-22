@@ -41,6 +41,8 @@ pub enum ClientMessage {
     HushAll,
     /// Set BPM.
     SetBpm { bpm: f64 },
+    /// Set beats per cycle (meter).
+    SetBeatsPerCycle { beats: f64 },
     /// Ping / health check.
     Ping,
     /// Atomic batch: all commands apply before the next scheduler tick.

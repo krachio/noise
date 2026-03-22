@@ -1150,6 +1150,15 @@ class VoiceMixer:
         self._session.tempo = bpm
 
     @property
+    def meter(self) -> float:
+        """Current beats per cycle, delegated to session."""
+        return self._session.meter
+
+    @meter.setter
+    def meter(self, beats: float) -> None:
+        self._session.meter = beats
+
+    @property
     def slots(self) -> dict[str, Any]:
         """Read-only snapshot of session slots."""
         return self._session.slots

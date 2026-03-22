@@ -12,6 +12,7 @@ from midiman_frontend.ir import (
     Hush,
     HushAll,
     Ping,
+    SetBeatsPerCycle,
     SetBpm,
     SetPattern,
     SetPatternFromZero,
@@ -53,6 +54,7 @@ class Session:
         default_factory=lambda: dict[str, SlotState](), init=False, repr=False
     )
     _tempo: float = field(default=120.0, init=False, repr=False)
+    _meter: float = field(default=4.0, init=False, repr=False)
 
     # ── Connection ──────────────────────────────────────────────────────
 
@@ -134,6 +136,18 @@ class Session:
             return
         self._tempo = bpm
         self.send(SetBpm(bpm=bpm))
+
+    @property
+    def meter(self) -> float:
+        """Current beats per cycle."""
+        return self._meter
+
+    @meter.setter
+    def meter(self, beats: float) -> None:
+        if beats == self._meter:
+            return
+        self._meter = beats
+        self.send(SetBeatsPerCycle(beats=beats))
 
     # ── IPC ──────────────────────────────────────────────────────────────
 

@@ -81,6 +81,11 @@ pub enum EngineCommand {
         /// New beats per minute.
         bpm: f64,
     },
+    /// Change beats per cycle (meter).
+    SetBeatsPerCycle {
+        /// New beats per cycle.
+        beats: f64,
+    },
 }
 
 /// The pattern engine: pattern state + clock + event heap.
@@ -172,6 +177,17 @@ impl Engine {
                     return;
                 }
                 self.clock = Clock::new(bpm, self.clock.beats_per_cycle());
+                self.heap.clear();
+                self.next_cycle.fill(0);
+                self.phase_offset.fill(0);
+            }
+            EngineCommand::SetBeatsPerCycle { beats } => {
+                if !beats.is_finite() || beats <= 0.0
+                    || (beats - self.clock.beats_per_cycle()).abs() < f64::EPSILON
+                {
+                    return;
+                }
+                self.clock = Clock::new(self.clock.bpm(), beats);
                 self.heap.clear();
                 self.next_cycle.fill(0);
                 self.phase_offset.fill(0);
@@ -383,6 +399,39 @@ mod tests {
         // next_cycle resets to 0 for a fresh clock (not first_future_cycle,
         // since the new clock's epoch is now).
         assert!(e.next_cycle.iter().all(|&c| c == 0), "BPM change should reset cycle counters");
+    }
+
+    #[test]
+    fn test_set_beats_per_cycle() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetPattern {
+            name: "kick".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+        e.fill(Instant::now());
+        let before = e.heap.len();
+        assert!(before > 0, "heap should have events after fill");
+
+        e.apply(EngineCommand::SetBeatsPerCycle { beats: 3.0 });
+        assert_eq!(e.heap.len(), 0, "meter change should clear heap");
+        assert!(e.next_cycle.iter().all(|&c| c == 0), "meter change should reset cycle counters");
+        assert_eq!(e.clock.beats_per_cycle(), 3.0);
+    }
+
+    #[test]
+    fn test_set_beats_per_cycle_same_value_is_noop() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetPattern {
+            name: "kick".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+        e.fill(Instant::now());
+        let before = e.heap.len();
+        assert!(before > 0);
+
+        // Same value as fast_engine (4.0) — should be no-op.
+        e.apply(EngineCommand::SetBeatsPerCycle { beats: 4.0 });
+        assert_eq!(e.heap.len(), before, "same meter should preserve heap");
     }
 
     #[test]

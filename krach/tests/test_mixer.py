@@ -2659,6 +2659,27 @@ def test_bus_handle_repr() -> None:
     assert "gain=0.50" in r
 
 
+# ── Meter ─────────────────────────────────────────────────────────────────
+
+
+def test_meter_property() -> None:
+    """VoiceMixer.meter delegates to session meter."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.meter = 4.0
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    # Read: delegates to session.meter
+    assert mixer.meter == 4.0
+
+    # Write: sets session.meter
+    mixer.meter = 3.0
+    assert session.meter == 3.0
+
+
 # ── Phase-Reset: fade/mod use play_from_zero ──────────────────────────────
 
 

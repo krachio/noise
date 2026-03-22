@@ -179,6 +179,7 @@ pub fn compile_command(msg: &ClientMessage) -> Result<Option<EngineCommand>, Str
         ClientMessage::Hush { slot } => Ok(Some(EngineCommand::Hush { name: slot.clone() })),
         ClientMessage::HushAll => Ok(Some(EngineCommand::HushAll)),
         ClientMessage::SetBpm { bpm } => Ok(Some(EngineCommand::SetBpm { bpm: *bpm })),
+        ClientMessage::SetBeatsPerCycle { beats } => Ok(Some(EngineCommand::SetBeatsPerCycle { beats: *beats })),
         ClientMessage::Ping => Ok(None),
         ClientMessage::Batch { .. } => Err("nested Batch is not allowed".into()),
     }
@@ -192,6 +193,7 @@ pub fn describe(cmd: &EngineCommand) -> String {
         EngineCommand::Hush { name } => format!("{name} hushed"),
         EngineCommand::HushAll => "all slots hushed".into(),
         EngineCommand::SetBpm { bpm } => format!("bpm set to {bpm}"),
+        EngineCommand::SetBeatsPerCycle { beats } => format!("beats per cycle set to {beats}"),
     }
 }
 
