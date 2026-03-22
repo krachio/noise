@@ -614,7 +614,7 @@ class VoiceMixer:
         self._buses: dict[str, Bus] = {}
         self._sends: dict[tuple[str, str], float] = {}  # (voice, bus) → gain
         self._wires: dict[tuple[str, str], str] = {}    # (voice, bus) → port
-        # _mods is deprecated — mod() now delegates to play() which uses _ctrl_ slots
+        self._ctrl_values: dict[str, float] = {}  # path → last set value (for fade start)
         self._batching: bool = False
         self._graph_loaded: bool = False
 
@@ -936,6 +936,7 @@ class VoiceMixer:
     def set(self, path: str, value: float) -> None:
         """Set a control value by path. Instant — no pattern scheduling."""
         _check_finite(value, path)
+        self._ctrl_values[path] = value
         self._session.set_ctrl(path, float(value))
 
     def _resolve_path(self, path: str) -> str:
@@ -980,18 +981,21 @@ class VoiceMixer:
             parts = path.split("/", 1)
             voice_name, param = parts[0], parts[1]
 
-            # Determine current value for gain paths, else default 0.0
-            current = 0.0
-            if param == "gain":
-                if voice_name in self._voices:
-                    current = self._voices[voice_name].gain
-                elif voice_name in self._poly:
-                    current = self._poly[voice_name].gain
+            # Determine current value: check ctrl_values first, then gain bookkeeping
+            if path in self._ctrl_values:
+                current = self._ctrl_values[path]
+            elif param == "gain" and voice_name in self._voices:
+                current = self._voices[voice_name].gain
+            elif param == "gain" and voice_name in self._poly:
+                current = self._poly[voice_name].gain
+            else:
+                current = 0.0
 
             slot = f"_fade_{path.replace('/', '_')}"
             self._session.hush(slot)
             pattern = self._build_fade_pattern(current, target, bars, steps_per_bar)
             self.play(path, pattern)
+            self._ctrl_values[path] = target
 
             # Update gain bookkeeping if applicable
             if param == "gain":
