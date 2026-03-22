@@ -91,6 +91,43 @@ Labels are always `{voice_name}_{param}`. Example:
 - `mix.voice("bass", my_bass_fn)` with controls (freq, gate, cutoff) →
   labels: bass_freq, bass_gate, bass_cutoff
 
+### Effect buses, sends, and wires
+```python
+# Add an effect bus (a DSP that takes audio input):
+mix.bus("verb", my_reverb_fn, gain=0.3)
+
+# Route a voice to a bus via a gain-controlled send:
+mix.send("bass", "verb", level=0.4)
+# Update send level instantly (no rebuild):
+mix.send("bass", "verb", level=0.7)
+
+# Wire a voice directly to a bus port (no gain stage):
+mix.wire("kick", "comp", port="in0")
+mix.wire("snare", "comp", port="in1")
+
+# Remove a bus (cleans up all sends/wires):
+mix.remove_bus("verb")
+
+# gain() also works on buses:
+mix.gain("verb", 0.5)
+```
+
+### Modulation
+```python
+# Modulate a parameter with a shape over N bars:
+mix.mod("bass", "cutoff", mod_sine, lo=200.0, hi=2000.0, bars=4)
+mix.mod("bass", "gain", mod_tri, lo=0.1, hi=0.5, bars=8)
+
+# Modulate a send level:
+mix.mod("bass", "verb_send", mod_ramp, lo=0.0, hi=1.0, bars=16)
+
+# Stop a modulation:
+mix.hush_mod("bass", "cutoff")
+```
+
+Available shapes: `mod_sine`, `mod_tri`, `mod_ramp`, `mod_ramp_down`, `mod_square`, `mod_exp`.
+All shapes map t ∈ [0,1) → value ∈ [0,1], scaled by lo/hi.
+
 ---
 
 ## Patterns — `mm` (midiman)

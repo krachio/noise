@@ -1667,3 +1667,502 @@ def test_build_graph_ir_no_buses_backward_compatible() -> None:
     ir_old = build_graph_ir(voices)
     ir_new = build_graph_ir(voices, buses=None, sends=None, wires=None)
     assert ir_old == ir_new
+
+
+# ── Commit 3: bus() + send() + remove_bus() ──────────────────────────────────
+
+
+def test_bus_creates_bus_and_rebuilds() -> None:
+    """bus() stores a Bus and triggers a rebuild."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    session.reset_mock()
+
+    mixer.bus("verb", "faust:verb", gain=0.3)
+
+    assert session.load_graph.call_count == 1
+    # Bus node and gain node should appear in the IR
+    ir = session.load_graph.call_args.args[0]
+    node_ids = {n.id for n in ir.nodes}
+    assert "verb" in node_ids
+    assert "verb_g" in node_ids
+
+
+def test_send_new_rebuilds() -> None:
+    """send() with a new (voice, bus) pair triggers a rebuild."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    session.reset_mock()
+
+    mixer.send("bass", "verb", level=0.4)
+
+    assert session.load_graph.call_count == 1
+    ir = session.load_graph.call_args.args[0]
+    node_ids = {n.id for n in ir.nodes}
+    assert "bass_send_verb" in node_ids
+
+
+def test_send_update_instant() -> None:
+    """send() on an existing (voice, bus) pair does instant set_ctrl, no rebuild."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("bass", "verb", level=0.4)
+    session.reset_mock()
+
+    mixer.send("bass", "verb", level=0.7)
+
+    assert session.load_graph.call_count == 0
+    session.set_ctrl.assert_called_once_with("bass_send_verb_gain", 0.7)
+
+
+def test_send_validates_voice_exists() -> None:
+    """send() raises ValueError if voice doesn't exist."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:verb": ("room",),
+    })
+    mixer.bus("verb", "faust:verb", gain=0.3)
+
+    with pytest.raises(ValueError, match="voice.*not found"):
+        mixer.send("nope", "verb", level=0.4)
+
+
+def test_send_validates_bus_exists() -> None:
+    """send() raises ValueError if bus doesn't exist."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    with pytest.raises(ValueError, match="bus.*not found"):
+        mixer.send("bass", "nope", level=0.4)
+
+
+def test_remove_voice_cleans_sends() -> None:
+    """remove() cleans up sends where the removed voice is the source."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("bass", "verb", level=0.4)
+
+    mixer.remove("bass")
+
+    # Rebuild should NOT include the send node
+    ir = session.load_graph.call_args.args[0]
+    node_ids = {n.id for n in ir.nodes}
+    assert "bass_send_verb" not in node_ids
+
+
+def test_remove_bus_cleans_sends_and_wires() -> None:
+    """remove_bus() removes the bus and all sends/wires targeting it."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("bass", "verb", level=0.4)
+
+    mixer.remove_bus("verb")
+
+    ir = session.load_graph.call_args.args[0]
+    node_ids = {n.id for n in ir.nodes}
+    assert "verb" not in node_ids
+    assert "bass_send_verb" not in node_ids
+
+
+def test_bus_name_collision_with_voice_raises() -> None:
+    """bus() raises ValueError if name collides with an existing voice."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    with pytest.raises(ValueError, match="name.*already.*voice"):
+        mixer.bus("bass", "faust:bass", gain=0.3)
+
+
+def test_bus_name_collision_with_poly_raises() -> None:
+    """bus() raises ValueError if name collides with a poly parent."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+
+    with pytest.raises(ValueError, match="name.*already.*voice"):
+        mixer.bus("pad", "faust:pad", gain=0.3)
+
+
+def test_gain_works_for_bus() -> None:
+    """gain() also works for bus names."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:verb": ("room",),
+    })
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    session.reset_mock()
+
+    mixer.gain("verb", 0.8)
+
+    session.set_ctrl.assert_called_once_with("verb_gain", 0.8)
+
+
+def test_send_poly_parent_instant_update() -> None:
+    """send() instant update on poly parent uses {parent}_send_{bus}_gain label."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("pad", "verb", level=0.4)
+    session.reset_mock()
+
+    mixer.send("pad", "verb", level=0.7)
+
+    assert session.load_graph.call_count == 0
+    session.set_ctrl.assert_called_once_with("pad_send_verb_gain", 0.7)
+
+
+def test_repr_shows_buses() -> None:
+    """__repr__ shows buses."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+
+    r = repr(mixer)
+    assert "verb" in r
+    assert "bus" in r.lower() or "faust:verb" in r
+
+
+def test_voice_replace_cleans_sends() -> None:
+    """voice() replacement cleans up sends from the old voice."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:bass2": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("bass", "verb", level=0.4)
+
+    # Replace voice — sends from old voice should be cleaned
+    mixer.voice("bass", "faust:bass2", gain=0.3)
+
+    ir = session.load_graph.call_args.args[0]
+    node_ids = {n.id for n in ir.nodes}
+    assert "bass_send_verb" not in node_ids
+
+
+def test_poly_replace_cleans_sends() -> None:
+    """poly() replacement cleans up sends from old poly parent."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("pad", "verb", level=0.4)
+
+    # Re-poly — sends should be cleaned
+    mixer.poly("pad", "faust:pad", voices=3, gain=0.6)
+
+    ir = session.load_graph.call_args.args[0]
+    node_ids = {n.id for n in ir.nodes}
+    assert "pad_send_verb" not in node_ids
+
+
+# ── Commit 4: wire() ─────────────────────────────────────────────────────────
+
+
+def test_wire_rebuilds() -> None:
+    """wire() stores a wire and triggers a rebuild."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+        "faust:comp": ("threshold",),
+    })
+    mixer.voice("pad", "faust:pad", gain=0.5)
+    mixer.bus("comp", "faust:comp", gain=1.0)
+    session.reset_mock()
+
+    mixer.wire("pad", "comp", port="in0")
+
+    assert session.load_graph.call_count == 1
+    ir = session.load_graph.call_args.args[0]
+    wire_conns = [
+        (c.from_node, c.to_node, c.to_port) for c in ir.connections
+    ]
+    assert ("pad", "comp", "in0") in wire_conns
+
+
+def test_wire_and_send_same_pair_raises() -> None:
+    """wire() raises if a send already exists for the same (voice, bus) pair."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("pad", "faust:pad", gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("pad", "verb", level=0.4)
+
+    with pytest.raises(ValueError, match="send already exists"):
+        mixer.wire("pad", "verb", port="in0")
+
+
+def test_send_and_wire_same_pair_raises() -> None:
+    """send() raises if a wire already exists for the same (voice, bus) pair."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("pad", "faust:pad", gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.wire("pad", "verb", port="in0")
+
+    with pytest.raises(ValueError, match="wire already exists"):
+        mixer.send("pad", "verb", level=0.4)
+
+
+def test_remove_voice_cleans_wires() -> None:
+    """remove() cleans up wires where the removed voice is the source."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+        "faust:comp": ("threshold",),
+    })
+    mixer.voice("pad", "faust:pad", gain=0.5)
+    mixer.bus("comp", "faust:comp", gain=1.0)
+    mixer.wire("pad", "comp", port="in0")
+
+    mixer.remove("pad")
+
+    ir = session.load_graph.call_args.args[0]
+    wire_conns = [(c.from_node, c.to_node, c.to_port) for c in ir.connections]
+    assert ("pad", "comp", "in0") not in wire_conns
+
+
+# ── Commit 5: mod() + shapes ─────────────────────────────────────────────────
+
+
+def test_mod_shapes_range() -> None:
+    """All mod shapes return values in [0, 1] for t in [0, 1)."""
+    from krach._mixer import mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square, mod_tri
+
+    shapes = [mod_sine, mod_tri, mod_ramp, mod_ramp_down, mod_square, mod_exp]
+    for shape in shapes:
+        for i in range(100):
+            t = i / 100
+            val = shape(t)
+            assert 0.0 <= val <= 1.0, f"{shape.__name__}({t}) = {val} out of [0,1]"
+
+
+def test_mod_sine_values() -> None:
+    """mod_sine at key points: t=0 → 0.5, t=0.25 → 1.0, t=0.5 → 0.5, t=0.75 → 0.0."""
+    from krach._mixer import mod_sine
+
+    assert abs(mod_sine(0.0) - 0.5) < 1e-9
+    assert abs(mod_sine(0.25) - 1.0) < 1e-9
+    assert abs(mod_sine(0.5) - 0.5) < 1e-9
+    assert abs(mod_sine(0.75) - 0.0) < 1e-9
+
+
+def test_mod_plays_pattern() -> None:
+    """mod() plays a pattern on the mod slot."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer, mod_sine
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    session.reset_mock()
+
+    mixer.mod("bass", "cutoff", mod_sine, lo=200.0, hi=2000.0, bars=4)
+
+    # Should play on the mod slot
+    assert session.play.call_count == 1
+    slot = session.play.call_args.args[0]
+    assert slot == "_mod_bass_cutoff"
+
+
+def test_hush_mod() -> None:
+    """hush_mod() hushes the mod slot and removes from _mods."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer, mod_sine
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.mod("bass", "cutoff", mod_sine, lo=200.0, hi=2000.0, bars=4)
+    session.reset_mock()
+
+    mixer.hush_mod("bass", "cutoff")
+
+    session.hush.assert_any_call("_mod_bass_cutoff")
+
+
+def test_remove_voice_hushes_mods() -> None:
+    """remove() hushes all active mods for the removed voice."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer, mod_sine
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.mod("bass", "cutoff", mod_sine, lo=200.0, hi=2000.0, bars=4)
+    session.reset_mock()
+
+    mixer.remove("bass")
+
+    hushed_names = {c.args[0] for c in session.hush.call_args_list}
+    assert "_mod_bass_cutoff" in hushed_names
+
+
+def test_mod_send_param_label() -> None:
+    """mod() with a send param resolves to {voice}_send_{bus}_gain label."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer, mod_sine
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("bass", "verb", level=0.4)
+    session.reset_mock()
+
+    mixer.mod("bass", "verb_send", mod_sine, lo=0.0, hi=1.0, bars=4)
+
+    assert session.play.call_count == 1
+    slot = session.play.call_args.args[0]
+    assert slot == "_mod_bass_verb_send"

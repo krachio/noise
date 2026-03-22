@@ -96,6 +96,39 @@ def _check_finite(value: float, label: str) -> None:
         raise ValueError(f"{label} must be finite, got {value}")
 
 
+# ── Mod shapes ────────────────────────────────────────────────────────────────
+
+
+def mod_sine(t: float) -> float:
+    """Sine LFO shape: 0.5 at t=0, 1.0 at t=0.25, 0.5 at t=0.5, 0.0 at t=0.75."""
+    return 0.5 + 0.5 * math.sin(2 * math.pi * t)
+
+
+def mod_tri(t: float) -> float:
+    """Triangle shape: 0→1→0 over one period."""
+    return 1.0 - abs(2.0 * t - 1.0)
+
+
+def mod_ramp(t: float) -> float:
+    """Ramp up: 0→1."""
+    return t
+
+
+def mod_ramp_down(t: float) -> float:
+    """Ramp down: 1→0."""
+    return 1.0 - t
+
+
+def mod_square(t: float) -> float:
+    """Square wave: 1 for first half, 0 for second half."""
+    return 1.0 if t < 0.5 else 0.0
+
+
+def mod_exp(t: float) -> float:
+    """Exponential curve: t^2."""
+    return t * t
+
+
 # ── Pure builders (testable without I/O) ──────────────────────────────────────
 
 
@@ -316,6 +349,12 @@ class VoiceMixer:
                 self._voices.pop(f"{name}_v{i}", None)
                 self._muted.pop(f"{name}_v{i}", None)
 
+        # Clean sends/wires from old voice
+        for key in [k for k in self._sends if k[0] == name]:
+            del self._sends[key]
+        for key in [k for k in self._wires if k[0] == name]:
+            del self._wires[key]
+
         is_new = name not in self._voices
         if not is_new:
             self.hush(name)
@@ -362,6 +401,12 @@ class VoiceMixer:
             self.hush(name)
             del self._voices[name]
 
+        # Clean sends/wires from old voice
+        for key in [k for k in self._sends if k[0] == name]:
+            del self._sends[key]
+        for key in [k for k in self._wires if k[0] == name]:
+            del self._wires[key]
+
         self._poly[name] = PolyVoice(type_id=type_id, count=voices, gain=gain, controls=controls)
         self._poly_alloc[name] = 0
 
@@ -379,6 +424,15 @@ class VoiceMixer:
             raise ValueError(f"voice '{name}' not found")
         self._muted.pop(name, None)
         self.hush(name)
+        # Hush active mods for this voice
+        for slot in [s for s in self._mods if s.startswith(f"_mod_{name}_")]:
+            self._session.hush(slot)
+            self._mods.discard(slot)
+        # Clean sends/wires where this voice is the source
+        for key in [k for k in self._sends if k[0] == name]:
+            del self._sends[key]
+        for key in [k for k in self._wires if k[0] == name]:
+            del self._wires[key]
         if name in self._poly:
             pv = self._poly.pop(name)
             self._poly_alloc.pop(name, None)
@@ -420,11 +474,19 @@ class VoiceMixer:
                 self.hush(name)
 
     def gain(self, name: str, value: float) -> None:
-        """Update a voice's gain. Instant — no graph rebuild.
+        """Update a voice or bus gain. Instant — no graph rebuild.
 
         For poly voices, distributes gain equally across instances.
         """
         _check_finite(value, f"gain for '{name}'")
+        if name in self._buses:
+            old_bus = self._buses[name]
+            self._buses[name] = Bus(
+                type_id=old_bus.type_id, gain=value,
+                controls=old_bus.controls, num_inputs=old_bus.num_inputs,
+            )
+            self._session.set_ctrl(f"{name}_gain", float(value))
+            return
         if name not in self._poly and name not in self._voices:
             raise ValueError(f"voice '{name}' not found")
         if name in self._poly:
@@ -613,6 +675,139 @@ class VoiceMixer:
             type_id=old.type_id, gain=target, controls=old.controls, init=old.init
         )
 
+    def bus(
+        self,
+        name: str,
+        source: str | DspDef | Callable[..., Any],
+        gain: float = 0.5,
+    ) -> None:
+        """Add an effect bus. Rebuilds the graph.
+
+        Raises ValueError if name collides with an existing voice or poly parent.
+        """
+        if name in self._voices or name in self._poly:
+            raise ValueError(f"name '{name}' already used as a voice")
+        type_id, controls = self._resolve_source(name, source)
+        num_inputs: int
+        if isinstance(source, DspDef):
+            num_inputs = source.num_inputs
+        elif callable(source) and not isinstance(source, str):
+            result = _transpile(source)  # type: ignore[arg-type]
+            num_inputs = result.num_inputs
+        else:
+            num_inputs = 1
+        self._buses[name] = Bus(type_id=type_id, gain=gain, controls=controls, num_inputs=num_inputs)
+        if not self._batching:
+            self._rebuild()
+
+    def send(self, voice: str, bus: str, level: float = 0.5) -> None:
+        """Route a voice to a bus via a gain-controlled send.
+
+        If the (voice, bus) pair already exists, does an instant level update
+        (no rebuild). Otherwise stores the send and rebuilds.
+        Raises ValueError if a wire exists for the same (voice, bus) pair.
+        """
+        _check_finite(level, f"send level for '{voice}' → '{bus}'")
+        # Resolve voice: accept poly parents or mono voices
+        if voice not in self._voices and voice not in self._poly:
+            raise ValueError(f"voice '{voice}' not found")
+        if bus not in self._buses:
+            raise ValueError(f"bus '{bus}' not found")
+
+        key = (voice, bus)
+
+        if key in self._wires:
+            raise ValueError(f"wire already exists for ('{voice}', '{bus}') — cannot also send")
+
+        if key in self._sends:
+            # Instant update — no rebuild
+            self._sends[key] = level
+            self._session.set_ctrl(f"{voice}_send_{bus}_gain", level)
+            return
+
+        self._sends[key] = level
+        if not self._batching:
+            self._rebuild()
+
+    def wire(self, voice: str, bus: str, port: str = "in0") -> None:
+        """Wire a voice directly to a bus port (no gain stage).
+
+        Raises ValueError if a send exists for the same (voice, bus) pair.
+        """
+        if voice not in self._voices and voice not in self._poly:
+            raise ValueError(f"voice '{voice}' not found")
+        if bus not in self._buses:
+            raise ValueError(f"bus '{bus}' not found")
+
+        key = (voice, bus)
+
+        if key in self._sends:
+            raise ValueError(f"send already exists for ('{voice}', '{bus}') — cannot also wire")
+
+        self._wires[key] = port
+        if not self._batching:
+            self._rebuild()
+
+    def remove_bus(self, name: str) -> None:
+        """Remove a bus and all sends/wires targeting it. Rebuilds the graph."""
+        if name not in self._buses:
+            raise ValueError(f"bus '{name}' not found")
+        del self._buses[name]
+        # Clean sends targeting this bus
+        for key in [k for k in self._sends if k[1] == name]:
+            del self._sends[key]
+        # Clean wires targeting this bus
+        for key in [k for k in self._wires if k[1] == name]:
+            del self._wires[key]
+        self._rebuild()
+
+    def mod(
+        self,
+        voice: str,
+        param: str,
+        shape: Callable[[float], float],
+        lo: float,
+        hi: float,
+        bars: int,
+        steps: int = 64,
+    ) -> None:
+        """Modulate a voice parameter with a shape over N bars.
+
+        Pre-computes ``steps`` values and plays them as a pattern.
+        ``param`` resolution: ``"cutoff"`` → ``{voice}_cutoff``,
+        ``"gain"`` → ``{voice}_gain``,
+        ``"{bus}_send"`` → ``{voice}_send_{bus}_gain``.
+        """
+        # Resolve control label
+        if param.endswith("_send"):
+            bus_name = param[:-5]  # strip "_send"
+            label = f"{voice}_send_{bus_name}_gain"
+        elif param == "gain":
+            label = f"{voice}_gain"
+        else:
+            label = f"{voice}_{param}"
+
+        atoms: list[Pattern] = []
+        for i in range(steps):
+            t = i / steps
+            val = lo + (hi - lo) * shape(t)
+            _check_finite(val, f"mod value at step {i}")
+            atoms.append(_osc("/soundman/set", OscStr(label), OscFloat(val)))
+
+        pattern = atoms[0]
+        for a in atoms[1:]:
+            pattern = pattern + a
+
+        slot = f"_mod_{voice}_{param}"
+        self._session.play(slot, pattern.over(bars))
+        self._mods.add(slot)
+
+    def hush_mod(self, voice: str, param: str) -> None:
+        """Stop a modulation pattern."""
+        slot = f"_mod_{voice}_{param}"
+        self._session.hush(slot)
+        self._mods.discard(slot)
+
     @contextmanager
     def batch(self) -> Generator[None]:
         """Batch voice declarations into a single graph rebuild.
@@ -671,6 +866,13 @@ class VoiceMixer:
                 if name in self._muted:
                     parts += "  [muted]"
             lines.append(parts)
+
+        # Buses
+        if self._buses:
+            lines.append(f"  buses:")
+            for bname, b in self._buses.items():
+                lines.append(f"    {bname}: {b.type_id}  gain={b.gain:.2f}")
+
         return "\n".join(lines)
 
     @property
@@ -693,7 +895,13 @@ class VoiceMixer:
         self._rebuild()
 
     def _rebuild(self) -> None:
-        ir = build_graph_ir(self._voices)
+        ir = build_graph_ir(
+            self._voices,
+            buses=self._buses,
+            sends=self._sends,
+            wires=self._wires,
+            poly={name: pv.count for name, pv in self._poly.items()},
+        )
         self._session.load_graph(ir)
         self._graph_loaded = True
 

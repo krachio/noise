@@ -73,7 +73,7 @@ def main() -> None:
     import anthropic
 
     from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, parse_dsp_controls, split_cells
-    from krach._mixer import VoiceMixer, dsp
+    from krach._mixer import VoiceMixer, dsp, mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square, mod_tri
     from krach._pitch import NOTES as _NOTES, ftom, mtof
 
     mm = Session(socket_path=str(engine_sock))
@@ -167,6 +167,7 @@ def main() -> None:
     print(f"  dsp dir  {dsp_dir}")
     print()
     print("  in scope: mix  mm  dsp()  rest  mtof  ftom  C0..B8  status()  c()  cn()"
+          "  mod_sine  mod_tri  mod_ramp  mod_ramp_down  mod_square  mod_exp"
           "  + faust-dsl: control sine_osc saw lowpass adsr ...")
     print()
 
@@ -195,6 +196,13 @@ def main() -> None:
         "white_noise": white_noise,
         "adsr": adsr,
         "reverb": reverb,
+        # Mod shapes
+        "mod_sine": mod_sine,
+        "mod_tri": mod_tri,
+        "mod_ramp": mod_ramp,
+        "mod_ramp_down": mod_ramp_down,
+        "mod_square": mod_square,
+        "mod_exp": mod_exp,
         # Session
         "status": status,
         "c": c,
