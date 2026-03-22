@@ -1,3 +1,14 @@
+# Ralph Review Sprint 16
+
+## Sprint 16 — convergence check
+- [x] COPILOT_STALE_STEP — _copilot.py:71 — "mix.step" string → "mix.note"
+- [x] PLAN_STALE_REFS — plan.md — step/chord examples → note/seq/play
+
+## Sprint 16 — adversarial
+Zero bugs found. Full grep sweep clean — no stale references anywhere.
+
+---
+
 # Ralph Review Sprint 15
 
 ## Sprint 15 — cleanup
