@@ -58,6 +58,7 @@ class Session:
     def connect(self) -> None:
         self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         self._sock.connect(self.socket_path)
+        self._sock.settimeout(5.0)
         self._reader = self._sock.makefile("rb")
 
     def disconnect(self) -> None:
@@ -137,8 +138,11 @@ class Session:
         if self._sock is None or self._reader is None:
             raise RuntimeError("not connected — call connect() or use context manager")
         data = command_to_json(msg) + "\n"
-        self._sock.sendall(data.encode())
-        _parse_response(self._reader.readline())
+        try:
+            self._sock.sendall(data.encode())
+            _parse_response(self._reader.readline())
+        except socket.timeout:
+            raise ConnectionError("engine not responding (socket timeout)")
 
     # ── Graph commands (soundman-style, via unified binary) ──────────────
 
@@ -147,8 +151,11 @@ class Session:
         if self._sock is None or self._reader is None:
             raise RuntimeError("not connected — call connect() or use context manager")
         data = json.dumps(obj, separators=(",", ":")) + "\n"
-        self._sock.sendall(data.encode())
-        return _parse_response(self._reader.readline())
+        try:
+            self._sock.sendall(data.encode())
+            return _parse_response(self._reader.readline())
+        except socket.timeout:
+            raise ConnectionError("engine not responding (socket timeout)")
 
     def load_graph(self, graph: GraphIr) -> None:
         """Load an audio graph via the unified binary."""

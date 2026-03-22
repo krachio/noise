@@ -291,6 +291,31 @@ class TestSendBeforeConnect:
             s.play("drums", note(36))
 
 
+class TestSocketTimeout:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_connect_sets_timeout(self, mock_cls: MagicMock) -> None:
+        s = Session()
+        s.connect()
+        mock_cls.return_value.settimeout.assert_called_once_with(5.0)
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_send_catches_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        s = Session()
+        s.connect()
+        mock_cls.return_value.sendall.side_effect = socket.timeout("timed out")
+        with pytest.raises(ConnectionError, match="engine"):
+            s.ping()
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_readline_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
+        s = Session()
+        s.connect()
+        mock_cls.return_value.makefile.return_value.readline.side_effect = socket.timeout("timed out")
+        with pytest.raises(ConnectionError, match="engine"):
+            s.ping()
+
+
 class TestNewlineDelimited:
     @patch("midiman_frontend.session.socket.socket")
     def test_messages_end_with_newline(self, mock_cls: MagicMock) -> None:
@@ -299,3 +324,24 @@ class TestNewlineDelimited:
             s.play("drums", note(36))
         raw: bytes = mock_cls.return_value.sendall.call_args[0][0]
         assert raw.endswith(b"\n")
+
+
+class TestSendJsonTimeout:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_send_json_sendall_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
+        """_send_json must catch socket.timeout and raise ConnectionError."""
+        _stub_ok_response(mock_cls)
+        s = Session()
+        s.connect()
+        mock_cls.return_value.sendall.side_effect = socket.timeout("timed out")
+        with pytest.raises(ConnectionError, match="engine"):
+            s.set_ctrl("bass_gain", 0.5)
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_send_json_readline_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
+        """_send_json readline timeout must raise ConnectionError."""
+        s = Session()
+        s.connect()
+        mock_cls.return_value.makefile.return_value.readline.side_effect = socket.timeout("timed out")
+        with pytest.raises(ConnectionError, match="engine"):
+            s.set_ctrl("bass_gain", 0.5)

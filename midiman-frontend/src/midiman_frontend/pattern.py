@@ -107,6 +107,7 @@ class Pattern:
         )
 
     def thin(self, prob: float, seed: int = 0) -> Pattern:
+        """Drop events with probability prob (0.0 = keep all, 1.0 = drop all)."""
         return Pattern(Degrade(prob=prob, seed=seed, child=self.node))
 
 

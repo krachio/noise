@@ -239,6 +239,7 @@ class VoiceMixer:
         string, or a raw Python DSP function (transpiled on the fly).
         """
         type_id, controls = self._resolve_source(name, source, tuple(init.keys()))
+        self._muted.pop(name, None)
 
         # If replacing a poly voice with a mono voice, clean up poly state first.
         if name in self._poly:
@@ -281,6 +282,7 @@ class VoiceMixer:
         if voices < 1:
             raise ValueError("poly requires at least 1 voice")
         type_id, controls = self._resolve_source(name, source)
+        self._muted.pop(name, None)
 
         # Clean up old state: either poly instances or a mono voice.
         if name in self._poly:
@@ -307,6 +309,7 @@ class VoiceMixer:
         """Remove a voice or poly voice. Rebuilds the graph."""
         if name not in self._voices and name not in self._poly:
             raise ValueError(f"voice '{name}' not found")
+        self._muted.pop(name, None)
         self.hush(name)
         if name in self._poly:
             pv = self._poly.pop(name)
@@ -411,6 +414,11 @@ class VoiceMixer:
             if n != name:
                 self.mute(n)
         self.unmute(name)
+
+    def unsolo(self) -> None:
+        """Unmute all muted voices — reverses solo() or manual mutes."""
+        for name in list(self._muted):
+            self.unmute(name)
 
     def note(self, name: str, *pitches: float, vel: float = 1.0, **params: float) -> Pattern:
         """Unified melodic trigger: single note, chord, or gate-only.
@@ -559,6 +567,42 @@ class VoiceMixer:
                 self._voices = snap_voices
                 self._poly = snap_poly
                 self._poly_alloc = snap_alloc
+
+    def __repr__(self) -> str:
+        # Collect top-level names: mono voices + poly parents (skip poly instances)
+        poly_instances: set[str] = set()
+        for pname, pv in self._poly.items():
+            for i in range(pv.count):
+                poly_instances.add(f"{pname}_v{i}")
+
+        top: list[str] = []
+        for vname in self._voices:
+            if vname not in poly_instances:
+                top.append(vname)
+        for pname in self._poly:
+            if pname not in top:
+                top.append(pname)
+
+        count = len(top)
+        lines = [f"VoiceMixer({count} voices)"]
+        if not top:
+            return lines[0]
+
+        max_name = max(len(n) for n in top)
+        for name in top:
+            if name in self._poly:
+                pv = self._poly[name]
+                parts = f"  {name + ':':.<{max_name + 2}} {pv.type_id}  gain={pv.gain:.2f}"
+                if name in self._muted:
+                    parts += "  [muted]"
+                parts += f"  poly({pv.count})"
+            else:
+                v = self._voices[name]
+                parts = f"  {name + ':':.<{max_name + 2}} {v.type_id}  gain={v.gain:.2f}"
+                if name in self._muted:
+                    parts += "  [muted]"
+            lines.append(parts)
+        return "\n".join(lines)
 
     @property
     def voices(self) -> dict[str, Voice]:

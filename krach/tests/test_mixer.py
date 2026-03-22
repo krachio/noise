@@ -1214,3 +1214,189 @@ def test_batch_exception_rolls_back_voices() -> None:
     assert "bass" not in mixer.voices, (
         "failed batch left 'bass' in _voices without loading graph"
     )
+
+
+# ── Sprint 13: MUTED_LEAK ─────────────────────────────────────────────────
+
+
+def test_remove_cleans_muted_state() -> None:
+    """remove() must pop the voice from _muted so re-adding + unmute()
+    doesn't restore stale gain."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.mute("bass")
+    mixer.remove("bass")
+
+    # Re-add with different gain
+    mixer.voice("bass", "faust:bass", gain=0.8)
+    # unmute should be a no-op (not muted anymore)
+    mixer.unmute("bass")
+    assert mixer.voices["bass"].gain == 0.8
+
+
+def test_voice_replace_cleans_muted_state() -> None:
+    """voice() replacement must pop old muted state."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:bass2": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.mute("bass")
+    mixer.voice("bass", "faust:bass2", gain=0.7)
+
+    # unmute should be a no-op — muted state was cleared by replacement
+    mixer.unmute("bass")
+    assert mixer.voices["bass"].gain == 0.7
+
+
+def test_poly_replace_cleans_muted_state() -> None:
+    """poly() replacement must pop old muted state."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.6)
+    mixer.mute("pad")
+    mixer.poly("pad", "faust:pad", voices=3, gain=0.9)
+
+    mixer.unmute("pad")
+    # Should not restore stale 0.6 — muted state was cleared
+    # Each instance gets 0.9/3 = 0.3
+    assert mixer.voices["pad_v0"].gain == 0.9 / 3
+
+
+# ── Sprint 13: UNSOLO ─────────────────────────────────────────────────────
+
+
+def test_unsolo_restores_all_muted_voices() -> None:
+    """unsolo() unmutes all voices that were muted by solo()."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:pad": ("freq", "gate"),
+        "faust:kit": ("gate",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.voice("pad", "faust:pad", gain=0.3)
+    mixer.voice("kit", "faust:kit", gain=0.8)
+
+    mixer.solo("bass")
+    mixer.unsolo()
+
+    v = mixer.voices
+    assert v["bass"].gain == 0.5
+    assert v["pad"].gain == 0.3
+    assert v["kit"].gain == 0.8
+
+
+def test_unsolo_with_nothing_muted_is_noop() -> None:
+    """unsolo() with no muted voices does nothing."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    session.reset_mock()
+    mixer.unsolo()
+    # No set_ctrl calls since nothing was muted
+    assert session.set_ctrl.call_count == 0
+
+
+# ── Sprint 13: MIXER_REPR ─────────────────────────────────────────────────
+
+
+def test_repr_shows_voices_and_gains() -> None:
+    """__repr__ shows voice count, names, type_ids, gains."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:kick": ("gate",),
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("kick", "faust:kick", gain=0.8)
+    mixer.voice("bass", "faust:bass", gain=0.3)
+
+    r = repr(mixer)
+    assert "VoiceMixer(2 voices)" in r
+    assert "kick" in r
+    assert "faust:kick" in r
+    assert "0.80" in r
+    assert "bass" in r
+    assert "faust:bass" in r
+    assert "0.30" in r
+
+
+def test_repr_shows_muted() -> None:
+    """__repr__ shows [muted] for muted voices."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.3)
+    mixer.mute("bass")
+
+    r = repr(mixer)
+    assert "[muted]" in r
+
+
+def test_repr_shows_poly() -> None:
+    """__repr__ shows poly(N) for poly voices."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.poly("pad", "faust:pad", voices=4, gain=0.5)
+
+    r = repr(mixer)
+    assert "poly(4)" in r
+
+
+def test_repr_empty() -> None:
+    """__repr__ on empty mixer."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    r = repr(mixer)
+    assert "VoiceMixer(0 voices)" in r
