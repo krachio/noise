@@ -28,6 +28,20 @@ from krach._pitch import mtof as _mtof
 from krach._pitch import parse_note as _parse_note
 
 
+@dataclass(frozen=True)
+class Scene:
+    """Snapshot of the mixer state — voices, buses, sends, patterns, controls."""
+
+    voices: dict[str, tuple[str, float, tuple[str, ...], int]]  # name → (type_id, gain, controls, count)
+    buses: dict[str, tuple[str, float, tuple[str, ...], int]]   # name → (type_id, gain, controls, num_inputs)
+    sends: dict[tuple[str, str], float]                          # (voice, bus) → level
+    wires: dict[tuple[str, str], str]                            # (voice, bus) → port
+    patterns: dict[str, Pattern]                                  # slot → unbound pattern
+    ctrl_values: dict[str, float]                                 # path → value
+    tempo: float
+    master: float
+
+
 @dataclass
 class Voice:
     """A named audio voice — mono (count=1) or polyphonic (count>1)."""
@@ -616,6 +630,7 @@ class VoiceMixer:
         self._wires: dict[tuple[str, str], str] = {}    # (voice, bus) → port
         self._ctrl_values: dict[str, float] = {}  # path → last set value (for fade start)
         self._patterns: dict[str, Pattern] = {}  # target → last unbound pattern
+        self._scenes: dict[str, Scene] = {}
         self._batching: bool = False
         self._graph_loaded: bool = False
         self._master_gain: float = 0.7
@@ -833,6 +848,70 @@ class VoiceMixer:
         """Unmute all muted voices — reverses solo() or manual mutes."""
         for name in list(self._muted):
             self.unmute(name)
+
+    # ── Scenes ─────────────────────────────────────────────────────────────
+
+    def save(self, name: str) -> None:
+        """Save current state as a named scene."""
+        self._scenes[name] = Scene(
+            voices={n: (v.type_id, v.gain, v.controls, v.count) for n, v in self._voices.items()},
+            buses={n: (b.type_id, b.gain, b.controls, b.num_inputs) for n, b in self._buses.items()},
+            sends=dict(self._sends),
+            wires=dict(self._wires),
+            patterns=dict(self._patterns),
+            ctrl_values=dict(self._ctrl_values),
+            tempo=self.tempo,
+            master=self._master_gain,
+        )
+
+    def recall(self, name: str) -> None:
+        """Recall a saved scene — rebuilds graph, replays patterns, restores controls."""
+        if name not in self._scenes:
+            raise ValueError(f"scene '{name}' not found")
+        scene = self._scenes[name]
+
+        # Stop everything
+        self.stop()
+
+        # Rebuild voices and buses
+        self._voices.clear()
+        self._buses.clear()
+        self._sends.clear()
+        self._wires.clear()
+
+        for vname, (type_id, gain, controls, count) in scene.voices.items():
+            self._voices[vname] = Voice(type_id=type_id, gain=gain, controls=controls, count=count)
+        for bname, (type_id, gain, controls, num_inputs) in scene.buses.items():
+            self._buses[bname] = Bus(type_id=type_id, gain=gain, controls=controls, num_inputs=num_inputs)
+        self._sends = dict(scene.sends)
+        self._wires = dict(scene.wires)
+        self._rebuild()
+
+        # Restore tempo and master
+        self.tempo = scene.tempo
+        self.master = scene.master
+
+        # Restore control values
+        for path, value in scene.ctrl_values.items():
+            self.set(path, value)
+
+        # Replay patterns
+        for slot, pattern in scene.patterns.items():
+            self.play(slot, pattern)
+
+    @property
+    def scenes(self) -> list[str]:
+        """List of saved scene names."""
+        return list(self._scenes.keys())
+
+    def load(self, path: str) -> None:
+        """Load and execute a Python file with ``mix`` in scope."""
+        p = Path(path)
+        if not p.exists():
+            raise FileNotFoundError(f"scene file not found: {path}")
+        code = p.read_text()
+        ns: dict[str, object] = {"mix": self}
+        exec(compile(code, path, "exec"), ns)  # noqa: S102
 
     def _is_voice_or_bus(self, name: str) -> bool:
         """Check if name is a known voice or bus."""

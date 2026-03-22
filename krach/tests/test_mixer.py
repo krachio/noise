@@ -3032,3 +3032,150 @@ def test_fade_gain_path_updates_bookkeeping() -> None:
 
     assert mixer.get_voice("bass") is not None
     assert mixer.get_voice("bass").gain == 0.8  # type: ignore[union-attr]
+
+
+# ── Scene save/recall ─────────────────────────────────────────────────────────
+
+
+def test_save_captures_state() -> None:
+    """save() snapshots voices, buses, sends, patterns, tempo, master."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.tempo = 130.0
+    session.meter = 4.0
+    session.list_nodes.return_value = ["faust:bass", "faust:verb", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.4)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("bass", "verb", 0.5)
+    mixer.master = 0.8
+
+    mixer.save("drop")
+
+    assert "drop" in mixer.scenes
+
+    # Verify by recalling into a clean state and checking results
+    mixer.voice("pad", "faust:bass", gain=0.9)  # add extra voice
+    mixer.master = 0.1
+    mixer.recall("drop")
+
+    # After recall, only original voices should exist
+    assert "bass" in mixer.voice_data
+    assert "pad" not in mixer.voice_data
+    assert mixer.voice_data["bass"].gain == 0.4
+    assert mixer.voice_data["bass"].type_id == "faust:bass"
+    assert mixer.voice_data["bass"].controls == ("freq", "gate")
+    assert mixer.get_bus("verb") is not None
+    assert mixer.master == 0.8
+
+
+def test_recall_restores_state() -> None:
+    """save, modify, recall — should restore voices/buses/sends/tempo/master."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.tempo = 120.0
+    session.meter = 4.0
+    session.list_nodes.return_value = ["faust:bass", "faust:pad", "faust:verb", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:pad": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.4)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("bass", "verb", 0.5)
+    mixer.master = 0.8
+    mixer.save("intro")
+
+    # Modify state
+    mixer.voice("pad", "faust:pad", gain=0.6)
+    mixer.master = 0.5
+    session.tempo = 140.0
+
+    # Recall
+    mixer.recall("intro")
+
+    # Voices restored
+    assert "bass" in mixer.voice_data
+    assert "pad" not in mixer.voice_data
+    assert mixer.voice_data["bass"].gain == 0.4
+    # Buses restored
+    assert mixer.get_bus("verb") is not None
+    # Master restored
+    assert mixer.master == 0.8
+
+
+def test_recall_unknown_raises() -> None:
+    """recall() on unknown scene name raises ValueError."""
+    import pytest
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.tempo = 120.0
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    with pytest.raises(ValueError, match="scene 'nope' not found"):
+        mixer.recall("nope")
+
+
+def test_scenes_lists_names() -> None:
+    """scenes property returns list of saved scene names."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.tempo = 120.0
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    assert mixer.scenes == []
+    mixer.save("a")
+    mixer.save("b")
+    assert mixer.scenes == ["a", "b"]
+
+
+# ── load() — music as Python modules ─────────────────────────────────────────
+
+
+def test_load_executes_file(tmp_path: Path) -> None:
+    """load() execs a Python file with `mix` in scope."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.tempo = 120.0
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    # Write a temp file that sets master gain via mix
+    scene_file = tmp_path / "my_scene.py"
+    scene_file.write_text("mix.master = 0.42\n")
+
+    mixer.load(str(scene_file))
+    assert mixer.master == 0.42
+
+
+def test_load_missing_file_raises() -> None:
+    """load() raises FileNotFoundError for missing path."""
+    import pytest
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.tempo = 120.0
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    with pytest.raises(FileNotFoundError, match="scene file not found"):
+        mixer.load("/nonexistent/nope.py")
