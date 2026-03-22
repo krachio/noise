@@ -1,19 +1,17 @@
-# Ralph Review Sprint 7
+# Ralph Review Sprint 8
 
-## Completed (sprint 6)
-- [x] STOP_MISSES_POLY — krach/_mixer.py:300
-- [x] HOT_PATH_ALLOC — soundman-core/src/graph/mod.rs:188-195
-- [x] STEP_LABEL_TYPO — noise-engine/src/main.rs:332,335
-- [x] POLY_PREFIX_COLLISION — krach/_mixer.py:303
-- [x] NOTE_DUR_PANIC — noise-engine/src/main.rs:312
-- [x] CROSSFADE_DROP_ON_RT — soundman-core/src/swap/mod.rs:128
+## Completed (sprint 7)
+- [x] NEGATIVE_DEN_WRAP — midiman/src/ir/validate.rs:84
 
-## Sprint 7
-- [x] NEGATIVE_DEN_WRAP — midiman/src/ir/validate.rs:84 — reject negative denominators (pair[1] <= 0)
+## Sprint 8 — review
+No new issues found in code review (second consecutive clean review).
 
-## Sprint 7 — adversarial (deferred, theoretical-only)
-These are theoretically reachable overflow paths in Time arithmetic but practically unreachable — musical time values are small rationals. GCD reduction keeps denominators small. Adding overflow checks would clutter hot-path code for scenarios that can't occur from the Python REPL.
-- Time::reduce128 truncation on u128→u64/i64 downcast (time.rs:59-65)
-- cross_add i128 overflow for extreme inputs (time.rs:52-55)
-- floor() den cast wraps for den > i64::MAX (time.rs:110-113)
-- Unbounded query recursion (query.rs:18 — depth bounded by frontend DSL)
+## Sprint 8 — adversarial fixes
+- [x] FADE_SURVIVES_REMOVE — krach/_mixer.py:275 — remove() now also hushes _fade_{name}
+- [x] CHORD_EXCEEDS_VOICES — krach/_mixer.py:345 — chord() raises ValueError when pitches > voice count
+- [x] REPOLY_STALE_PATTERNS — krach/_mixer.py:259 — re-poly() now hushes old parent pattern before cleanup
+
+## Sprint 8 — deferred (low practical impact)
+- Stale pending control events survive LoadGraph (noise-engine: produces warnings, not crashes)
+- control_values grows unbounded across LoadGraph label churn (slow growth, ~50 labels/session max)
+- Pattern engine slot table only grows (slow growth, ~20 slots/session max)

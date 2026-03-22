@@ -260,3 +260,83 @@ def test_stop_does_not_skip_mono_voice_with_poly_like_prefix() -> None:
     assert "pad_vinyl" in hushed_names, (
         f"stop() must hush mono 'pad_vinyl', but only hushed: {hushed_names}"
     )
+
+
+# ── remove() with active fade ───────────────────────────────────────────────
+
+
+def test_remove_hushes_fade_pattern() -> None:
+    """remove() must hush the _fade_{name} pattern slot so fades don't
+    keep driving a deleted voice's gain control."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    # Start a fade — schedules _fade_bass pattern
+    mixer.fade("bass", target=0.1, bars=4)
+    assert session.play.call_count == 1
+
+    # Remove the voice — must also hush _fade_bass
+    session.reset_mock()
+    mixer.remove("bass")
+
+    hushed_names = {c.args[0] for c in session.hush.call_args_list}
+    assert "_fade_bass" in hushed_names, (
+        f"remove() must hush '_fade_bass', but only hushed: {hushed_names}"
+    )
+
+
+# ── chord() with more pitches than voices ────────────────────────────────────
+
+
+def test_chord_raises_when_pitches_exceed_voice_count() -> None:
+    """chord() with more pitches than poly voices should raise ValueError."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+
+    with pytest.raises(ValueError, match="more pitches .* than voices"):
+        mixer.chord("pad", 220, 330, 440)  # 3 pitches, 2 voices
+
+
+# ── re-poly() hushes old patterns ────────────────────────────────────────────
+
+
+def test_repoly_hushes_old_instance_patterns() -> None:
+    """Re-calling poly() with a different voice count must hush patterns
+    targeting old instance names (e.g. pad_v2, pad_v3)."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.poly("pad", "faust:pad", voices=4, gain=0.5)
+
+    # Re-poly with fewer voices — old instances pad_v2, pad_v3 should be hushed
+    session.reset_mock()
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+
+    hushed_names = {c.args[0] for c in session.hush.call_args_list}
+    # The old poly parent "pad" should be hushed (stops old patterns)
+    assert "pad" in hushed_names, (
+        f"re-poly must hush 'pad' parent slot, but only hushed: {hushed_names}"
+    )

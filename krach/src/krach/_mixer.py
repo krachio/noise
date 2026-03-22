@@ -256,6 +256,7 @@ class VoiceMixer:
 
         # Clean up old instances if re-registering.
         if name in self._poly:
+            self.hush(name)
             old = self._poly[name]
             for i in range(old.count):
                 self._voices.pop(f"{name}_v{i}", None)
@@ -274,6 +275,7 @@ class VoiceMixer:
     def remove(self, name: str) -> None:
         """Remove a voice or poly voice. Rebuilds the graph."""
         self.hush(name)
+        self._session.hush(f"_fade_{name}")
         if name in self._poly:
             pv = self._poly.pop(name)
             self._poly_alloc.pop(name, None)
@@ -341,6 +343,11 @@ class VoiceMixer:
         """
         if name not in self._poly:
             raise ValueError(f"'{name}' is not a poly voice — use mix.poly() first")
+        pv = self._poly[name]
+        if len(pitches) > pv.count:
+            raise ValueError(
+                f"more pitches ({len(pitches)}) than voices ({pv.count}) for '{name}'"
+            )
         atoms: list[Pattern] = []
         for pitch in pitches:
             inst = self._alloc_voice(name)
