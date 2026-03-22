@@ -2,7 +2,7 @@ pub mod config;
 
 use std::collections::HashMap;
 
-use log::{debug, warn};
+use log::{debug, info, warn};
 use rtrb::{Consumer, Producer, RingBuffer};
 
 use config::EngineConfig;
@@ -105,11 +105,12 @@ impl EngineController {
     pub fn handle_message(&mut self, msg: ClientMessage) -> Result<(), CompileError> {
         match msg {
             ClientMessage::LoadGraph(ir) => {
-                debug!("load_graph: {} nodes, {} connections", ir.nodes.len(), ir.connections.len());
+                info!("load_graph: {} nodes, {} connections, {} controls",
+                    ir.nodes.len(), ir.connections.len(), ir.exposed_controls.len());
                 self.exposed_controls = ir.exposed_controls.clone();
                 self.shadow_graph = ir;
                 self.recompile_and_send(true)?; // reuse — preserves DSP state for existing voices
-                debug!("graph compiled and queued for swap");
+                info!("graph compiled — exposed: {:?}", self.exposed_controls.keys().collect::<Vec<_>>());
             }
             ClientMessage::AddNode { id, type_id, controls } => {
                 debug!("add_node: id={id}, type={type_id}, controls={controls:?}");

@@ -110,9 +110,16 @@ Labels are always `{voice_name}/{param}`. Example:
   labels: bass/freq, bass/gate, bass/cutoff
 
 ### Effect buses, sends, and wires
+
+IMPORTANT: Effects like reverb/delay that receive audio from other voices MUST use
+`mix.bus()`, NOT `mix.voice()`. A bus has audio inputs; a voice does not.
+
 ```python
-# Add an effect bus (a DSP that takes audio input):
-mix.bus("verb", my_reverb_fn, gain=0.3)
+# CORRECT: reverb as a bus (has audio input — receives sends)
+mix.bus("verb", "faust:verb", gain=0.3)
+
+# WRONG: mix.voice("verb", "faust:verb") — this creates a voice, not a bus!
+# Sends won't work if the effect is created with voice() instead of bus().
 
 # Route a voice to a bus via a gain-controlled send:
 mix.send("bass", "verb", level=0.4)
