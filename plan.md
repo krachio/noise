@@ -2,7 +2,7 @@
 
 ## Current State
 
-~780 tests (236 krach, 142 midiman-frontend, 68 faust-dsl, ~340 Rust). Pyright strict clean.
+817 tests (257 krach, 143 midiman-frontend, 68 faust-dsl, 349 Rust). Pyright strict clean.
 Single user object `mix` with voice handles, voice-free patterns, `/` path addressing,
 effect routing, native automation lanes (block-rate on audio thread), unified Voice model,
 phase-reset, meter, pattern retrieval, scenes, mix.load().
@@ -12,6 +12,8 @@ Engine logs to `~/.krach/engine.log`.
 - ✅ Stage 1: Stability (master gain, bpm alias, voice/bus handles, copilot context)
 - ✅ Stage 2: Automation lanes (AutoShape, GraphSwapper integration, IPC, Python mod/fade)
 - ✅ Stage 3: Scenes + music-as-code (save/recall, mix.load())
+- ✅ Stage 5.1: Mini-notation parser (`p("x . x . x . . x")`)
+- ✅ Stage 5.3: Typed Control IR (Control(label, value) replaces Osc convention)
 
 ---
 
