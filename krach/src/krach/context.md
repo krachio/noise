@@ -174,14 +174,39 @@ mix.stop()                 # hush all voices
 
 ---
 
-## Patterns -- `mm` (midiman)
+## Patterns + Transport
 
-### Session control
+### Transport
 ```python
-mm.tempo = 128
-mix.play("kick", pat)   # assign pattern to slot, starts on next cycle
-mix.hush("kick")        # silence slot (resumable)
-mix.stop()              # hush all slots
+mix.tempo = 128
+mix.meter = 4          # 4/4 time (default). Use 3 for waltz, 7 for 7/8
+mix.play("kick", pat)  # assign pattern to slot, starts on next cycle
+mix.hush("kick")       # silence slot (resumable)
+mix.stop()             # hush all slots
+```
+
+### Voice handles (eliminates name repetition)
+```python
+kick = mix.voice("drums/kick", kick_fn, gain=0.8)
+bass = mix.voice("bass", bass_fn, gain=0.5)
+verb = mix.bus("verb", reverb_fn, gain=0.3)
+
+kick.play(hit() * 4)
+bass.play(seq("A2", "D3", None, "E2").over(2))
+bass.send(verb, 0.4)
+bass.set("cutoff", 1200)
+bass.fade("cutoff", 200, bars=4)
+bass.play("cutoff", mod_sine(400, 2000).over(4))
+bass.mute()
+```
+
+### Pattern retrieval
+```python
+p = mix.pattern("kick")          # get current pattern
+mix.play("kick", p.fast(2))      # modify and replay
+# Or via handle:
+p = kick.pattern()
+kick.play(p.every(4, lambda p: p.reverse()))
 ```
 
 ### Pattern algebra
@@ -258,7 +283,7 @@ with mix.batch():
     mix.voice("bass", acid_bass, gain=0.3)
 
 # --- Play patterns
-mm.tempo = 128
+mix.tempo = 128
 
 mix.play("kick", hit() * 4)
 mix.play("hat",  (hit() + rest()) * 8)
