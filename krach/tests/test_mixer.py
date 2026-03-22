@@ -203,3 +203,60 @@ def test_voice_outside_batch_rebuilds_immediately() -> None:
 
     mixer.voice("kick", "faust:kick", gain=0.8)
     assert session.load_graph.call_count == 1  # immediate rebuild
+
+
+# ── stop() with poly voices ─────────────────────────────────────────────────
+
+
+def test_stop_hushes_poly_parent_slots() -> None:
+    """stop() must hush the poly parent pattern slots (e.g. 'pad'),
+    not just the individual instances ('pad_v0', 'pad_v1').
+    Otherwise patterns keep firing after stop()."""
+    from unittest.mock import MagicMock, call
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+
+    # stop() should hush "pad" (the poly parent pattern slot)
+    session.reset_mock()
+    mixer.stop()
+
+    hush_calls = [c for c in session.hush.call_args_list]
+    hushed_names = {c.args[0] for c in hush_calls}
+    assert "pad" in hushed_names, (
+        f"stop() must hush poly parent 'pad', but only hushed: {hushed_names}"
+    )
+
+
+def test_stop_does_not_skip_mono_voice_with_poly_like_prefix() -> None:
+    """A mono voice 'pad_vinyl' must not be skipped when poly 'pad' exists.
+    The prefix 'pad_v' matches 'pad_vinyl' — stop() must use exact instance
+    name matching, not startswith."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "faust:pad_vinyl", "dac", "gain"]
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+        "faust:pad_vinyl": ("freq", "gate"),
+    })
+
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.voice("pad_vinyl", "faust:pad_vinyl", gain=0.4)
+
+    session.reset_mock()
+    mixer.stop()
+
+    hushed_names = {c.args[0] for c in session.hush.call_args_list}
+    assert "pad_vinyl" in hushed_names, (
+        f"stop() must hush mono 'pad_vinyl', but only hushed: {hushed_names}"
+    )

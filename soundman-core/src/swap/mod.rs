@@ -127,6 +127,12 @@ impl GraphSwapper {
 
     fn begin_swap(&mut self, new_graph: Box<DspGraph>) {
         if self.active.is_some() {
+            // If already crossfading, move the old retiring graph to
+            // retired_ready so it's not dropped on the audio thread
+            // (RT-safe deallocation) and can be returned for node reuse.
+            if self.retiring.is_some() {
+                self.retired_ready = self.retiring.take();
+            }
             self.retiring = self.active.take();
             self.active = Some(new_graph);
             self.state = SwapState::Crossfading {
@@ -482,5 +488,41 @@ mod tests {
             "retiring graph should have received SetParam during crossfade \
              (during={crossings_during}, after={crossings_after})"
         );
+    }
+
+    #[test]
+    fn swap_during_crossfade_preserves_retiring_for_reuse() {
+        // If begin_swap is called during an active crossfade, the old
+        // retiring graph must be moved to retired_ready (not dropped on
+        // the audio thread). This ensures RT-safe deallocation and
+        // enables node reuse for the next compilation.
+        let registry = test_registry();
+        let block_size = 64;
+        let crossfade_samples = 256; // 4 blocks
+
+        let g1 = make_graph(&registry, 440.0, block_size);
+        let g2 = make_graph(&registry, 880.0, block_size);
+        let g3 = make_graph(&registry, 220.0, block_size);
+
+        let mut swapper = GraphSwapper::new(crossfade_samples, block_size);
+
+        // Load g1, process to establish it
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(g1)));
+        let mut buf = vec![0.0_f32; block_size];
+        swapper.process(&mut buf);
+
+        // Swap to g2 — starts crossfade (g1 → retiring, g2 → active)
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(g2)));
+        assert!(swapper.is_crossfading());
+        swapper.process(&mut buf); // 1 block into crossfade
+
+        // Swap to g3 during active crossfade — g1 should be preserved
+        // in retired_ready, not dropped on the audio thread.
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(g3)));
+        assert!(swapper.is_crossfading());
+
+        // The old retiring graph (g1) should now be in retired_ready.
+        let retired = swapper.take_retired();
+        assert!(retired.is_some(), "old retiring graph must be preserved in retired_ready");
     }
 }

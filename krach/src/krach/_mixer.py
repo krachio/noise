@@ -299,8 +299,16 @@ class VoiceMixer:
 
     def stop(self) -> None:
         """Hush all voices and release all gates."""
+        # Collect exact poly instance names to avoid prefix-matching bugs
+        # (e.g. mono "pad_vinyl" must not be skipped when poly "pad" exists).
+        poly_instances: set[str] = set()
+        for pname, pv in self._poly.items():
+            self.hush(pname)
+            for i in range(pv.count):
+                poly_instances.add(f"{pname}_v{i}")
         for name in self._voices:
-            self.hush(name)
+            if name not in poly_instances:
+                self.hush(name)
 
     def gain(self, name: str, value: float) -> None:
         """Update a voice's gain.  Instant — no graph rebuild."""

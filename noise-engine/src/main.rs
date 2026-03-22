@@ -308,11 +308,14 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                 match &ev.event.value {
                     Value::Note { channel, note, dur, .. } => {
                         let cycle_dur = BEATS_PER_CYCLE * 60.0 / pattern_engine.bpm();
-                        note_offs.push(Reverse(PendingNoteOff {
-                            fire_at: ev.fire_at + Duration::from_secs_f64(dur * cycle_dur),
-                            channel: *channel,
-                            note: *note,
-                        }));
+                        let dur_secs = (dur * cycle_dur).max(0.0);
+                        if dur_secs.is_finite() {
+                            note_offs.push(Reverse(PendingNoteOff {
+                                fire_at: ev.fire_at + Duration::from_secs_f64(dur_secs),
+                                channel: *channel,
+                                note: *note,
+                            }));
+                        }
                     }
                     _ => {}
                 }
@@ -332,7 +335,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
         // ⑦ Drain any note-offs that are now due.
         drain_note_offs(&mut note_offs, &mut midi_sink);
 
-        // ⑦ MIDI clock ticks.
+        // ⑧ MIDI clock ticks.
         if let Some(ref mut next_tick) = next_clock_tick {
             let tick_now = Instant::now();
             while *next_tick <= tick_now {
@@ -345,7 +348,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
             }
         }
 
-        // ⑧ Sleep until next event (capped at 1ms for command responsiveness).
+        // ⑨ Sleep until next event (capped at 1ms for command responsiveness).
         let midi_deadline = pending_midi.iter().map(|e| e.fire_at).min();
         let ctrl_deadline = pending.iter().map(|p| p.fire_at()).min();
         let deadline = earliest_deadline(
@@ -521,6 +524,34 @@ mod tests {
         let at_44k = crossfade_samples(120.0, 44100);
         assert!(at_48k > at_44k);
         assert_eq!(at_44k, 11025); // 250ms * 44100 = 11025
+    }
+
+    // ── note-off duration guard ───────────────────────────────────────────
+
+    #[test]
+    fn negative_note_dur_does_not_panic() {
+        // Duration::from_secs_f64 panics on negative values.
+        // Guard: (dur * cycle_dur).max(0.0) + is_finite check.
+        let dur = -0.5_f64;
+        let cycle_dur = 2.0;
+        let dur_secs = (dur * cycle_dur).max(0.0);
+        assert!(dur_secs.is_finite());
+        assert!(dur_secs >= 0.0);
+        // Should not panic:
+        let _ = Duration::from_secs_f64(dur_secs);
+    }
+
+    #[test]
+    fn nan_note_dur_becomes_zero() {
+        // NaN * anything = NaN, but NaN.max(0.0) = 0.0 in Rust (IEEE 754 maximum).
+        // This means NaN durations become immediate note-offs, which is safe.
+        let dur = f64::NAN;
+        let cycle_dur = 2.0;
+        let dur_secs = (dur * cycle_dur).max(0.0);
+        assert!(dur_secs.is_finite());
+        assert!((dur_secs - 0.0).abs() < f64::EPSILON, "NaN dur should become 0.0");
+        // Must not panic:
+        let _ = std::time::Duration::from_secs_f64(dur_secs);
     }
 
 }

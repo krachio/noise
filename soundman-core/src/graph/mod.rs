@@ -1,6 +1,8 @@
 pub mod compiler;
 pub mod node;
 
+use smallvec::SmallVec;
+
 use node::{DspNode, NodeId, ParamError};
 
 #[derive(Debug, Clone)]
@@ -184,17 +186,20 @@ impl DspGraph {
                 self.scratch_outputs[i].fill(0.0);
             }
 
-            // Build slice references for DspNode::process
-            let input_refs: Vec<&[f32]> = self.scratch_inputs[..num_inputs]
+            // Build slice references for DspNode::process.
+            // SmallVec<[_; 4]> keeps data on the stack for ≤4 ports (typical),
+            // avoiding heap allocation on the audio hot path.
+            let input_refs: SmallVec<[&[f32]; 4]> = self.scratch_inputs[..num_inputs]
                 .iter()
                 .map(Vec::as_slice)
                 .collect();
-            let mut output_refs: Vec<&mut [f32]> = self.scratch_outputs[..num_outputs]
+            let mut output_refs: SmallVec<[&mut [f32]; 4]> = self.scratch_outputs[..num_outputs]
                 .iter_mut()
                 .map(Vec::as_mut_slice)
                 .collect();
 
             self.nodes[idx].process(&input_refs, &mut output_refs);
+            drop(output_refs); // release mutable borrow before re-reading scratch_outputs
 
             // Copy scratch outputs back into buffer pool
             for (port, &buf_idx) in self.output_buffer_map[idx].iter().enumerate() {
