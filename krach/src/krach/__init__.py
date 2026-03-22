@@ -79,6 +79,7 @@ def main() -> None:
     import anthropic
 
     from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, parse_dsp_controls, split_cells
+    from krach._mininotation import p
     from krach._mixer import (
         VoiceMixer, dsp, hit, mod_exp, mod_ramp,
         mod_ramp_down, mod_sine, mod_square, mod_tri, note, ramp, seq,
@@ -177,7 +178,7 @@ def main() -> None:
     print(f"  nodes    {nodes}")
     print(f"  dsp dir  {dsp_dir}")
     print()
-    print("  in scope: mix  dsp()  note()  hit()  seq()  rest  ramp()  mtof  ftom  parse_note"
+    print("  in scope: mix  dsp()  note()  hit()  seq()  p()  rest  ramp()  mtof  ftom  parse_note"
           "  C0..B8  status()  c()  cn()"
           "  mod_sine  mod_tri  mod_ramp  mod_ramp_down  mod_square  mod_exp"
           "  + faust-dsl: control sine_osc saw lowpass adsr ...")
@@ -193,6 +194,7 @@ def main() -> None:
         "note": note,
         "hit": hit,
         "seq": seq,
+        "p": p,
         "ramp": ramp,
         # Pitch utilities
         "mtof": mtof,
