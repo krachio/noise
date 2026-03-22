@@ -99,37 +99,55 @@ def _check_finite(value: float, label: str) -> None:
         raise ValueError(f"{label} must be finite, got {value}")
 
 
-# ── Mod shapes ────────────────────────────────────────────────────────────────
+# ── Control pattern builders ──────────────────────────────────────────────────
 
 
-def mod_sine(t: float) -> float:
-    """Sine LFO shape: 0.5 at t=0, 1.0 at t=0.25, 0.5 at t=0.5, 0.0 at t=0.75."""
-    return 0.5 + 0.5 * math.sin(2 * math.pi * t)
+def _build_mod(shape: Callable[[float], float], lo: float, hi: float, steps: int) -> Pattern:
+    """Build a control pattern from a shape function [0,1) → [0,1]."""
+    atoms: list[Pattern] = []
+    for i in range(steps):
+        t = i / steps
+        val = lo + (hi - lo) * shape(t)
+        atoms.append(_osc("/set", OscStr("ctrl"), OscFloat(val)))
+    result = atoms[0]
+    for a in atoms[1:]:
+        result = result + a
+    return result
 
 
-def mod_tri(t: float) -> float:
-    """Triangle shape: 0→1→0 over one period."""
-    return 1.0 - abs(2.0 * t - 1.0)
+def ramp(start: float, end: float, steps: int = 64) -> Pattern:
+    """Linear ramp from start to end. Returns a 1-cycle pattern."""
+    return _build_mod(lambda t: t, start, end, steps)
 
 
-def mod_ramp(t: float) -> float:
-    """Ramp up: 0→1."""
-    return t
+def mod_sine(lo: float, hi: float, steps: int = 64) -> Pattern:
+    """Sine LFO from lo to hi. Returns a 1-cycle pattern."""
+    return _build_mod(lambda t: 0.5 + 0.5 * math.sin(2 * math.pi * t), lo, hi, steps)
 
 
-def mod_ramp_down(t: float) -> float:
-    """Ramp down: 1→0."""
-    return 1.0 - t
+def mod_tri(lo: float, hi: float, steps: int = 64) -> Pattern:
+    """Triangle shape: lo→hi→lo over one period."""
+    return _build_mod(lambda t: 1.0 - abs(2.0 * t - 1.0), lo, hi, steps)
 
 
-def mod_square(t: float) -> float:
-    """Square wave: 1 for first half, 0 for second half."""
-    return 1.0 if t < 0.5 else 0.0
+def mod_ramp(lo: float, hi: float, steps: int = 64) -> Pattern:
+    """Ramp up: lo→hi."""
+    return ramp(lo, hi, steps)
 
 
-def mod_exp(t: float) -> float:
-    """Exponential curve: t^2."""
-    return t * t
+def mod_ramp_down(lo: float, hi: float, steps: int = 64) -> Pattern:
+    """Ramp down: hi→lo."""
+    return _build_mod(lambda t: 1.0 - t, lo, hi, steps)
+
+
+def mod_square(lo: float, hi: float, steps: int = 64) -> Pattern:
+    """Square wave: hi for first half, lo for second half."""
+    return _build_mod(lambda t: 1.0 if t < 0.5 else 0.0, lo, hi, steps)
+
+
+def mod_exp(lo: float, hi: float, steps: int = 64) -> Pattern:
+    """Exponential curve: lo→hi following t^2."""
+    return _build_mod(lambda t: t * t, lo, hi, steps)
 
 
 # ── Pure builders (testable without I/O) ──────────────────────────────────────
@@ -428,6 +446,89 @@ def _bind_voice(node: IrNode, voice: str) -> IrNode:
             return Degrade(prob, seed, _bind_voice(child, voice))
 
 
+def _bind_voice_poly(
+    node: IrNode, parent: str, count: int, alloc: int,
+) -> tuple[IrNode, int]:
+    """Bind a pattern to a poly voice, round-robin allocating instances.
+
+    Each Freeze compound (note/hit event) binds to the next instance.
+    Returns (rewritten_node, updated_alloc_counter).
+    """
+    from midiman_frontend.ir import (
+        Cat,
+        Degrade,
+        Early,
+        Euclid,
+        Every,
+        Fast,
+        Freeze,
+        Late,
+        Rev,
+        Silence,
+        Slow,
+        Stack,
+    )
+
+    match node:
+        case Freeze(Stack(children)):
+            # Freeze(Stack) = chord — each child gets a different instance
+            new_children: list[IrNode] = []
+            for c in children:
+                bound_c, alloc = _bind_voice_poly(c, parent, count, alloc)
+                new_children.append(bound_c)
+            return Freeze(Stack(tuple(new_children))), alloc
+        case Freeze(child):
+            # A Freeze is one "event" (note/hit compound) — allocate one instance
+            inst = f"{parent}_v{alloc % count}"
+            alloc += 1
+            return Freeze(_bind_voice(child, inst)), alloc
+        case Cat(children):
+            # Sequence: each child gets the next instance
+            new_children: list[IrNode] = []
+            for c in children:
+                bound_c, alloc = _bind_voice_poly(c, parent, count, alloc)
+                new_children.append(bound_c)
+            return Cat(tuple(new_children)), alloc
+        case Stack(children):
+            # Simultaneous: each child gets a different instance (chord)
+            new_children_s: list[IrNode] = []
+            for c in children:
+                bound_c, alloc = _bind_voice_poly(c, parent, count, alloc)
+                new_children_s.append(bound_c)
+            return Stack(tuple(new_children_s)), alloc
+        case Silence():
+            return node, alloc
+        case Fast(factor, child):
+            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
+            return Fast(factor, bound), alloc
+        case Slow(factor, child):
+            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
+            return Slow(factor, bound), alloc
+        case Early(offset, child):
+            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
+            return Early(offset, bound), alloc
+        case Late(offset, child):
+            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
+            return Late(offset, bound), alloc
+        case Rev(child):
+            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
+            return Rev(bound), alloc
+        case Every(n, transform, child):
+            bt, alloc = _bind_voice_poly(transform, parent, count, alloc)
+            bc, alloc = _bind_voice_poly(child, parent, count, alloc)
+            return Every(n, bt, bc), alloc
+        case Euclid(pulses, steps, rotation, child):
+            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
+            return Euclid(pulses, steps, rotation, bound), alloc
+        case Degrade(prob, seed, child):
+            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
+            return Degrade(prob, seed, bound), alloc
+        case _:
+            # Atom without Freeze — bind to current instance (non-compound event)
+            inst = f"{parent}_v{alloc % count}"
+            return _bind_voice(node, inst), alloc
+
+
 def _bind_ctrl(node: IrNode, label: str) -> IrNode:
     """Replace the ``"ctrl"`` placeholder param in Osc atoms with ``label``.
 
@@ -513,7 +614,7 @@ class VoiceMixer:
         self._buses: dict[str, Bus] = {}
         self._sends: dict[tuple[str, str], float] = {}  # (voice, bus) → gain
         self._wires: dict[tuple[str, str], str] = {}    # (voice, bus) → port
-        self._mods: set[str] = set()                     # active mod slot names
+        # _mods is deprecated — mod() now delegates to play() which uses _ctrl_ slots
         self._batching: bool = False
         self._graph_loaded: bool = False
 
@@ -640,10 +741,6 @@ class VoiceMixer:
             raise ValueError(f"voice '{name}' not found")
         self._muted.pop(name, None)
         self.hush(name)
-        # Hush active mods for this voice
-        for slot in [s for s in self._mods if s.startswith(f"_mod_{name}_")]:
-            self._session.hush(slot)
-            self._mods.discard(slot)
         # Clean sends/wires where this voice is the source
         for key in [k for k in self._sends if k[0] == name]:
             del self._sends[key]
@@ -660,7 +757,34 @@ class VoiceMixer:
         self._rebuild()
 
     def hush(self, name: str) -> None:
-        """Stop the pattern, its fade, and release gates for a voice (or all poly instances)."""
+        """Stop the pattern, its fade, and release gates for a voice, control path, or group.
+
+        - Control path (contains ``/``): hushes the ``_ctrl_`` slot
+        - Voice name: hushes voice + fade + gates
+        - Group prefix: hushes all matching voices
+        """
+        # Control path: hush the _ctrl_ slot
+        if "/" in name:
+            slot = f"_ctrl_{name.replace('/', '_')}"
+            self._session.hush(slot)
+            # Also try group-prefix resolution
+            targets = self._resolve_targets_soft(name)
+            for t in targets:
+                self._hush_single(t)
+            return
+
+        # Exact match or group prefix
+        targets = self._resolve_targets_soft(name)
+        if targets:
+            for t in targets:
+                self._hush_single(t)
+        else:
+            # Not found — still pass through to session (e.g. custom slot names)
+            self._session.hush(name)
+            self._session.hush(f"_fade_{name}")
+
+    def _hush_single(self, name: str) -> None:
+        """Hush a single voice (not a group or path)."""
         self._session.hush(name)
         self._session.hush(f"_fade_{name}")
         if name in self._poly:
@@ -690,11 +814,18 @@ class VoiceMixer:
                 self.hush(name)
 
     def gain(self, name: str, value: float) -> None:
-        """Update a voice or bus gain. Instant — no graph rebuild.
+        """Update a voice, bus, or group gain. Instant — no graph rebuild.
 
         For poly voices, distributes gain equally across instances.
+        Prefix matching: ``gain("drums", 0.5)`` applies to all ``drums/*`` voices.
         """
         _check_finite(value, f"gain for '{name}'")
+        targets = self._resolve_targets(name)
+        for t in targets:
+            self._gain_single(t, value)
+
+    def _gain_single(self, name: str, value: float) -> None:
+        """Set gain for a single voice, poly, or bus."""
         if name in self._buses:
             old_bus = self._buses[name]
             self._buses[name] = Bus(
@@ -703,8 +834,6 @@ class VoiceMixer:
             )
             self._session.set_ctrl(f"{name}/gain", float(value))
             return
-        if name not in self._poly and name not in self._voices:
-            raise ValueError(f"voice '{name}' not found")
         if name in self._poly:
             pv = self._poly[name]
             per_voice = value / pv.count
@@ -726,27 +855,37 @@ class VoiceMixer:
             self._session.set_ctrl(f"{name}/gain", float(value))
 
     def mute(self, name: str) -> None:
-        """Mute a voice — stores current gain, sets gain to 0. No-op if already muted."""
-        if name not in self._voices and name not in self._poly:
-            raise ValueError(f"voice '{name}' not found")
+        """Mute a voice or group — stores current gain, sets gain to 0. No-op if already muted."""
+        targets = self._resolve_targets(name)
+        for t in targets:
+            self._mute_single(t)
+
+    def _mute_single(self, name: str) -> None:
+        """Mute a single voice."""
         if name in self._muted:
             return
         if name in self._poly:
             self._muted[name] = self._poly[name].gain
-        else:
+        elif name in self._voices:
             self._muted[name] = self._voices[name].gain
-        self.gain(name, 0.0)
+        self._gain_single(name, 0.0)
 
     def unmute(self, name: str) -> None:
-        """Unmute a voice — restores gain saved by mute()."""
-        if name not in self._muted:
+        """Unmute a voice or group — restores gain saved by mute()."""
+        targets = self._resolve_targets_soft(name)
+        if not targets:
+            if name not in self._muted:
+                return
+            # Single name not in current voices — just pop muted
+            self._muted.pop(name, None)
             return
-        self.gain(name, self._muted.pop(name))
+        for t in targets:
+            if t in self._muted:
+                self._gain_single(t, self._muted.pop(t))
 
     def solo(self, name: str) -> None:
-        """Solo a voice — mutes all others, unmutes target."""
-        if name not in self._voices and name not in self._poly:
-            raise ValueError(f"voice '{name}' not found")
+        """Solo a voice or group — mutes all others, unmutes targets."""
+        targets = set(self._resolve_targets(name))
         # Collect all top-level names (mono voices + poly parents)
         all_names: set[str] = set()
         for vname in self._voices:
@@ -758,49 +897,22 @@ class VoiceMixer:
             for i in range(pv.count):
                 all_names.discard(f"{pname}_v{i}")
         for n in all_names:
-            if n != name:
-                self.mute(n)
-        self.unmute(name)
+            if n not in targets:
+                self._mute_single(n)
+        for t in targets:
+            if t in self._muted:
+                self._gain_single(t, self._muted.pop(t))
 
     def unsolo(self) -> None:
         """Unmute all muted voices — reverses solo() or manual mutes."""
         for name in list(self._muted):
             self.unmute(name)
 
-    def note(self, name: str, *pitches: float, vel: float = 1.0, **params: float) -> Pattern:
-        """Unified melodic trigger: single note, chord, or gate-only.
-
-        - 0 pitches: gate-only trigger (no freq set)
-        - 1 pitch: single note on mono or next poly instance
-        - N pitches on poly: simultaneous notes (one per instance), frozen stack
-        - N pitches on mono: raises ValueError
-        """
-        if len(pitches) > 1:
-            if name not in self._poly:
-                raise ValueError(
-                    f"'{name}' is not a poly voice — cannot play {len(pitches)} pitches"
-                )
-            pv = self._poly[name]
-            if len(pitches) > pv.count:
-                raise ValueError(
-                    f"more pitches ({len(pitches)}) than voices ({pv.count}) for '{name}'"
-                )
-            atoms: list[Pattern] = []
-            for pitch in pitches:
-                inst = self._alloc_voice(name)
-                atoms.append(build_note(inst, self._voices[inst].controls, pitch, vel=vel, **params))
-            result = atoms[0]
-            for a in atoms[1:]:
-                result = result | a
-            return _freeze(result)
-        pitch = pitches[0] if pitches else None
-        inst = self._alloc_voice(name)
-        return build_note(inst, self._voices[inst].controls, pitch, vel=vel, **params)
-
     def play(self, target: str, pattern: Pattern) -> None:
         """Play a pattern on a voice or control path.
 
         - Plain name (no ``/``): voice name — rewrites bare params to ``voice/param``
+        - Poly name: round-robin allocates instances (``pad_v0``, ``pad_v1``, ...)
         - Path with ``/``: control path — rewrites ``"ctrl"`` placeholder to the label
         """
         if "/" in target:
@@ -809,10 +921,22 @@ class VoiceMixer:
             bound = Pattern(_bind_ctrl(pattern.node, label))
             slot = f"_ctrl_{target.replace('/', '_')}"
             self._session.play(slot, bound)
+        elif target in self._poly:
+            # Poly voice: round-robin allocate instances during rewrite
+            pv = self._poly[target]
+            alloc = self._poly_alloc.get(target, 0)
+            bound_node, alloc = _bind_voice_poly(pattern.node, target, pv.count, alloc)
+            self._poly_alloc[target] = alloc
+            self._session.play(target, Pattern(bound_node))
         else:
-            # Voice name: rewrite bare params to voice/param
+            # Mono voice: rewrite bare params to voice/param
             bound = Pattern(_bind_voice(pattern.node, target))
             self._session.play(target, bound)
+
+    def set(self, path: str, value: float) -> None:
+        """Set a control value by path. Instant — no pattern scheduling."""
+        _check_finite(value, path)
+        self._session.set_ctrl(path, float(value))
 
     def _resolve_path(self, path: str) -> str:
         """Convert a ``/``-separated path to the exposed control label.
@@ -821,60 +945,61 @@ class VoiceMixer:
         """
         return path
 
-    def hit(self, name: str, param: str) -> Pattern:
-        """Percussive trigger: trig + reset on a specific control.
+    def _resolve_targets(self, name: str) -> list[str]:
+        """Resolve name to matching voices/poly/buses. Exact match first, then prefix."""
+        if name in self._voices or name in self._poly or name in self._buses:
+            return [name]
+        prefix = name + "/"
+        matches = [n for n in [*self._voices, *self._poly, *self._buses] if n.startswith(prefix)]
+        if not matches:
+            raise ValueError(f"voice or group '{name}' not found")
+        return matches
 
-        For poly voices, allocates the next instance (round-robin).
-        """
-        inst = self._alloc_voice(name)
-        return build_hit(inst, param)
-
-    def seq(self, name: str, *notes: float | None, **params: float) -> Pattern:
-        """Build a Cat of steps/rests from a sequence of pitches.
-
-        Each element is a float (pitch) or None (rest).
-        For poly voices, allocates instances via round-robin per note.
-
-        Usage::
-
-            mix.seq("bass", 55, 73, None, 65)
-        """
-        if not notes:
-            raise ValueError("seq requires at least one note")
-        atoms: list[Pattern] = []
-        for pitch in notes:
-            if pitch is None:
-                atoms.append(_rest())
-            else:
-                atoms.append(self.note(name, pitch, **params))
-        result = atoms[0]
-        for a in atoms[1:]:
-            result = result + a
-        return result
-
-    def _alloc_voice(self, name: str) -> str:
-        """Resolve a voice name to a concrete instance. For poly voices,
-        returns the next instance via round-robin. For mono voices, returns name."""
-        if name in self._poly:
-            pv = self._poly[name]
-            idx = self._poly_alloc[name] % pv.count
-            self._poly_alloc[name] = idx + 1
-            return f"{name}_v{idx}"
-        if name not in self._voices:
-            raise ValueError(f"voice '{name}' not found")
-        return name
+    def _resolve_targets_soft(self, name: str) -> list[str]:
+        """Like _resolve_targets but returns empty list instead of raising."""
+        if name in self._voices or name in self._poly or name in self._buses:
+            return [name]
+        prefix = name + "/"
+        return [n for n in [*self._voices, *self._poly, *self._buses] if n.startswith(prefix)]
 
     def fade(
-        self, name: str, target: float, bars: int = 4, steps_per_bar: int = 4
+        self, path: str, target: float, bars: int = 4, steps_per_bar: int = 4
     ) -> None:
-        """Smoothly fade voice gain over N bars using a midiman pattern.
+        """Fade any parameter to target over N bars. One-shot (holds at target).
 
-        For poly voices, fades all instances proportionally.
-        No Python threads needed — schedules gain changes through the pattern
-        engine, synchronized to the beat grid.
+        Accepts either a voice name (fades gain) or a ``/``-separated path
+        like ``"bass/gain"``, ``"bass/cutoff"``.
+
+        For voice names: poly voices fade all instances proportionally.
         """
         if bars < 1 or steps_per_bar < 1:
             raise ValueError("bars and steps_per_bar must be >= 1")
+
+        # Path-based fade: "bass/gain", "bass/cutoff", etc.
+        if "/" in path:
+            parts = path.split("/", 1)
+            voice_name, param = parts[0], parts[1]
+
+            # Determine current value for gain paths, else default 0.0
+            current = 0.0
+            if param == "gain":
+                if voice_name in self._voices:
+                    current = self._voices[voice_name].gain
+                elif voice_name in self._poly:
+                    current = self._poly[voice_name].gain
+
+            slot = f"_fade_{path.replace('/', '_')}"
+            self._session.hush(slot)
+            pattern = self._build_fade_pattern(current, target, bars, steps_per_bar)
+            self.play(path, pattern)
+
+            # Update gain bookkeeping if applicable
+            if param == "gain":
+                self._update_gain_bookkeeping(voice_name, target)
+            return
+
+        # Legacy: plain voice name → fade gain
+        name = path
         if name not in self._poly and name not in self._voices:
             raise ValueError(f"voice '{name}' not found")
 
@@ -883,12 +1008,30 @@ class VoiceMixer:
             for i in range(pv.count):
                 inst = f"{name}_v{i}"
                 self._fade_voice(inst, target / pv.count, bars, steps_per_bar)
-            # Update poly gain for bookkeeping
             self._poly[name] = PolyVoice(
                 type_id=pv.type_id, count=pv.count, gain=target, controls=pv.controls,
             )
         else:
             self._fade_voice(name, target, bars, steps_per_bar)
+
+    def _build_fade_pattern(
+        self, current: float, target: float, bars: int, steps_per_bar: int
+    ) -> Pattern:
+        """Build a ramp + hold pattern for one-shot fade behavior."""
+        total_steps = bars * steps_per_bar
+        ramp_atoms: list[Pattern] = []
+        for i in range(total_steps + 1):
+            t = i / total_steps
+            value = current + (target - current) * t
+            ramp_atoms.append(_osc("/set", OscStr("ctrl"), OscFloat(value)))
+        # Hold: repeat target value for 19x the ramp length (one-shot)
+        hold_atom = _osc("/set", OscStr("ctrl"), OscFloat(target))
+        hold_atoms = [hold_atom] * (total_steps * 19)
+        all_atoms = ramp_atoms + hold_atoms
+        pattern = all_atoms[0]
+        for a in all_atoms[1:]:
+            pattern = pattern + a
+        return pattern.over(bars * 20)
 
     def _fade_voice(
         self, name: str, target: float, bars: int, steps_per_bar: int
@@ -897,19 +1040,43 @@ class VoiceMixer:
         self._session.hush(f"_fade_{name}")
         current = self._voices[name].gain
         total_steps = bars * steps_per_bar
-        atoms: list[Pattern] = []
+        ramp_atoms: list[Pattern] = []
         for i in range(total_steps + 1):
             t = i / total_steps
             value = current + (target - current) * t
-            atoms.append(_osc("/soundman/set", OscStr(f"{name}/gain"), OscFloat(value)))
-        pattern = atoms[0]
-        for a in atoms[1:]:
+            ramp_atoms.append(_osc("/soundman/set", OscStr(f"{name}/gain"), OscFloat(value)))
+        # Hold: repeat target for 19x (one-shot behavior)
+        hold_atom = _osc("/soundman/set", OscStr(f"{name}/gain"), OscFloat(target))
+        hold_atoms = [hold_atom] * (total_steps * 19)
+        all_atoms = ramp_atoms + hold_atoms
+        pattern = all_atoms[0]
+        for a in all_atoms[1:]:
             pattern = pattern + a
-        self._session.play(f"_fade_{name}", pattern.over(bars))
+        self._session.play(f"_fade_{name}", pattern.over(bars * 20))
         old = self._voices[name]
         self._voices[name] = Voice(
             type_id=old.type_id, gain=target, controls=old.controls, init=old.init
         )
+
+    def _update_gain_bookkeeping(self, name: str, target: float) -> None:
+        """Update gain bookkeeping after a path-based fade."""
+        if name in self._poly:
+            pv = self._poly[name]
+            per_voice = target / pv.count
+            for i in range(pv.count):
+                inst = f"{name}_v{i}"
+                old = self._voices[inst]
+                self._voices[inst] = Voice(
+                    type_id=old.type_id, gain=per_voice, controls=old.controls, init=old.init
+                )
+            self._poly[name] = PolyVoice(
+                type_id=pv.type_id, count=pv.count, gain=target, controls=pv.controls,
+            )
+        elif name in self._voices:
+            old = self._voices[name]
+            self._voices[name] = Voice(
+                type_id=old.type_id, gain=target, controls=old.controls, init=old.init
+            )
 
     def bus(
         self,
@@ -997,52 +1164,9 @@ class VoiceMixer:
             del self._wires[key]
         self._rebuild()
 
-    def mod(
-        self,
-        voice: str,
-        param: str,
-        shape: Callable[[float], float],
-        lo: float,
-        hi: float,
-        bars: int,
-        steps: int = 64,
-    ) -> None:
-        """Modulate a voice parameter with a shape over N bars.
-
-        Pre-computes ``steps`` values and plays them as a pattern.
-        ``param`` resolution: ``"cutoff"`` → ``{voice}/cutoff``,
-        ``"gain"`` → ``{voice}/gain``,
-        ``"{bus}_send"`` → ``{voice}_send_{bus}/gain``.
-        """
-        # Resolve control label
-        if param.endswith("_send"):
-            bus_name = param[:-5]  # strip "_send"
-            label = f"{voice}_send_{bus_name}/gain"
-        elif param == "gain":
-            label = f"{voice}/gain"
-        else:
-            label = f"{voice}/{param}"
-
-        atoms: list[Pattern] = []
-        for i in range(steps):
-            t = i / steps
-            val = lo + (hi - lo) * shape(t)
-            _check_finite(val, f"mod value at step {i}")
-            atoms.append(_osc("/soundman/set", OscStr(label), OscFloat(val)))
-
-        pattern = atoms[0]
-        for a in atoms[1:]:
-            pattern = pattern + a
-
-        slot = f"_mod_{voice}_{param}"
-        self._session.play(slot, pattern.over(bars))
-        self._mods.add(slot)
-
-    def hush_mod(self, voice: str, param: str) -> None:
-        """Stop a modulation pattern."""
-        slot = f"_mod_{voice}_{param}"
-        self._session.hush(slot)
-        self._mods.discard(slot)
+    def mod(self, path: str, pattern: Pattern, bars: int = 1) -> None:
+        """Sugar for ``play(path, pattern.over(bars))``."""
+        self.play(path, pattern.over(bars))
 
     @contextmanager
     def batch(self) -> Generator[None]:
