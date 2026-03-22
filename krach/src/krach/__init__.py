@@ -35,7 +35,11 @@ def main() -> None:
     dsp_dir.mkdir(parents=True, exist_ok=True)
 
     engine_sock.unlink(missing_ok=True)
-    env = {**os.environ, "RUST_LOG": os.environ.get("RUST_LOG", "warn")}
+    env = {**os.environ, "RUST_LOG": os.environ.get("RUST_LOG", "info")}
+
+    log_path = Path.home() / ".krach" / "engine.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    _log_file = log_path.open("w")
 
     engine_proc = subprocess.Popen(
         [str(engine_bin)],
@@ -44,6 +48,7 @@ def main() -> None:
             "NOISE_SOCKET": str(engine_sock),
             "NOISE_DSP_DIR": str(dsp_dir),
         },
+        stderr=_log_file,
     )
 
     def _cleanup() -> None:
@@ -54,6 +59,7 @@ def main() -> None:
             engine_proc.kill()
             engine_proc.wait()
         engine_sock.unlink(missing_ok=True)
+        _log_file.close()
 
     atexit.register(_cleanup)
 
@@ -167,6 +173,7 @@ def main() -> None:
     print("  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝")
     print()
     print(f"  engine   {engine_sock}")
+    print(f"  log      {log_path}")
     print(f"  nodes    {nodes}")
     print(f"  dsp dir  {dsp_dir}")
     print()
