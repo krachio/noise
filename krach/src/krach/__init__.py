@@ -73,18 +73,22 @@ def main() -> None:
     import anthropic
 
     from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, parse_dsp_controls, split_cells
-    from krach._mixer import VoiceMixer, dsp, mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square, mod_tri
-    from krach._pitch import NOTES as _NOTES, ftom, mtof
+    from krach._mixer import (
+        VoiceMixer, dsp, hit, mod_exp, mod_ramp, mod_ramp_down, mod_sine,
+        mod_square, mod_tri, note, ramp, seq,
+    )
+    from krach._pitch import NOTES as _NOTES, ftom, mtof, parse_note
 
     mm = Session(socket_path=str(engine_sock))
     mm.connect()
 
     # Pre-populate controls from DSP files already on disk (previous sessions).
     _node_controls: dict[str, tuple[str, ...]] = {}
-    for _p in dsp_dir.glob("*.dsp"):
+    for _p in dsp_dir.rglob("*.dsp"):
         _controls = parse_dsp_controls(_p.read_text())
         if _controls:
-            _node_controls[f"faust:{_p.stem}"] = _controls
+            _rel = _p.relative_to(dsp_dir).with_suffix("")
+            _node_controls[f"faust:{_rel}"] = _controls
 
     mix = VoiceMixer(session=mm, dsp_dir=dsp_dir, node_controls=_node_controls)
     _user_ns_keys: tuple[str, ...] = ()  # populated after user_ns is built
@@ -166,7 +170,8 @@ def main() -> None:
     print(f"  nodes    {nodes}")
     print(f"  dsp dir  {dsp_dir}")
     print()
-    print("  in scope: mix  mm  dsp()  rest  mtof  ftom  C0..B8  status()  c()  cn()"
+    print("  in scope: mix  mm  dsp()  note()  hit()  seq()  rest  ramp()  mtof  ftom  parse_note"
+          "  C0..B8  status()  c()  cn()"
           "  mod_sine  mod_tri  mod_ramp  mod_ramp_down  mod_square  mod_exp"
           "  + faust-dsl: control sine_osc saw lowpass adsr ...")
     print()
@@ -178,9 +183,15 @@ def main() -> None:
         "mix": mix,
         "mm": mm,
         "rest": rest,
+        # Free pattern builders (shadow midiman_frontend.pattern.note)
+        "note": note,
+        "hit": hit,
+        "seq": seq,
+        "ramp": ramp,
         # Pitch utilities
         "mtof": mtof,
         "ftom": ftom,
+        "parse_note": parse_note,
         **_NOTES,
         # Synth design (faust-dsl)
         "dsp": dsp,
@@ -196,7 +207,7 @@ def main() -> None:
         "white_noise": white_noise,
         "adsr": adsr,
         "reverb": reverb,
-        # Mod shapes
+        # Mod patterns
         "mod_sine": mod_sine,
         "mod_tri": mod_tri,
         "mod_ramp": mod_ramp,

@@ -38,28 +38,36 @@ impl DspWatcher {
     /// Returns an error if the watcher cannot be created or the directory cannot be watched.
     pub fn new(dir: impl AsRef<Path>, tx: Sender<WatchEvent>) -> Result<Self, String> {
         let dir = dir.as_ref().to_path_buf();
+        let base = dir.canonicalize().unwrap_or_else(|_| dir.clone());
 
         let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
             let Ok(event) = res else { return };
-            Self::handle_event(&event, &tx);
+            Self::handle_event(&event, &base, &tx);
         })
         .map_err(|e| format!("failed to create watcher: {e}"))?;
 
         watcher
-            .watch(dir.as_ref(), RecursiveMode::NonRecursive)
+            .watch(dir.as_ref(), RecursiveMode::Recursive)
             .map_err(|e| format!("failed to watch {}: {e}", dir.display()))?;
 
         Ok(Self { _watcher: watcher })
     }
 
-    fn handle_event(event: &Event, tx: &Sender<WatchEvent>) {
+    fn handle_event(event: &Event, base_dir: &Path, tx: &Sender<WatchEvent>) {
         for path in &event.paths {
             let is_dsp = path.extension().is_some_and(|ext| ext == "dsp");
             if !is_dsp {
                 continue;
             }
 
-            let Some(type_id) = path.file_stem().and_then(|s| s.to_str()).map(|s| format!("faust:{s}")) else {
+            // Derive type_id from path relative to base_dir.
+            // e.g. base/drums/kick.dsp → "faust:drums/kick"
+            let canon = path.canonicalize().unwrap_or_else(|_| path.clone());
+            let Some(type_id) = canon
+                .strip_prefix(base_dir)
+                .ok()
+                .and_then(|rel| rel.with_extension("").to_str().map(|s| format!("faust:{s}")))
+            else {
                 continue;
             };
 

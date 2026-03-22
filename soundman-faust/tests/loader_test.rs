@@ -29,14 +29,14 @@ process = *(gain);
 #[test]
 fn load_dsp_file_reads_code_and_derives_type_id() {
     let dir = tmp_dsp_dir();
-    let (type_id, code) = loader::load_dsp_file(dir.path().join("sine.dsp")).unwrap();
+    let (type_id, code) = loader::load_dsp_file(dir.path().join("sine.dsp"), dir.path()).unwrap();
     assert_eq!(type_id, "faust:sine");
     assert!(code.contains("process"));
 }
 
 #[test]
 fn load_dsp_file_nonexistent_returns_error() {
-    let result = loader::load_dsp_file("/nonexistent/path.dsp");
+    let result = loader::load_dsp_file("/nonexistent/path.dsp", "/nonexistent");
     assert!(result.is_err());
 }
 

@@ -627,7 +627,9 @@ class VoiceMixer:
         """Resolve a source to (type_id, controls). Writes .dsp and waits for JIT if needed."""
         if isinstance(source, DspDef):
             type_id = f"faust:{name}"
-            self._dsp_dir.joinpath(f"{name}.py").write_text(source.source)
+            py_path = self._dsp_dir.joinpath(f"{name}.py")
+            py_path.parent.mkdir(parents=True, exist_ok=True)
+            py_path.write_text(source.source)
             faust_code, controls = source.faust, source.controls
         elif callable(source):
             type_id = f"faust:{name}"
@@ -636,7 +638,9 @@ class VoiceMixer:
         else:
             return source, self._node_controls.get(source, fallback_controls)
 
-        self._dsp_dir.joinpath(f"{name}.dsp").write_text(faust_code)
+        dsp_path = self._dsp_dir.joinpath(f"{name}.dsp")
+        dsp_path.parent.mkdir(parents=True, exist_ok=True)
+        dsp_path.write_text(faust_code)
         self._node_controls[type_id] = controls
         if not self._batching:
             self._wait_for_type(type_id)

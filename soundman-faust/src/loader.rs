@@ -7,24 +7,29 @@ use soundman_core::registry::NodeRegistry;
 
 use crate::factory::FaustFactory;
 
-/// Load a `.dsp` file, returning `(type_id, code)`.
+/// Load a `.dsp` file, deriving type_id from path relative to base_dir.
 ///
-/// The `type_id` is derived from the filename: `lowpass.dsp` → `"faust:lowpass"`.
+/// `base_dir/drums/kick.dsp` → `("faust:drums/kick", code)`.
 ///
 /// # Errors
 /// Returns an IO error if the file cannot be read.
-pub fn load_dsp_file(path: impl AsRef<Path>) -> Result<(String, String), std::io::Error> {
+pub fn load_dsp_file(
+    path: impl AsRef<Path>,
+    base_dir: impl AsRef<Path>,
+) -> Result<(String, String), std::io::Error> {
     let path = path.as_ref();
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid filename"))?;
+    let rel = path.strip_prefix(base_dir.as_ref()).unwrap_or(path);
+    let stem = rel
+        .with_extension("")
+        .to_str()
+        .ok_or_else(|| std::io::Error::new(std::io::ErrorKind::InvalidInput, "invalid path"))?
+        .to_string();
     let type_id = format!("faust:{stem}");
     let code = fs::read_to_string(path)?;
     Ok((type_id, code))
 }
 
-/// Scan a directory for `.dsp` files and register each in the registry.
+/// Recursively scan a directory for `.dsp` files and register each in the registry.
 ///
 /// Returns the list of registered `type_id`s.
 ///
@@ -35,20 +40,15 @@ pub fn register_dsp_dir(
     dir: impl AsRef<Path>,
 ) -> Result<Vec<String>, String> {
     let dir = dir.as_ref();
-    let mut entries: Vec<_> = fs::read_dir(dir)
-        .map_err(|e| format!("failed to read directory {}: {e}", dir.display()))?
-        .filter_map(Result::ok)
-        .filter(|e| e.path().extension().is_some_and(|ext| ext == "dsp"))
-        .collect();
-
-    // Sort for deterministic registration order
-    entries.sort_by_key(std::fs::DirEntry::path);
+    let mut dsp_files = Vec::new();
+    collect_dsp_files(dir, &mut dsp_files)
+        .map_err(|e| format!("failed to scan {}: {e}", dir.display()))?;
+    dsp_files.sort();
 
     let mut registered = Vec::new();
-    for entry in entries {
-        let path = entry.path();
+    for path in dsp_files {
         let (type_id, code) =
-            load_dsp_file(&path).map_err(|e| format!("failed to read {}: {e}", path.display()))?;
+            load_dsp_file(&path, dir).map_err(|e| format!("failed to read {}: {e}", path.display()))?;
         let name = path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -60,4 +60,17 @@ pub fn register_dsp_dir(
     }
 
     Ok(registered)
+}
+
+fn collect_dsp_files(dir: &Path, out: &mut Vec<std::path::PathBuf>) -> std::io::Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            collect_dsp_files(&path, out)?;
+        } else if path.extension().is_some_and(|ext| ext == "dsp") {
+            out.push(path);
+        }
+    }
+    Ok(())
 }
