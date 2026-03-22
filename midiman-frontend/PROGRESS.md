@@ -6,7 +6,7 @@ Ableton-inspired Python DSL frontend for the midiman Rust kernel.
 
 ### Modules
 - `ir.py` — frozen dataclasses for IrNode, Value, ClientMessage (incl. `Batch`, `SimpleCommand`) + JSON serialization + `__post_init__` validation
-- `pattern.py` — Pattern class with `+` (seq), `|` (layer), `*` (repeat), `.over()`, `.scale()`, `.shift()`, `.reverse()`, `.every()`, `.spread()`, `.thin()`. Atom constructors: `note()`, `rest()`, `cc()`, `osc()`
+- `pattern.py` — Pattern class with `+` (seq), `|` (layer), `*` (repeat), `.over()`, `.fast()`, `.shift()`, `.reverse()`, `.every()`, `.spread()`, `.thin()`. Atom constructors: `note()`, `rest()`, `cc()`, `osc()`
 - `transform.py` — composable Transform callables with `>>` composition
 - `session.py` — Session with flat slot→pattern model: `play()`, `hush()`, `resume()`, `remove()`, `stop()`, `launch()`. SlotState (frozen) tracks playing/stopped per slot. KernelError on bad responses.
 

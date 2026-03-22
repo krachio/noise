@@ -81,7 +81,7 @@ All operations return new `Pattern` objects — nothing is mutated.
 | `p \| q` | layer (both occupy full cycle) | `Stack([p, q])` |
 | `p * n` | repeat n times | `Cat([p] * n)` |
 | `p.over(n)` | loop over n cycles | `Slow(n, p)` |
-| `p.scale(f)` | speed up by factor f | `Fast(f, p)` |
+| `p.fast(f)` | speed up by factor f | `Fast(f, p)` |
 | `p.shift(t)` | shift in time | `Late(t, p)` / `Early(-t, p)` |
 | `p.reverse()` | reverse within cycle | `Rev(p)` |
 | `p.every(n, fn)` | transform every n cycles | `Every(n, fn(p), p)` |
@@ -95,9 +95,9 @@ Nested `+` and `|` flatten automatically: `(a + b) + c` produces `Cat([a, b, c])
 Standalone curried versions of pattern methods, composable with `>>`:
 
 ```python
-from midiman_frontend import scale, reverse, thin, every
+from midiman_frontend import fast, reverse, thin, every
 
-fx = scale(2) >> reverse >> thin(0.2)
+fx = fast(2) >> reverse >> thin(0.2)
 processed = fx(note(60) + note(64) + note(67))
 
 # Apply a transform every N cycles

@@ -10,6 +10,9 @@ pub struct GainNode {
     target: f32,
     /// Smoothing coefficient per sample. ~0.02 gives ~5ms ramp at 44100Hz.
     coeff: f32,
+    /// True until the first process() call. set_param snaps current=target
+    /// before audio starts, so initial controls don't cause a ramp from 1.0.
+    virgin: bool,
 }
 
 /// Smoothing coefficient: controls how fast gain ramps to target.
@@ -23,6 +26,7 @@ impl GainNode {
             current: 1.0,
             target: 1.0,
             coeff: SMOOTH_COEFF,
+            virgin: true,
         }
     }
 }
@@ -35,6 +39,7 @@ impl Default for GainNode {
 
 impl DspNode for GainNode {
     fn process(&mut self, inputs: &[&[f32]], outputs: &mut [&mut [f32]]) {
+        self.virgin = false;
         if let (Some(inp), Some(out)) = (inputs.first(), outputs.first_mut()) {
             let len = inp.len().min(out.len());
             for (o, i) in out[..len].iter_mut().zip(&inp[..len]) {
@@ -49,7 +54,13 @@ impl DspNode for GainNode {
 
     fn set_param(&mut self, name: &str, value: f32) -> Result<(), ParamError> {
         match name {
-            "gain" => { self.target = value; Ok(()) }
+            "gain" => {
+                self.target = value;
+                if self.virgin {
+                    self.current = value;
+                }
+                Ok(())
+            }
             _ => Err(ParamError::NotFound(name.into())),
         }
     }
@@ -174,5 +185,45 @@ mod tests {
             .map(|w| (w[1] - w[0]).abs())
             .fold(0.0_f32, f32::max);
         assert!(max_jump < 0.05, "max sample-to-sample jump {max_jump} should be small");
+    }
+
+    #[test]
+    fn fresh_gain_snaps_to_initial_value() {
+        // A fresh GainNode with set_param("gain", 0.5) before any process()
+        // should start at 0.5 immediately — no ramp from 1.0.
+        let mut node = GainNode::new();
+        node.set_param("gain", 0.5).unwrap();
+
+        let input = [1.0_f32; 4];
+        let mut output = [0.0_f32; 4];
+        node.process(&[&input], &mut [&mut output]);
+
+        // First sample should be at (or very near) 0.5, not ramping from 1.0
+        assert!(
+            (output[0] - 0.5).abs() < 0.02,
+            "fresh gain node should snap to initial value, got {}",
+            output[0]
+        );
+    }
+
+    #[test]
+    fn gain_still_ramps_after_first_process() {
+        // After processing at least one block, set_param should ramp (not snap).
+        let mut node = GainNode::new();
+        let input = [1.0_f32; 64];
+        let mut output = [0.0_f32; 64];
+        node.process(&[&input], &mut [&mut output]);
+
+        // Now change gain — should ramp, not snap
+        node.set_param("gain", 0.0).unwrap();
+        let mut output2 = [0.0_f32; 4];
+        node.process(&[&input[..4]], &mut [&mut output2]);
+
+        // First sample should still be near 1.0 (ramping), not snapped to 0
+        assert!(
+            output2[0] > 0.5,
+            "after first process, gain should ramp not snap, got {}",
+            output2[0]
+        );
     }
 }
