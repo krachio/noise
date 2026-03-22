@@ -275,7 +275,6 @@ class VoiceMixer:
     def remove(self, name: str) -> None:
         """Remove a voice or poly voice. Rebuilds the graph."""
         self.hush(name)
-        self._session.hush(f"_fade_{name}")
         if name in self._poly:
             pv = self._poly.pop(name)
             self._poly_alloc.pop(name, None)
@@ -286,12 +285,14 @@ class VoiceMixer:
         self._rebuild()
 
     def hush(self, name: str) -> None:
-        """Stop the pattern and release the gate for a voice (or all poly instances)."""
+        """Stop the pattern, its fade, and release gates for a voice (or all poly instances)."""
         self._session.hush(name)
+        self._session.hush(f"_fade_{name}")
         if name in self._poly:
             pv = self._poly[name]
             for i in range(pv.count):
                 inst = f"{name}_v{i}"
+                self._session.hush(f"_fade_{inst}")
                 if "gate" in pv.controls:
                     self._session.set_ctrl(f"{inst}_gate", 0.0)
         else:

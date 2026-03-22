@@ -340,3 +340,76 @@ def test_repoly_hushes_old_instance_patterns() -> None:
     assert "pad" in hushed_names, (
         f"re-poly must hush 'pad' parent slot, but only hushed: {hushed_names}"
     )
+
+
+# ── fade lifecycle: hush/stop/remove must cancel fades ───────────────────────
+
+
+def test_stop_hushes_fade_patterns() -> None:
+    """stop() must hush _fade_* patterns so fades don't keep running."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.fade("bass", target=0.1, bars=4)
+
+    session.reset_mock()
+    mixer.stop()
+
+    hushed_names = {c.args[0] for c in session.hush.call_args_list}
+    assert "_fade_bass" in hushed_names, (
+        f"stop() must hush '_fade_bass', but only hushed: {hushed_names}"
+    )
+
+
+def test_remove_poly_hushes_instance_fades() -> None:
+    """remove() on a poly voice must hush _fade_* for each instance."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+
+    session.reset_mock()
+    mixer.remove("pad")
+
+    hushed_names = {c.args[0] for c in session.hush.call_args_list}
+    assert "_fade_pad_v0" in hushed_names, (
+        f"remove() must hush '_fade_pad_v0', but only hushed: {hushed_names}"
+    )
+    assert "_fade_pad_v1" in hushed_names, (
+        f"remove() must hush '_fade_pad_v1', but only hushed: {hushed_names}"
+    )
+
+
+def test_repoly_hushes_old_instance_fades() -> None:
+    """re-poly() must hush _fade_* for old instances."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.poly("pad", "faust:pad", voices=3, gain=0.5)
+
+    session.reset_mock()
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+
+    hushed_names = {c.args[0] for c in session.hush.call_args_list}
+    # Old instances pad_v0..v2 should have their fades hushed
+    assert "_fade_pad_v0" in hushed_names, (
+        f"re-poly must hush old instance fades, but only hushed: {hushed_names}"
+    )
