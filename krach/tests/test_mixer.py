@@ -2282,3 +2282,50 @@ def test_free_seq_string_pitches() -> None:
     pat = seq("C4", "E4", "G4")
     assert isinstance(pat.node, Cat)
     assert len(pat.node.children) == 3
+
+
+# ── _bind_voice() ────────────────────────────────────────────────────────────
+
+
+def test_bind_voice_rewrites_bare_params() -> None:
+    """_bind_voice() prepends voice/ to bare param names in Osc atoms."""
+    from midiman_frontend.ir import ir_to_dict
+
+    from krach._mixer import _bind_voice, note  # pyright: ignore[reportPrivateUsage]
+
+    pat = note(440.0)
+    bound = _bind_voice(pat.node, "bass")
+    ir_str = str(ir_to_dict(bound))
+    assert "'Str': 'bass/freq'" in ir_str
+    assert "'Str': 'bass/gate'" in ir_str
+    # No bare "freq" or "gate" left
+    assert "'Str': 'freq'" not in ir_str
+    assert "'Str': 'gate'" not in ir_str
+
+
+def test_bind_voice_skips_already_bound() -> None:
+    """_bind_voice() leaves params containing / unchanged."""
+    from midiman_frontend.ir import Atom, Osc, OscFloat, OscStr, ir_to_dict
+
+    from krach._mixer import _bind_voice  # pyright: ignore[reportPrivateUsage]
+
+    # Create a node with already-bound param
+    node = Atom(Osc("/soundman/set", (OscStr("other/freq"), OscFloat(440.0))))
+    bound = _bind_voice(node, "bass")
+    ir_str = str(ir_to_dict(bound))
+    # Should remain "other/freq", not "bass/other/freq"
+    assert "'Str': 'other/freq'" in ir_str
+
+
+def test_bind_voice_walks_nested_tree() -> None:
+    """_bind_voice() recursively walks Cat, Stack, Freeze, etc."""
+    from midiman_frontend.ir import ir_to_dict
+
+    from krach._mixer import _bind_voice, seq  # pyright: ignore[reportPrivateUsage]
+
+    pat = seq(440.0, 330.0)
+    bound = _bind_voice(pat.node, "pad")
+    ir_str = str(ir_to_dict(bound))
+    assert "'Str': 'pad/freq'" in ir_str
+    assert "'Str': 'pad/gate'" in ir_str
+    assert "'Str': 'freq'" not in ir_str

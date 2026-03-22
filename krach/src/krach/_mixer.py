@@ -18,7 +18,7 @@ from typing import Any, Callable  # Any still used for DspDef.fn
 
 from faust_dsl import transpile as _transpile
 from midiman_frontend import Graph, GraphIr, Session
-from midiman_frontend.ir import OscFloat, OscStr
+from midiman_frontend.ir import IrNode, OscFloat, OscStr
 from midiman_frontend.pattern import Pattern
 from midiman_frontend.pattern import freeze as _freeze
 from midiman_frontend.pattern import osc as _osc
@@ -365,6 +365,125 @@ def seq(*notes: str | int | float | None, vel: float = 1.0, **params: float) -> 
     for a in atoms[1:]:
         result = result + a
     return result
+
+
+# ── Tree rewriters ────────────────────────────────────────────────────────────
+
+
+def _bind_voice(node: IrNode, voice: str) -> IrNode:
+    """Prepend ``voice/`` to bare param names in all Osc atoms.
+
+    A param is "bare" if it does not contain ``/``.  Already-bound params
+    (containing ``/``) are left unchanged.  Walks the full IR tree.
+    """
+    from midiman_frontend.ir import (
+        Atom,
+        Cat,
+        Degrade,
+        Early,
+        Euclid,
+        Every,
+        Fast,
+        Freeze,
+        Late,
+        Osc,
+        Rev,
+        Silence,
+        Slow,
+        Stack,
+    )
+
+    match node:
+        case Atom(Osc(addr, args)):
+            new_args = tuple(
+                OscStr(f"{voice}/{a.value}") if isinstance(a, OscStr) and "/" not in a.value else a
+                for a in args
+            )
+            return Atom(Osc(addr, new_args))
+        case Atom():
+            return node
+        case Silence():
+            return node
+        case Freeze(child):
+            return Freeze(_bind_voice(child, voice))
+        case Cat(children):
+            return Cat(tuple(_bind_voice(c, voice) for c in children))
+        case Stack(children):
+            return Stack(tuple(_bind_voice(c, voice) for c in children))
+        case Fast(factor, child):
+            return Fast(factor, _bind_voice(child, voice))
+        case Slow(factor, child):
+            return Slow(factor, _bind_voice(child, voice))
+        case Early(offset, child):
+            return Early(offset, _bind_voice(child, voice))
+        case Late(offset, child):
+            return Late(offset, _bind_voice(child, voice))
+        case Rev(child):
+            return Rev(_bind_voice(child, voice))
+        case Every(n, transform, child):
+            return Every(n, _bind_voice(transform, voice), _bind_voice(child, voice))
+        case Euclid(pulses, steps, rotation, child):
+            return Euclid(pulses, steps, rotation, _bind_voice(child, voice))
+        case Degrade(prob, seed, child):
+            return Degrade(prob, seed, _bind_voice(child, voice))
+
+
+def _bind_ctrl(node: IrNode, label: str) -> IrNode:
+    """Replace the ``"ctrl"`` placeholder param in Osc atoms with ``label``.
+
+    Similar to ``_bind_voice()`` but replaces the specific placeholder
+    ``"ctrl"`` rather than prepending a prefix.
+    """
+    from midiman_frontend.ir import (
+        Atom,
+        Cat,
+        Degrade,
+        Early,
+        Euclid,
+        Every,
+        Fast,
+        Freeze,
+        Late,
+        Osc,
+        Rev,
+        Silence,
+        Slow,
+        Stack,
+    )
+
+    match node:
+        case Atom(Osc(addr, args)):
+            new_args = tuple(
+                OscStr(label) if isinstance(a, OscStr) and a.value == "ctrl" else a
+                for a in args
+            )
+            return Atom(Osc(addr, new_args))
+        case Atom():
+            return node
+        case Silence():
+            return node
+        case Freeze(child):
+            return Freeze(_bind_ctrl(child, label))
+        case Cat(children):
+            return Cat(tuple(_bind_ctrl(c, label) for c in children))
+        case Stack(children):
+            return Stack(tuple(_bind_ctrl(c, label) for c in children))
+        case Fast(factor, child):
+            return Fast(factor, _bind_ctrl(child, label))
+        case Slow(factor, child):
+            return Slow(factor, _bind_ctrl(child, label))
+        case Early(offset, child):
+            return Early(offset, _bind_ctrl(child, label))
+        case Late(offset, child):
+            return Late(offset, _bind_ctrl(child, label))
+        case Rev(child):
+            return Rev(_bind_ctrl(child, label))
+        case Every(n, transform, child):
+            return Every(n, _bind_ctrl(transform, label), _bind_ctrl(child, label))
+        case Euclid(pulses, steps, rotation, child):
+            return Euclid(pulses, steps, rotation, _bind_ctrl(child, label))
+        case Degrade(prob, seed, child):
+            return Degrade(prob, seed, _bind_ctrl(child, label))
 
 
 # ── VoiceMixer ────────────────────────────────────────────────────────────────
