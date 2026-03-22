@@ -1,0 +1,192 @@
+//! Wire protocol types for IPC messages.
+//!
+//! Messages are newline-delimited JSON over a Unix socket.
+//! The frontend sends [`ClientMessage`]s, the kernel replies with [`ServerMessage`]s.
+//!
+//! # JSON examples
+//!
+//! ```json
+//! // Set a pattern on slot d1
+//! {"cmd": "SetPattern", "slot": "d1", "pattern": {"op": "Atom", "value": {"type": "Note", "channel": 0, "note": 60, "velocity": 100, "dur": 0.5}}}
+//!
+//! // Atomic batch: swap two patterns + change BPM in one tick
+//! {"cmd": "Batch", "commands": [
+//!   {"cmd": "SetPattern", "slot": "d1", "pattern": {"op": "Silence"}},
+//!   {"cmd": "SetPattern", "slot": "d2", "pattern": {"op": "Silence"}},
+//!   {"cmd": "SetBpm", "bpm": 140.0}
+//! ]}
+//!
+//! // Responses
+//! {"status": "Ok", "msg": "pattern set on d1"}
+//! {"status": "Error", "msg": "Cat requires at least one child"}
+//! {"status": "Pong"}
+//! ```
+
+use serde::{Deserialize, Serialize};
+
+use crate::ir::IrNode;
+
+/// Message from client (Python frontend) to server (pattern-engine kernel).
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "cmd")]
+pub enum ClientMessage {
+    /// Set a pattern on a named slot (e.g., "d1").
+    SetPattern { slot: String, pattern: IrNode },
+    /// Set a pattern on a named slot, resetting phase so it starts from cycle 0.
+    SetPatternFromZero { slot: String, pattern: IrNode },
+    /// Silence a named slot.
+    Hush { slot: String },
+    /// Silence all slots.
+    HushAll,
+    /// Set BPM.
+    SetBpm { bpm: f64 },
+    /// Set beats per cycle (meter).
+    SetBeatsPerCycle { beats: f64 },
+    /// Ping / health check.
+    Ping,
+    /// Atomic batch: all commands apply before the next scheduler tick.
+    /// Flat only — nested Batch is rejected. All-or-nothing on failure.
+    Batch { commands: Vec<ClientMessage> },
+}
+
+/// Message from server to client.
+#[allow(missing_docs)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(tag = "status")]
+pub enum ServerMessage {
+    /// Successful acknowledgement with a human-readable message.
+    Ok { msg: String },
+    /// An error occurred; `msg` describes what went wrong.
+    Error { msg: String },
+    /// Response to a `Ping`.
+    Pong,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::event::Value;
+
+    #[test]
+    fn client_message_set_pattern_roundtrip() {
+        let msg = ClientMessage::SetPattern {
+            slot: "d1".into(),
+            pattern: IrNode::Atom {
+                value: Value::Note {
+                    channel: 0,
+                    note: 60,
+                    velocity: 100,
+                    dur: 0.5,
+                },
+            },
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let decoded: ClientMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            ClientMessage::SetPattern { slot, pattern } => {
+                assert_eq!(slot, "d1");
+                match pattern {
+                    IrNode::Atom { value } => match value {
+                        Value::Note { note, .. } => assert_eq!(note, 60),
+                        _ => panic!("expected Note"),
+                    },
+                    _ => panic!("expected Atom"),
+                }
+            }
+            _ => panic!("expected SetPattern"),
+        }
+    }
+
+    #[test]
+    fn client_message_hush_roundtrip() {
+        let msg = ClientMessage::Hush {
+            slot: "d2".into(),
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let decoded: ClientMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            ClientMessage::Hush { slot } => assert_eq!(slot, "d2"),
+            _ => panic!("expected Hush"),
+        }
+    }
+
+    #[test]
+    fn client_message_set_pattern_from_zero_roundtrip() {
+        let msg = ClientMessage::SetPatternFromZero {
+            slot: "mod1".into(),
+            pattern: IrNode::Atom {
+                value: Value::Note {
+                    channel: 0,
+                    note: 60,
+                    velocity: 100,
+                    dur: 0.5,
+                },
+            },
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""cmd":"SetPatternFromZero"#));
+        let decoded: ClientMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            ClientMessage::SetPatternFromZero { slot, pattern } => {
+                assert_eq!(slot, "mod1");
+                match pattern {
+                    IrNode::Atom { value } => match value {
+                        Value::Note { note, .. } => assert_eq!(note, 60),
+                        _ => panic!("expected Note"),
+                    },
+                    _ => panic!("expected Atom"),
+                }
+            }
+            _ => panic!("expected SetPatternFromZero"),
+        }
+    }
+
+    #[test]
+    fn client_message_ping_roundtrip() {
+        let json = serde_json::to_string(&ClientMessage::Ping).unwrap();
+        let decoded: ClientMessage = serde_json::from_str(&json).unwrap();
+        assert!(matches!(decoded, ClientMessage::Ping));
+    }
+
+    #[test]
+    fn client_message_batch_roundtrip() {
+        let msg = ClientMessage::Batch {
+            commands: vec![
+                ClientMessage::SetPattern {
+                    slot: "d1".into(),
+                    pattern: IrNode::Atom {
+                        value: Value::Note {
+                            channel: 0,
+                            note: 60,
+                            velocity: 100,
+                            dur: 0.5,
+                        },
+                    },
+                },
+                ClientMessage::SetBpm { bpm: 140.0 },
+                ClientMessage::Hush { slot: "d2".into() },
+            ],
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        let decoded: ClientMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            ClientMessage::Batch { commands } => assert_eq!(commands.len(), 3),
+            _ => panic!("expected Batch"),
+        }
+    }
+
+    #[test]
+    fn server_message_roundtrip() {
+        let ok = serde_json::to_string(&ServerMessage::Ok {
+            msg: "done".into(),
+        })
+        .unwrap();
+        let decoded: ServerMessage = serde_json::from_str(&ok).unwrap();
+        assert!(matches!(decoded, ServerMessage::Ok { .. }));
+
+        let pong = serde_json::to_string(&ServerMessage::Pong).unwrap();
+        let decoded: ServerMessage = serde_json::from_str(&pong).unwrap();
+        assert!(matches!(decoded, ServerMessage::Pong));
+    }
+}

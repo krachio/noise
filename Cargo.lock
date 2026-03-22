@@ -99,6 +99,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "audio-engine"
+version = "0.1.0"
+dependencies = [
+ "cpal",
+ "env_logger",
+ "log",
+ "rosc",
+ "rtrb",
+ "serde",
+ "serde_json",
+ "smallvec",
+]
+
+[[package]]
+name = "audio-faust"
+version = "0.1.0"
+dependencies = [
+ "audio-engine",
+ "env_logger",
+ "log",
+ "notify",
+ "tempfile",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -613,6 +638,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "krach-engine"
+version = "0.1.0"
+dependencies = [
+ "audio-engine",
+ "audio-faust",
+ "crossbeam-channel",
+ "env_logger",
+ "log",
+ "midir",
+ "pattern-engine",
+ "serde",
+ "serde_json",
+ "spin_sleep",
+]
+
+[[package]]
 name = "leb128fmt"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -669,21 +710,6 @@ name = "memchr"
 version = "2.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8ca58f447f06ed17d5fc4043ce1b10dd205e060fb3ce5b979b8ed8e59ff3f79"
-
-[[package]]
-name = "midiman"
-version = "0.1.0"
-dependencies = [
- "arc-swap",
- "crossbeam-channel",
- "midir",
- "rosc",
- "serde",
- "serde_json",
- "smallvec",
- "spin_sleep",
- "thread-priority",
-]
 
 [[package]]
 name = "midir"
@@ -747,22 +773,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8c196769dd60fd4f363e11d948139556a344e79d451aeb2fa2fd040738ef7691"
 dependencies = [
  "jni-sys",
-]
-
-[[package]]
-name = "noise-engine"
-version = "0.1.0"
-dependencies = [
- "crossbeam-channel",
- "env_logger",
- "log",
- "midiman",
- "midir",
- "serde",
- "serde_json",
- "soundman-core",
- "soundman-faust",
- "spin_sleep",
 ]
 
 [[package]]
@@ -900,6 +910,21 @@ dependencies = [
  "redox_syscall",
  "smallvec",
  "windows-link",
+]
+
+[[package]]
+name = "pattern-engine"
+version = "0.1.0"
+dependencies = [
+ "arc-swap",
+ "crossbeam-channel",
+ "midir",
+ "rosc",
+ "serde",
+ "serde_json",
+ "smallvec",
+ "spin_sleep",
+ "thread-priority",
 ]
 
 [[package]]
@@ -1138,31 +1163,6 @@ name = "smallvec"
 version = "1.15.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "67b1b7a3b5fe4f1376887184045fcf45c69e92af734b7aaddc05fb777b6fbd03"
-
-[[package]]
-name = "soundman-core"
-version = "0.1.0"
-dependencies = [
- "cpal",
- "env_logger",
- "log",
- "rosc",
- "rtrb",
- "serde",
- "serde_json",
- "smallvec",
-]
-
-[[package]]
-name = "soundman-faust"
-version = "0.1.0"
-dependencies = [
- "env_logger",
- "log",
- "notify",
- "soundman-core",
- "tempfile",
-]
 
 [[package]]
 name = "spin_sleep"
