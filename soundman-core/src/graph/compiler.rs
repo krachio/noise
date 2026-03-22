@@ -67,6 +67,25 @@ pub fn compile_with_reuse(
     sample_rate: u32,
     block_size: usize,
 ) -> Result<DspGraph, CompileError> {
+    compile_with_reuse_and_injected(ir, registry, previous, &mut HashMap::new(), sample_rate, block_size)
+}
+
+/// Like [`compile_with_reuse`] but accepts pre-built nodes that bypass the
+/// factory system. Used for nodes that require external resources (e.g.
+/// `AdcNode` needs a ring buffer consumer from the audio input stream).
+///
+/// Injected nodes are consumed (removed from the map) when matched by node ID.
+///
+/// # Errors
+/// Returns `CompileError` if validation fails.
+pub fn compile_with_reuse_and_injected(
+    ir: &GraphIr,
+    registry: &NodeRegistry,
+    previous: Option<DspGraph>,
+    injected: &mut HashMap<String, Box<dyn crate::graph::node::DspNode>>,
+    sample_rate: u32,
+    block_size: usize,
+) -> Result<DspGraph, CompileError> {
     // Check for duplicate node IDs
     let mut id_set = HashMap::with_capacity(ir.nodes.len());
     for (idx, node) in ir.nodes.iter().enumerate() {
@@ -89,7 +108,17 @@ pub fn compile_with_reuse(
     for ir_node in &ir.nodes {
         let current_version = registry.version(&ir_node.type_id);
 
-        let node = if let Some(cached) = reusable.remove(&ir_node.id) {
+        // Priority: 1) injected (pre-built, e.g. AdcNode), 2) reuse from previous graph, 3) factory
+        let node = if let Some(pre_built) = injected.remove(&ir_node.id) {
+            // Pre-built node (bypasses factory). Apply initial controls.
+            let mut node = pre_built;
+            for (name, &value) in &ir_node.controls {
+                if let Err(e) = node.set_param(name, value) {
+                    warn!("set_param on injected {}/{name}: {e}", ir_node.id);
+                }
+            }
+            node
+        } else if let Some(cached) = reusable.remove(&ir_node.id) {
             if cached.type_id == ir_node.type_id && cached.version == current_version {
                 // Reuse — internal DSP state (filter memory, reverb tails) preserved.
                 // Apply initial controls to reset gate=0 (prevents stuck-gate silence)
@@ -554,6 +583,86 @@ mod tests {
         assert!(
             c1000 > c440,
             "reused node should have freq=1000 applied (got {c1000} crossings vs {c440} at 440Hz)"
+        );
+    }
+
+    #[test]
+    fn compile_with_injected_node_bypasses_factory() {
+        use crate::nodes::adc::{adc_type_decl, AdcNode};
+        use rtrb::RingBuffer;
+
+        let mut registry = test_registry();
+        registry.register_type_only(adc_type_decl());
+
+        let (mut producer, consumer) = RingBuffer::new(256);
+        // Push known samples
+        for i in 0..64 {
+            #[allow(clippy::cast_precision_loss)]
+            producer.push((i as f32) * 0.01).unwrap();
+        }
+
+        let adc = AdcNode::new(consumer);
+        let mut injected: HashMap<String, Box<dyn crate::graph::node::DspNode>> = HashMap::new();
+        injected.insert("adc".into(), Box::new(adc));
+
+        let ir = GraphIr {
+            nodes: vec![
+                NodeInstance {
+                    id: "adc".into(),
+                    type_id: "adc_input".into(),
+                    controls: HashMap::new(),
+                },
+                NodeInstance {
+                    id: "out".into(),
+                    type_id: "dac".into(),
+                    controls: HashMap::new(),
+                },
+            ],
+            connections: vec![ConnectionIr {
+                from_node: "adc".into(),
+                from_port: "out".into(),
+                to_node: "out".into(),
+                to_port: "in".into(),
+            }],
+            exposed_controls: HashMap::new(),
+        };
+
+        let mut graph = compile_with_reuse_and_injected(
+            &ir, &registry, None, &mut injected, 48000, 64,
+        ).unwrap();
+
+        assert!(injected.is_empty(), "injected node should be consumed");
+
+        let mut output = vec![0.0_f32; 64];
+        graph.process(&mut output);
+
+        // First few samples should match what we pushed into the producer
+        assert!((output[0]).abs() < f32::EPSILON);
+        assert!((output[1] - 0.01).abs() < 0.001);
+        assert!((output[10] - 0.1).abs() < 0.001);
+    }
+
+    #[test]
+    fn compile_adc_without_injected_node_fails() {
+        use crate::nodes::adc::adc_type_decl;
+
+        let mut registry = test_registry();
+        registry.register_type_only(adc_type_decl());
+
+        let ir = GraphIr {
+            nodes: vec![NodeInstance {
+                id: "adc".into(),
+                type_id: "adc_input".into(),
+                controls: HashMap::new(),
+            }],
+            connections: vec![],
+            exposed_controls: HashMap::new(),
+        };
+
+        let result = compile(&ir, &registry, 48000, 64);
+        assert!(
+            matches!(result, Err(CompileError::Registry(_))),
+            "adc_input without injected node should fail: {result:?}"
         );
     }
 }

@@ -454,3 +454,45 @@ class TestSetAutomation:
         clear_msgs = [m for m in msgs if m.get("type") == "clear_automation"]
         assert len(clear_msgs) == 1
         assert clear_msgs[0]["id"] == "bass/cutoff"
+
+
+class TestStartInput:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_start_input_sends_json(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        s = Session()
+        s.connect()
+        s.start_input(channel=1)
+        msgs = _parse_sent(mock_cls.return_value)
+        input_msgs = [m for m in msgs if m.get("type") == "start_input"]
+        assert len(input_msgs) == 1
+        assert input_msgs[0]["channel"] == 1
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_start_input_default_channel(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        s = Session()
+        s.connect()
+        s.start_input()
+        msgs = _parse_sent(mock_cls.return_value)
+        input_msgs = [m for m in msgs if m.get("type") == "start_input"]
+        assert len(input_msgs) == 1
+        assert input_msgs[0]["channel"] == 0
+
+
+class TestMidiMap:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_midi_map_sends_json(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        s = Session()
+        s.connect()
+        s.midi_map(channel=0, cc=74, label="bass/cutoff", lo=200.0, hi=4000.0)
+        msgs = _parse_sent(mock_cls.return_value)
+        map_msgs = [m for m in msgs if m.get("type") == "midi_map"]
+        assert len(map_msgs) == 1
+        msg = map_msgs[0]
+        assert msg["channel"] == 0
+        assert msg["cc"] == 74
+        assert msg["label"] == "bass/cutoff"
+        assert msg["lo"] == 200.0
+        assert msg["hi"] == 4000.0

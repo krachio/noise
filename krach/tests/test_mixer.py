@@ -3235,3 +3235,120 @@ def test_build_hit_uses_control_not_osc() -> None:
     values = _collect_values(pat.node)
     for v in values:
         assert isinstance(v, Control), f"expected Control, got {type(v).__name__}: {v}"
+
+
+# ── VoiceMixer.input() ──────────────────────────────────────────────────────
+
+
+def test_input_calls_start_input_and_creates_voice() -> None:
+    """input() starts the audio input stream and creates an adc_input voice."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["adc_input", "dac", "gain"]
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={})
+
+    handle = mixer.input("mic", channel=1, gain=0.4)
+
+    # start_input was called with the right channel
+    session.start_input.assert_called_once_with(1)
+
+    # A voice named "mic" exists with type_id "adc_input"
+    voice = mixer.get_voice("mic")
+    assert voice is not None
+    assert voice.type_id == "adc_input"
+    assert voice.gain == 0.4
+
+    # Graph was rebuilt
+    assert session.load_graph.call_count >= 1
+
+    assert handle.name == "mic"
+
+
+def test_input_default_name_and_channel() -> None:
+    """input() defaults to name='mic' and channel=0."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["adc_input", "dac", "gain"]
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={})
+
+    mixer.input()
+
+    session.start_input.assert_called_once_with(0)
+    assert mixer.get_voice("mic") is not None
+
+
+def test_input_appears_in_graph_ir() -> None:
+    """The adc_input node appears in the built graph IR."""
+    from krach._mixer import build_graph_ir
+
+    voices = {
+        "mic": Voice("adc_input", 0.5, ()),
+    }
+    ir = build_graph_ir(voices)
+
+    node_ids = {n.id for n in ir.nodes}
+    assert "mic" in node_ids
+    mic_node = next(n for n in ir.nodes if n.id == "mic")
+    assert mic_node.type_id == "adc_input"
+
+
+# ── VoiceMixer.midi_map() ───────────────────────────────────────────────────
+
+
+def test_midi_map_sends_to_session() -> None:
+    """midi_map() sends the mapping to the session."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    mixer.midi_map(cc=74, path="bass/cutoff", lo=200.0, hi=4000.0)
+
+    session.midi_map.assert_called_once_with(0, 74, "bass/cutoff", 200.0, 4000.0)
+
+
+def test_midi_map_custom_channel() -> None:
+    """midi_map() passes channel parameter to session."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    mixer.midi_map(cc=1, path="bass/gain", lo=0.0, hi=1.0, channel=5)
+
+    session.midi_map.assert_called_once_with(5, 1, "bass/gain", 0.0, 1.0)
+
+
+def test_midi_map_resolves_send_path() -> None:
+    """midi_map() resolves send-level shorthand paths."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    # "bass/verb_send" should resolve to "bass_send_verb/gain"
+    mixer.midi_map(cc=20, path="bass/verb_send", lo=0.0, hi=1.0)
+
+    session.midi_map.assert_called_once_with(0, 20, "bass_send_verb/gain", 0.0, 1.0)

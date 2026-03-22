@@ -183,6 +183,18 @@ fn handle_graph(
             let types = node_types.read().map_or_else(|_| vec![], |g| g.clone());
             IpcResponse::NodeTypes { types }
         }
+        ClientMessage::StartInput { channel } => {
+            if cmd_tx.send(LoopCommand::Graph(ClientMessage::StartInput { channel })).is_err() {
+                warn!("main loop disconnected");
+            }
+            IpcResponse::Ok { msg: format!("input started (ch {channel})") }
+        }
+        ClientMessage::MidiMap { channel, cc, label, lo, hi } => {
+            if cmd_tx.send(LoopCommand::Graph(ClientMessage::MidiMap { channel, cc, label: label.clone(), lo, hi })).is_err() {
+                warn!("main loop disconnected");
+            }
+            IpcResponse::Ok { msg: format!("midi_map: ch{channel} cc{cc} → {label}") }
+        }
         ClientMessage::Shutdown => {
             if cmd_tx.send(LoopCommand::Graph(ClientMessage::Shutdown)).is_err() {
                 warn!("main loop disconnected");

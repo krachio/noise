@@ -7,7 +7,7 @@
 mod ipc;
 
 use std::cmp::Reverse;
-use std::collections::BinaryHeap;
+use std::collections::{BinaryHeap, HashMap};
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 use std::time::{Duration, Instant};
@@ -51,6 +51,14 @@ enum LoopCommand {
     Pattern(EngineCommand),
     Graph(ClientMessage),
 }
+
+/// A MIDI CC → exposed control mapping. CC values (0–127) are scaled to [lo, hi].
+struct MidiMapping {
+    label: String,
+    lo: f32,
+    hi: f32,
+}
+
 
 /// A pending MIDI note-off to fire at a specific wall-clock time.
 #[derive(Debug, Eq, PartialEq)]
@@ -212,6 +220,12 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
         info!("  midi clock: enabled (24 ppqn)");
     }
 
+    // MIDI CC input — receives CC messages from a connected MIDI controller.
+    let midi_cc_rx = try_connect_midi_input();
+
+    // MIDI CC → exposed control mappings. Key = (channel, cc_number).
+    let mut midi_mappings: HashMap<(u8, u8), MidiMapping> = HashMap::new();
+
     let mut note_offs: BinaryHeap<Reverse<PendingNoteOff>> = BinaryHeap::new();
 
     // Pending SetControl events (drained from pattern engine with lookahead,
@@ -245,6 +259,23 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                             if let Ok(mut types) = node_types.write() {
                                 *types = audio_engine.controller_mut().list_node_types();
                             }
+                        }
+                        ClientMessage::StartInput { channel } => {
+                            match backend.start_input(config.sample_rate, channel as usize) {
+                                Ok(consumer) => {
+                                    let adc = soundman_core::nodes::adc::AdcNode::new(consumer);
+                                    audio_engine.controller_mut().inject_node(
+                                        "adc_in".into(),
+                                        Box::new(adc),
+                                    );
+                                    info!("audio input started (ch {channel})");
+                                }
+                                Err(e) => warn!("start_input: {e}"),
+                            }
+                        }
+                        ClientMessage::MidiMap { channel, cc, label, lo, hi } => {
+                            midi_mappings.insert((channel, cc), MidiMapping { label, lo, hi });
+                            info!("midi_map: ch{channel} cc{cc} → [{lo}, {hi}]");
                         }
                         other => {
                             if let Err(e) = audio_engine.controller_mut().handle_message(other) {
@@ -363,7 +394,22 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
             }
         }
 
-        // ⑨ Sleep until next event (capped at 1ms for command responsiveness).
+        // ⑨ Poll MIDI CC input and dispatch mapped controls.
+        while let Ok((channel, cc, value)) = midi_cc_rx.try_recv() {
+            if let Some(mapping) = midi_mappings.get(&(channel, cc)) {
+                #[allow(clippy::cast_precision_loss)]
+                let scaled = mapping.lo + (mapping.hi - mapping.lo) * (value as f32 / 127.0);
+                let msg = ClientMessage::SetControl {
+                    label: mapping.label.clone(),
+                    value: scaled,
+                };
+                if let Err(e) = audio_engine.controller_mut().handle_message(msg) {
+                    warn!("midi_map dispatch: {e}");
+                }
+            }
+        }
+
+        // ⑩ Sleep until next event (capped at 1ms for command responsiveness).
         let midi_deadline = pending_midi.iter().map(|e| e.fire_at).min();
         let ctrl_deadline = pending.iter().map(|p| p.fire_at()).min();
         let deadline = earliest_deadline(
@@ -403,6 +449,46 @@ fn drain_note_offs(
             let _ = sink.send_note_off(pending.channel, pending.note);
         }
     }
+}
+
+/// Try to open a MIDI input port and return a channel receiver for CC messages.
+/// Each message is (channel, cc_number, value).
+fn try_connect_midi_input() -> crossbeam_channel::Receiver<(u8, u8, u8)> {
+    let (tx, rx) = crossbeam_channel::unbounded();
+    match midir::MidiInput::new("noise-engine-in") {
+        Ok(midi_in) => {
+            let ports = midi_in.ports();
+            if let Some(port) = ports.first() {
+                let port_name = midi_in.port_name(port).unwrap_or_default();
+                match midi_in.connect(
+                    port,
+                    "noise-cc",
+                    move |_stamp, msg, _| {
+                        // MIDI CC: status byte 0xB0–0xBF
+                        if msg.len() >= 3 && (msg[0] & 0xF0) == 0xB0 {
+                            let channel = msg[0] & 0x0F;
+                            let cc = msg[1];
+                            let value = msg[2];
+                            let _ = tx.send((channel, cc, value));
+                        }
+                    },
+                    (),
+                ) {
+                    Ok(conn) => {
+                        info!("  midi input: connected to '{port_name}'");
+                        // Leak the connection to keep it alive for the process lifetime.
+                        // This is intentional — the MIDI input thread runs until process exit.
+                        std::mem::forget(conn);
+                    }
+                    Err(e) => info!("  midi input: connect failed: {e}"),
+                }
+            } else {
+                info!("  midi input: no ports available");
+            }
+        }
+        Err(e) => info!("  midi input: {e} (running without MIDI input)"),
+    }
+    rx
 }
 
 fn try_connect_midi() -> Option<Box<dyn OutputSink>> {

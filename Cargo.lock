@@ -757,6 +757,7 @@ dependencies = [
  "env_logger",
  "log",
  "midiman",
+ "midir",
  "serde",
  "serde_json",
  "soundman-core",

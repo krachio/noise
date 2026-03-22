@@ -256,6 +256,35 @@ class Session:
         """Remove a parameter automation by id."""
         self._send_json({"type": "clear_automation", "id": id})
 
+    def start_input(self, channel: int = 0) -> None:
+        """Start the audio input stream on the given channel.
+
+        After calling this, ``"adc_input"`` is available as a node type.
+        """
+        self._send_json({"type": "start_input", "channel": channel})
+
+    def midi_map(
+        self,
+        channel: int,
+        cc: int,
+        label: str,
+        lo: float,
+        hi: float,
+    ) -> None:
+        """Map a MIDI CC to an exposed control parameter.
+
+        Incoming CC values (0-127) are scaled to ``[lo, hi]`` and dispatched
+        as ``set_control`` messages to the audio engine.
+        """
+        self._send_json({
+            "type": "midi_map",
+            "channel": channel,
+            "cc": cc,
+            "label": label,
+            "lo": lo,
+            "hi": hi,
+        })
+
     def shutdown(self) -> None:
         """Shut down the unified binary."""
         self._send_json({"type": "shutdown"})

@@ -98,6 +98,15 @@ impl NodeRegistry {
         Ok(())
     }
 
+    /// Register only the type declaration (no factory). Used for node types
+    /// that are created externally and injected into the compiler (e.g. `AdcNode`).
+    /// The type decl is needed so the compiler can resolve port names.
+    pub fn register_type_only(&mut self, decl: NodeTypeDecl) {
+        let type_id = decl.type_id.clone();
+        self.types.insert(type_id.clone(), decl);
+        *self.versions.entry(type_id).or_insert(0) += 1;
+    }
+
     /// # Errors
     /// Returns `RegistryError::TypeNotFound` if no factory exists for this `type_id`.
     pub fn create_node(

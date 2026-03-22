@@ -77,6 +77,21 @@ pub enum ClientMessage {
     },
     /// Remove a parameter automation by id.
     ClearAutomation { id: String },
+    /// Start the audio input stream. Returns an `adc_input` node type that
+    /// can be used in the graph. Only one input stream can be active.
+    StartInput {
+        #[serde(default)]
+        channel: u8,
+    },
+    /// Register a MIDI CC → exposed control mapping. Incoming CC values
+    /// (0–127) are scaled to `[lo, hi]` and dispatched as `SetControl`.
+    MidiMap {
+        channel: u8,
+        cc: u8,
+        label: String,
+        lo: f32,
+        hi: f32,
+    },
     /// Shut down the engine.
     Shutdown,
 }
@@ -93,6 +108,8 @@ pub enum ServerMessage {
     Pong,
     /// List of registered node type IDs.
     NodeTypes { types: Vec<String> },
+    /// Audio input stream started. The `adc_input` node type is now available.
+    InputStarted,
 }
 
 #[cfg(test)]
@@ -225,5 +242,53 @@ mod tests {
         let json = serde_json::to_string(&msg).unwrap();
         let parsed: ServerMessage = serde_json::from_str(&json).unwrap();
         assert!(matches!(parsed, ServerMessage::Pong));
+    }
+
+    #[test]
+    fn start_input_serde_roundtrip() {
+        let msg = ClientMessage::StartInput { channel: 1 };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("start_input"));
+        let parsed: ClientMessage = serde_json::from_str(&json).unwrap();
+        assert!(matches!(parsed, ClientMessage::StartInput { channel: 1 }));
+    }
+
+    #[test]
+    fn start_input_default_channel() {
+        let json = r#"{"type":"start_input"}"#;
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        assert!(matches!(msg, ClientMessage::StartInput { channel: 0 }));
+    }
+
+    #[test]
+    fn midi_map_serde_roundtrip() {
+        let msg = ClientMessage::MidiMap {
+            channel: 0,
+            cc: 74,
+            label: "bass/cutoff".into(),
+            lo: 200.0,
+            hi: 4000.0,
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("midi_map"));
+        assert!(json.contains("bass/cutoff"));
+        let parsed: ClientMessage = serde_json::from_str(&json).unwrap();
+        match parsed {
+            ClientMessage::MidiMap { channel, cc, label, lo, hi } => {
+                assert_eq!(channel, 0);
+                assert_eq!(cc, 74);
+                assert_eq!(label, "bass/cutoff");
+                assert!((lo - 200.0).abs() < f32::EPSILON);
+                assert!((hi - 4000.0).abs() < f32::EPSILON);
+            }
+            other => panic!("expected MidiMap, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn midi_map_from_json() {
+        let json = r#"{"type":"midi_map","channel":1,"cc":1,"label":"vol","lo":0.0,"hi":1.0}"#;
+        let msg: ClientMessage = serde_json::from_str(json).unwrap();
+        assert!(matches!(msg, ClientMessage::MidiMap { channel: 1, cc: 1, .. }));
     }
 }

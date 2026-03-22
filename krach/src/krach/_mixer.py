@@ -672,6 +672,37 @@ class VoiceMixer:
             self._wait_for_type(type_id)
         return type_id, controls
 
+    def input(self, name: str = "mic", channel: int = 0, gain: float = 0.5) -> VoiceHandle:
+        """Add an audio input voice (ADC).
+
+        Starts the system audio input stream (if not already started) and
+        creates an ``adc_input`` node in the graph.
+
+        ``channel``: which input channel to capture (0-based).
+        """
+        self._session.start_input(channel)
+        self._node_controls["adc_input"] = ()
+        # Use voice() with the built-in adc_input type.
+        return self.voice(name, "adc_input", gain=gain)
+
+    def midi_map(
+        self,
+        cc: int,
+        path: str,
+        lo: float = 0.0,
+        hi: float = 1.0,
+        channel: int = 0,
+    ) -> None:
+        """Map a MIDI CC to a control path.
+
+        ``cc``: MIDI CC number (0-127).
+        ``path``: control path, e.g. ``"bass/cutoff"`` or ``"bass/gain"``.
+        ``lo``/``hi``: output range the CC 0-127 is scaled to.
+        ``channel``: MIDI channel (0-based, default 0).
+        """
+        label = self._resolve_path(path)
+        self._session.midi_map(channel, cc, label, lo, hi)
+
     def voice(
         self,
         name: str,

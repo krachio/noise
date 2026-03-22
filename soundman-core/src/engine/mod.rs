@@ -12,6 +12,7 @@ use crate::control::ControlInput;
 use crate::graph::DspGraph;
 use crate::graph::compiler::{self, CompileError};
 use crate::ir::{ConnectionIr, GraphIr, NodeInstance};
+use crate::nodes::adc::adc_type_decl;
 use crate::nodes::dac::{dac_type_decl, DacFactory};
 use crate::nodes::gain::{gain_type_decl, GainFactory};
 use crate::nodes::oscillator::{oscillator_type_decl, OscillatorFactory};
@@ -47,6 +48,9 @@ pub struct EngineController {
     /// NOT used for LoadGraph (full replacement) — the cache is one generation
     /// stale, causing phase artifacts.
     cached_graph: Option<DspGraph>,
+    /// Pre-built nodes that bypass the factory system. Consumed on next compile.
+    /// Used for `AdcNode` which requires an external ring buffer consumer.
+    injected_nodes: HashMap<String, Box<dyn crate::graph::node::DspNode>>,
 }
 
 /// Audio-thread half of the engine.
@@ -74,6 +78,9 @@ pub fn engine(config: &EngineConfig) -> (EngineController, AudioProcessor) {
     let (producer, consumer) = RingBuffer::new(COMMAND_QUEUE_CAPACITY);
     let (return_producer, return_consumer) = RingBuffer::new(RETURN_QUEUE_CAPACITY);
 
+    // Register adc_input type decl (no factory — nodes are injected via inject_node).
+    registry.register_type_only(adc_type_decl());
+
     let controller = EngineController {
         config: config.clone(),
         registry,
@@ -87,6 +94,7 @@ pub fn engine(config: &EngineConfig) -> (EngineController, AudioProcessor) {
         producer,
         return_consumer,
         cached_graph: None,
+        injected_nodes: HashMap::new(),
     };
 
     let processor = AudioProcessor {
@@ -220,6 +228,12 @@ impl EngineController {
                 debug!("clear_automation: {id}");
                 self.send_command(Command::ClearAutomation { id });
             }
+            ClientMessage::StartInput { .. } => {
+                debug!("start_input (handled by caller)");
+            }
+            ClientMessage::MidiMap { .. } => {
+                debug!("midi_map (handled by caller)");
+            }
             ClientMessage::Ping => { debug!("ping"); }
             ClientMessage::Shutdown => { debug!("shutdown"); }
             ClientMessage::ListNodes { .. } => { debug!("list_nodes (reply handled by caller)"); }
@@ -247,6 +261,13 @@ impl EngineController {
     #[allow(clippy::missing_const_for_fn)]
     pub fn registry_mut(&mut self) -> &mut NodeRegistry {
         &mut self.registry
+    }
+
+    /// Inject a pre-built node that bypasses the factory system.
+    /// The node will be used on the next graph compile if a `NodeInstance`
+    /// with matching `id` exists in the IR. Consumed on compile.
+    pub fn inject_node(&mut self, id: String, node: Box<dyn crate::graph::node::DspNode>) {
+        self.injected_nodes.insert(id, node);
     }
 
     /// Returns the type IDs of all registered node types.
@@ -303,10 +324,11 @@ impl EngineController {
         }
 
         let previous = if reuse { self.cached_graph.take() } else { self.cached_graph.take(); None };
-        let mut graph = compiler::compile_with_reuse(
+        let mut graph = compiler::compile_with_reuse_and_injected(
             &self.shadow_graph,
             &self.registry,
             previous,
+            &mut self.injected_nodes,
             self.config.sample_rate,
             self.config.block_size,
         )?;
@@ -560,8 +582,9 @@ mod tests {
         let config = EngineConfig::default();
         let (ctrl, _) = engine(&config);
         let types = ctrl.list_node_types();
-        assert_eq!(types.len(), 3, "oscillator, dac, and gain are registered by default");
+        assert_eq!(types.len(), 4, "oscillator, dac, gain, and adc_input are registered by default");
         assert!(types.contains(&"gain".to_string()));
+        assert!(types.contains(&"adc_input".to_string()));
     }
 
     #[test]
