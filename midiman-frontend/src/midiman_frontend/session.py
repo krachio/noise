@@ -210,8 +210,8 @@ class Session:
             {"type": "connect", "from_node": f"{name}_g", "from_port": "out", "to_node": "out", "to_port": "in"},
         ]
         for param in controls:
-            commands.append({"type": "expose_control", "label": f"{name}_{param}", "node_id": name, "control_name": param})
-        commands.append({"type": "expose_control", "label": f"{name}_gain", "node_id": f"{name}_g", "control_name": "gain"})
+            commands.append({"type": "expose_control", "label": f"{name}/{param}", "node_id": name, "control_name": param})
+        commands.append({"type": "expose_control", "label": f"{name}/gain", "node_id": f"{name}_g", "control_name": "gain"})
         self._send_json({"type": "graph_batch", "commands": commands})
 
     def set_ctrl(self, label: str, value: float) -> None:
