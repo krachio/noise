@@ -1,7 +1,7 @@
 """VoiceMixer — named voices with stable control labels.
 
 Manages FAUST DSP voices, per-voice gain, and the underlying soundman graph.
-Control labels follow a deterministic convention: ``{voice_name}_{param}``.
+Control labels follow a deterministic convention: ``{voice_name}/{param}``.
 Adding or removing a voice rebuilds the graph; gain updates are instant.
 """
 
@@ -162,8 +162,8 @@ def build_graph_ir(
         builder.connect(name, "out", f"{name}_g", "in")
         builder.connect(f"{name}_g", "out", "out", "in")
         for param in voice.controls:
-            builder.expose(f"{name}_{param}", name, param)
-        builder.expose(f"{name}_gain", f"{name}_g", "gain")
+            builder.expose(f"{name}/{param}", name, param)
+        builder.expose(f"{name}/gain", f"{name}_g", "gain")
 
     # Poly sum nodes: implicit summing point for poly parents with sends/wires
     poly_with_routing: set[str] = set()
@@ -184,8 +184,8 @@ def build_graph_ir(
         builder.connect(name, "out", f"{name}_g", "in")
         builder.connect(f"{name}_g", "out", "out", "in")
         for param in bus.controls:
-            builder.expose(f"{name}_{param}", name, param)
-        builder.expose(f"{name}_gain", f"{name}_g", "gain")
+            builder.expose(f"{name}/{param}", name, param)
+        builder.expose(f"{name}/gain", f"{name}_g", "gain")
 
     # Sends: source → send_gain → bus:in
     for (voice, bus_name), level in _sends.items():
@@ -194,7 +194,7 @@ def build_graph_ir(
         builder.node(send_id, "gain", gain=level)
         builder.connect(source, "out", send_id, "in")
         builder.connect(send_id, "out", bus_name, "in")
-        builder.expose(f"{send_id}_gain", send_id, "gain")
+        builder.expose(f"{send_id}/gain", send_id, "gain")
 
     # Wires: source → bus:port (direct, no gain node)
     for (voice, bus_name), port in _wires.items():
@@ -228,19 +228,19 @@ def build_note(
     onset_atoms: list[Pattern] = []
 
     if pitch is not None and "freq" in controls:
-        onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}_freq"), OscFloat(pitch)))
+        onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}/freq"), OscFloat(pitch)))
 
     if vel != 1.0 and "vel" in controls:
-        onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}_vel"), OscFloat(vel)))
+        onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}/vel"), OscFloat(vel)))
 
     for param, value in params.items():
         if param in controls:
             onset_atoms.append(
-                _osc("/soundman/set", OscStr(f"{voice_name}_{param}"), OscFloat(value))
+                _osc("/soundman/set", OscStr(f"{voice_name}/{param}"), OscFloat(value))
             )
 
     if "gate" in controls:
-        onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}_gate"), OscFloat(1.0)))
+        onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}/gate"), OscFloat(1.0)))
 
     if not onset_atoms:
         raise ValueError(f"voice '{voice_name}' has no triggerable controls")
@@ -251,7 +251,7 @@ def build_note(
         onset = onset | a  # Stack: fire simultaneously
 
     if "gate" in controls:
-        reset = _osc("/soundman/set", OscStr(f"{voice_name}_gate"), OscFloat(0.0))
+        reset = _osc("/soundman/set", OscStr(f"{voice_name}/gate"), OscFloat(0.0))
         return _freeze(onset + reset)
     return _freeze(onset)
 
@@ -264,7 +264,7 @@ def build_hit(voice_name: str, param: str) -> Pattern:
     at the first half of the slot, reset at the second half, leaving a gap
     before the next atom's onset for FAUST to detect the rising edge.
     """
-    label = f"{voice_name}_{param}"
+    label = f"{voice_name}/{param}"
     trig = _osc("/soundman/set", OscStr(label), OscFloat(1.0))
     reset = _osc("/soundman/set", OscStr(label), OscFloat(0.0))
     return _freeze(trig + reset)
@@ -454,11 +454,11 @@ class VoiceMixer:
                 self._session.hush(inst)
                 self._session.hush(f"_fade_{inst}")
                 if "gate" in pv.controls:
-                    self._session.set_ctrl(f"{inst}_gate", 0.0)
+                    self._session.set_ctrl(f"{inst}/gate", 0.0)
         else:
             voice = self._voices.get(name)
             if voice and "gate" in voice.controls:
-                self._session.set_ctrl(f"{name}_gate", 0.0)
+                self._session.set_ctrl(f"{name}/gate", 0.0)
 
     def stop(self) -> None:
         """Hush all voices and release all gates."""
@@ -485,7 +485,7 @@ class VoiceMixer:
                 type_id=old_bus.type_id, gain=value,
                 controls=old_bus.controls, num_inputs=old_bus.num_inputs,
             )
-            self._session.set_ctrl(f"{name}_gain", float(value))
+            self._session.set_ctrl(f"{name}/gain", float(value))
             return
         if name not in self._poly and name not in self._voices:
             raise ValueError(f"voice '{name}' not found")
@@ -498,7 +498,7 @@ class VoiceMixer:
                 self._voices[inst] = Voice(
                     type_id=old.type_id, gain=per_voice, controls=old.controls, init=old.init
                 )
-                self._session.set_ctrl(f"{inst}_gain", float(per_voice))
+                self._session.set_ctrl(f"{inst}/gain", float(per_voice))
             self._poly[name] = PolyVoice(
                 type_id=pv.type_id, count=pv.count, gain=value, controls=pv.controls,
             )
@@ -507,7 +507,7 @@ class VoiceMixer:
             self._voices[name] = Voice(
                 type_id=old.type_id, gain=value, controls=old.controls, init=old.init
             )
-            self._session.set_ctrl(f"{name}_gain", float(value))
+            self._session.set_ctrl(f"{name}/gain", float(value))
 
     def mute(self, name: str) -> None:
         """Mute a voice — stores current gain, sets gain to 0. No-op if already muted."""
@@ -665,7 +665,7 @@ class VoiceMixer:
         for i in range(total_steps + 1):
             t = i / total_steps
             value = current + (target - current) * t
-            atoms.append(_osc("/soundman/set", OscStr(f"{name}_gain"), OscFloat(value)))
+            atoms.append(_osc("/soundman/set", OscStr(f"{name}/gain"), OscFloat(value)))
         pattern = atoms[0]
         for a in atoms[1:]:
             pattern = pattern + a
@@ -722,7 +722,7 @@ class VoiceMixer:
         if key in self._sends:
             # Instant update — no rebuild
             self._sends[key] = level
-            self._session.set_ctrl(f"{voice}_send_{bus}_gain", level)
+            self._session.set_ctrl(f"{voice}_send_{bus}/gain", level)
             return
 
         self._sends[key] = level
@@ -774,18 +774,18 @@ class VoiceMixer:
         """Modulate a voice parameter with a shape over N bars.
 
         Pre-computes ``steps`` values and plays them as a pattern.
-        ``param`` resolution: ``"cutoff"`` → ``{voice}_cutoff``,
-        ``"gain"`` → ``{voice}_gain``,
-        ``"{bus}_send"`` → ``{voice}_send_{bus}_gain``.
+        ``param`` resolution: ``"cutoff"`` → ``{voice}/cutoff``,
+        ``"gain"`` → ``{voice}/gain``,
+        ``"{bus}_send"`` → ``{voice}_send_{bus}/gain``.
         """
         # Resolve control label
         if param.endswith("_send"):
             bus_name = param[:-5]  # strip "_send"
-            label = f"{voice}_send_{bus_name}_gain"
+            label = f"{voice}_send_{bus_name}/gain"
         elif param == "gain":
-            label = f"{voice}_gain"
+            label = f"{voice}/gain"
         else:
-            label = f"{voice}_{param}"
+            label = f"{voice}/{param}"
 
         atoms: list[Pattern] = []
         for i in range(steps):

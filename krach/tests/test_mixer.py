@@ -19,11 +19,11 @@ def test_build_graph_ir_single_voice() -> None:
     assert node_ids == {"bass", "bass_g", "out"}
     assert len(ir.connections) == 2
 
-    # Controls exposed as {voice}_{param}
-    assert ir.exposed_controls["bass_freq"] == ("bass", "freq")
-    assert ir.exposed_controls["bass_gate"] == ("bass", "gate")
-    assert ir.exposed_controls["bass_cutoff"] == ("bass", "cutoff")
-    assert ir.exposed_controls["bass_gain"] == ("bass_g", "gain")
+    # Controls exposed as {voice}/{param}
+    assert ir.exposed_controls["bass/freq"] == ("bass", "freq")
+    assert ir.exposed_controls["bass/gate"] == ("bass", "gate")
+    assert ir.exposed_controls["bass/cutoff"] == ("bass", "cutoff")
+    assert ir.exposed_controls["bass/gain"] == ("bass_g", "gain")
 
 
 def test_build_graph_ir_two_voices() -> None:
@@ -36,10 +36,10 @@ def test_build_graph_ir_two_voices() -> None:
     assert len(ir.nodes) == 5  # kit, kit_g, bass, bass_g, out
     assert len(ir.connections) == 4
 
-    assert ir.exposed_controls["kit_kick"] == ("kit", "kick")
-    assert ir.exposed_controls["bass_freq"] == ("bass", "freq")
-    assert ir.exposed_controls["kit_gain"] == ("kit_g", "gain")
-    assert ir.exposed_controls["bass_gain"] == ("bass_g", "gain")
+    assert ir.exposed_controls["kit/kick"] == ("kit", "kick")
+    assert ir.exposed_controls["bass/freq"] == ("bass", "freq")
+    assert ir.exposed_controls["kit/gain"] == ("kit_g", "gain")
+    assert ir.exposed_controls["bass/gain"] == ("bass_g", "gain")
 
 
 def test_build_graph_ir_empty_produces_dac_only() -> None:
@@ -505,10 +505,10 @@ def test_gain_poly_parent_updates_all_instances() -> None:
     set_calls = {
         (c.args[0], c.args[1])
         for c in session.set_ctrl.call_args_list
-        if c.args[0].endswith("_gain")
+        if c.args[0].endswith("/gain")
     }
-    assert ("pad_v0_gain", 0.2) in set_calls
-    assert ("pad_v1_gain", 0.2) in set_calls
+    assert ("pad_v0/gain", 0.2) in set_calls
+    assert ("pad_v1/gain", 0.2) in set_calls
 
 
 # ── remove/step on missing name ─────────────────────────────────────────────
@@ -807,7 +807,7 @@ def test_mute_sets_gain_to_zero() -> None:
     mixer.mute("bass")
 
     assert mixer.voices["bass"].gain == 0.0
-    session.set_ctrl.assert_called_with("bass_gain", 0.0)
+    session.set_ctrl.assert_called_with("bass/gain", 0.0)
 
 
 def test_unmute_restores_gain() -> None:
@@ -826,7 +826,7 @@ def test_unmute_restores_gain() -> None:
     mixer.unmute("bass")
 
     assert mixer.voices["bass"].gain == 0.7
-    session.set_ctrl.assert_called_with("bass_gain", 0.7)
+    session.set_ctrl.assert_called_with("bass/gain", 0.7)
 
 
 def test_unmute_without_mute_is_noop() -> None:
@@ -845,7 +845,7 @@ def test_unmute_without_mute_is_noop() -> None:
     mixer.unmute("bass")
     # No set_ctrl call since voice wasn't muted
     assert not any(
-        c.args[0] == "bass_gain" for c in session.set_ctrl.call_args_list
+        c.args[0] == "bass/gain" for c in session.set_ctrl.call_args_list
     )
 
 
@@ -1092,7 +1092,7 @@ def test_note_vel_default_not_sent() -> None:
     pat = build_note("bass", ("freq", "gate", "vel"), pitch=55.0)
     # Serialize and check — no "bass_vel" should appear in the IR
     ir_json = str(ir_to_dict(pat.node))
-    assert "bass_vel" not in ir_json
+    assert "bass/vel" not in ir_json
 
 
 # ── mix.play() delegation ────────────────────────────────────────────────────
@@ -1563,8 +1563,8 @@ def test_build_graph_ir_with_bus() -> None:
     node_ids = {n.id for n in ir.nodes}
     assert "verb" in node_ids
     assert "verb_g" in node_ids
-    assert ir.exposed_controls["verb_room"] == ("verb", "room")
-    assert ir.exposed_controls["verb_gain"] == ("verb_g", "gain")
+    assert ir.exposed_controls["verb/room"] == ("verb", "room")
+    assert ir.exposed_controls["verb/gain"] == ("verb_g", "gain")
 
 
 def test_build_graph_ir_with_send() -> None:
@@ -1578,7 +1578,7 @@ def test_build_graph_ir_with_send() -> None:
     assert "bass_send_verb" in node_ids
 
     # Send gain exposed for instant level changes
-    assert ir.exposed_controls["bass_send_verb_gain"] == ("bass_send_verb", "gain")
+    assert ir.exposed_controls["bass_send_verb/gain"] == ("bass_send_verb", "gain")
 
     # Connection: bass → send → verb (via "in" port)
     conns = [(c.from_node, c.to_node) for c in ir.connections]
@@ -1738,7 +1738,7 @@ def test_send_update_instant() -> None:
     mixer.send("bass", "verb", level=0.7)
 
     assert session.load_graph.call_count == 0
-    session.set_ctrl.assert_called_once_with("bass_send_verb_gain", 0.7)
+    session.set_ctrl.assert_called_once_with("bass_send_verb/gain", 0.7)
 
 
 def test_send_validates_voice_exists() -> None:
@@ -1875,7 +1875,7 @@ def test_gain_works_for_bus() -> None:
 
     mixer.gain("verb", 0.8)
 
-    session.set_ctrl.assert_called_once_with("verb_gain", 0.8)
+    session.set_ctrl.assert_called_once_with("verb/gain", 0.8)
 
 
 def test_send_poly_parent_instant_update() -> None:
@@ -1898,7 +1898,7 @@ def test_send_poly_parent_instant_update() -> None:
     mixer.send("pad", "verb", level=0.7)
 
     assert session.load_graph.call_count == 0
-    session.set_ctrl.assert_called_once_with("pad_send_verb_gain", 0.7)
+    session.set_ctrl.assert_called_once_with("pad_send_verb/gain", 0.7)
 
 
 def test_repr_shows_buses() -> None:
