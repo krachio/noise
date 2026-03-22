@@ -1034,21 +1034,21 @@ class VoiceMixer:
     def _build_fade_pattern(
         self, current: float, target: float, bars: int, steps_per_bar: int
     ) -> Pattern:
-        """Build a ramp + hold pattern for one-shot fade behavior."""
+        """Build a ramp pattern over N bars.
+
+        The ramp fills exactly N bars. On loop it replays — acceptable since
+        subsequent fades read from _ctrl_values (the target).
+        """
         total_steps = bars * steps_per_bar
-        ramp_atoms: list[Pattern] = []
+        atoms: list[Pattern] = []
         for i in range(total_steps + 1):
             t = i / total_steps
             value = current + (target - current) * t
-            ramp_atoms.append(_osc("/soundman/set", OscStr("ctrl"), OscFloat(value)))
-        # Hold: repeat target value for 19x the ramp length (one-shot)
-        hold_atom = _osc("/soundman/set", OscStr("ctrl"), OscFloat(target))
-        hold_atoms = [hold_atom] * (total_steps * 19)
-        all_atoms = ramp_atoms + hold_atoms
-        pattern = all_atoms[0]
-        for a in all_atoms[1:]:
+            atoms.append(_osc("/soundman/set", OscStr("ctrl"), OscFloat(value)))
+        pattern = atoms[0]
+        for a in atoms[1:]:
             pattern = pattern + a
-        return pattern.over(bars * 20)
+        return pattern.over(bars)
 
     def _fade_voice(
         self, name: str, target: float, bars: int, steps_per_bar: int
