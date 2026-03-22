@@ -664,3 +664,145 @@ def test_seq_poly_uses_round_robin() -> None:
     # Round-robin: 3 notes allocated across 2 voices.
     # Each call advances the allocator; verify it moved forward.
     assert mixer._poly_alloc["pad"] != initial_alloc
+
+
+# ── Bug: gain() on nonexistent voice raises KeyError ─────────────────────────
+
+
+def test_gain_nonexistent_voice_raises_valueerror() -> None:
+    """gain() on a non-existent voice should raise ValueError, not KeyError.
+    Bug: _mixer.py:350 — self._voices[name] with no guard."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    with pytest.raises(ValueError, match="not found"):
+        mixer.gain("nope", 0.5)
+
+
+# ── Bug: poly() replacing mono voice leaves stale mono entry ─────────────────
+
+
+def test_poly_over_mono_cleans_up_mono() -> None:
+    """poly() with a name that's an existing mono voice should remove the mono
+    Voice entry from _voices. Bug: _mixer.py:250-285 — poly() only checks
+    _poly, never _voices, so the stale mono entry persists in the graph."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:bass", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+
+    # Create mono voice
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    assert "bass" in mixer._voices
+
+    # Replace with poly — should remove mono "bass" entry
+    mixer.poly("bass", "faust:bass", voices=2, gain=0.6)
+
+    # The mono "bass" entry must be gone; only "bass_v0" and "bass_v1" should exist
+    assert "bass" not in mixer._voices, (
+        "poly() must remove stale mono Voice entry 'bass' from _voices"
+    )
+    assert "bass_v0" in mixer._voices
+    assert "bass_v1" in mixer._voices
+
+
+# ── Bug: voice() replacing mono doesn't hush old fade ────────────────────────
+
+
+def test_voice_replace_mono_hushes_old_fade() -> None:
+    """Replacing a mono voice with voice() should hush the old fade pattern.
+    Bug: _mixer.py:237-248 — no hush() when replacing an existing mono voice,
+    so _fade_{name} keeps running after replacement."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:bass2": ("freq", "gate"),
+    })
+
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.fade("bass", target=0.1, bars=4)
+
+    # Replace the voice — should hush the old fade
+    session.reset_mock()
+    mixer.voice("bass", "faust:bass2", gain=0.3)
+
+    hushed_names = {c.args[0] for c in session.hush.call_args_list}
+    assert "_fade_bass" in hushed_names, (
+        f"voice() must hush old fade '_fade_bass' when replacing, but only hushed: {hushed_names}"
+    )
+
+
+# ── Bug: gain() accepts NaN ──────────────────────────────────────────────────
+
+
+def test_gain_nan_raises_valueerror() -> None:
+    """gain() with NaN should raise ValueError, not silently corrupt state.
+    Bug: _mixer.py:331-354 — no validation on gain value."""
+    from unittest.mock import MagicMock
+
+    import math
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    with pytest.raises(ValueError):
+        mixer.gain("bass", float("nan"))
+
+
+def test_gain_inf_raises_valueerror() -> None:
+    """gain() with Inf should raise ValueError."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    with pytest.raises(ValueError):
+        mixer.gain("bass", float("inf"))
+
+
+# ── Bug: fade() on nonexistent voice raises KeyError ─────────────────────────
+
+
+def test_fade_nonexistent_voice_raises_valueerror() -> None:
+    """fade() on a non-existent voice should raise ValueError, not KeyError.
+    Bug: _mixer.py:430-458 — no name check before self._voices[name]."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    with pytest.raises(ValueError, match="not found"):
+        mixer.fade("nope", target=0.5, bars=4)

@@ -8,6 +8,7 @@ Adding or removing a voice rebuilds the graph; gain updates are instant.
 from __future__ import annotations
 
 import inspect
+import math
 import textwrap
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -77,6 +78,12 @@ def dsp(fn: Callable[..., Any]) -> DspDef:
     )
 
 
+def _check_finite(value: float, label: str) -> None:
+    """Raise ValueError if value is NaN or Inf."""
+    if math.isnan(value) or math.isinf(value):
+        raise ValueError(f"{label} must be finite, got {value}")
+
+
 # ── Pure builders (testable without I/O) ──────────────────────────────────────
 
 
@@ -117,6 +124,8 @@ def build_step(
     """
     if pitch is not None and "freq" not in controls:
         raise ValueError(f"voice '{voice_name}' has no 'freq' control — pitch argument ignored")
+    if pitch is not None:
+        _check_finite(pitch, f"pitch for '{voice_name}'")
 
     onset_atoms: list[Pattern] = []
 
@@ -235,6 +244,8 @@ class VoiceMixer:
                 self._voices.pop(f"{name}_v{i}", None)
 
         is_new = name not in self._voices
+        if not is_new:
+            self.hush(name)
         self._voices[name] = Voice(
             type_id=type_id,
             gain=gain,
@@ -266,12 +277,15 @@ class VoiceMixer:
             raise ValueError("poly requires at least 1 voice")
         type_id, controls = self._resolve_source(name, source)
 
-        # Clean up old instances if re-registering.
+        # Clean up old state: either poly instances or a mono voice.
         if name in self._poly:
             self.hush(name)
             old = self._poly[name]
             for i in range(old.count):
                 self._voices.pop(f"{name}_v{i}", None)
+        elif name in self._voices:
+            self.hush(name)
+            del self._voices[name]
 
         self._poly[name] = PolyVoice(type_id=type_id, count=voices, gain=gain, controls=controls)
         self._poly_alloc[name] = 0
@@ -333,6 +347,9 @@ class VoiceMixer:
 
         For poly voices, distributes gain equally across instances.
         """
+        _check_finite(value, f"gain for '{name}'")
+        if name not in self._poly and name not in self._voices:
+            raise ValueError(f"voice '{name}' not found")
         if name in self._poly:
             pv = self._poly[name]
             per_voice = value / pv.count
@@ -438,6 +455,8 @@ class VoiceMixer:
         """
         if bars < 1 or steps_per_bar < 1:
             raise ValueError("bars and steps_per_bar must be >= 1")
+        if name not in self._poly and name not in self._voices:
+            raise ValueError(f"voice '{name}' not found")
 
         if name in self._poly:
             pv = self._poly[name]

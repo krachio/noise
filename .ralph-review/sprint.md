@@ -1,13 +1,15 @@
 # Ralph Review Sprint 11
 
-## Completed (sprint 10)
-- [x] GAIN_POLY_PARENT — gain() on poly parent distributes across instances
-- [x] REMOVE_MISSING — remove() raises ValueError for missing voices
-- [x] STEP_MISSING — _alloc_voice() raises ValueError for missing names
-- [x] VOICE_POLY_COLLISION — voice() over existing poly cleans up poly state
+## Sprint 11 — review + implementation
+- [x] STALE_SOCKET — krach/__init__.py:49 — _cleanup now wait/kill/unlink
+- [x] STEP_SILENT_PITCH — krach/_mixer.py:117 — ValueError when pitch given but no freq control
+- [x] STALE_CACHED_NODES — krach/__init__.py:96 — reads from mix._node_controls
+- [x] SEQ_SHORTHAND — krach/_mixer.py:372 — mix.seq() for melodic sequences
 
-## Sprint 11
-- [ ] STALE_SOCKET — krach/__init__.py:49 — _cleanup doesn't wait() on engine proc or unlink socket. Crash leaves stale socket, next launch connects to dead file.
-- [ ] STEP_SILENT_PITCH — krach/_mixer.py:119 — step() silently ignores pitch when voice lacks "freq" control. Should warn.
-- [ ] STALE_CACHED_NODES — krach/__init__.py:149 — _cached_nodes never refreshed after new @dsp voices. status()/copilot see outdated types. Fix: read from mixer or refresh on access.
-- [ ] SEQ_SHORTHAND — krach/_mixer.py — mix.seq("bass", [55, 73, None, 65]) shorthand for melodic sequences. Biggest UX win.
+## Sprint 11 — adversarial fixes
+- [x] GAIN_MISSING_VOICE — gain() on nonexistent voice now raises ValueError
+- [x] POLY_OVER_MONO — poly() replacing mono voice now hushes and deletes old entry
+- [x] VOICE_REPLACE_FADE — voice() replacing existing mono now hushes old fade
+- [x] GAIN_NAN_INF — _check_finite() validates gain and pitch values
+- [x] FADE_MISSING_VOICE — fade() on nonexistent voice raises ValueError
+- [x] PITCH_NAN_INF — build_step() validates pitch is finite
