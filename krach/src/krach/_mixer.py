@@ -465,6 +465,8 @@ def _bind_voice(node: IrNode, voice: str) -> IrNode:
             return Euclid(pulses, steps, rotation, _bind_voice(child, voice))
         case Degrade(prob, seed, child):
             return Degrade(prob, seed, _bind_voice(child, voice))
+        case _:
+            return node
 
 
 def _bind_voice_poly(
@@ -611,6 +613,8 @@ def _bind_ctrl(node: IrNode, label: str) -> IrNode:
             return Euclid(pulses, steps, rotation, _bind_ctrl(child, label))
         case Degrade(prob, seed, child):
             return Degrade(prob, seed, _bind_ctrl(child, label))
+        case _:
+            return node
 
 
 # ── VoiceMixer ────────────────────────────────────────────────────────────────
@@ -1116,21 +1120,6 @@ class VoiceMixer:
             inst = _inst_name(name, i, voice.count)
             self._fade_voice(inst, target / voice.count, bars, steps_per_bar)
         voice.gain = target
-
-    def _build_fade_pattern(
-        self, current: float, target: float, bars: int, steps_per_bar: int
-    ) -> Pattern:
-        """Build a ramp pattern over N bars."""
-        total_steps = bars * steps_per_bar
-        atoms: list[Pattern] = []
-        for i in range(total_steps + 1):
-            t = i / total_steps
-            value = current + (target - current) * t
-            atoms.append(_ctrl("ctrl", value))
-        pattern = atoms[0]
-        for a in atoms[1:]:
-            pattern = pattern + a
-        return pattern.over(bars)
 
     def _fade_voice(
         self, name: str, target: float, bars: int, steps_per_bar: int
