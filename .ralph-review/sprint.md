@@ -1,14 +1,15 @@
 # Ralph Review Sprint 13
 
 ## Sprint 13 — review + implementation
-- [ ] MUTED_LEAK — _mixer.py:306,229,266 — remove()/voice()/poly() don't clean _muted; stale gain restored on re-add
-- [ ] SEND_JSON_TIMEOUT — session.py:149 — _send_json() doesn't catch socket.timeout; raw exception escapes
-- [ ] MIXER_REPR — _mixer.py:181 — VoiceMixer has no __repr__; `mix` shows <object> in REPL
-- [ ] UNSOLO — _mixer.py — no unsolo(); performer stuck after solo() with no quick way to restore all
-- [ ] THIN_DOCSTRING — pattern.py:109 — thin() has no docstring; prob semantics ambiguous (0.3 = drop 30%)
+- [x] MUTED_LEAK — _mixer.py:306,229,266 — remove()/voice()/poly() don't clean _muted; stale gain restored on re-add
+- [x] SEND_JSON_TIMEOUT — session.py:149 — _send_json() doesn't catch socket.timeout; raw exception escapes
+- [x] MIXER_REPR — _mixer.py:181 — VoiceMixer has no __repr__; `mix` shows <object> in REPL
+- [x] UNSOLO — _mixer.py — no unsolo(); performer stuck after solo() with no quick way to restore all
+- [x] THIN_DOCSTRING — pattern.py:109 — thin() has no docstring; prob semantics ambiguous (0.3 = drop 30%)
 
-## Sprint 13 — adversarial
-(to be filled after implementation)
+## Sprint 13 — adversarial fixes
+- [x] MUTED_INSTANCE_LEAK — remove()/voice()/poly() now also clean _muted for poly instances (pad_v0, etc.)
+- [x] LOAD_GRAPH_TIMEOUT — load_graph() now catches socket.timeout → ConnectionError
 
 ---
 

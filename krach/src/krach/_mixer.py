@@ -248,6 +248,7 @@ class VoiceMixer:
             self._poly_alloc.pop(name, None)
             for i in range(old_pv.count):
                 self._voices.pop(f"{name}_v{i}", None)
+                self._muted.pop(f"{name}_v{i}", None)
 
         is_new = name not in self._voices
         if not is_new:
@@ -290,6 +291,7 @@ class VoiceMixer:
             old = self._poly[name]
             for i in range(old.count):
                 self._voices.pop(f"{name}_v{i}", None)
+                self._muted.pop(f"{name}_v{i}", None)
         elif name in self._voices:
             self.hush(name)
             del self._voices[name]
@@ -316,6 +318,7 @@ class VoiceMixer:
             self._poly_alloc.pop(name, None)
             for i in range(pv.count):
                 self._voices.pop(f"{name}_v{i}", None)
+                self._muted.pop(f"{name}_v{i}", None)
         else:
             del self._voices[name]
         self._rebuild()

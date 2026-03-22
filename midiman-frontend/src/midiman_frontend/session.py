@@ -165,8 +165,11 @@ class Session:
         # in a single pass (avoids serialize → parse → re-serialize).
         inner = graph.to_json()
         msg = f'{{"type":"load_graph",{inner[1:]}'  # replace leading '{' with '{"type":"load_graph",'
-        self._sock.sendall((msg + "\n").encode())
-        _parse_response(self._reader.readline())
+        try:
+            self._sock.sendall((msg + "\n").encode())
+            _parse_response(self._reader.readline())
+        except socket.timeout:
+            raise ConnectionError("engine not responding (socket timeout)")
 
     def add_voice(
         self,

@@ -326,6 +326,51 @@ class TestNewlineDelimited:
         assert raw.endswith(b"\n")
 
 
+class TestLoadGraphTimeout:
+    @patch("midiman_frontend.session.socket.socket")
+    def test_load_graph_sendall_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
+        """BUG: load_graph() does not catch socket.timeout.
+        send() and _send_json() both catch it, but load_graph() has its own
+        raw sendall() call (line 168) with no try/except. A timeout during
+        graph load produces a bare socket.timeout instead of ConnectionError.
+
+        Root cause: session.py:160-169 — load_graph uses raw socket ops
+        without the timeout-catching wrapper used by send() and _send_json().
+        """
+        from midiman_frontend.graph import Graph
+
+        _stub_ok_response(mock_cls)
+        s = Session()
+        s.connect()
+
+        # Build a minimal graph IR
+        g = Graph()
+        g.node("out", "dac")
+        ir = g.build()
+
+        mock_cls.return_value.sendall.side_effect = socket.timeout("timed out")
+        with pytest.raises(ConnectionError, match="engine"):
+            s.load_graph(ir)
+
+    @patch("midiman_frontend.session.socket.socket")
+    def test_load_graph_readline_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
+        """BUG: load_graph() readline does not catch socket.timeout."""
+        from midiman_frontend.graph import Graph
+
+        _stub_ok_response(mock_cls)
+        s = Session()
+        s.connect()
+
+        g = Graph()
+        g.node("out", "dac")
+        ir = g.build()
+
+        # sendall succeeds, but readline times out
+        mock_cls.return_value.makefile.return_value.readline.side_effect = socket.timeout("timed out")
+        with pytest.raises(ConnectionError, match="engine"):
+            s.load_graph(ir)
+
+
 class TestSendJsonTimeout:
     @patch("midiman_frontend.session.socket.socket")
     def test_send_json_sendall_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
