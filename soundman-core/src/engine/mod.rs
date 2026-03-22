@@ -184,6 +184,13 @@ impl EngineController {
                 debug!("set_master_gain: {gain}");
                 self.send_command(Command::SetMasterGain(gain));
             }
+            ClientMessage::GraphBatch { commands } => {
+                debug!("graph_batch: {} commands", commands.len());
+                for cmd in commands {
+                    self.apply_mutation(cmd);
+                }
+                self.recompile_and_send(true)?; // reuse — incremental batch
+            }
             ClientMessage::Ping => { debug!("ping"); }
             ClientMessage::Shutdown => { debug!("shutdown"); }
             ClientMessage::ListNodes { .. } => { debug!("list_nodes (reply handled by caller)"); }
@@ -217,6 +224,33 @@ impl EngineController {
     #[must_use]
     pub fn list_node_types(&self) -> Vec<String> {
         self.registry.type_ids().into_iter().map(str::to_owned).collect()
+    }
+
+    /// Apply a graph mutation to the shadow graph without recompiling.
+    /// Used by `GraphBatch` to batch multiple mutations before one recompile.
+    fn apply_mutation(&mut self, msg: ClientMessage) {
+        match msg {
+            ClientMessage::AddNode { id, type_id, controls } => {
+                self.shadow_graph.nodes.push(NodeInstance { id, type_id, controls });
+            }
+            ClientMessage::RemoveNode { id } => {
+                self.shadow_graph.nodes.retain(|n| n.id != id);
+                self.shadow_graph.connections.retain(|c| c.from_node != id && c.to_node != id);
+            }
+            ClientMessage::Connect { from_node, from_port, to_node, to_port } => {
+                self.shadow_graph.connections.push(ConnectionIr { from_node, from_port, to_node, to_port });
+            }
+            ClientMessage::Disconnect { from_node, from_port, to_node, to_port } => {
+                self.shadow_graph.connections.retain(|c| {
+                    !(c.from_node == from_node && c.from_port == from_port
+                      && c.to_node == to_node && c.to_port == to_port)
+                });
+            }
+            ClientMessage::ExposeControl { label, node_id, control_name } => {
+                self.exposed_controls.insert(label, (node_id, control_name));
+            }
+            _ => {} // non-mutation messages ignored in batch
+        }
     }
 
     /// Update the crossfade duration for subsequent graph swaps.
@@ -577,6 +611,46 @@ mod tests {
             "after graph reload, oscillator should still be at 880 Hz (got {crossings_after_reload} \
              crossings, but 440 Hz has {crossings_at_440})"
         );
+    }
+
+    #[test]
+    fn graph_batch_applies_all_mutations_with_single_swap() {
+        // GraphBatch should apply AddNode + Connect atomically with one recompile.
+        let config = EngineConfig { block_size: 64, ..Default::default() };
+        let (mut ctrl, mut proc) = engine(&config);
+
+        // Load initial graph.
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        let mut buf = vec![0.0_f32; 64];
+        proc.process(&mut buf);
+        assert!(proc.has_active_graph());
+
+        // Add a gain node via GraphBatch.
+        ctrl.handle_message(ClientMessage::GraphBatch {
+            commands: vec![
+                ClientMessage::AddNode {
+                    id: "g1".into(),
+                    type_id: "gain".into(),
+                    controls: HashMap::new(),
+                },
+                ClientMessage::Connect {
+                    from_node: "osc1".into(),
+                    from_port: "out".into(),
+                    to_node: "g1".into(),
+                    to_port: "in".into(),
+                },
+                ClientMessage::ExposeControl {
+                    label: "vol".into(),
+                    node_id: "g1".into(),
+                    control_name: "gain".into(),
+                },
+            ],
+        }).unwrap();
+
+        // Process — should produce audio (graph compiled with new node).
+        proc.process(&mut buf);
+        let energy: f32 = buf.iter().map(|s| s * s).sum();
+        assert!(energy > 0.0, "graph should produce audio after GraphBatch");
     }
 
     #[test]

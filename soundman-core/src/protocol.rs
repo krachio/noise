@@ -58,6 +58,9 @@ pub enum ClientMessage {
     /// Request the list of registered node type IDs.
     /// soundman sends a `/soundman/node_types` OSC reply to `127.0.0.1:<reply_port>`.
     ListNodes { reply_port: u16 },
+    /// Atomic batch of graph mutations. All mutations are applied to the
+    /// shadow graph before a single recompile + SwapGraph.
+    GraphBatch { commands: Vec<ClientMessage> },
     /// Health check — engine responds with `ServerMessage::Pong`.
     Ping,
     /// Shut down the engine.
@@ -128,6 +131,32 @@ mod tests {
         };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("unknown node type"));
+    }
+
+    #[test]
+    fn graph_batch_serde_roundtrip() {
+        let msg = ClientMessage::GraphBatch {
+            commands: vec![
+                ClientMessage::AddNode {
+                    id: "osc2".into(),
+                    type_id: "oscillator".into(),
+                    controls: HashMap::from([("freq".into(), 880.0)]),
+                },
+                ClientMessage::Connect {
+                    from_node: "osc2".into(),
+                    from_port: "out".into(),
+                    to_node: "out".into(),
+                    to_port: "in".into(),
+                },
+            ],
+        };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains("graph_batch"));
+        let parsed: ClientMessage = serde_json::from_str(&json).unwrap();
+        match parsed {
+            ClientMessage::GraphBatch { commands } => assert_eq!(commands.len(), 2),
+            other => panic!("expected GraphBatch, got {other:?}"),
+        }
     }
 
     #[test]
