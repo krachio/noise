@@ -244,10 +244,14 @@ class VoiceMixer:
     ) -> None:
         """Create a polyphonic voice with N instances of the same FAUST type.
 
+        Raises ValueError if voices < 1.
+
         Each instance is named ``{name}_v0``, ``{name}_v1``, etc.
         Use ``mix.step(name, freq)`` to trigger the next available instance
         (round-robin), or ``mix.chord(name, f1, f2, f3)`` for simultaneous notes.
         """
+        if voices < 1:
+            raise ValueError("poly requires at least 1 voice")
         type_id, controls = self._resolve_source(name, source)
 
         # Clean up old instances if re-registering.
