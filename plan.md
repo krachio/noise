@@ -1,78 +1,116 @@
-The audit reveals a deeper issue than just "reuse nodes" — it's about real-time safety and state preservation across graph swaps. Here's the full picture:
+# Plan: Incremental voice addition + polyphonic voices
 
-  ---
-  Three flaws solved by one refactor
+## Problem 1: Glitches when adding voices
 
-  Flaw 1: Node state loss on graph swap
-  Every compile() creates fresh DSP instances. Existing voices lose their ADSR phase, filter memory, reverb tails. This is the audible gap you hear.
+Every `mix.voice()` triggers full `LoadGraph` → `recompile_and_send` → `SwapGraph` with
+crossfade. Fresh FAUST nodes have reset internal state. The crossfade blends old (playing)
+with new (cold), producing audible artifacts.
 
-  Flaw 2: Deallocation on the audio thread
-  self.retiring = None drops the old graph (with all its FAUST LLVM JIT nodes, heap buffers) directly on the CoreAudio callback thread. This is a real-time safety violation — allocator
-  calls can block for unbounded time.
+### Fix: Re-enable node reuse for incremental mutations + batch mutations
 
-  Flaw 3: No factory version tracking
-  When a FAUST .dsp is hot-reloaded (reregister()), the registry replaces the factory but existing compiled nodes use the old code. If we naively reuse nodes, we'd keep stale FAUST code
-   after hot-reload.
+The stale-cache problem that caused us to disable reuse only affects `LoadGraph` (full
+replacement). For `AddNode`/`Connect`, the shadow graph already has existing nodes — the
+recompile can reuse them from the return channel because the retired graph has matching
+node IDs/types.
 
-  ---
-  The fix: return channel + versioned node reuse
+### Commits
 
-  BEFORE:
-    Control thread: compile(ir) → SwapGraph(new) → [ring buffer →] Audio thread
-    Audio thread:   swap, crossfade, DROP old graph ← RT safety violation + state lost
+#### Commit 1: Re-enable node reuse for incremental mutations
 
-  AFTER:
-    Control thread: compile_with_reuse(ir, old_graph) → SwapGraph(new) → Audio thread
-    Audio thread:   swap, crossfade, RETURN old graph → [return buffer →] Control thread
-    Control thread: receives old graph → extracts nodes for next compile
+Add `force_fresh: bool` to `recompile_and_send`. `LoadGraph` passes `true` (always fresh
+— stale cache problem). `AddNode`/`Connect`/`RemoveNode`/`Disconnect` pass `false`
+(reuse from return channel when available).
 
-  Key additions:
-  - Registry version counter: register() / reregister() bump a per-type version. Nodes are only reused if type_id AND version match.
-  - DspGraph.into_nodes(): consumes graph, returns HashMap<id, (type_id, version, Box<dyn DspNode>)>
-  - compile_with_reuse(): takes optional previous graph, reuses matching nodes, creates fresh for new/changed ones
-  - Return ring buffer (audio→control): retired graphs sent back for reuse, deallocation happens off the audio thread
+**Files:** `soundman-core/src/engine/mod.rs`
 
-  ---
-  Plan (4 commits)
+#### Commit 2: Add `GraphBatch` to soundman-core protocol
 
-  Commit 1: Registry version tracking (~20 lines + tests)
-  - versions: HashMap<String, u64> in NodeRegistry
-  - Bumped on register() and reregister()
-  - Test: version increments on reregister, different types have independent versions
+New `ClientMessage::GraphBatch { commands: Vec<ClientMessage> }`. `handle_message`
+applies all mutations to the shadow graph, then calls `recompile_and_send` once.
+Single SwapGraph for the entire batch.
 
-  Commit 2: DspGraph.into_nodes + compile_with_reuse (~80 lines + tests)
-  - DspGraph gains node_type_ids: Vec<String>, node_versions: Vec<u64>
-  - into_nodes(self) extracts nodes for reuse
-  - compile_with_reuse(ir, registry, previous, sr, bs) reuses matching nodes
-  - Tests: node reused when same type+version, fresh when type changed, fresh when version bumped
+**Files:** `soundman-core/src/protocol.rs`, `soundman-core/src/engine/mod.rs`
 
-  Commit 3: Return channel + engine wiring (~50 lines + tests)
-  - Second SPSC ring buffer (audio→control) for returning retired graphs
-  - GraphSwapper sends retired graph back instead of dropping
-  - EngineController drains returned graphs, passes to compile_with_reuse
-  - Test: end-to-end — graph swap preserves node state for unchanged voices
+#### Commit 3: Session.add_voice + VoiceMixer incremental add
 
-  Commit 4: VoiceMixer.batch() (~30 lines + tests)
-  - Context manager for batching voice declarations
-  - Writes all .dsp files first, waits for all types, one rebuild
-  - Test: batch produces single rebuild
+Python side: `Session.add_voice(name, type_id, controls, gain)` sends a `GraphBatch`
+of AddNode + Connect + ExposeControl.
 
-  ---
-  What this fixes for the user
+VoiceMixer: when adding a NEW voice (not replacing) and a graph is already loaded, use
+`session.add_voice()` instead of `_rebuild()`. For `batch()`, collect deltas and send
+as one GraphBatch.
 
-  # BEFORE: 8 voices = 8 gaps, all voices restarted fresh each time
-  mix.voice("kick", house_kick, gain=0.88)   # other voices go silent
-  mix.voice("bass", deep_bass, gain=0.58)    # kick goes silent, restarts
+**Files:** `midiman-frontend/session.py`, `noise-engine/src/ipc.rs`, `krach/_mixer.py`
 
-  # AFTER: 8 voices = 8 crossfades, but each preserves all existing state
-  mix.voice("kick", house_kick, gain=0.88)   # kick plays
-  mix.voice("bass", deep_bass, gain=0.58)    # kick keeps playing, bass joins seamlessly
+---
 
-  # EVEN BETTER with batch():
-  with mix.batch():
-      mix.voice("kick", house_kick, gain=0.88)
-      mix.voice("bass", deep_bass, gain=0.58)
-      # ... 8 voices
-  # ONE crossfade, all voices start together
+## Problem 2: Polyphony
 
-  This is ~175 lines of Rust + ~30 lines of Python. It's a real architectural improvement, not a workaround. Proceed?
+Currently each voice = one FAUST node = one freq + gate. Playing a chord requires
+separate named voices. We want proper polyphonic voices at the graph level.
+
+FAUST's `declare nvoices` is NOT supported by libfaust LLVM JIT. Polyphony must be
+at the graph level: N instances of the same FAUST type, each with independent freq/gate.
+
+### Commits
+
+#### Commit 4: `mix.poly(name, source, voices=4, gain=0.5)`
+
+New VoiceMixer method that creates N FAUST node instances:
+- Nodes: `{name}_v0`, `{name}_v1`, ..., `{name}_v{N-1}` (same type_id)
+- Each with its own gain node: `{name}_v0_g`, etc.
+- All connected to DAC via fan-in
+- Exposed: `{name}_v0_freq`, `{name}_v0_gate`, ..., `{name}_v0_gain`, etc.
+
+Internally stores a `PolyVoice` dataclass:
+```python
+@dataclass(frozen=True)
+class PolyVoice:
+    type_id: str
+    count: int
+    gain: float
+    controls: tuple[str, ...]
+```
+
+Uses `add_voice` (incremental) for each instance if graph already loaded.
+
+**Files:** `krach/_mixer.py`
+
+#### Commit 5: Voice allocator — `mix.note`/`mix.hit` on poly voices
+
+When `mix.note("pad", freq)` is called on a poly voice, the allocator picks the next
+instance (round-robin). Returns a pattern targeting `{name}_v{N}_freq`, `{name}_v{N}_gate`.
+Multiple pitches on a poly voice play a chord: `mix.note("pad", 261.6, 329.6, 392.0)`.
+
+```python
+# Arpeggio — each note targets next voice instance (round-robin)
+mix.play("pad_arp", mix.seq("pad", 261.6, 329.6, 392.0).over(2))
+
+# Chord — all pitches simultaneously on poly instances
+mix.play("chords", mix.note("pad", 261.6, 329.6, 392.0))
+```
+
+**Files:** `krach/_mixer.py`
+
+---
+
+## Verification
+
+1. `cargo test --workspace` — all Rust tests pass
+2. `cd krach && uv run pytest` — all Python tests pass
+3. Manual test:
+   ```python
+   mix.voice("kick", "faust:kick", gain=0.9)
+   mm.play("kick", mix.hit("kick", "gate") * 4)
+   # Kick is playing...
+   mix.voice("hat", "faust:hihat", gain=0.35)  # ← NO glitch, kick continues
+   mm.play("hat", mix.hit("hat", "gate") * 16)
+   ```
+4. Polyphony test:
+   ```python
+   mix.poly("pad", pad_synth, voices=4, gain=0.3)
+   mix.play("chords", (
+       mix.note("pad", 261.6, 329.6, 392.0) +
+       mix.note("pad", 293.7, 349.2, 440.0)
+   ).over(4))
+   ```
