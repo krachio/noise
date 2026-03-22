@@ -71,7 +71,7 @@ pub fn dispatch(
             }
         }
         Value::Control { .. } => {
-            // Handled directly by noise-engine dispatch, not routed to sinks.
+            // Handled directly by krach-engine dispatch, not routed to sinks.
         }
     }
     Ok(())

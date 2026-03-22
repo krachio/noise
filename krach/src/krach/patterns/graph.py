@@ -1,8 +1,4 @@
-"""Graph IR types and builder for the audio engine.
-
-Moved from soundman-frontend to midiman-frontend so the unified Session
-can send graph commands without depending on soundman-frontend (OSC).
-"""
+"""Graph IR types and builder for the audio engine."""
 
 from __future__ import annotations
 
