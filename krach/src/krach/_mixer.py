@@ -396,8 +396,10 @@ class VoiceMixer:
 
     def _flush(self) -> None:
         """Wait for all pending FAUST types and rebuild the graph once."""
+        seen: set[str] = set()
         for voice in self._voices.values():
-            if voice.type_id.startswith("faust:"):
+            if voice.type_id.startswith("faust:") and voice.type_id not in seen:
+                seen.add(voice.type_id)
                 self._wait_for_type(voice.type_id)
         self._rebuild()
 

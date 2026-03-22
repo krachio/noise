@@ -40,6 +40,7 @@ const MAX_SLEEP: Duration = Duration::from_millis(1);
 /// | 180 | 167ms    |
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn crossfade_samples(bpm: f64, sample_rate: u32) -> usize {
+    let bpm = bpm.max(1.0); // guard: zero/negative BPM → treat as 1
     let half_beat_secs = 60.0 / bpm / 2.0;
     (half_beat_secs * f64::from(sample_rate)) as usize
 }

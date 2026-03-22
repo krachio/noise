@@ -140,7 +140,7 @@ impl Engine {
                 self.next_cycle.fill(future);
             }
             EngineCommand::SetBpm { bpm } => {
-                if (bpm - self.clock.bpm()).abs() < f64::EPSILON {
+                if bpm <= 0.0 || (bpm - self.clock.bpm()).abs() < f64::EPSILON {
                     return;
                 }
                 self.clock = Clock::new(bpm, self.clock.beats_per_cycle());
