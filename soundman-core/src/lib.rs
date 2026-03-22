@@ -118,6 +118,7 @@
 //! [`Command`]: swap::command::Command
 //! [`GraphSwapper::process`]: swap::GraphSwapper::process
 
+pub mod automation;
 pub mod control;
 pub mod engine;
 pub mod graph;

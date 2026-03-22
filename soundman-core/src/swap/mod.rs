@@ -6,6 +6,9 @@
 
 pub mod command;
 
+use std::collections::HashMap;
+
+use crate::automation::Automation;
 use crate::graph::DspGraph;
 
 use command::Command;
@@ -30,6 +33,7 @@ pub struct GraphSwapper {
     master_gain: f32,
     fade_buf_old: Vec<f32>,
     fade_buf_new: Vec<f32>,
+    automations: HashMap<String, Automation>,
 }
 
 impl GraphSwapper {
@@ -44,6 +48,7 @@ impl GraphSwapper {
             master_gain: 1.0,
             fade_buf_old: vec![0.0; block_size],
             fade_buf_new: vec![0.0; block_size],
+            automations: HashMap::new(),
         }
     }
 
@@ -65,6 +70,12 @@ impl GraphSwapper {
                 }
                 Command::SetMasterGain(gain) => self.master_gain = gain,
                 Command::SetCrossfade(samples) => self.crossfade_samples = samples,
+                Command::SetAutomation { id, automation } => {
+                    self.automations.insert(id, automation);
+                }
+                Command::ClearAutomation { id } => {
+                    self.automations.remove(&id);
+                }
                 Command::Shutdown => {}
             }
         }
@@ -72,6 +83,7 @@ impl GraphSwapper {
 
     #[allow(clippy::cast_precision_loss)]
     pub fn process(&mut self, output: &mut [f32]) {
+        self.tick_automations(output.len());
         output.fill(0.0);
 
         match self.state {
@@ -143,6 +155,19 @@ impl GraphSwapper {
         }
     }
 
+    fn tick_automations(&mut self, block_size: usize) {
+        for auto in self.automations.values_mut() {
+            if !auto.active {
+                continue;
+            }
+            let value = auto.eval();
+            if let Some(graph) = &mut self.active {
+                let _ = graph.set_param(&auto.node_id, &auto.param, value);
+            }
+            auto.advance(block_size);
+        }
+    }
+
     #[must_use]
     pub const fn has_active_graph(&self) -> bool {
         self.active.is_some()
@@ -169,6 +194,7 @@ impl std::fmt::Debug for GraphSwapper {
             .field("state", &self.state)
             .field("crossfade_samples", &self.crossfade_samples)
             .field("master_gain", &self.master_gain)
+            .field("automations", &self.automations.len())
             .finish_non_exhaustive()
     }
 }
@@ -524,5 +550,218 @@ mod tests {
         // The old retiring graph (g1) should now be in retired_ready.
         let retired = swapper.take_retired();
         assert!(retired.is_some(), "old retiring graph must be preserved in retired_ready");
+    }
+
+    // ---- Automation integration tests ----
+
+    use crate::automation::{AutoShape, Automation};
+    use crate::nodes::gain::{gain_type_decl, GainFactory};
+
+    fn gain_registry() -> NodeRegistry {
+        let mut registry = NodeRegistry::new();
+        registry
+            .register(oscillator_type_decl(), OscillatorFactory)
+            .unwrap();
+        registry.register(dac_type_decl(), DacFactory).unwrap();
+        registry
+            .register(gain_type_decl(), GainFactory)
+            .unwrap();
+        registry
+    }
+
+    fn make_gain_graph(registry: &NodeRegistry, freq: f32, gain: f32, block_size: usize) -> Box<DspGraph> {
+        let ir = GraphIr {
+            nodes: vec![
+                NodeInstance {
+                    id: "osc1".into(),
+                    type_id: "oscillator".into(),
+                    controls: HashMap::from([("freq".into(), freq)]),
+                },
+                NodeInstance {
+                    id: "gain1".into(),
+                    type_id: "gain".into(),
+                    controls: HashMap::from([("gain".into(), gain)]),
+                },
+                NodeInstance {
+                    id: "out".into(),
+                    type_id: "dac".into(),
+                    controls: HashMap::new(),
+                },
+            ],
+            connections: vec![
+                ConnectionIr {
+                    from_node: "osc1".into(),
+                    from_port: "out".into(),
+                    to_node: "gain1".into(),
+                    to_port: "in".into(),
+                },
+                ConnectionIr {
+                    from_node: "gain1".into(),
+                    from_port: "out".into(),
+                    to_node: "out".into(),
+                    to_port: "in".into(),
+                },
+            ],
+            exposed_controls: HashMap::new(),
+        };
+        Box::new(compile(&ir, registry, 48000, block_size).unwrap())
+    }
+
+    #[test]
+    fn test_automation_modulates_gain() {
+        let registry = gain_registry();
+        let block_size = 256;
+        let graph = make_gain_graph(&registry, 440.0, 0.0, block_size);
+
+        let mut swapper = GraphSwapper::new(0, block_size);
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(graph)));
+
+        // Process one block at gain=0 to establish baseline
+        let mut buf_silent = vec![0.0_f32; block_size];
+        swapper.process(&mut buf_silent);
+        let energy_silent: f32 = buf_silent.iter().map(|s| s * s).sum();
+
+        // Add a Ramp automation: gain goes from 0.0 to 1.0 over period_samples
+        let auto = Automation {
+            node_id: "gain1".into(),
+            param: "gain".into(),
+            shape: AutoShape::Ramp,
+            lo: 0.5,
+            hi: 1.0,
+            period_samples: block_size * 4,
+            phase: 0,
+            active: true,
+            one_shot: false,
+        };
+        swapper.drain_commands(std::iter::once(Command::SetAutomation {
+            id: "gain_auto".into(),
+            automation: auto,
+        }));
+
+        // Process several blocks — automation should increase gain
+        let mut buf_auto = vec![0.0_f32; block_size];
+        for _ in 0..4 {
+            swapper.process(&mut buf_auto);
+        }
+        let energy_auto: f32 = buf_auto.iter().map(|s| s * s).sum();
+
+        assert!(
+            energy_auto > energy_silent + 0.001,
+            "automation should modulate gain upward (silent={energy_silent}, auto={energy_auto})"
+        );
+    }
+
+    #[test]
+    fn test_automation_one_shot_holds_at_target() {
+        let registry = gain_registry();
+        let block_size = 64;
+        let period = block_size * 2; // 2 blocks to complete
+
+        let graph = make_gain_graph(&registry, 440.0, 0.0, block_size);
+        let mut swapper = GraphSwapper::new(0, block_size);
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(graph)));
+
+        let auto = Automation {
+            node_id: "gain1".into(),
+            param: "gain".into(),
+            shape: AutoShape::Ramp,
+            lo: 0.0,
+            hi: 1.0,
+            period_samples: period,
+            phase: 0,
+            active: true,
+            one_shot: true,
+        };
+        swapper.drain_commands(std::iter::once(Command::SetAutomation {
+            id: "a1".into(),
+            automation: auto,
+        }));
+
+        // Process past the one-shot period
+        let mut buf = vec![0.0_f32; block_size];
+        for _ in 0..4 {
+            swapper.process(&mut buf);
+        }
+
+        // The automation should have deactivated
+        let auto_ref = swapper.automations.get("a1").unwrap();
+        assert!(!auto_ref.active, "one-shot should deactivate after period");
+    }
+
+    #[test]
+    fn test_automation_replaces_existing() {
+        let registry = gain_registry();
+        let block_size = 64;
+        let graph = make_gain_graph(&registry, 440.0, 1.0, block_size);
+
+        let mut swapper = GraphSwapper::new(0, block_size);
+        swapper.drain_commands(std::iter::once(Command::SwapGraph(graph)));
+
+        let auto1 = Automation {
+            node_id: "gain1".into(),
+            param: "gain".into(),
+            shape: AutoShape::Sine,
+            lo: 0.0,
+            hi: 1.0,
+            period_samples: 1000,
+            phase: 0,
+            active: true,
+            one_shot: false,
+        };
+        swapper.drain_commands(std::iter::once(Command::SetAutomation {
+            id: "a1".into(),
+            automation: auto1,
+        }));
+        assert_eq!(swapper.automations.len(), 1);
+
+        // Replace with a different shape
+        let auto2 = Automation {
+            node_id: "gain1".into(),
+            param: "gain".into(),
+            shape: AutoShape::Ramp,
+            lo: 0.2,
+            hi: 0.8,
+            period_samples: 2000,
+            phase: 0,
+            active: true,
+            one_shot: false,
+        };
+        swapper.drain_commands(std::iter::once(Command::SetAutomation {
+            id: "a1".into(),
+            automation: auto2,
+        }));
+
+        assert_eq!(swapper.automations.len(), 1, "same id should replace, not add");
+        let a = swapper.automations.get("a1").unwrap();
+        assert!((a.lo - 0.2).abs() < 1e-5, "should have the second automation's lo");
+    }
+
+    #[test]
+    fn test_clear_automation() {
+        let mut swapper = GraphSwapper::new(0, 64);
+
+        let auto = Automation {
+            node_id: "n".into(),
+            param: "p".into(),
+            shape: AutoShape::Sine,
+            lo: 0.0,
+            hi: 1.0,
+            period_samples: 1000,
+            phase: 0,
+            active: true,
+            one_shot: false,
+        };
+        swapper.drain_commands(
+            [
+                Command::SetAutomation { id: "a1".into(), automation: auto },
+            ]
+            .into_iter(),
+        );
+        assert_eq!(swapper.automations.len(), 1);
+
+        swapper.drain_commands(std::iter::once(Command::ClearAutomation {
+            id: "a1".into(),
+        }));
+        assert_eq!(swapper.automations.len(), 0, "clear should remove the automation");
     }
 }

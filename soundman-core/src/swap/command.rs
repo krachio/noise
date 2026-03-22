@@ -1,3 +1,4 @@
+use crate::automation::Automation;
 use crate::graph::DspGraph;
 
 /// Instructions sent from the control thread to the audio thread via the
@@ -11,6 +12,10 @@ pub enum Command {
     SetMasterGain(f32),
     /// Update the crossfade duration (in samples) for subsequent graph swaps.
     SetCrossfade(usize),
+    /// Add or replace a parameter automation (keyed by id).
+    SetAutomation { id: String, automation: Automation },
+    /// Remove a parameter automation by id.
+    ClearAutomation { id: String },
     /// Signal engine shutdown.
     Shutdown,
 }
@@ -24,6 +29,8 @@ impl std::fmt::Debug for Command {
             }
             Self::SetMasterGain(gain) => write!(f, "Command::SetMasterGain({gain})"),
             Self::SetCrossfade(samples) => write!(f, "Command::SetCrossfade({samples})"),
+            Self::SetAutomation { id, .. } => write!(f, "Command::SetAutomation({id})"),
+            Self::ClearAutomation { id } => write!(f, "Command::ClearAutomation({id})"),
             Self::Shutdown => write!(f, "Command::Shutdown"),
         }
     }
