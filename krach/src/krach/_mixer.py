@@ -613,6 +613,7 @@ class VoiceMixer:
         self._sends: dict[tuple[str, str], float] = {}  # (voice, bus) → gain
         self._wires: dict[tuple[str, str], str] = {}    # (voice, bus) → port
         self._ctrl_values: dict[str, float] = {}  # path → last set value (for fade start)
+        self._patterns: dict[str, Pattern] = {}  # target → last unbound pattern
         self._batching: bool = False
         self._graph_loaded: bool = False
 
@@ -844,6 +845,7 @@ class VoiceMixer:
         ``from_zero``: if True, uses ``play_from_zero`` so the pattern phase
         starts at 0 regardless of the current cycle position.
         """
+        self._patterns[target] = pattern
         send = self._session.play_from_zero if from_zero else self._session.play
         voice = self._voices.get(target)
         if voice is not None and voice.count > 1:
@@ -863,6 +865,12 @@ class VoiceMixer:
         else:
             bound = Pattern(_bind_voice(pattern.node, target))
             send(target, bound)
+
+    def pattern(self, name: str) -> Pattern:
+        """Retrieve the last unbound pattern played on a target."""
+        if name not in self._patterns:
+            raise ValueError(f"no pattern for '{name}'")
+        return self._patterns[name]
 
     def set(self, path: str, value: float) -> None:
         """Set a control value by path. Instant — no pattern scheduling."""
@@ -1235,6 +1243,10 @@ class VoiceHandle:
         else:
             assert isinstance(target_or_pattern, Pattern)
             self._mixer.play(self._name, target_or_pattern)
+
+    def pattern(self) -> Pattern:
+        """Retrieve the last unbound pattern played on this voice."""
+        return self._mixer.pattern(self._name)
 
     def set(self, param: str, value: float) -> None:
         self._mixer.set(f"{self._name}/{param}", value)

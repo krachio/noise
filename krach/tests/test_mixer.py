@@ -2722,3 +2722,57 @@ def test_mod_uses_play_from_zero() -> None:
 
     assert session.play_from_zero.call_count == 1
     assert session.play.call_count == 0
+
+
+# ── Pattern retrieval ─────────────────────────────────────────────────────
+
+
+def test_pattern_retrieval() -> None:
+    """play() stores the unbound pattern and pattern() retrieves it."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer, note
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    pat = note(440.0)
+    mixer.play("bass", pat)
+
+    assert mixer.pattern("bass") is pat
+
+
+def test_pattern_retrieval_unknown_raises() -> None:
+    """pattern() raises ValueError for unknown names."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    with pytest.raises(ValueError, match="no pattern for"):
+        mixer.pattern("nope")
+
+
+def test_handle_pattern_retrieval() -> None:
+    """VoiceHandle.pattern() delegates to mixer.pattern()."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer, note
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    handle = mixer.voice("bass", "faust:bass", gain=0.5)
+
+    pat = note(440.0)
+    handle.play(pat)
+
+    assert handle.pattern() is pat
