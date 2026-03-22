@@ -1,8 +1,11 @@
 # Ralph Review Sprint 15
 
 ## Sprint 15 — cleanup
-- [ ] GAIN_SNAP_INIT — gain.rs — fresh GainNode ramps from 1.0→target on first block; snap current=target on first set_param
-- [ ] STALE_SCALE_DOCS — midiman-frontend README.md + PROGRESS.md — still reference .scale() instead of .fast()
+- [x] GAIN_SNAP_INIT — gain.rs — fresh GainNode ramps from 1.0→target on first block; snap current=target on first set_param
+- [x] STALE_SCALE_DOCS — midiman-frontend README.md + PROGRESS.md — still reference .scale() instead of .fast()
+
+## Sprint 15 — adversarial
+No bugs found. Gain virgin flag logic is correct for all edge cases (multiple set_param before process, reused nodes, reset).
 
 ---
 

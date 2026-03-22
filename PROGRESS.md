@@ -49,6 +49,8 @@ mix.fade("bass", target=0.15, bars=8)
 
 ## Next
 
+- **Control IR node**: Replace Osc("/soundman/set", ...) with typed Control(label, value) IR node — eliminates string parsing on hot path, makes intent explicit
+- **Voice-scoped API**: Reduce name repetition — `bass = mix.v("bass"); bass.play(bass.note(mtof(A2)))` or auto-infer slot from pattern
 - Follow-up PR: rename soundman-core → audio-engine, soundman-faust → audio-faust, midiman → pattern-engine, midiman-frontend → noise-client
 - Effects routing: mix.bus() / mix.send() for reverb/delay
 - Mini-notation parser: p("bd sd ~ bd") shorthand
