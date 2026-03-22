@@ -387,6 +387,188 @@ Stage 5.2  Library restructure            (refactor: move files)
 Stage 5.3  Typed Control IR               (Rust + Python: new value type)
 ```
 
+---
+
+## Stage 6: Pattern Compiler — Control Voices → Automation Curves
+
+Unify the pattern engine and audio engine output paths. Control-voice patterns compile
+to block-rate automation wavetables instead of discrete per-event IPC. Fixes hanging
+notes by construction, improves resolution 20x, eliminates per-event dispatch overhead.
+
+### Architecture
+
+```
+Python (one-time)          Rust (per-cycle)                Rust (per-block)
+─────────────────          ────────────────                ────────────────
+kr.play("bass", pat)  →   pattern engine evaluates    →   audio engine plays
+  sends IR once            converts events to wavetables   curves at block rate
+  done                     cache by evaluation hash        (existing AutoShape::Custom)
+                           send via lock-free channel
+                           (same process, no IPC)
+```
+
+The pattern IR is unchanged. Python remains a pure definition layer. The compilation
+to wavetables is a new Rust-side backend for existing IR evaluation.
+
+### Why this works
+
+- Existing `AutoShape::Custom { table: Vec<f32> }` already plays wavetables at block rate
+- Existing `SetAutomation` / `ClearAutomation` commands already manage automation lifecycle
+- Pattern engine already evaluates patterns each cycle in Rust (including Degrade/random)
+- Gate lifecycle is in the curve by construction — `ClearAutomation` resets to 0
+
+### Cache model (like XLA → jaxpr → HLO)
+
+Wavetables are cached by hashing the evaluation output (sorted events for the cycle).
+Same events → same wavetable → cache hit. No explicit stationarity detection needed.
+
+- Static patterns (`hit() * 4`): compile once, permanent cache hit
+- Periodic (`.every(4, reverse)`): N unique evaluations, cached after first occurrence
+- Random (`.thin(seed=42)`): seed + cycle deterministic → cache if same seed+cycle repeats
+
+### 6.1 `events_to_wavetables` — pure function (Rust, pattern-engine)
+
+New module: `pattern-engine/src/curve.rs`
+
+```rust
+/// Convert a sorted list of (onset_fraction, label, value) events for one cycle
+/// into per-parameter wavetables at the given block resolution.
+///
+/// Each wavetable has `blocks_per_cycle` entries. Values are sample-and-hold:
+/// the parameter stays at its last-set value until the next event.
+pub fn events_to_wavetables(
+    events: &[(f64, &str, f32)],  // (onset_frac 0..1, label, value)
+    blocks_per_cycle: usize,
+) -> HashMap<String, Vec<f32>> { ... }
+```
+
+- Pure function: events in, wavetables out. No state, no side effects.
+- Sample-and-hold: each block slot holds the most recent value for that parameter.
+- Gate events produce clean pulses: `[0, 0, 1, 1, ..., 0, 0, ...]`
+- Test: `seq("C4", "E4", None)` → freq wavetable with 3 plateaus, gate with 2 pulses + rest
+
+**Tests:**
+- Single note → freq constant, gate pulse + release
+- `seq(A, B, None)` → freq step function, gate pulses with rest
+- `hit() * 4` → 4 gate pulses evenly spaced
+- Empty events → all-zero wavetables
+- Edge: event at exactly t=0.0 and t=1.0
+
+### 6.2 Evaluation hash + wavetable cache (Rust, pattern-engine)
+
+```rust
+/// Cache of compiled wavetables keyed by content hash of the evaluation output.
+struct CurveCache {
+    entries: HashMap<u64, HashMap<String, Vec<f32>>>,
+    // u64 = hash of sorted events for one cycle
+}
+```
+
+- Hash the events list (onset, label, value tuples) with a fast hasher (FxHash)
+- On cache hit: return reference to existing wavetables
+- On cache miss: call `events_to_wavetables`, insert, return
+- Cache eviction: LRU or bounded size (keep last N unique evaluations)
+
+**Tests:**
+- Same events → same hash → cache hit
+- Different events → different hash → cache miss
+- Cache returns correct wavetables on hit
+
+### 6.3 Cycle-boundary curve generation (Rust, krach-engine)
+
+New step in the main loop: at each cycle boundary, for each active Control-voice slot:
+
+1. Evaluate pattern for the next cycle → list of `(onset_frac, label, value)` events
+2. Check cache → hit: reuse wavetables; miss: compile + cache
+3. For each parameter wavetable, send `SetAutomation(Custom { table }, period = 1 cycle, one_shot = true)`
+4. Automation plays for exactly one cycle, then the next cycle's curve replaces it
+
+This replaces steps ③④ in the current main loop (drain events + pending dispatch)
+for Control-voice events. MIDI events continue through the existing discrete path.
+
+**Key change in main loop:**
+- Pattern engine `drain()` still produces events for MIDI slots
+- For Control-voice slots: instead of draining individual events, evaluate the full
+  cycle and compile to curves
+- Need: per-slot metadata to distinguish Control-voice slots from MIDI slots
+  (Python sets this when `play()` is called — the slot name matches a voice with
+  exposed controls)
+
+**Files:** `krach-engine/src/main.rs` (cycle boundary logic), `krach-engine/src/curve_dispatch.rs` (new)
+
+### 6.4 Slot hush/replace → ClearAutomation (Rust, krach-engine)
+
+When a Control-voice slot is hushed or its pattern replaced:
+1. Send `ClearAutomation` for all parameters that had active curves
+2. Gate params return to 0.0 (no automation = default value)
+3. No hanging notes — cleanup is automatic
+
+Track active curve labels per slot: `HashMap<SlotIdx, HashSet<String>>`.
+On `Hush` or `SetPattern`: clear all automations for that slot's labels.
+
+**Tests:**
+- Hush clears all automations for the slot
+- SetPattern clears old automations before new curves start
+- Gate returns to 0 after ClearAutomation
+
+### 6.5 Python-side integration (Python, krach)
+
+Minimal changes — the IR doesn't change. But:
+
+1. `play()` tells the engine whether this slot is a Control-voice slot
+   (so krach-engine knows to use curve compilation vs discrete dispatch).
+   Add a flag to `SetPattern` command: `compile_to_curves: bool`.
+   Python sets it based on whether the target is a voice with exposed controls.
+
+2. `hush()` already sends `Hush` — no change needed (6.4 handles cleanup).
+
+3. Remove `PendingEvent::Control` dispatch path from main loop for curve-compiled
+   slots (discrete Control dispatch only for non-curve slots and `kr.set()`).
+
+**Tests:**
+- `play()` on a Control voice sets `compile_to_curves: true`
+- `play()` on a MIDI slot sets `compile_to_curves: false`
+- `kr.set()` still works (direct SetControl, not curve)
+
+### 6.6 Cleanup: remove legacy Osc dispatch path
+
+After curve compilation works for all Control voices:
+- `Value::Osc` dispatch in krach-engine becomes dead code for Control voices
+- `parse_set_control()` / `parse_set_gain()` only needed for backward compat
+- Can remove `PendingEvent` vec for curve-compiled slots
+- `Freeze` wrapper in `note()`/`hit()` is still valid IR but no longer load-bearing
+  for gate lifecycle — the curve handles it
+
+### Commit order
+
+```
+6.1  events_to_wavetables pure function + tests    (Rust: pattern-engine/src/curve.rs)
+6.2  CurveCache with hash-based lookup + tests     (Rust: pattern-engine/src/curve.rs)
+6.3  Cycle-boundary dispatch in main loop          (Rust: krach-engine)
+6.4  Hush/replace → ClearAutomation                (Rust: krach-engine)
+6.5  Python compile_to_curves flag                  (Python + Rust: protocol)
+6.6  Remove legacy Osc Control dispatch             (Rust: cleanup)
+```
+
+### Verification
+
+After 6.4 (end-to-end working):
+```python
+kr.voice("bass", acid_bass, gain=0.3)
+kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
+# Engine log: set_automation bass/freq Custom(172 samples) ...
+# Engine log: set_automation bass/gate Custom(172 samples) ...
+# No discrete Control events in log
+
+kr.play("bass", kr.seq("C3", "E3"))
+# Old automations cleared, new ones set. No hanging notes.
+
+kr.hush("bass")
+# ClearAutomation for all bass params. Gate → 0. Silence.
+```
+
+---
+
 ## Verification
 
 After each stage:
