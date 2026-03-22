@@ -18,7 +18,7 @@
 //!
 //! // OSC message targeting audio-engine
 //! let osc = Value::Osc {
-//!     address: "/soundman/set".into(),
+//!     address: "/audio/set".into(),
 //!     args: vec![OscArg::Str("pitch".into()), OscArg::Float(440.0)],
 //! };
 //! ```

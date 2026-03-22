@@ -108,7 +108,7 @@ fn socket_path() -> PathBuf {
     if let Ok(path) = std::env::var("NOISE_SOCKET") {
         PathBuf::from(path)
     } else {
-        std::env::temp_dir().join("noise-engine.sock")
+        std::env::temp_dir().join("krach.sock")
     }
 }
 
@@ -137,11 +137,11 @@ fn make_audio_callback(
 
 /// Parse a pattern-engine OSC event into a (label, value) pair for direct dispatch.
 ///
-/// Matches events with address "/soundman/set" and args [Str(label), Float(value)].
+/// Matches events with address "/audio/set" and args [Str(label), Float(value)].
 /// Returns None for non-SetControl events (MIDI notes, CCs, other OSC addresses).
 fn parse_set_control(event: &pattern_engine::engine::TimedEvent) -> Option<(&str, f32)> {
     match &event.event.value {
-        Value::Osc { address, args } if address == "/soundman/set" => {
+        Value::Osc { address, args } if address == "/audio/set" => {
             let label = match args.first()? {
                 OscArg::Str(s) => s.as_str(),
                 _ => return None,
@@ -161,7 +161,7 @@ fn parse_set_control(event: &pattern_engine::engine::TimedEvent) -> Option<(&str
 /// Parse a pattern-engine OSC event into a SetMasterGain value.
 fn parse_set_gain(event: &pattern_engine::engine::TimedEvent) -> Option<f32> {
     match &event.event.value {
-        Value::Osc { address, args } if address == "/soundman/gain" => {
+        Value::Osc { address, args } if address == "/audio/gain" => {
             #[allow(clippy::cast_possible_truncation)]
             match args.first()? {
                 OscArg::Float(f) => Some(*f as f32),
@@ -201,7 +201,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
     let sock = socket_path();
     let ipc_handle = ipc::start(sock, cmd_tx, Arc::clone(&node_types))?;
 
-    info!("noise-engine ready");
+    info!("krach-engine ready");
     info!("  socket: {}", ipc_handle.socket_path.display());
     info!("  DSP dir: {}", dsp_dir.display());
     info!("  bpm: {DEFAULT_BPM}");
@@ -455,7 +455,7 @@ fn drain_note_offs(
 /// Each message is (channel, cc_number, value).
 fn try_connect_midi_input() -> crossbeam_channel::Receiver<(u8, u8, u8)> {
     let (tx, rx) = crossbeam_channel::unbounded();
-    match midir::MidiInput::new("noise-engine-in") {
+    match midir::MidiInput::new("krach-engine-in") {
         Ok(midi_in) => {
             let ports = midi_in.ports();
             if let Some(port) = ports.first() {
@@ -530,7 +530,7 @@ mod tests {
     #[test]
     fn parse_set_control_extracts_label_and_value() {
         let event = make_osc_event(
-            "/soundman/set",
+            "/audio/set",
             vec![OscArg::Str("pitch".into()), OscArg::Float(440.0)],
         );
         let (label, value) = parse_set_control(&event).unwrap();
@@ -541,7 +541,7 @@ mod tests {
     #[test]
     fn parse_set_control_accepts_int_value() {
         let event = make_osc_event(
-            "/soundman/set",
+            "/audio/set",
             vec![OscArg::Str("gate".into()), OscArg::Int(1)],
         );
         let (label, value) = parse_set_control(&event).unwrap();
@@ -560,7 +560,7 @@ mod tests {
 
     #[test]
     fn parse_set_control_returns_none_for_missing_args() {
-        let event = make_osc_event("/soundman/set", vec![]);
+        let event = make_osc_event("/audio/set", vec![]);
         assert!(parse_set_control(&event).is_none());
     }
 
@@ -582,20 +582,20 @@ mod tests {
 
     #[test]
     fn parse_set_gain_extracts_float() {
-        let event = make_osc_event("/soundman/gain", vec![OscArg::Float(0.75)]);
+        let event = make_osc_event("/audio/gain", vec![OscArg::Float(0.75)]);
         let gain = parse_set_gain(&event).unwrap();
         assert!((gain - 0.75).abs() < f32::EPSILON);
     }
 
     #[test]
     fn parse_set_gain_returns_none_for_wrong_address() {
-        let event = make_osc_event("/soundman/set", vec![OscArg::Float(0.5)]);
+        let event = make_osc_event("/audio/set", vec![OscArg::Float(0.5)]);
         assert!(parse_set_gain(&event).is_none());
     }
 
     #[test]
     fn parse_set_gain_returns_none_for_empty_args() {
-        let event = make_osc_event("/soundman/gain", vec![]);
+        let event = make_osc_event("/audio/gain", vec![]);
         assert!(parse_set_gain(&event).is_none());
     }
 

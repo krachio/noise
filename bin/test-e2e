@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# End-to-end integration test: noise-engine (unified binary)
+# End-to-end integration test: krach-engine (unified binary)
 # Verifies the full pipeline: IPC → Pattern Engine → Audio Engine → FAUST → audio
 #
 # What this tests:
@@ -10,16 +10,16 @@
 
 set -e
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
-cargo build --bin noise-engine -q --manifest-path "$REPO/Cargo.toml"
+cargo build --bin krach-engine -q --manifest-path "$REPO/Cargo.toml"
 
 TMPDIR_NATIVE="$(python3 -c 'import tempfile; print(tempfile.gettempdir())')"
-ENGINE_SOCK="${TMPDIR_NATIVE}/noise-engine-test-e2e.sock"
+ENGINE_SOCK="${TMPDIR_NATIVE}/krach-engine-test-e2e.sock"
 rm -f "$ENGINE_SOCK"
 
 NOISE_SOCKET="$ENGINE_SOCK" \
 NOISE_DSP_DIR="$HOME/.krach/dsp" \
 RUST_LOG=warn \
-  "$REPO/target/debug/noise-engine" &
+  "$REPO/target/debug/krach-engine" &
 ENGINE_PID=$!
 
 cleanup() { kill $ENGINE_PID 2>/dev/null; wait 2>/dev/null; }
@@ -40,7 +40,7 @@ from midiman_frontend.ir import OscFloat, OscStr
 from midiman_frontend.pattern import osc as midi_osc
 
 engine_sock = os.environ.get("ENGINE_SOCK", os.path.join(
-    __import__("tempfile").gettempdir(), "noise-engine-test-e2e.sock"))
+    __import__("tempfile").gettempdir(), "krach-engine-test-e2e.sock"))
 mm = Session(socket_path=engine_sock)
 mm.connect()
 
@@ -78,7 +78,7 @@ print("step 2 — kit graph loaded")
 
 # ── step 3: send patterns ───────────────────────────────────────────────
 def sc(label, value):
-    return midi_osc("/soundman/set", OscStr(label), OscFloat(value))
+    return midi_osc("/audio/set", OscStr(label), OscFloat(value))
 
 mm.tempo = 120
 

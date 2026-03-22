@@ -44,8 +44,8 @@ pub fn osc_time_to_instant(osc_time: OscTime) -> Instant {
 /// pending UDP packets each call. Accepts both `OscType::Float` and
 /// `OscType::Double` for numeric arguments.
 ///
-/// OSC address namespace: `/soundman/set`, `/soundman/gain`,
-/// `/soundman/load_graph`, `/soundman/ping`, `/soundman/shutdown`.
+/// OSC address namespace: `/audio/set`, `/audio/gain`,
+/// `/audio/load_graph`, `/audio/ping`, `/audio/shutdown`.
 pub struct OscControlInput {
     socket: Option<UdpSocket>,
     addr: String,
@@ -74,14 +74,14 @@ impl OscControlInput {
 
     fn parse_osc_message(msg: &OscMessage) -> Option<ClientMessage> {
         let parts: Vec<&str> = msg.addr.split('/').collect();
-        if parts.len() < 3 || parts[1] != "soundman" {
-            trace!("ignoring non-soundman OSC: {}", msg.addr);
+        if parts.len() < 3 || parts[1] != "audio" {
+            trace!("ignoring non-audio OSC: {}", msg.addr);
             return None;
         }
 
         match parts[2] {
             "set" => {
-                // /soundman/set <label> <value>
+                // /audio/set <label> <value>
                 let label = msg.args.first().and_then(|a| {
                     if let OscType::String(s) = a { Some(s.clone()) } else { None }
                 })?;
@@ -89,7 +89,7 @@ impl OscControlInput {
                 Some(ClientMessage::SetControl { label, value })
             }
             "load_graph" => {
-                // /soundman/load_graph <json_string>
+                // /audio/load_graph <json_string>
                 let json = msg.args.first().and_then(|a| {
                     if let OscType::String(s) = a { Some(s.as_str()) } else { None }
                 })?;
@@ -97,12 +97,12 @@ impl OscControlInput {
                 Some(ClientMessage::LoadGraph(ir))
             }
             "gain" => {
-                // /soundman/gain <float>
+                // /audio/gain <float>
                 let gain = msg.args.first().and_then(Self::osc_as_f32)?;
                 Some(ClientMessage::SetMasterGain { gain })
             }
             "list_nodes" => {
-                // /soundman/list_nodes <reply_port: int>
+                // /audio/list_nodes <reply_port: int>
                 let port = msg.args.first().and_then(|a| {
                     if let OscType::Int(p) = a { u16::try_from(*p).ok() } else { None }
                 })?;
@@ -111,7 +111,7 @@ impl OscControlInput {
             "ping" => Some(ClientMessage::Ping),
             "shutdown" => Some(ClientMessage::Shutdown),
             unknown => {
-                warn!("unknown OSC command: /soundman/{unknown}");
+                warn!("unknown OSC command: /audio/{unknown}");
                 None
             }
         }
@@ -187,14 +187,14 @@ impl OscControlInput {
     }
 }
 
-/// Send a `/soundman/node_types` OSC reply to `host:port`.
+/// Send a `/audio/node_types` OSC reply to `host:port`.
 ///
 /// The reply carries a single JSON-encoded string arg: `["type1", "type2", ...]`.
 /// Errors are logged and silently dropped — this is a best-effort reply.
 pub fn send_node_types_reply(host: &str, port: u16, types: &[String]) {
     let Ok(json) = serde_json::to_string(types) else { return };
     let msg = OscPacket::Message(OscMessage {
-        addr: "/soundman/node_types".to_string(),
+        addr: "/audio/node_types".to_string(),
         args: vec![OscType::String(json)],
     });
     let Ok(encoded) = rosc::encoder::encode(&msg) else { return };
@@ -263,7 +263,7 @@ mod tests {
     #[test]
     fn parse_set_control() {
         let msg = OscMessage {
-            addr: "/soundman/set".into(),
+            addr: "/audio/set".into(),
             args: vec![
                 OscType::String("pitch".into()),
                 OscType::Float(880.0),
@@ -280,7 +280,7 @@ mod tests {
     #[test]
     fn parse_set_control_double() {
         let msg = OscMessage {
-            addr: "/soundman/set".into(),
+            addr: "/audio/set".into(),
             args: vec![
                 OscType::String("pitch".into()),
                 OscType::Double(440.0),
@@ -297,7 +297,7 @@ mod tests {
     #[test]
     fn parse_gain_double() {
         let msg = OscMessage {
-            addr: "/soundman/gain".into(),
+            addr: "/audio/gain".into(),
             args: vec![OscType::Double(0.75)],
         };
         let result = OscControlInput::parse_osc_message(&msg).unwrap();
@@ -307,7 +307,7 @@ mod tests {
     #[test]
     fn parse_gain() {
         let msg = OscMessage {
-            addr: "/soundman/gain".into(),
+            addr: "/audio/gain".into(),
             args: vec![OscType::Float(0.5)],
         };
         let result = OscControlInput::parse_osc_message(&msg).unwrap();
@@ -317,7 +317,7 @@ mod tests {
     #[test]
     fn parse_ping() {
         let msg = OscMessage {
-            addr: "/soundman/ping".into(),
+            addr: "/audio/ping".into(),
             args: vec![],
         };
         let result = OscControlInput::parse_osc_message(&msg).unwrap();
@@ -327,7 +327,7 @@ mod tests {
     #[test]
     fn parse_shutdown() {
         let msg = OscMessage {
-            addr: "/soundman/shutdown".into(),
+            addr: "/audio/shutdown".into(),
             args: vec![],
         };
         let result = OscControlInput::parse_osc_message(&msg).unwrap();
@@ -337,7 +337,7 @@ mod tests {
     #[test]
     fn parse_unknown_command_returns_none() {
         let msg = OscMessage {
-            addr: "/soundman/unknown".into(),
+            addr: "/audio/unknown".into(),
             args: vec![],
         };
         assert!(OscControlInput::parse_osc_message(&msg).is_none());
@@ -360,7 +360,7 @@ mod tests {
         let json = r#"{"nodes":[{"id":"osc1","type_id":"oscillator","controls":{"freq":440.0}},{"id":"out","type_id":"dac","controls":{}}],"connections":[{"from_node":"osc1","from_port":"out","to_node":"out","to_port":"in"}],"exposed_controls":{}}"#;
 
         let msg = OscMessage {
-            addr: "/soundman/load_graph".into(),
+            addr: "/audio/load_graph".into(),
             args: vec![OscType::String(json.into())],
         };
         let result = OscControlInput::parse_osc_message(&msg).unwrap();
@@ -378,7 +378,7 @@ mod tests {
         // Send an OSC message via UDP
         let sender = UdpSocket::bind("127.0.0.1:0").unwrap();
         let msg = rosc::encoder::encode(&OscPacket::Message(OscMessage {
-            addr: "/soundman/set".into(),
+            addr: "/audio/set".into(),
             args: vec![
                 OscType::String("pitch".into()),
                 OscType::Float(880.0),
@@ -401,7 +401,7 @@ mod tests {
     #[test]
     fn parse_list_nodes_with_int_port() {
         let msg = OscMessage {
-            addr: "/soundman/list_nodes".into(),
+            addr: "/audio/list_nodes".into(),
             args: vec![OscType::Int(12345)],
         };
         let result = OscControlInput::parse_osc_message(&msg).unwrap();
@@ -411,7 +411,7 @@ mod tests {
     #[test]
     fn parse_list_nodes_missing_port_returns_none() {
         let msg = OscMessage {
-            addr: "/soundman/list_nodes".into(),
+            addr: "/audio/list_nodes".into(),
             args: vec![],
         };
         assert!(OscControlInput::parse_osc_message(&msg).is_none());
@@ -435,7 +435,7 @@ mod tests {
         let (_, packet) = rosc::decoder::decode_udp(&buf[..size]).unwrap();
 
         if let rosc::OscPacket::Message(msg) = packet {
-            assert_eq!(msg.addr, "/soundman/node_types");
+            assert_eq!(msg.addr, "/audio/node_types");
             assert_eq!(msg.args.len(), 1);
             if let rosc::OscType::String(json) = &msg.args[0] {
                 let parsed: Vec<String> = serde_json::from_str(json).unwrap();
@@ -495,7 +495,7 @@ mod tests {
         let bundle = rosc::encoder::encode(&OscPacket::Bundle(rosc::OscBundle {
             timetag: osc_time,
             content: vec![OscPacket::Message(OscMessage {
-                addr: "/soundman/set".into(),
+                addr: "/audio/set".into(),
                 args: vec![
                     OscType::String("pitch".into()),
                     OscType::Float(440.0),
@@ -533,7 +533,7 @@ mod tests {
 
         let sender = UdpSocket::bind("127.0.0.1:0").unwrap();
         let msg = rosc::encoder::encode(&OscPacket::Message(OscMessage {
-            addr: "/soundman/ping".into(),
+            addr: "/audio/ping".into(),
             args: vec![],
         }))
         .unwrap();

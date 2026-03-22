@@ -2063,7 +2063,7 @@ def test_bind_voice_skips_already_bound() -> None:
 
     from krach._mixer import _bind_voice  # pyright: ignore[reportPrivateUsage]
 
-    node = Atom(Osc("/soundman/set", (OscStr("other/freq"), OscFloat(440.0))))
+    node = Atom(Osc("/audio/set", (OscStr("other/freq"), OscFloat(440.0))))
     bound = _bind_voice(node, "bass")
     ir_str = str(ir_to_dict(bound))
     assert "'Str': 'other/freq'" in ir_str
@@ -2124,7 +2124,7 @@ def test_play_control_path_binds_ctrl() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
 
-    ctrl_pat = osc("/soundman/set", OscStr("ctrl"), OscFloat(800.0))
+    ctrl_pat = osc("/audio/set", OscStr("ctrl"), OscFloat(800.0))
     mixer.play("bass/cutoff", ctrl_pat)
 
     call_args = session.play.call_args

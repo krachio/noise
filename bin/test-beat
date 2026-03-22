@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# Quick integration smoke test — starts noise-engine, plays a beat, exits.
+# Quick integration smoke test — starts krach-engine, plays a beat, exits.
 # Usage: ./bin/test-beat
 set -e
 REPO="$(cd "$(dirname "$0")/.." && pwd)"
 
-cargo build --bin noise-engine -q --manifest-path "$REPO/Cargo.toml"
+cargo build --bin krach-engine -q --manifest-path "$REPO/Cargo.toml"
 
 TMPDIR_NATIVE="$(python3 -c 'import tempfile; print(tempfile.gettempdir())')"
-ENGINE_SOCK="${TMPDIR_NATIVE}/noise-engine-test-beat.sock"
+ENGINE_SOCK="${TMPDIR_NATIVE}/krach-engine-test-beat.sock"
 rm -f "$ENGINE_SOCK"
 
 NOISE_SOCKET="$ENGINE_SOCK" \
 NOISE_DSP_DIR="$HOME/.krach/dsp" \
-RUST_LOG=warn "$REPO/target/debug/noise-engine" &
+RUST_LOG=warn "$REPO/target/debug/krach-engine" &
 ENGINE_PID=$!
 trap "kill $ENGINE_PID 2>/dev/null" EXIT
 

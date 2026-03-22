@@ -33,7 +33,7 @@ class SlotState:
 
 
 def _default_socket_path() -> str:
-    return os.environ.get("NOISE_SOCKET", "/tmp/noise-engine.sock")
+    return os.environ.get("NOISE_SOCKET", "/tmp/krach.sock")
 
 
 def _parse_response(line: bytes) -> dict[str, Any]:

@@ -21,16 +21,16 @@ def _wait_for_socket(path: Path, timeout: float = 5.0) -> bool:
 
 def main() -> None:
     repo = _repo_root()
-    engine_bin = repo / "target" / "debug" / "noise-engine"
+    engine_bin = repo / "target" / "debug" / "krach-engine"
 
-    print("building noise-engine...")
+    print("building krach-engine...")
     subprocess.run(
-        ["cargo", "build", "--bin", "noise-engine", "-q"],
+        ["cargo", "build", "--bin", "krach-engine", "-q"],
         cwd=repo,
         check=True,
     )
 
-    engine_sock = Path(tempfile.gettempdir()) / "noise-engine.sock"
+    engine_sock = Path(tempfile.gettempdir()) / "krach-engine.sock"
     dsp_dir = Path.home() / ".krach" / "dsp"
     dsp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -64,7 +64,7 @@ def main() -> None:
     atexit.register(_cleanup)
 
     if not _wait_for_socket(engine_sock):
-        raise RuntimeError("noise-engine socket not ready after 5s")
+        raise RuntimeError("krach-engine socket not ready after 5s")
 
     # ── imports ──────────────────────────────────────────────────────────────
     from krach.patterns import Session
@@ -161,7 +161,7 @@ def main() -> None:
         except (TimeoutError, ConnectionError):
             time.sleep(0.1)
     else:
-        raise RuntimeError("noise-engine not ready after 10s")
+        raise RuntimeError("krach-engine not ready after 10s")
 
     # nodes list used for the banner only; status() reads live from mix._node_controls.
 

@@ -85,10 +85,10 @@ fn main() {
 
     info!("audio-engine running — 440 Hz sine on default output");
     info!("OSC control on 127.0.0.1:9000");
-    info!("  /soundman/set pitch <freq>");
-    info!("  /soundman/gain <0.0-1.0>");
-    info!("  /soundman/list_nodes <reply_port>");
-    info!("  /soundman/shutdown");
+    info!("  /audio/set pitch <freq>");
+    info!("  /audio/gain <0.0-1.0>");
+    info!("  /audio/list_nodes <reply_port>");
+    info!("  /audio/shutdown");
     info!("set RUST_LOG=audio_engine=debug for verbose output");
 
     // Start OSC control input

@@ -307,7 +307,7 @@ mod tests {
     fn osc_val(label: &str, v: f32) -> Value {
         use crate::event::{OscArg, Value};
         Value::Osc {
-            address: "/soundman/set".into(),
+            address: "/audio/set".into(),
             args: vec![OscArg::Str(label.into()), OscArg::Float(f64::from(v))],
         }
     }
