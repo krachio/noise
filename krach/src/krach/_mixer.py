@@ -222,6 +222,14 @@ class VoiceMixer:
         """
         type_id, controls = self._resolve_source(name, source, tuple(init.keys()))
 
+        # If replacing a poly voice with a mono voice, clean up poly state first.
+        if name in self._poly:
+            self.hush(name)
+            old_pv = self._poly.pop(name)
+            self._poly_alloc.pop(name, None)
+            for i in range(old_pv.count):
+                self._voices.pop(f"{name}_v{i}", None)
+
         is_new = name not in self._voices
         self._voices[name] = Voice(
             type_id=type_id,
@@ -274,6 +282,8 @@ class VoiceMixer:
 
     def remove(self, name: str) -> None:
         """Remove a voice or poly voice. Rebuilds the graph."""
+        if name not in self._voices and name not in self._poly:
+            raise ValueError(f"voice '{name}' not found")
         self.hush(name)
         if name in self._poly:
             pv = self._poly.pop(name)
@@ -315,12 +325,29 @@ class VoiceMixer:
                 self.hush(name)
 
     def gain(self, name: str, value: float) -> None:
-        """Update a voice's gain.  Instant — no graph rebuild."""
-        old = self._voices[name]
-        self._voices[name] = Voice(
-            type_id=old.type_id, gain=value, controls=old.controls, init=old.init
-        )
-        self._session.set_ctrl(f"{name}_gain", float(value))
+        """Update a voice's gain. Instant — no graph rebuild.
+
+        For poly voices, distributes gain equally across instances.
+        """
+        if name in self._poly:
+            pv = self._poly[name]
+            per_voice = value / pv.count
+            for i in range(pv.count):
+                inst = f"{name}_v{i}"
+                old = self._voices[inst]
+                self._voices[inst] = Voice(
+                    type_id=old.type_id, gain=per_voice, controls=old.controls, init=old.init
+                )
+                self._session.set_ctrl(f"{inst}_gain", float(per_voice))
+            self._poly[name] = PolyVoice(
+                type_id=pv.type_id, count=pv.count, gain=value, controls=pv.controls,
+            )
+        else:
+            old = self._voices[name]
+            self._voices[name] = Voice(
+                type_id=old.type_id, gain=value, controls=old.controls, init=old.init
+            )
+            self._session.set_ctrl(f"{name}_gain", float(value))
 
     def step(self, name: str, pitch: float | None = None, **params: float) -> Pattern:
         """Melodic trigger: set freq + optional params + gate trig/reset.
@@ -369,6 +396,8 @@ class VoiceMixer:
             idx = self._poly_alloc[name] % pv.count
             self._poly_alloc[name] = idx + 1
             return f"{name}_v{idx}"
+        if name not in self._voices:
+            raise ValueError(f"voice '{name}' not found")
         return name
 
     def fade(

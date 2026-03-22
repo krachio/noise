@@ -1,7 +1,10 @@
-# Ralph Review Sprint 9
+# Ralph Review Sprint 10
 
-## Sprint 9 — fixes
-- [x] FADE_LIFECYCLE — hush() now cancels _fade_* and instance pattern slots
-- [x] FADE_POLY_PARENT — fade() handles poly parents by fading all instances proportionally
-- [x] FADE_ZERO_BARS — fade() validates bars >= 1 and steps_per_bar >= 1
-- [x] HUSH_INSTANCE_SLOTS — hush() for poly voices now also hushes per-instance pattern slots
+## Sprint 10 — review
+No new code issues found. Review clean.
+
+## Sprint 10 — adversarial fixes
+- [x] GAIN_POLY_PARENT — krach/_mixer.py:317 — gain() on poly parent now distributes across instances
+- [x] REMOVE_MISSING — krach/_mixer.py:275 — remove() raises ValueError for missing voices (was KeyError)
+- [x] STEP_MISSING — krach/_mixer.py:376 — _alloc_voice() raises ValueError for missing names (was KeyError)
+- [x] VOICE_POLY_COLLISION — krach/_mixer.py:225 — voice() over existing poly cleans up poly state first

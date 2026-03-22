@@ -480,3 +480,90 @@ def test_hush_poly_stops_instance_patterns() -> None:
     assert "pad_v1" in hushed_names, (
         f"hush('pad') must hush instance 'pad_v1', but only hushed: {hushed_names}"
     )
+
+
+# ── gain() on poly parent ───────────────────────────────────────────────────
+
+
+def test_gain_poly_parent_updates_all_instances() -> None:
+    """gain() on a poly parent should update all instances proportionally."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.6)
+
+    # Should not crash — updates all instances
+    mixer.gain("pad", 0.4)
+
+    # Each instance should get 0.4/2 = 0.2
+    set_calls = {
+        (c.args[0], c.args[1])
+        for c in session.set_ctrl.call_args_list
+        if c.args[0].endswith("_gain")
+    }
+    assert ("pad_v0_gain", 0.2) in set_calls
+    assert ("pad_v1_gain", 0.2) in set_calls
+
+
+# ── remove/step on missing name ─────────────────────────────────────────────
+
+
+def test_remove_missing_voice_raises_valueerror() -> None:
+    """remove() on a non-existent voice should raise ValueError, not KeyError."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    session = MagicMock()
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    with pytest.raises(ValueError, match="not found"):
+        mixer.remove("nope")
+
+
+def test_step_missing_voice_raises_valueerror() -> None:
+    """step() on a non-existent voice should raise ValueError."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    session = MagicMock()
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    with pytest.raises(ValueError, match="not found"):
+        mixer.step("nope", 440)
+
+
+# ── voice/poly name collision ────────────────────────────────────────────────
+
+
+def test_voice_over_poly_cleans_up_poly() -> None:
+    """voice() with a name that's an existing poly parent should clean up
+    the poly state first (remove old instances, hush)."""
+    from unittest.mock import MagicMock
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "faust:mono", "dac", "gain"]
+    from krach._mixer import VoiceMixer
+
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+        "faust:mono": ("freq", "gate"),
+    })
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+
+    # Replace poly with mono voice — should clean up poly state
+    mixer.voice("pad", "faust:mono", gain=0.3)
+
+    assert "pad" not in mixer._poly
+    assert "pad_v0" not in mixer._voices
+    assert "pad_v1" not in mixer._voices
+    assert "pad" in mixer._voices
