@@ -108,7 +108,7 @@ def _build_mod(shape: Callable[[float], float], lo: float, hi: float, steps: int
     for i in range(steps):
         t = i / steps
         val = lo + (hi - lo) * shape(t)
-        atoms.append(_osc("/set", OscStr("ctrl"), OscFloat(val)))
+        atoms.append(_osc("/soundman/set", OscStr("ctrl"), OscFloat(val)))
     result = atoms[0]
     for a in atoms[1:]:
         result = result + a
@@ -1027,9 +1027,9 @@ class VoiceMixer:
         for i in range(total_steps + 1):
             t = i / total_steps
             value = current + (target - current) * t
-            ramp_atoms.append(_osc("/set", OscStr("ctrl"), OscFloat(value)))
+            ramp_atoms.append(_osc("/soundman/set", OscStr("ctrl"), OscFloat(value)))
         # Hold: repeat target value for 19x the ramp length (one-shot)
-        hold_atom = _osc("/set", OscStr("ctrl"), OscFloat(target))
+        hold_atom = _osc("/soundman/set", OscStr("ctrl"), OscFloat(target))
         hold_atoms = [hold_atom] * (total_steps * 19)
         all_atoms = ramp_atoms + hold_atoms
         pattern = all_atoms[0]
