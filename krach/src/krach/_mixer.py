@@ -32,14 +32,15 @@ from krach._pitch import parse_note as _parse_note
 class Scene:
     """Snapshot of the mixer state — voices, buses, sends, patterns, controls."""
 
-    voices: dict[str, tuple[str, float, tuple[str, ...], int]]  # name → (type_id, gain, controls, count)
-    buses: dict[str, tuple[str, float, tuple[str, ...], int]]   # name → (type_id, gain, controls, num_inputs)
-    sends: dict[tuple[str, str], float]                          # (voice, bus) → level
-    wires: dict[tuple[str, str], str]                            # (voice, bus) → port
-    patterns: dict[str, Pattern]                                  # slot → unbound pattern
-    ctrl_values: dict[str, float]                                 # path → value
+    voices: dict[str, tuple[str, float, tuple[str, ...], int, tuple[tuple[str, float], ...]]]
+    buses: dict[str, tuple[str, float, tuple[str, ...], int]]
+    sends: dict[tuple[str, str], float]
+    wires: dict[tuple[str, str], str]
+    patterns: dict[str, Pattern]
+    ctrl_values: dict[str, float]
     tempo: float
     master: float
+    muted: dict[str, float]  # name → gain before mute
 
 
 @dataclass
@@ -852,11 +853,13 @@ class VoiceMixer:
             self._mute_single(t)
 
     def _mute_single(self, name: str) -> None:
-        """Mute a single voice."""
+        """Mute a single voice or bus."""
         if name in self._muted:
             return
         if name in self._voices:
             self._muted[name] = self._voices[name].gain
+        elif name in self._buses:
+            self._muted[name] = self._buses[name].gain
         self._gain_single(name, 0.0)
 
     def unmute(self, name: str) -> None:
@@ -893,7 +896,7 @@ class VoiceMixer:
     def save(self, name: str) -> None:
         """Save current state as a named scene."""
         self._scenes[name] = Scene(
-            voices={n: (v.type_id, v.gain, v.controls, v.count) for n, v in self._voices.items()},
+            voices={n: (v.type_id, v.gain, v.controls, v.count, v.init) for n, v in self._voices.items()},
             buses={n: (b.type_id, b.gain, b.controls, b.num_inputs) for n, b in self._buses.items()},
             sends=dict(self._sends),
             wires=dict(self._wires),
@@ -901,6 +904,7 @@ class VoiceMixer:
             ctrl_values=dict(self._ctrl_values),
             tempo=self.tempo,
             master=self._master_gain,
+            muted=dict(self._muted),
         )
 
     def recall(self, name: str) -> None:
@@ -918,12 +922,13 @@ class VoiceMixer:
         self._sends.clear()
         self._wires.clear()
 
-        for vname, (type_id, gain, controls, count) in scene.voices.items():
-            self._voices[vname] = Voice(type_id=type_id, gain=gain, controls=controls, count=count)
+        for vname, (type_id, gain, controls, count, init) in scene.voices.items():
+            self._voices[vname] = Voice(type_id=type_id, gain=gain, controls=controls, count=count, init=init)
         for bname, (type_id, gain, controls, num_inputs) in scene.buses.items():
             self._buses[bname] = Bus(type_id=type_id, gain=gain, controls=controls, num_inputs=num_inputs)
         self._sends = dict(scene.sends)
         self._wires = dict(scene.wires)
+        self._muted = dict(scene.muted)
         self._rebuild()
 
         # Restore tempo and master
@@ -1365,12 +1370,16 @@ class VoiceMixer:
         return dict(self._node_controls)
 
     def _flush(self) -> None:
-        """Wait for all pending FAUST types and rebuild the graph once."""
+        """Wait for all pending FAUST types (voices + buses) and rebuild the graph once."""
         seen: set[str] = set()
         for voice in self._voices.values():
             if voice.type_id.startswith("faust:") and voice.type_id not in seen:
                 seen.add(voice.type_id)
                 self._wait_for_type(voice.type_id)
+        for bus in self._buses.values():
+            if bus.type_id.startswith("faust:") and bus.type_id not in seen:
+                seen.add(bus.type_id)
+                self._wait_for_type(bus.type_id)
         self._rebuild()
 
     def _rebuild(self) -> None:
