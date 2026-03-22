@@ -1,6 +1,6 @@
 # soundman-faust
 
-FAUST LLVM JIT plugin for the [soundman](https://github.com/krachio/soundman) audio engine. Write DSP in [FAUST](https://faust.grame.fr), drop `.dsp` files in a directory, get live hot-reloading nodes in the audio graph.
+FAUST LLVM JIT plugin for the `soundman-core` audio engine (sibling in this monorepo). Write DSP in [FAUST](https://faust.grame.fr), drop `.dsp` files in a directory, get live hot-reloading nodes in the audio graph.
 
 ## Architecture
 
@@ -64,9 +64,10 @@ engine.poll_reload().unwrap();
 
 ### Writing FAUST nodes
 
-Drop `.dsp` files in your DSP directory. The filename becomes the type ID:
+Drop `.dsp` files in your DSP directory (supports subdirectories). The relative path becomes the type ID:
 
 **`dsp/lowpass.dsp`** → type ID `faust:lowpass`
+**`dsp/fx/reverb.dsp`** → type ID `faust:fx/reverb`
 
 ```faust
 import("stdfaust.lib");
@@ -89,9 +90,9 @@ FAUST parameters (`hslider`, `vslider`, `nentry`, `button`, `checkbox`) are auto
 
 Edit any `.dsp` file while the engine is running. `poll_reload()` detects the change, recompiles the FAUST code, updates the registry, and crossfade-swaps to the new graph. No restart needed.
 
-## With soundman and midiman
+## With soundman-core and midiman
 
-soundman-faust provides DSP nodes to [soundman](https://github.com/krachio/soundman). [midiman](https://github.com/krachio/midiman) sequences control messages via OSC.
+soundman-faust provides DSP nodes to `soundman-core`. `midiman` sequences control messages via OSC (both siblings in this monorepo).
 
 ```bash
 # Terminal 1: run soundman with FAUST nodes + hot reload
@@ -136,7 +137,7 @@ Port names are derived from channel count: `in`/`out` for mono, `in0`/`in1`/`out
 
 ```bash
 cargo check    # type check (strict clippy: all + pedantic + nursery)
-cargo test     # 27 tests (serialized — FAUST LLVM JIT not thread-safe)
+cargo test     # 14 tests (serialized — FAUST LLVM JIT not thread-safe)
 ```
 
 Requires libfaust linked at build time (`build.rs` handles homebrew paths on macOS).

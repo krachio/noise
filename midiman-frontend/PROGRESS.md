@@ -6,12 +6,12 @@ Ableton-inspired Python DSL frontend for the midiman Rust kernel.
 
 ### Modules
 - `ir.py` — frozen dataclasses for IrNode, Value, ClientMessage (incl. `Batch`, `SimpleCommand`) + JSON serialization + `__post_init__` validation
-- `pattern.py` — Pattern class with `+` (seq), `|` (layer), `*` (repeat), `.over()`, `.fast()`, `.shift()`, `.reverse()`, `.every()`, `.spread()`, `.thin()`. Atom constructors: `note()`, `rest()`, `cc()`, `osc()`
+- `pattern.py` — Pattern class with `+` (seq), `|` (layer), `*` (repeat), `.over()`, `.fast()`, `.shift()`, `.reverse()`, `.every()`, `.spread()`, `.thin()`. Atom constructors: `note()`, `rest()`, `cc()`, `osc()`. `play_from_zero()` for phase-reset playback.
 - `transform.py` — composable Transform callables with `>>` composition
-- `session.py` — Session with flat slot→pattern model: `play()`, `hush()`, `resume()`, `remove()`, `stop()`, `launch()`. SlotState (frozen) tracks playing/stopped per slot. KernelError on bad responses.
+- `session.py` — Session with flat slot→pattern model: `play()`, `play_from_zero()`, `hush()`, `resume()`, `remove()`, `stop()`, `launch()`. SlotState (frozen) tracks playing/stopped per slot. KernelError on bad responses. `meter` property for beats-per-cycle control.
 
 ### Test coverage
-120 tests, 0 pyright strict errors. Covers IR serialization (incl. Batch), pattern algebra, transforms, session slot management, launch/batch, response handling, end-to-end integration, and IR validation.
+139 tests, 0 pyright strict errors. Covers IR serialization (incl. Batch), pattern algebra, transforms, session slot management, launch/batch, response handling, end-to-end integration, and IR validation.
 
 ### Wire compatibility
 JSON output matches the Rust kernel's serde-tagged format: `{"op": ...}` for IrNode, `{"type": ...}` for Value, `{"cmd": ...}` for ClientMessage. Batch: `{"cmd":"Batch","commands":[...]}`.

@@ -1,6 +1,6 @@
-# soundman
+# soundman-core
 
-Real-time audio engine for the [noise](https://github.com/krachio) ecosystem. Graph-based DSP with lock-free audio, hot-swappable graphs, and OSC control.
+Real-time audio engine for the noise monorepo. Graph-based DSP with lock-free audio, hot-swappable graphs, and OSC control.
 
 ## Architecture
 
@@ -54,7 +54,7 @@ All commands are under the `/soundman/` namespace:
 |---------|------|-------------|
 | `/soundman/set` | `s:label f:value` | Set an exposed control parameter |
 | `/soundman/gain` | `f:gain` | Set master gain (0.0–1.0) |
-| `/soundman/load_graph` | `s:json` | Hot-swap to a new graph (JSON `GraphIr`) |
+| `/soundman/load_graph` | `s:json` | Hot-swap to a new graph (JSON `GraphIr`); reuses matching node instances |
 | `/soundman/ping` | — | Health check |
 | `/soundman/shutdown` | — | Stop the engine |
 
@@ -79,7 +79,7 @@ Load a graph via OSC or programmatically:
 
 ## With midiman
 
-[midiman](https://github.com/krachio/midiman) is a pattern sequencer that sends timed OSC messages. Connect them:
+`midiman` (sibling in this monorepo) is a pattern sequencer that sends timed OSC messages. Connect them:
 
 ```bash
 # Terminal 1: audio engine
@@ -110,13 +110,13 @@ Each type needs:
 - **`NodeTypeDecl`** — declares ports (audio in/out) and controls (name, range, default)
 - **`NodeFactory`** — `create(sample_rate, block_size) -> Result<Box<dyn DspNode>, String>`
 
-See [`soundman-faust`](https://github.com/krachio/soundman-faust) for a real-world example that compiles FAUST DSP code via LLVM JIT and registers nodes at runtime.
+See `soundman-faust` (sibling in this monorepo) for a real-world example that compiles FAUST DSP code via LLVM JIT and registers nodes at runtime.
 
 ## Development
 
 ```bash
 cargo check    # type check (strict clippy, unsafe_code = "forbid")
-cargo test     # 91 unit + 6 integration tests
+cargo test     # 122 tests
 ```
 
 ## License

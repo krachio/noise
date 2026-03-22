@@ -20,12 +20,15 @@ early (~100ms ahead), queues in `BinaryHeap<Reverse<Timed>>`, fires at the audio
 containing `fire_at`. Error: ±5.8ms (one 256-sample block @ 44100Hz) vs previously 1–7ms late.
 
 ### Stats
-- 114 tests passing
+- 129 tests passing
 - Rust edition 2024, strict clippy, `unsafe_code = "forbid"`
+
+### Additional features
+- **Phase reset** (`SetPatternFromZero`): start pattern from cycle zero on next set
+- **Meter** (`SetBeatsPerCycle`): configure beats per cycle independently of BPM
 
 ## Next
 
-- Note-off scheduling (priority queue for duration-based note-off)
 - Real-time thread priority
 - Phase 2: sub-block sample splitting (~0ms jitter)
 - MIDI clock sync output

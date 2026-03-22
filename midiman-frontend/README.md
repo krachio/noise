@@ -1,6 +1,6 @@
 # midiman-frontend
 
-Ableton-inspired Python DSL for the [noise](https://github.com/krachio) ecosystem. Immutable pattern graphs composed with Python operators, compiled to JSON IR, sent to the [midiman](https://github.com/krachio/midiman) kernel over a Unix socket.
+Ableton-inspired Python DSL for the noise monorepo. Immutable pattern graphs composed with Python operators, compiled to JSON IR, sent to the `midiman` kernel (sibling in this monorepo) over a Unix socket.
 
 ## Architecture
 
@@ -104,7 +104,7 @@ processed = fx(note(60) + note(64) + note(67))
 swing = every(2, reverse)
 ```
 
-Available: `scale`, `reverse`, `shift`, `every`, `spread`, `thin`.
+Available: `fast`, `reverse`, `shift`, `every`, `spread`, `thin`.
 
 ## Session
 
@@ -118,7 +118,9 @@ Session is a thin binding layer — maps slot names to pattern trees and sends t
 | `s.remove("drums")` | silence and forget pattern | `Hush` |
 | `s.stop()` | silence all slots (patterns remembered) | `HushAll` |
 | `s.launch({"drums": p1, "mel": p2})` | atomic multi-slot update | `Batch` |
+| `s.play_from_zero("drums", pat)` | set pattern, restart from cycle zero | `SetPatternFromZero` |
 | `s.tempo = 128` | set BPM | `SetBpm` |
+| `s.meter = 3` | set beats per cycle | `SetBeatsPerCycle` |
 | `s.ping()` | health check | `Ping` |
 
 `launch()` sends all patterns in a single `Batch` command — the kernel applies them atomically, so slots stay in sync.
@@ -136,13 +138,13 @@ Session(connected, tempo=128.0)
 {"drums": SlotState(pattern=..., playing=True), ...}
 ```
 
-## With midiman + soundman
+## With midiman + soundman-core
 
-Drive [soundman](https://github.com/krachio/soundman) oscillators through midiman:
+Drive `soundman-core` oscillators through midiman:
 
 ```bash
 # Terminal 1: audio engine
-cd ../soundman && cargo run
+cd ../soundman-core && cargo run
 
 # Terminal 2: pattern sequencer
 cd ../midiman && MIDIMAN_OSC_TARGET=127.0.0.1:9000 cargo run
@@ -171,7 +173,7 @@ C major 7th arpeggio through soundman's oscillator.
 
 ```bash
 uv run pyright   # type check (strict mode, 0 errors)
-uv run pytest    # 120 tests
+uv run pytest    # 139 tests
 ```
 
 ## License

@@ -13,6 +13,12 @@ Live coding REPL integrating midiman (patterns) + soundman (audio) + faust-dsl (
 - `mix.play(name, pattern)` — play pattern on slot (delegates to Session)
 - `mix.gain/fade/mute/unmute/solo` — gain control + live performance ops
 - Labels always `{voice_name}_{param}` — patterns survive graph changes
+- Voice handles: returned from `mix.voice()` / `mix.poly()` for direct access
+- Voice-free patterns: patterns without a bound voice (effect routing, modulation)
+- `/` path addressing — hierarchical slot naming
+- Effect routing: send/return via path addressing
+- Modulation as patterns: LFO-style control via pattern slots
+- `mix.tempo` / `mix.meter` — tempo and meter control (no `mm` in namespace)
 
 ### Pitch utilities
 - `mtof(note)` / `ftom(freq)` — MIDI↔Hz conversion
@@ -23,10 +29,8 @@ Live coding REPL integrating midiman (patterns) + soundman (audio) + faust-dsl (
 - Session context includes active voices, their labels, and node controls
 
 ## Stats
-- 107 krach tests, 129 midiman-frontend tests (pyright strict, 0 errors)
+- 218 krach tests (pyright strict, 0 errors)
 
 ## Next
-- Effects routing: `mix.bus()` / `mix.send()` for shared reverb/delay
-- Scene support: `mm.scene()` for pattern snapshot switching
+- Scene support: scene snapshot switching
 - Mini-notation parser: `p("bd sd ~ bd")` shorthand
-- Rename: soundman-core → audio-engine, midiman → pattern-engine

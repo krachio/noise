@@ -2,7 +2,7 @@
 
 A [Tidal Cycles](https://tidalcycles.org)-inspired live coding kernel for MIDI and OSC. No audio synthesis — just precise, composable control signal patterns evaluated over rational time.
 
-A separate Python frontend (not in this repo) sends pattern IR over a Unix socket; the Rust kernel compiles, schedules, and outputs events in real time.
+The `midiman-frontend` Python package (sibling in this monorepo) sends pattern IR over a Unix socket; the Rust kernel compiles, schedules, and outputs events in real time.
 
 ## Architecture
 
@@ -210,6 +210,18 @@ Newline-delimited JSON over Unix socket.
 {"cmd": "SetBpm", "bpm": 140.0}
 ```
 
+**SetBeatsPerCycle** — set meter (beats per cycle):
+
+```json
+{"cmd": "SetBeatsPerCycle", "beats": 3}
+```
+
+**SetPatternFromZero** — assign pattern and restart from cycle zero:
+
+```json
+{"cmd": "SetPatternFromZero", "slot": "d1", "pattern": <IrNode>}
+```
+
 **Ping** — health check:
 
 ```json
@@ -282,7 +294,7 @@ Hi-hat triplets layered with a Euclidean kick — 3-against-5 polyrhythm.
 
 ### Driving soundman over OSC
 
-With [soundman](https://github.com/krachio/soundman) running on port 9000:
+With `soundman-core` (sibling in this monorepo) running on port 9000:
 
 ```bash
 MIDIMAN_OSC_TARGET=127.0.0.1:9000 cargo run
@@ -315,7 +327,7 @@ MIDI output connects to the first available port automatically.
 
 ```bash
 cargo check    # type check (strict clippy, unsafe_code = "forbid")
-cargo test     # 123 tests
+cargo test     # 129 tests
 ```
 
 ## License
