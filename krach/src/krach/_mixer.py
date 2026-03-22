@@ -940,10 +940,20 @@ class VoiceMixer:
         self._session.set_ctrl(path, float(value))
 
     def _resolve_path(self, path: str) -> str:
-        """Convert a ``/``-separated path to the exposed control label.
+        """Convert a user-facing ``/``-separated path to the exposed control label.
 
-        Since labels are now also ``/``-separated (commit 2), the path IS the label.
+        Most paths are identity (``bass/cutoff`` → ``bass/cutoff``).
+        Send levels use a special convention:
+        ``bass/verb_send`` → ``bass_send_verb/gain``
         """
+        if "/" not in path:
+            return path
+        parts = path.rsplit("/", 1)
+        name, param = parts[0], parts[1]
+        # Check if param ends with _send (send level shorthand)
+        if param.endswith("_send"):
+            bus = param[: -len("_send")]
+            return f"{name}_send_{bus}/gain"
         return path
 
     def _resolve_targets(self, name: str) -> list[str]:
