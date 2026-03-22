@@ -10,12 +10,12 @@ Architecture fully rewritten from two-thread scheduler to single-loop engine wit
 - **Pattern engine** (`pattern/`): Arena-indexed `CompiledPattern`, `query()` for all combinators
 - **IR compiler** (`ir/`): `IrNode` serde-tagged enum, validation, `compile()`
 - **Engine** (`engine.rs`): Single-loop `Engine` with `BinaryHeap<Reverse<TimedEvent>>` — correct global fire_at ordering across all slots. `drain(horizon)` pre-dispatches OSC events up to 100ms ahead.
-- **Output sinks** (`output/`): MIDI via midir; OSC via rosc sends bundles with NTP `fire_at` time tags (soundman queues and fires at correct audio block).
+- **Output sinks** (`output/`): MIDI via midir; OSC via rosc sends bundles with NTP `fire_at` time tags (audio-engine queues and fires at correct audio block).
 - **IPC server** (`ipc/`): Unix domain socket, JSON protocol — commands sent as `EngineCommand` via channel (no shared mutex)
 - **Binary** (`main.rs`): drain commands → fill heap → drain(now+LOOKAHEAD) → sleep 1ms
 
 ### Sample-accurate OSC scheduling
-OSC events sent as `OscBundle` with `fire_at` encoded as NTP time tag. soundman receives
+OSC events sent as `OscBundle` with `fire_at` encoded as NTP time tag. audio-engine receives
 early (~100ms ahead), queues in `BinaryHeap<Reverse<Timed>>`, fires at the audio block
 containing `fire_at`. Error: ±5.8ms (one 256-sample block @ 44100Hz) vs previously 1–7ms late.
 

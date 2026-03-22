@@ -1,13 +1,13 @@
-# midiman
+# pattern-engine
 
 A [Tidal Cycles](https://tidalcycles.org)-inspired live coding kernel for MIDI and OSC. No audio synthesis — just precise, composable control signal patterns evaluated over rational time.
 
-The `midiman-frontend` Python package (sibling in this monorepo) sends pattern IR over a Unix socket; the Rust kernel compiles, schedules, and outputs events in real time.
+The `krach.patterns` Python module (in `krach/` sibling) sends pattern IR over a Unix socket; the Rust kernel compiles, schedules, and outputs events in real time.
 
 ## Architecture
 
 ```
-Python frontend ──JSON/IPC──▶ midiman kernel
+Python frontend ──JSON/IPC──▶ pattern-engine kernel
                                  │
                          ┌───────┴───────┐
                          ▼               ▼
@@ -31,7 +31,7 @@ Python frontend ──JSON/IPC──▶ midiman kernel
 ## Quick start
 
 ```bash
-cargo run                    # listens on /tmp/midiman.sock
+cargo run                    # listens on /tmp/krach.sock
 ```
 
 In another terminal:
@@ -39,10 +39,10 @@ In another terminal:
 ```bash
 # Play middle C
 echo '{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Atom","value":{"type":"Note","channel":0,"note":60,"velocity":100,"dur":0.5}}}' \
-  | socat - UNIX-CONNECT:/tmp/midiman.sock
+  | socat - UNIX-CONNECT:/tmp/krach.sock
 
 # Silence it
-echo '{"cmd":"Hush","slot":"d1"}' | socat - UNIX-CONNECT:/tmp/midiman.sock
+echo '{"cmd":"Hush","slot":"d1"}' | socat - UNIX-CONNECT:/tmp/krach.sock
 ```
 
 ## Pattern IR reference
@@ -292,9 +292,9 @@ Three kicks distributed across eight slots — the classic tresillo rhythm (x..x
 
 Hi-hat triplets layered with a Euclidean kick — 3-against-5 polyrhythm.
 
-### Driving soundman over OSC
+### Driving audio-engine over OSC
 
-With `soundman-core` (sibling in this monorepo) running on port 9000:
+With `audio-engine` (sibling in this monorepo) running on port 9000:
 
 ```bash
 MIDIMAN_OSC_TARGET=127.0.0.1:9000 cargo run
@@ -303,21 +303,21 @@ MIDIMAN_OSC_TARGET=127.0.0.1:9000 cargo run
 ```json
 {"cmd": "SetPattern", "slot": "d1", "pattern":
   {"op": "Cat", "children": [
-    {"op": "Atom", "value": {"type": "Osc", "address": "/soundman/set", "args": [{"Str": "pitch"}, {"Float": 261.63}]}},
-    {"op": "Atom", "value": {"type": "Osc", "address": "/soundman/set", "args": [{"Str": "pitch"}, {"Float": 329.63}]}},
-    {"op": "Atom", "value": {"type": "Osc", "address": "/soundman/set", "args": [{"Str": "pitch"}, {"Float": 392.0}]}},
-    {"op": "Atom", "value": {"type": "Osc", "address": "/soundman/set", "args": [{"Str": "pitch"}, {"Float": 493.88}]}}
+    {"op": "Atom", "value": {"type": "Osc", "address": "/audio/set", "args": [{"Str": "pitch"}, {"Float": 261.63}]}},
+    {"op": "Atom", "value": {"type": "Osc", "address": "/audio/set", "args": [{"Str": "pitch"}, {"Float": 329.63}]}},
+    {"op": "Atom", "value": {"type": "Osc", "address": "/audio/set", "args": [{"Str": "pitch"}, {"Float": 392.0}]}},
+    {"op": "Atom", "value": {"type": "Osc", "address": "/audio/set", "args": [{"Str": "pitch"}, {"Float": 493.88}]}}
   ]}
 }
 ```
 
-Sequences a C major 7th arpeggio through soundman's oscillator.
+Sequences a C major 7th arpeggio through audio-engine's oscillator.
 
 ## Configuration
 
 | Env var | Default | Description |
 |---------|---------|-------------|
-| `MIDIMAN_SOCKET` | `/tmp/midiman.sock` | IPC socket path |
+| `MIDIMAN_SOCKET` | `/tmp/krach.sock` | IPC socket path |
 | `MIDIMAN_OSC_TARGET` | `127.0.0.1:57120` | OSC destination |
 | `MIDIMAN_MIDI_CLOCK` | off | Set to `1` to emit 24 ppqn MIDI clock |
 

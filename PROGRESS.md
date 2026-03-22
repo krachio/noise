@@ -6,24 +6,22 @@ Live coding audio system — monorepo, Cargo workspace + Python (uv).
 
 ```
 noise/
-├── soundman-core/     Rust — audio engine (graph runtime, node reuse, crossfade, gain smoothing)
-├── soundman-faust/    Rust — FAUST LLVM JIT plugin (hot reload, recursive dir watcher)
-├── midiman/           Rust — pattern sequencer (min-heap, rational time, phase-reset, meter)
-├── noise-engine/      Rust — unified binary (midiman + soundman + faust, one socket)
-├── midiman-frontend/  Python — Pattern DSL + Graph IR + Session
+├── audio-engine/      Rust — audio engine (graph runtime, node reuse, crossfade, gain smoothing)
+├── audio-faust/       Rust — FAUST LLVM JIT plugin (hot reload, recursive dir watcher)
+├── pattern-engine/    Rust — pattern sequencer (min-heap, rational time, phase-reset, meter)
+├── krach-engine/      Rust — unified binary (pattern-engine + audio-engine + audio-faust, one socket)
 ├── faust-dsl/         Python — Python → Faust .dsp transpiler
-└── krach/             Python — live coding REPL (VoiceMixer, copilot, DSP design)
+└── krach/             Python — live coding REPL (VoiceMixer, patterns, copilot, DSP design)
 ```
 
 ### Test counts
-- soundman-core: 160 Rust tests
-- soundman-faust: 22 Rust tests
-- midiman: 141 Rust tests
-- noise-engine: 25 Rust tests
-- midiman-frontend: 146 Python tests
+- audio-engine: 160 Rust tests
+- audio-faust: 22 Rust tests
+- pattern-engine: 141 Rust tests
+- krach-engine: 25 Rust tests
 - faust-dsl: 68 Python tests
-- krach: 263 Python tests
-- **Total: 838 tests**, all green. Pyright strict clean.
+- krach: 409 Python tests (includes patterns module, formerly midiman-frontend)
+- **Total: 825 tests**, all green. Pyright strict clean.
 
 ## Usage
 
@@ -79,5 +77,4 @@ mix.mute("drums")
 
 ## Next
 
-- **Library restructure**: Merge midiman-frontend into krach, rename Rust crates
 - **Looper**: Record live input into buffer, play back as pattern-triggered voice

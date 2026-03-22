@@ -1,4 +1,4 @@
-# soundman-core
+# audio-engine
 
 ## Commands
 
@@ -14,4 +14,4 @@
 
 ## Architecture
 
-soundman-core is a library used by noise-engine (the unified binary). midiman (pattern sequencer) and soundman (audio engine) run in-process, communicating via channels. External control comes through a single Unix socket (JSON protocol).
+audio-engine is a library used by krach-engine (the unified binary). pattern-engine (pattern sequencer) and audio-engine run in-process, communicating via channels. External control comes through a single Unix socket (`/tmp/krach.sock`, JSON protocol).

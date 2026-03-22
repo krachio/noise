@@ -1,4 +1,4 @@
-# midiman - Project Instructions
+# pattern-engine - Project Instructions
 
 ## Commands
 

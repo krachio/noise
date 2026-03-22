@@ -1,4 +1,4 @@
-# soundman-faust
+# audio-faust
 
 ## Commands
 
@@ -15,4 +15,4 @@
 
 ## Architecture
 
-soundman-core is the graph wiring / audio rendering engine. soundman-faust is the primary DSP provider -- it compiles FAUST code via LLVM JIT and registers nodes through soundman-core's `NodeFactory`/`DspNode` traits. Both are linked into noise-engine (the unified binary). Control flow: `krach (Python) → noise-engine (Unix socket) → soundman-core → soundman-faust nodes (via registry)`
+audio-engine is the graph wiring / audio rendering engine. audio-faust is the primary DSP provider -- it compiles FAUST code via LLVM JIT and registers nodes through audio-engine's `NodeFactory`/`DspNode` traits. Both are linked into krach-engine (the unified binary). Control flow: `krach (Python) → krach-engine (Unix socket /tmp/krach.sock) → audio-engine → audio-faust nodes (via registry)`

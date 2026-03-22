@@ -2,7 +2,7 @@
 
 ## Current State
 
-838 tests (263 krach, 146 midiman-frontend, 68 faust-dsl, 361 Rust). Pyright strict clean.
+825 tests (409 krach, 68 faust-dsl, 348 Rust). Pyright strict clean.
 Single user object `mix` with voice handles, voice-free patterns, `/` path addressing,
 effect routing, native automation lanes (block-rate on audio thread), unified Voice model,
 phase-reset, meter, pattern retrieval, scenes, mix.load().
@@ -13,6 +13,7 @@ Engine logs to `~/.krach/engine.log`.
 - ✅ Stage 2: Automation lanes (AutoShape, GraphSwapper integration, IPC, Python mod/fade)
 - ✅ Stage 3: Scenes + music-as-code (save/recall, mix.load())
 - ✅ Stage 5.1: Mini-notation parser (`p("x . x . x . . x")`)
+- ✅ Stage 5.2: Library restructure (midiman-frontend merged into krach, Rust crates renamed)
 - ✅ Stage 5.3: Typed Control IR (Control(label, value) replaces Osc convention)
 - ✅ Stage 4.1: ADC input node (AdcNode + mix.input())
 - ✅ Stage 4.2: MIDI controller input (midi_map + CC→SetControl)
@@ -114,7 +115,7 @@ at 44100Hz/256 block, vs 64 pattern events over 4 bars (~8/sec currently). 20x i
 with zero IPC overhead.
 
 ### 2.1 AutoShape + Automation struct (Rust)
-**New file:** `soundman-core/src/automation.rs`
+**New file:** `audio-engine/src/automation.rs`
 ```rust
 pub enum AutoShape { Sine, Tri, Ramp, RampDown, Square, Exp, Pulse { duty: f32 }, Custom { table: Vec<f32> } }
 
@@ -154,10 +155,10 @@ impl AutoShape {
 }
 ```
 **Tests:** Unit tests for each shape at key t values (0, 0.25, 0.5, 0.75, 1.0).
-**Files:** `soundman-core/src/automation.rs`, `soundman-core/src/lib.rs` (pub mod)
+**Files:** `audio-engine/src/automation.rs`, `audio-engine/src/lib.rs` (pub mod)
 
 ### 2.2 Automation in GraphSwapper (Rust)
-**File:** `soundman-core/src/swap/mod.rs`
+**File:** `audio-engine/src/swap/mod.rs`
 Add `automations: Vec<Automation>` to `GraphSwapper`.
 In `process()`, after processing the graph, evaluate all active automations:
 ```rust
@@ -178,18 +179,18 @@ Command::ClearAutomation { id: String }
 The `id` is a unique key (e.g., `"bass/cutoff"`) so multiple automations on different
 params coexist, and re-sending replaces the existing one.
 **Tests:** `test_automation_modulates_gain`, `test_automation_one_shot_holds`, `test_automation_replaces`
-**Files:** `soundman-core/src/swap/mod.rs`, `soundman-core/src/swap/command.rs`
+**Files:** `audio-engine/src/swap/mod.rs`, `audio-engine/src/swap/command.rs`
 
 ### 2.3 SetAutomation IPC (Rust)
-**soundman-core protocol:** Add `ClientMessage::SetAutomation` and `ClearAutomation` variants.
-**noise-engine IPC:** Add `{"type": "set_automation", ...}` JSON handler that constructs the
+**audio-engine protocol:** Add `ClientMessage::SetAutomation` and `ClearAutomation` variants.
+**krach-engine IPC:** Add `{"type": "set_automation", ...}` JSON handler that constructs the
 `Automation` struct and sends it as a `Command` to the audio thread.
 **Serialization:** Shape as string (`"sine"`, `"tri"`, etc.), lo/hi/period as f32/f32/f64.
 For `Custom`: table as `Vec<f32>` (JSON array).
-**Files:** `soundman-core/src/protocol.rs`, `noise-engine/src/ipc.rs`, `noise-engine/src/main.rs`
+**Files:** `audio-engine/src/protocol.rs`, `krach-engine/src/ipc.rs`, `krach-engine/src/main.rs`
 
 ### 2.4 Python: SetAutomation in Session
-**midiman-frontend session.py:**
+**krach/src/krach/patterns/session.py:**
 ```python
 def set_automation(self, label: str, shape: str, lo: float, hi: float,
                    period_beats: float, one_shot: bool = False) -> None:
@@ -202,7 +203,7 @@ def set_automation(self, label: str, shape: str, lo: float, hi: float,
 def clear_automation(self, label: str) -> None:
     self._send_json({"type": "clear_automation", "id": label})
 ```
-**Files:** `midiman-frontend/session.py`
+**Files:** `krach/src/krach/patterns/session.py`
 
 ### 2.5 Python: VoiceMixer uses automation for mod/fade
 **krach/_mixer.py:**
@@ -297,7 +298,7 @@ with `mix` in the namespace.
 ## Stage 4: Live Audio + Hardware
 
 ### 4.1 ADC input node
-New `AdcNode` in soundman-core: reads from the system audio input buffer (CoreAudio).
+New `AdcNode` in audio-engine: reads from the system audio input buffer (CoreAudio).
 Needs: shared buffer between CoreAudio input callback and the DspNode. Use a lock-free
 ring buffer (same `rtrb` crate already in the project).
 ```rust
@@ -315,14 +316,14 @@ impl DspNode for AdcNode {
 }
 ```
 Python: `mix.input(channel=0)` returns a handle. Wire like any voice.
-**Files:** `soundman-core/src/nodes/adc.rs`, `soundman-core/src/output/cpal_backend.rs` (input stream)
+**Files:** `audio-engine/src/nodes/adc.rs`, `audio-engine/src/output/cpal_backend.rs` (input stream)
 
 ### 4.2 MIDI controller input
-MIDI input already partially exists (`midiman` has MIDI output). Add MIDI input:
+MIDI input already partially exists (`pattern-engine` has MIDI output). Add MIDI input:
 - Read MIDI CC messages from a port
 - Map CC → `/` path: `mix.midi_map(cc=74, path="bass/cutoff", lo=200, hi=4000)`
 - Map generates `SetControl` commands from CC values
-**Files:** `noise-engine/src/main.rs` (MIDI input polling), `krach/_mixer.py` (midi_map)
+**Files:** `krach-engine/src/main.rs` (MIDI input polling), `krach/_mixer.py` (midi_map)
 
 ### 4.3 Looper (future)
 Record live input into a buffer, play back as a pattern-triggered voice.
@@ -343,11 +344,11 @@ p("<C4 E4> G4")                 # <> = alternate each cycle
 Returns a `Pattern`. Pure Python, no engine changes.
 **Files:** New `krach/src/krach/_mininotation.py`, tests
 
-### 5.2 Library restructure
-- Move `midiman-frontend/src/midiman_frontend/` → `krach/src/krach/patterns/`
-- Update all imports
+### 5.2 Library restructure ✅
+- Moved `midiman-frontend/src/midiman_frontend/` → `krach/src/krach/patterns/`
+- Updated all imports
 - Single `pyproject.toml` for krach
-- Rename Rust crates (zero-functional-change PR)
+- Renamed Rust crates: soundman-core → audio-engine, soundman-faust → audio-faust, midiman → pattern-engine, noise-engine → krach-engine
 
 ### 5.3 Replace OSC wire format
 New `Control(label, value)` IR value type alongside `Note`, `Cc`, `Osc`.
@@ -390,7 +391,6 @@ Stage 5.3  Typed Control IR               (Rust + Python: new value type)
 After each stage:
 ```
 cd krach && uv run pyright && uv run pytest -x -q
-cd midiman-frontend && uv run pyright && uv run pytest -x -q
 cargo test --workspace
 ```
 

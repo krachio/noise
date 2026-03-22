@@ -4,13 +4,12 @@
 
 ```
 noise/
-├── soundman-core/      Rust — audio engine library (NodeFactory, DspNode, graph runtime)
-├── soundman-faust/     Rust — FAUST LLVM JIT plugin library for soundman-core
-├── midiman/            Rust lib — pattern sequencer (engine, IPC protocol, MIDI/OSC output)
-├── noise-engine/       Rust binary — unified process (midiman + soundman-core + soundman-faust)
-├── midiman-frontend/   Python 3.13 — pattern DSL + graph IR + unified Session
+├── audio-engine/       Rust — audio engine library (NodeFactory, DspNode, graph runtime)
+├── audio-faust/        Rust — FAUST LLVM JIT plugin library for audio-engine
+├── pattern-engine/     Rust lib — pattern sequencer (engine, IPC protocol, MIDI/OSC output)
+├── krach-engine/       Rust binary — unified process (pattern-engine + audio-engine + audio-faust)
 ├── faust-dsl/          Python 3.13 — Python → Faust .dsp transpiler
-└── krach/              Python 3.13 — live coding REPL (starts noise-engine, one socket)
+└── krach/              Python 3.13 — live coding REPL (starts krach-engine, patterns, one socket)
 ```
 
 ## Rust workspace

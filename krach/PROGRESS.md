@@ -2,7 +2,7 @@
 
 ## Current state
 
-Live coding REPL integrating midiman (patterns) + soundman (audio) + faust-dsl (synth design).
+Live coding REPL integrating pattern-engine (patterns) + audio-engine (audio) + faust-dsl (synth design).
 
 ### VoiceMixer (`mix`)
 - `mix.voice(name, source, gain, count)` — add voice, returns `VoiceHandle`. `count > 1` = poly.
@@ -40,4 +40,4 @@ Live coding REPL integrating midiman (patterns) + soundman (audio) + faust-dsl (
 - 263 krach tests (pyright strict, 0 errors)
 
 ## Next
-- Library restructure: merge midiman-frontend into krach
+- Looper: record live input into buffer, play back as pattern-triggered voice

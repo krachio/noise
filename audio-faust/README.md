@@ -1,6 +1,6 @@
-# soundman-faust
+# audio-faust
 
-FAUST LLVM JIT plugin for the `soundman-core` audio engine (sibling in this monorepo). Write DSP in [FAUST](https://faust.grame.fr), drop `.dsp` files in a directory, get live hot-reloading nodes in the audio graph.
+FAUST LLVM JIT plugin for the `audio-engine` (sibling in this monorepo). Write DSP in [FAUST](https://faust.grame.fr), drop `.dsp` files in a directory, get live hot-reloading nodes in the audio graph.
 
 ## Architecture
 
@@ -24,8 +24,8 @@ FAUST LLVM JIT plugin for the `soundman-core` audio engine (sibling in this mono
 |--------|------|
 | `ffi` | Raw FFI bindings to libfaust C API (`llvm-dsp-c.h`, `CInterface.h`) |
 | `dsp` | Safe `FaustDsp` wrapper — compile, parameter discovery via UIGlue, audio processing |
-| `factory` | `FaustFactory` implements soundman's `NodeFactory` — probes ports and controls |
-| `node` | `FaustNode` adapts `FaustDsp` to soundman's `DspNode` trait |
+| `factory` | `FaustFactory` implements audio-engine's `NodeFactory` — probes ports and controls |
+| `node` | `FaustNode` adapts `FaustDsp` to audio-engine's `DspNode` trait |
 | `loader` | Load `.dsp` files from disk, register entire directories |
 | `watcher` | `notify`-based file watcher, `apply_reload()` for register/reregister |
 | `hot_reload` | `HotReloadEngine` — wraps engine + watcher + graph for live reloading |
@@ -43,8 +43,8 @@ brew install faust  # macOS
 ### Programmatic usage
 
 ```rust
-use soundman::engine::{self, config::EngineConfig};
-use soundman_faust::hot_reload::HotReloadEngine;
+use audio_engine::engine::{self, config::EngineConfig};
+use audio_faust::hot_reload::HotReloadEngine;
 
 // Point at a directory of .dsp files
 let (mut engine, mut proc) = HotReloadEngine::new(
@@ -84,34 +84,34 @@ freq = hslider("freq", 440, 20, 20000, 1);
 process = os.osc(freq);
 ```
 
-FAUST parameters (`hslider`, `vslider`, `nentry`, `button`, `checkbox`) are automatically discovered and exposed as soundman controls.
+FAUST parameters (`hslider`, `vslider`, `nentry`, `button`, `checkbox`) are automatically discovered and exposed as audio-engine controls.
 
 ### Hot reload
 
 Edit any `.dsp` file while the engine is running. `poll_reload()` detects the change, recompiles the FAUST code, updates the registry, and crossfade-swaps to the new graph. No restart needed.
 
-## With soundman-core and midiman
+## With audio-engine and pattern-engine
 
-soundman-faust provides DSP nodes to `soundman-core`. `midiman` sequences control messages via OSC (both siblings in this monorepo).
+audio-faust provides DSP nodes to `audio-engine`. `pattern-engine` sequences control messages via OSC (both siblings in this monorepo).
 
 ```bash
-# Terminal 1: run soundman with FAUST nodes + hot reload
+# Terminal 1: run audio-engine with FAUST nodes + hot reload
 # (binary wiring is up to your application)
 
-# Terminal 2: run midiman
-cd ../midiman && MIDIMAN_OSC_TARGET=127.0.0.1:9000 cargo run
+# Terminal 2: run pattern-engine
+cd ../pattern-engine && MIDIMAN_OSC_TARGET=127.0.0.1:9000 cargo run
 
 # Terminal 3: sequence a FAUST node's parameters
 echo '{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Cat","children":[
-  {"op":"Atom","value":{"type":"Osc","address":"/soundman/set","args":[{"Str":"cutoff"},{"Float":500.0}]}},
-  {"op":"Atom","value":{"type":"Osc","address":"/soundman/set","args":[{"Str":"cutoff"},{"Float":2000.0}]}},
-  {"op":"Atom","value":{"type":"Osc","address":"/soundman/set","args":[{"Str":"cutoff"},{"Float":8000.0}]}}
-]}}' | socat - UNIX-CONNECT:/tmp/midiman.sock
+  {"op":"Atom","value":{"type":"Osc","address":"/audio/set","args":[{"Str":"cutoff"},{"Float":500.0}]}},
+  {"op":"Atom","value":{"type":"Osc","address":"/audio/set","args":[{"Str":"cutoff"},{"Float":2000.0}]}},
+  {"op":"Atom","value":{"type":"Osc","address":"/audio/set","args":[{"Str":"cutoff"},{"Float":8000.0}]}}
+]}}' | socat - UNIX-CONNECT:/tmp/krach.sock
 ```
 
 ## Graph IR
 
-Reference a FAUST node in soundman's JSON graph format:
+Reference a FAUST node in audio-engine's JSON graph format:
 
 ```json
 {
