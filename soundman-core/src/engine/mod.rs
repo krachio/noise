@@ -108,7 +108,7 @@ impl EngineController {
                 debug!("load_graph: {} nodes, {} connections", ir.nodes.len(), ir.connections.len());
                 self.exposed_controls = ir.exposed_controls.clone();
                 self.shadow_graph = ir;
-                self.recompile_and_send(false)?; // fresh — stale cache
+                self.recompile_and_send(true)?; // reuse — preserves DSP state for existing voices
                 debug!("graph compiled and queued for swap");
             }
             ClientMessage::AddNode { id, type_id, controls } => {
@@ -263,9 +263,10 @@ impl EngineController {
 
     /// Compile the shadow graph and send SwapGraph to the audio thread.
     ///
-    /// `reuse`: if true, reuse nodes from the cached retired graph (for
-    /// incremental mutations like AddNode/Connect). If false, compile all
-    /// fresh (for LoadGraph — stale cache causes phase artifacts).
+    /// `reuse`: if true, reuse nodes from the cached retired graph when
+    /// node ID, type, and registry version match. Preserves DSP state
+    /// (oscillator phase, filter memory, reverb tails) for existing voices.
+    /// If false, compile all nodes fresh.
     fn recompile_and_send(&mut self, reuse: bool) -> Result<(), CompileError> {
         // Drain retired graphs into cache (RT-safe deallocation + reuse).
         while let Ok(returned) = self.return_consumer.pop() {
