@@ -92,14 +92,14 @@ def test_build_step_skips_unknown_controls() -> None:
 
 
 def test_build_step_gate_only_voice() -> None:
-    pat = build_step("pad", ("gate",), pitch=440.0)
+    pat = build_step("pad", ("gate",))
     assert isinstance(pat.node, Freeze)
 
 
 def test_build_step_no_triggerable_controls_raises() -> None:
     import pytest
     with pytest.raises(ValueError, match="no triggerable controls"):
-        build_step("osc", ("waveform",), pitch=440.0)
+        build_step("osc", ("waveform",))
 
 
 # ── build_hit ─────────────────────────────────────────────────────────────────
@@ -567,3 +567,100 @@ def test_voice_over_poly_cleans_up_poly() -> None:
     assert "pad_v0" not in mixer._voices
     assert "pad_v1" not in mixer._voices
     assert "pad" in mixer._voices
+
+
+# ── Fix 2: STEP_SILENT_PITCH ─────────────────────────────────────────────────
+
+
+def test_build_step_raises_when_pitch_but_no_freq() -> None:
+    """build_step with pitch set but no 'freq' in controls must raise ValueError,
+    not silently ignore the pitch."""
+    import pytest
+
+    with pytest.raises(ValueError, match="no 'freq' control"):
+        build_step("pad", ("gate",), pitch=440.0)
+
+
+# ── Fix 4: SEQ_SHORTHAND ─────────────────────────────────────────────────────
+
+
+def test_seq_builds_cat_of_steps() -> None:
+    """seq() returns a Cat pattern with correct number of children."""
+    from unittest.mock import MagicMock
+
+    from midiman_frontend.ir import Cat
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    pat = mixer.seq("bass", 55, 73, 65)
+    assert isinstance(pat, Pattern)
+    assert isinstance(pat.node, Cat)
+    assert len(pat.node.children) == 3
+
+
+def test_seq_with_none_inserts_rest() -> None:
+    """None entries in seq() produce Silence nodes."""
+    from unittest.mock import MagicMock
+
+    from midiman_frontend.ir import Cat, Silence
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    pat = mixer.seq("bass", 55, None, 65)
+    assert isinstance(pat.node, Cat)
+    # The second child should be a Silence
+    assert isinstance(pat.node.children[1], Silence)
+
+
+def test_seq_raises_on_empty() -> None:
+    """seq() with no notes raises ValueError."""
+    from unittest.mock import MagicMock
+
+    import pytest
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    with pytest.raises(ValueError, match="at least one note"):
+        mixer.seq("bass")
+
+
+def test_seq_poly_uses_round_robin() -> None:
+    """seq() on a poly voice allocates instances via round-robin per note."""
+    from unittest.mock import MagicMock
+
+    from midiman_frontend.ir import Cat
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+
+    initial_alloc = mixer._poly_alloc["pad"]
+    pat = mixer.seq("pad", 220, 330, 440)
+    assert isinstance(pat.node, Cat)
+    assert len(pat.node.children) == 3
+    # Round-robin: 3 notes allocated across 2 voices.
+    # Each call advances the allocator; verify it moved forward.
+    assert mixer._poly_alloc["pad"] != initial_alloc

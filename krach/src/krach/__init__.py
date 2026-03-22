@@ -48,6 +48,12 @@ def main() -> None:
 
     def _cleanup() -> None:
         engine_proc.terminate()
+        try:
+            engine_proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            engine_proc.kill()
+            engine_proc.wait()
+        engine_sock.unlink(missing_ok=True)
 
     atexit.register(_cleanup)
 
@@ -87,8 +93,8 @@ def main() -> None:
             bpm=mm.tempo,
             playing=tuple(k for k, v in mm.slots.items() if v.playing),
             stopped=tuple(k for k, v in mm.slots.items() if not v.playing),
-            nodes=tuple(_cached_nodes),
-            node_controls=tuple(_node_controls.items()),
+            nodes=tuple(mix._node_controls.keys()),
+            node_controls=tuple(mix._node_controls.items()),
             in_scope=_user_ns_keys,
             active_voices=tuple(
                 (name, v.type_id, v.gain, v.controls) for name, v in mix.voices.items()
@@ -145,8 +151,7 @@ def main() -> None:
     else:
         raise RuntimeError("noise-engine not ready after 10s")
 
-    # Cache nodes so status() and c() don't block on an OSC round-trip.
-    _cached_nodes: list[str] = list(nodes)
+    # nodes list used for the banner only; status() reads live from mix._node_controls.
 
     print()
     print("  ██╗  ██╗██████╗  █████╗  ██████╗██╗  ██╗")

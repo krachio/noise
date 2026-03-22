@@ -21,6 +21,7 @@ from midiman_frontend.ir import OscFloat, OscStr
 from midiman_frontend.pattern import Pattern
 from midiman_frontend.pattern import freeze as _freeze
 from midiman_frontend.pattern import osc as _osc
+from midiman_frontend.pattern import rest as _rest
 
 
 @dataclass(frozen=True)
@@ -114,6 +115,9 @@ def build_step(
     at the first half, reset at the second half, leaving a gap before the
     next atom's onset for FAUST to detect the rising edge.
     """
+    if pitch is not None and "freq" not in controls:
+        raise ValueError(f"voice '{voice_name}' has no 'freq' control — pitch argument ignored")
+
     onset_atoms: list[Pattern] = []
 
     if pitch is not None and "freq" in controls:
@@ -364,6 +368,29 @@ class VoiceMixer:
         """
         inst = self._alloc_voice(name)
         return build_hit(inst, param)
+
+    def seq(self, name: str, *notes: float | None, **params: float) -> Pattern:
+        """Build a Cat of steps/rests from a sequence of pitches.
+
+        Each element is a float (pitch) or None (rest).
+        For poly voices, allocates instances via round-robin per note.
+
+        Usage::
+
+            mix.seq("bass", 55, 73, None, 65)
+        """
+        if not notes:
+            raise ValueError("seq requires at least one note")
+        atoms: list[Pattern] = []
+        for note in notes:
+            if note is None:
+                atoms.append(_rest())
+            else:
+                atoms.append(self.step(name, note, **params))
+        result = atoms[0]
+        for a in atoms[1:]:
+            result = result + a
+        return result
 
     def chord(self, name: str, *pitches: float, **params: float) -> Pattern:
         """Simultaneous notes on a poly voice — one pitch per instance.
