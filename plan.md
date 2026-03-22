@@ -2,10 +2,10 @@
 
 ## Current State
 
-825 tests (409 krach, 68 faust-dsl, 348 Rust). Pyright strict clean.
-Single user object `mix` with voice handles, voice-free patterns, `/` path addressing,
-effect routing, native automation lanes (block-rate on audio thread), unified Voice model,
-phase-reset, meter, pattern retrieval, scenes, mix.load().
+858 tests (442 krach, 68 faust-dsl, 348 Rust). Pyright strict clean.
+Two-symbol API: `kr` (VoiceMixer) + `krs` (krach.dsp). Voice handles, voice-free patterns,
+`/` path addressing, effect routing, native automation lanes (block-rate on audio thread),
+unified Voice model, phase-reset, meter, pattern retrieval, scenes, kr.load().
 Engine logs to `~/.krach/engine.log`.
 
 ### Completed

@@ -4,7 +4,7 @@
 //! - **Note On** (`0x90`): triggered by [`Value::Note`]
 //! - **Note Off** (`0x80`): scheduled by the dispatch loop after `dur` cycles
 //! - **CC** (`0xB0`): triggered by [`Value::Cc`]
-//! - **Clock** (`0xF8`/`0xFA`/`0xFC`): 24 ppqn sync, opt-in via `MIDIMAN_MIDI_CLOCK=1`
+//! - **Clock** (`0xF8`/`0xFA`/`0xFC`): 24 ppqn sync, enabled by caller
 //!
 //! Use [`MidiSink::connect_first`] to auto-connect to the first available port,
 //! or [`MidiSink::connect_by_name`] to target a specific device.

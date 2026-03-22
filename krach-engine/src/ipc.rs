@@ -251,7 +251,7 @@ mod tests {
     }
 
     #[test]
-    fn dispatch_routes_midiman_ping() {
+    fn dispatch_routes_pattern_engine_ping() {
         let (tx, _rx) = crossbeam_channel::unbounded();
         let types = Arc::new(RwLock::new(vec![]));
         let resp = dispatch(r#"{"cmd":"Ping"}"#, &tx, &types);
@@ -259,7 +259,7 @@ mod tests {
     }
 
     #[test]
-    fn dispatch_routes_soundman_ping() {
+    fn dispatch_routes_audio_engine_ping() {
         let (tx, _rx) = crossbeam_channel::unbounded();
         let types = Arc::new(RwLock::new(vec![]));
         let resp = dispatch(r#"{"type":"ping"}"#, &tx, &types);

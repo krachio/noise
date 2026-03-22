@@ -4,40 +4,41 @@
 
 Live coding REPL integrating pattern-engine (patterns) + audio-engine (audio) + faust-dsl (synth design).
 
-### VoiceMixer (`mix`)
-- `mix.voice(name, source, gain, count)` — add voice, returns `VoiceHandle`. `count > 1` = poly.
-- `mix.bus(name, source, gain)` — add effect bus, returns `BusHandle`
-- `mix.play(name, pattern)` / `mix.set(path, value)` / `mix.fade(path, target, bars)`
-- `mix.send(voice, bus, level)` / `mix.wire(voice, bus, port)` — effect routing
-- `mix.gain/mute/unmute/solo/unsolo/hush/stop` — live performance ops
-- `mix.mod(path, pattern, bars)` — convenience for modulation
-- `mix.tempo` / `mix.meter` — transport (no `mm` in namespace)
-- Voice handles: `kick = mix.voice(...)` then `kick.play(hit() * 4)`
+### Two-symbol API: `kr` + `krs`
+- `kr` = VoiceMixer instance (all live coding ops)
+- `krs` = `krach.dsp` module (synthesis primitives)
+- `krach.connect()` encapsulates startup
 
-### Free pattern functions
-- `note("C4")`, `hit()`, `seq("A2", "D3", None)` — bind to voice at play time
-- `mod_sine(lo, hi)`, `ramp(start, end)` — modulation as patterns
-- `/` path addressing: `mix.set("bass/cutoff", v)`, group ops: `mix.mute("drums")`
+### VoiceMixer (`kr`)
+- `kr.voice(name, source, gain, count)` — add voice, returns `VoiceHandle`. `count > 1` = poly.
+- `kr.bus(name, source, gain)` — add effect bus, returns `BusHandle`
+- `kr.play(name, pattern)` / `kr.set(path, value)` / `kr.fade(path, target, bars)`
+- `kr.send(voice, bus, level)` / `kr.wire(voice, bus, port)` — effect routing
+- `kr.gain/mute/unmute/solo/unsolo/hush/stop` — live performance ops
+- `kr.mod(path, pattern, bars)` — modulation
+- `kr.tempo` / `kr.meter` — transport
+- `kr.save("verse")` / `kr.recall("chorus")` — scene snapshot + restore
+- `kr.load("songs/verse.py")` — music-as-code
+- `kr.input("mic")` — ADC input node (live audio from CoreAudio)
+- `kr.midi_map(cc=74, path="bass/cutoff", lo=200, hi=4000)` — MIDI CC mapping
+- Voice handles: `kick = kr.voice(...)` then `kick.play(kr.hit() * 4)`
 
-### Pitch utilities
-- `mtof(note)` / `ftom(freq)` — MIDI↔Hz conversion
-- Note constants: `C0`–`B8` (C4=60, A4=69), sharps as `Cs4`, `Ds4`, etc.
+### Pattern builders (on `kr`)
+- `kr.note("C4")`, `kr.hit()`, `kr.seq("A2", "D3", None)` — bind to voice at play time
+- `kr.mod_sine(lo, hi)`, `kr.ramp(start, end)` — modulation as patterns
+- `kr.p("x . x . x . . x")` — mini-notation parser
+- `/` path addressing: `kr.set("bass/cutoff", v)`, group ops: `kr.mute("drums")`
 
-### Copilot (`c()`)
-- Claude generates `mix.voice()` + `mix.note()` code, not raw Graph builder
+### Pitch utilities (on `kr`)
+- `kr.mtof(note)` / `kr.ftom(freq)` — MIDI↔Hz conversion
+- `kr.parse_note("C#4")` — note name to MIDI number
+
+### Copilot (`kr.c()`)
+- Claude generates `kr.voice()` + `kr.note()` code
 - Session context includes active voices, their labels, and node controls
 
-### Additional features
-- `mix.save("verse")` / `mix.recall("chorus")` — scene snapshot + restore
-- `mix.load("songs/verse.py")` — music-as-code (exec Python files as scenes)
-- `p("x . x . x . . x")` — mini-notation parser
-- `mix.input("mic")` — ADC input node (live audio from CoreAudio)
-- `mix.midi_map(cc=74, path="bass/cutoff", lo=200, hi=4000)` — MIDI CC mapping
-- `seq()` accepts mixed pitches + `note()` objects
-- Voice handles: `kick = mix.voice(...)` then `kick.play(hit() * 4)`
-
 ## Stats
-- 263 krach tests (pyright strict, 0 errors)
+- 442 krach tests (pyright strict, 0 errors)
 
 ## Next
 - Looper: record live input into buffer, play back as pattern-triggered voice

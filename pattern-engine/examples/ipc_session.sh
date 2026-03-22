@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# Example IPC session for midiman.
+# Example IPC session for pattern-engine.
 #
 # Prerequisites:
-#   1. Start midiman in another terminal: cargo run
+#   1. Start krach-engine in another terminal: cargo run
 #   2. Ensure socat is installed (brew install socat / apt install socat)
 #
 # Usage: ./examples/ipc_session.sh [socket_path]
 #
-# Default socket path: /tmp/midiman.sock
+# Default socket path: /tmp/krach.sock
 
 set -euo pipefail
 
-SOCK="${1:-/tmp/midiman.sock}"
+SOCK="${1:-/tmp/krach.sock}"
 
 if ! command -v socat &>/dev/null; then
     echo "Error: socat is required. Install with: brew install socat (macOS) or apt install socat (Linux)"
@@ -28,7 +28,7 @@ send() {
     echo
 }
 
-echo "=== midiman IPC session ==="
+echo "=== pattern-engine IPC session ==="
 echo "Socket: $SOCK"
 echo
 

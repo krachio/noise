@@ -1,6 +1,6 @@
 """VoiceMixer — named voices with stable control labels.
 
-Manages FAUST DSP voices, per-voice gain, and the underlying soundman graph.
+Manages FAUST DSP voices, per-voice gain, and the underlying audio graph.
 Control labels follow a deterministic convention: ``{voice_name}/{param}``.
 Adding or removing a voice rebuilds the graph; gain updates are instant.
 """
@@ -88,7 +88,7 @@ def dsp(fn: Callable[..., Any]) -> DspDef:
             gate = control("gate", 0.0, 0.0, 1.0)
             return lowpass(saw(freq), 800.0) * adsr(...) * 0.55
 
-        mix.voice("bass", acid_bass, gain=0.3)
+        kr.voice("bass", acid_bass, gain=0.3)
     """
     source = textwrap.dedent(inspect.getsource(fn))
     result = _transpile(fn)  # type: ignore[arg-type]
@@ -172,7 +172,7 @@ def build_graph_ir(
     sends: dict[tuple[str, str], float] | None = None,
     wires: dict[tuple[str, str], str] | None = None,
 ) -> GraphIr:
-    """Build a complete soundman graph IR from voices, buses, sends, and wires.
+    """Build a complete audio graph IR from voices, buses, sends, and wires.
 
     Each voice gets: DSP node → gain node → DAC.
     Poly voices (count>1) expand to N instances internally.
@@ -620,7 +620,7 @@ class VoiceMixer:
     """Manages named audio voices with stable control labels.
 
     Each voice is a FAUST DSP node (string type_id or Python function) with
-    an independent gain stage.  Adding/removing voices rebuilds the soundman
+    an independent gain stage.  Adding/removing voices rebuilds the audio
     graph transparently.  ``gain()`` updates are instant (no rebuild).
 
     Pattern builders and pitch utilities are exposed as static methods so

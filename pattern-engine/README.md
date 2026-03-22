@@ -317,9 +317,9 @@ Sequences a C major 7th arpeggio through audio-engine's oscillator.
 
 | Env var | Default | Description |
 |---------|---------|-------------|
-| `MIDIMAN_SOCKET` | `/tmp/krach.sock` | IPC socket path |
-| `MIDIMAN_OSC_TARGET` | `127.0.0.1:57120` | OSC destination |
-| `MIDIMAN_MIDI_CLOCK` | off | Set to `1` to emit 24 ppqn MIDI clock |
+| `PATTERN_ENGINE_SOCKET` | `/tmp/krach.sock` | IPC socket path |
+| `PATTERN_ENGINE_OSC_TARGET` | `127.0.0.1:57120` | OSC destination |
+| `PATTERN_ENGINE_MIDI_CLOCK` | off | Set to `1` to emit 24 ppqn MIDI clock |
 
 MIDI output connects to the first available port automatically.
 

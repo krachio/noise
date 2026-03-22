@@ -4,7 +4,7 @@
 //! Each `OscArg::Float` maps to `OscType::Double`, `OscArg::Int` to `OscType::Int`,
 //! and `OscArg::Str` to `OscType::String`.
 //!
-//! Target address is configured via `MIDIMAN_OSC_TARGET` (default `127.0.0.1:57120`).
+//! Target address defaults to `127.0.0.1:57120`.
 //! Note and CC values are ignored by this sink — they go to MIDI instead.
 
 use std::net::UdpSocket;

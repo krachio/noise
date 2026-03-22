@@ -23,7 +23,7 @@ from krach.patterns.pattern import Pattern
 
 
 class KernelError(Exception):
-    """Raised when the midiman kernel returns an error response."""
+    """Raised when the pattern engine returns an error response."""
 
 
 @dataclass(frozen=True)
@@ -164,7 +164,7 @@ class Session:
         except socket.timeout:
             raise ConnectionError("engine not responding (socket timeout)")
 
-    # ── Graph commands (soundman-style, via unified binary) ──────────────
+    # ── Graph commands (audio engine, via unified binary) ────────────────
 
     def _send_json(self, obj: dict[str, Any]) -> dict[str, Any]:
         """Send raw JSON to the unified binary and return the parsed response."""
