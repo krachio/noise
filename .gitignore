@@ -17,3 +17,7 @@ dist/
 
 # OS
 .DS_Store
+krach/.claude/ralph-loop.local.md
+.claude/ralph-loop.local.md
+.ralph-review/
+*.swp

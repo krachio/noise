@@ -375,6 +375,11 @@ def seq(*notes: str | int | float | None, vel: float = 1.0, **params: float) -> 
         raise ValueError("seq requires at least one note")
     atoms: list[Pattern] = []
     for n in notes:
+        if isinstance(n, Pattern):
+            raise TypeError(
+                "seq() takes pitch values (str/int/float/None), not Pattern objects. "
+                "Use seq('A2', 'D3', None, 'E2') not seq(note('A2'), ...)"
+            )
         if n is None:
             atoms.append(_rest())
         else:

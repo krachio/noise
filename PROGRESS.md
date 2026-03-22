@@ -2,20 +2,28 @@
 
 ## Current state
 
-Live coding audio system — monorepo at `krachio/noise`, Cargo workspace.
+Live coding audio system — monorepo, Cargo workspace + Python (uv).
 
-- **soundman-core** (Rust): Audio engine — graph runtime with node reuse + return channel, gain smoothing, fan-in with NaN isolation, output clamping, registry versioning, pre-computed connection map, live control tracking, crossfade trigger forwarding, RT-safe crossfade-during-crossfade, SmallVec hot-path refs, fresh-only control restore — 121 tests.
-- **soundman-faust** (Rust): FAUST LLVM JIT plugin — hot reload of `.dsp` files — 14 tests.
-- **midiman** (Rust lib): Pattern sequencer — Freeze compound atoms, single-loop engine with min-heap, slot index (no string clone on hot path), SetBpm no-op guard, BPM NaN/Inf validation — 122 tests.
-- **noise-engine** (Rust binary): Unified binary — merges midiman + soundman-core + soundman-faust. Single process, direct event dispatch (no OSC), BPM-relative crossfade (1/2 beat), dual-protocol IPC (pattern + graph commands on one Unix socket), note-dur panic guard — 24 tests.
-- **midiman-frontend** (Python 3.13): Pattern DSL + Graph IR + unified Session. Pattern.fast() (was scale), over()/fast() inf/nan guards — 133 tests.
-- **faust-dsl** (Python 3.13): Python → Faust transpiler — 68 tests.
-- **krach** (Python 3.13): Live coding REPL — VoiceMixer with @dsp, note(), hit(), seq(), poly(), batch(), fade(), mute/unmute/solo, mix.play(), mtof/ftom, note constants (C0-B8), copilot — 112 tests.
+```
+noise/
+├── soundman-core/     Rust — audio engine (graph runtime, node reuse, crossfade, gain smoothing)
+├── soundman-faust/    Rust — FAUST LLVM JIT plugin (hot reload, recursive dir watcher)
+├── midiman/           Rust — pattern sequencer (min-heap, rational time, phase-reset, meter)
+├── noise-engine/      Rust — unified binary (midiman + soundman + faust, one socket)
+├── midiman-frontend/  Python — Pattern DSL + Graph IR + Session
+├── faust-dsl/         Python — Python → Faust .dsp transpiler
+└── krach/             Python — live coding REPL (VoiceMixer, copilot, DSP design)
+```
 
-### Removed
-
-- **soundman** (Rust binary): Replaced by noise-engine. OSC control input eliminated.
-- **soundman-frontend** (Python): OSC client. Graph/Session merged into midiman-frontend.
+### Test counts
+- soundman-core: 122 Rust tests
+- soundman-faust: 14 Rust tests
+- midiman: 129 Rust tests
+- noise-engine: 24 Rust tests
+- midiman-frontend: 139 Python tests
+- faust-dsl: 68 Python tests
+- krach: 218 Python tests
+- **Total: ~714 tests**, all green. Pyright strict clean.
 
 ## Usage
 
@@ -28,37 +36,45 @@ Live coding audio system — monorepo at `krachio/noise`, Cargo workspace.
 def acid_bass() -> Signal:
     freq = control("freq", 55.0, 20.0, 800.0)
     gate = control("gate", 0.0, 0.0, 1.0)
-    return lowpass(saw(freq), 800.0) * adsr(0.005, 0.15, 0.3, 0.08, gate) * 0.55
+    cutoff = control("cutoff", 800.0, 100.0, 4000.0)
+    env = adsr(0.005, 0.15, 0.3, 0.08, gate)
+    return lowpass(saw(freq), cutoff) * env * 0.55
 
-with mix.batch():
-    mix.voice("kick", kick_fn, gain=0.8)
-    mix.voice("bass", acid_bass, gain=0.3)
+# Voice handles — zero name repetition
+bass = mix.voice("bass", acid_bass, gain=0.3)
+kick = mix.voice("drums/kick", kick_fn, gain=0.8)
+verb = mix.bus("verb", reverb_fn, gain=0.3)
 
-mix.play("kick", mix.hit("kick", "gate") * 4)
-mix.play("bass", mix.seq("bass", mtof(A2), mtof(D3), None, mtof(E2)).over(2))
-mix.fade("bass", target=0.15, bars=8)
+bass.play(seq("A2", "D3", None, "E2").over(2))
+kick.play(hit() * 4)
+bass.send(verb, 0.4)
+bass.play("cutoff", mod_sine(400, 2000).over(4))
+
+mix.tempo = 128
+mix.meter = 4
+mix.fade("bass/gain", 0.0, bars=4)
+mix.mute("drums")
 ```
 
-## Recent fixes
+## Key features
 
-- **Ergonomics pass**: Unified note() API (replaces step/chord), mtof/ftom + note constants, scale()→fast(), mix.play() delegation.
-- **Live performance**: mute()/unmute()/solo(), socket timeout, fade cancel, batch rollback on exception.
-- **Polyphonic voices**: poly(), round-robin allocator in VoiceMixer.
-- **RT-safe crossfade-during-crossfade**: begin_swap() during active crossfade moves old retiring graph to retired_ready instead of dropping on audio thread.
-- **BPM validation**: NaN, Inf, zero, negative BPM all guarded in midiman + noise-engine.
-
-## In progress
-
-- **Unified Voice model**: Merge Voice + PolyVoice → single `Voice(count=N)`. Eliminate 22 poly/mono branch points.
-- **Absorb Session into VoiceMixer**: `mix.tempo`, `mix.meter`, remove `mm` from user namespace.
-- **Voice handles**: `kick = mix.voice("kick", kick_fn)` returns proxy — `kick.play(hit() * 4)`.
-- **Phase-reset**: Rust `SetPatternFromZero` so fades/mods start from beat 1.
+- **Voice-free patterns**: `note("C4")`, `hit()`, `seq("A2", "D3")` — bind to voice at play time
+- **`/` path addressing**: `mix.set("bass/cutoff", 1200)`, `mix.fade("verb/room", 0.8, bars=8)`
+- **Voice handles**: `bass = mix.voice(...)` returns proxy — `bass.play()`, `bass.set()`, `bass.mute()`
+- **Effect routing**: `mix.bus()`, `mix.send()`, `mix.wire()` — shared reverb, sidechain, multi-input
+- **Modulation as patterns**: `mod_sine(lo, hi).over(bars)` — compose with pattern algebra
+- **Group operations**: `mix.mute("drums")` — prefix matching for `/`-grouped voices
+- **Phase-reset**: fades/mods start from beat 1 via `SetPatternFromZero`
+- **Meter**: `mix.meter = 3` for waltz, 7 for 7/8
+- **Pattern retrieval**: `mix.pattern("kick")` returns unbound pattern for modification
+- **Unified Voice model**: `Voice(count=N)` — no separate poly concept
+- **One user object**: `mix` handles everything (tempo, play, set, fade, mod, mute, solo)
 
 ## Next
 
-- **Pattern JIT** (same compilation model as DSP): Pattern IR → native automation node on audio thread. Pre-built shapes (hit, ramp, sine) ship compiled. Complex patterns JIT at play() time. Zero IPC for steady-state modulation.
-- **Scenes**: `mix.save("verse")` / `mix.recall("chorus", bars=4)` — snapshot all patterns + controls + routing.
-- **Music as Python repos**: Each song = a Python module. Load/hot-swap scenes by importing. Version control with git.
-- **Live audio input**: `mix.input(channel=0)` — mic/instruments as graph source nodes.
-- **Library restructure**: Merge midiman-frontend into krach. Single package.
-- Rename crates: soundman-core → audio-engine, midiman → pattern-engine
+- **Pattern JIT**: Compile pattern IR to native automation nodes on audio thread. Same model as `@dsp` → FAUST. Zero IPC for steady-state modulation.
+- **Scenes**: `mix.save("verse")` / `mix.recall("chorus", bars=4)` — snapshot + crossfade
+- **Music as Python repos**: Songs as importable modules, git-versioned
+- **Live audio input**: `mix.input(channel=0)` — mic/instruments in the graph
+- **Mini-notation**: `p("x . x . x . . x")` shorthand
+- **Library restructure**: Merge midiman-frontend into krach, rename Rust crates
