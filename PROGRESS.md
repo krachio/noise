@@ -47,11 +47,18 @@ mix.fade("bass", target=0.15, bars=8)
 - **RT-safe crossfade-during-crossfade**: begin_swap() during active crossfade moves old retiring graph to retired_ready instead of dropping on audio thread.
 - **BPM validation**: NaN, Inf, zero, negative BPM all guarded in midiman + noise-engine.
 
+## In progress
+
+- **Unified Voice model**: Merge Voice + PolyVoice → single `Voice(count=N)`. Eliminate 22 poly/mono branch points.
+- **Absorb Session into VoiceMixer**: `mix.tempo`, `mix.meter`, remove `mm` from user namespace.
+- **Voice handles**: `kick = mix.voice("kick", kick_fn)` returns proxy — `kick.play(hit() * 4)`.
+- **Phase-reset**: Rust `SetPatternFromZero` so fades/mods start from beat 1.
+
 ## Next
 
-- **Control IR node**: Replace Osc("/soundman/set", ...) with typed Control(label, value) IR node — eliminates string parsing on hot path, makes intent explicit
-- **Voice-scoped API**: Reduce name repetition — `bass = mix.v("bass"); bass.play(bass.note(mtof(A2)))` or auto-infer slot from pattern
-- Follow-up PR: rename soundman-core → audio-engine, soundman-faust → audio-faust, midiman → pattern-engine, midiman-frontend → noise-client
-- Effects routing: mix.bus() / mix.send() for reverb/delay
-- Mini-notation parser: p("bd sd ~ bd") shorthand
-- Scenes: mm.scene() for pattern snapshot switching
+- **Pattern JIT** (same compilation model as DSP): Pattern IR → native automation node on audio thread. Pre-built shapes (hit, ramp, sine) ship compiled. Complex patterns JIT at play() time. Zero IPC for steady-state modulation.
+- **Scenes**: `mix.save("verse")` / `mix.recall("chorus", bars=4)` — snapshot all patterns + controls + routing.
+- **Music as Python repos**: Each song = a Python module. Load/hot-swap scenes by importing. Version control with git.
+- **Live audio input**: `mix.input(channel=0)` — mic/instruments as graph source nodes.
+- **Library restructure**: Merge midiman-frontend into krach. Single package.
+- Rename crates: soundman-core → audio-engine, midiman → pattern-engine

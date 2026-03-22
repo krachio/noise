@@ -39,8 +39,8 @@ def test_build_context_contains_dsl_reference() -> None:
     ctx = build_context(make_state())
     # context.md content must be present
     assert "mix.voice(" in ctx
-    assert "mix.hit(" in ctx
-    assert "mix.note(" in ctx
+    assert "hit(" in ctx
+    assert "note(" in ctx
 
 
 def test_build_context_includes_node_controls() -> None:

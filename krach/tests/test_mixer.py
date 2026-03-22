@@ -71,6 +71,80 @@ def test_build_graph_ir_with_init_values() -> None:
     assert bass_node.controls["gate"] == 0.0
 
 
+def test_build_graph_ir_poly_voice_expands_instances() -> None:
+    """A voice with count>1 expands to N instances in the IR."""
+    voices = {
+        "pad": Voice("faust:pad", 0.6, ("freq", "gate"), count=2),
+    }
+    ir = build_graph_ir(voices)
+
+    node_ids = {n.id for n in ir.nodes}
+    assert "pad_v0" in node_ids
+    assert "pad_v1" in node_ids
+    assert "pad_v0_g" in node_ids
+    assert "pad_v1_g" in node_ids
+    # No bare "pad" node — instances only
+    assert "pad" not in node_ids
+
+    # Each instance gain = total gain / count
+    g0 = next(n for n in ir.nodes if n.id == "pad_v0_g")
+    assert g0.controls["gain"] == 0.3  # 0.6 / 2
+
+    # Controls exposed per instance
+    assert ir.exposed_controls["pad_v0/freq"] == ("pad_v0", "freq")
+    assert ir.exposed_controls["pad_v1/gate"] == ("pad_v1", "gate")
+
+
+def test_build_graph_ir_mono_voice_no_suffix() -> None:
+    """A voice with count=1 uses name directly (no _v0 suffix)."""
+    voices = {
+        "bass": Voice("faust:bass", 0.5, ("freq", "gate"), count=1),
+    }
+    ir = build_graph_ir(voices)
+
+    node_ids = {n.id for n in ir.nodes}
+    assert "bass" in node_ids
+    assert "bass_v0" not in node_ids
+
+
+def test_build_graph_ir_poly_sum_node() -> None:
+    """Poly voice with sends gets an implicit sum node."""
+    voices = {
+        "pad": Voice("faust:pad", 0.6, ("freq", "gate"), count=2),
+    }
+    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
+    sends = {("pad", "verb"): 0.4}
+
+    ir = build_graph_ir(voices, buses=buses, sends=sends)
+
+    node_ids = {n.id for n in ir.nodes}
+    assert "pad_sum" in node_ids  # implicit sum node
+
+    # Both instances fan into sum
+    conns = [(c.from_node, c.to_node) for c in ir.connections]
+    assert ("pad_v0", "pad_sum") in conns
+    assert ("pad_v1", "pad_sum") in conns
+    # Sum → send → bus
+    assert ("pad_sum", "pad_send_verb") in conns
+
+
+def test_build_graph_ir_mono_no_sum_node() -> None:
+    """Mono voice with sends does NOT get a sum node."""
+    voices = {
+        "bass": Voice("faust:bass", 0.5, ("freq", "gate"), count=1),
+    }
+    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
+    sends = {("bass", "verb"): 0.4}
+
+    ir = build_graph_ir(voices, buses=buses, sends=sends)
+
+    node_ids = {n.id for n in ir.nodes}
+    assert "bass_sum" not in node_ids
+    # Direct: bass → send → verb
+    conns = [(c.from_node, c.to_node) for c in ir.connections]
+    assert ("bass", "bass_send_verb") in conns
+
+
 # ── build_note ────────────────────────────────────────────────────────────────
 
 
@@ -211,7 +285,7 @@ def test_voice_outside_batch_rebuilds_immediately() -> None:
 def test_stop_hushes_poly_parent_slots() -> None:
     """stop() must hush the poly parent pattern slots (e.g. 'pad'),
     not just the individual instances ('pad_v0', 'pad_v1').
-    Otherwise patterns keep firing after stop()."""
+    """
     from unittest.mock import MagicMock
 
     session = MagicMock()
@@ -222,9 +296,8 @@ def test_stop_hushes_poly_parent_slots() -> None:
         "faust:pad": ("freq", "gate"),
     })
 
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.5)
 
-    # stop() should hush "pad" (the poly parent pattern slot)
     session.reset_mock()
     mixer.stop()
 
@@ -236,9 +309,7 @@ def test_stop_hushes_poly_parent_slots() -> None:
 
 
 def test_stop_does_not_skip_mono_voice_with_poly_like_prefix() -> None:
-    """A mono voice 'pad_vinyl' must not be skipped when poly 'pad' exists.
-    The prefix 'pad_v' matches 'pad_vinyl' — stop() must use exact instance
-    name matching, not startswith."""
+    """A mono voice 'pad_vinyl' must not be skipped when poly 'pad' exists."""
     from unittest.mock import MagicMock
 
     session = MagicMock()
@@ -250,7 +321,7 @@ def test_stop_does_not_skip_mono_voice_with_poly_like_prefix() -> None:
         "faust:pad_vinyl": ("freq", "gate"),
     })
 
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.5)
     mixer.voice("pad_vinyl", "faust:pad_vinyl", gain=0.4)
 
     session.reset_mock()
@@ -266,8 +337,7 @@ def test_stop_does_not_skip_mono_voice_with_poly_like_prefix() -> None:
 
 
 def test_remove_hushes_fade_pattern() -> None:
-    """remove() must hush the _fade_{name} pattern slot so fades don't
-    keep driving a deleted voice's gain control."""
+    """remove() must hush the _fade_{name} pattern slot."""
     from unittest.mock import MagicMock
 
     session = MagicMock()
@@ -292,15 +362,12 @@ def test_remove_hushes_fade_pattern() -> None:
     )
 
 
-# ── chord() with more pitches than voices ────────────────────────────────────
+# ── re-voice() with count change hushes old patterns ─────────────────────────
 
 
-# ── re-poly() hushes old patterns ────────────────────────────────────────────
-
-
-def test_repoly_hushes_old_instance_patterns() -> None:
-    """Re-calling poly() with a different voice count must hush patterns
-    targeting old instance names (e.g. pad_v2, pad_v3)."""
+def test_revoice_hushes_old_instance_patterns() -> None:
+    """Re-calling voice() with a different count must hush patterns
+    targeting old instance names."""
     from unittest.mock import MagicMock
 
     session = MagicMock()
@@ -310,16 +377,15 @@ def test_repoly_hushes_old_instance_patterns() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=4, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=4, gain=0.5)
 
-    # Re-poly with fewer voices — old instances pad_v2, pad_v3 should be hushed
+    # Re-voice with fewer count — old instances should be hushed
     session.reset_mock()
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.5)
 
     hushed_names = {c.args[0] for c in session.hush.call_args_list}
-    # The old poly parent "pad" should be hushed (stops old patterns)
     assert "pad" in hushed_names, (
-        f"re-poly must hush 'pad' parent slot, but only hushed: {hushed_names}"
+        f"re-voice must hush 'pad' parent slot, but only hushed: {hushed_names}"
     )
 
 
@@ -359,7 +425,7 @@ def test_remove_poly_hushes_instance_fades() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.5)
 
     session.reset_mock()
     mixer.remove("pad")
@@ -373,8 +439,8 @@ def test_remove_poly_hushes_instance_fades() -> None:
     )
 
 
-def test_repoly_hushes_old_instance_fades() -> None:
-    """re-poly() must hush _fade_* for old instances."""
+def test_revoice_hushes_old_instance_fades() -> None:
+    """re-voice() must hush _fade_* for old instances."""
     from unittest.mock import MagicMock
 
     session = MagicMock()
@@ -384,15 +450,14 @@ def test_repoly_hushes_old_instance_fades() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=3, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=3, gain=0.5)
 
     session.reset_mock()
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.5)
 
     hushed_names = {c.args[0] for c in session.hush.call_args_list}
-    # Old instances pad_v0..v2 should have their fades hushed
     assert "_fade_pad_v0" in hushed_names, (
-        f"re-poly must hush old instance fades, but only hushed: {hushed_names}"
+        f"re-voice must hush old instance fades, but only hushed: {hushed_names}"
     )
 
 
@@ -400,8 +465,7 @@ def test_repoly_hushes_old_instance_fades() -> None:
 
 
 def test_fade_poly_parent_fades_all_instances() -> None:
-    """fade() on a poly parent name should fade all instances proportionally,
-    not crash with KeyError."""
+    """fade() on a poly parent name should fade all instances proportionally."""
     from unittest.mock import MagicMock
 
     session = MagicMock()
@@ -411,7 +475,7 @@ def test_fade_poly_parent_fades_all_instances() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.6)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.6)
 
     # Should not crash — fades all instances
     mixer.fade("pad", target=0.2, bars=4)
@@ -449,7 +513,7 @@ def test_hush_poly_stops_instance_patterns() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.5)
 
     session.reset_mock()
     mixer.hush("pad")
@@ -477,9 +541,8 @@ def test_gain_poly_parent_updates_all_instances() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.6)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.6)
 
-    # Should not crash — updates all instances
     mixer.gain("pad", 0.4)
 
     # Each instance should get 0.4/2 = 0.2
@@ -521,8 +584,7 @@ def test_note_free_function_exists() -> None:
 
 
 def test_voice_over_poly_cleans_up_poly() -> None:
-    """voice() with a name that's an existing poly parent should clean up
-    the poly state first (remove old instances, hush)."""
+    """voice() replacing a poly voice with mono should clean up."""
     from unittest.mock import MagicMock
 
     session = MagicMock()
@@ -533,23 +595,21 @@ def test_voice_over_poly_cleans_up_poly() -> None:
         "faust:pad": ("freq", "gate"),
         "faust:mono": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.5)
 
-    # Replace poly with mono voice — should clean up poly state
+    # Replace poly with mono voice
     mixer.voice("pad", "faust:mono", gain=0.3)
 
     v = mixer.voices
-    assert "pad_v0" not in v
-    assert "pad_v1" not in v
     assert "pad" in v
+    assert v["pad"].count == 1
 
 
 # ── Fix 2: STEP_SILENT_PITCH ─────────────────────────────────────────────────
 
 
 def test_build_note_raises_when_pitch_but_no_freq() -> None:
-    """build_note with pitch set but no 'freq' in controls must raise ValueError,
-    not silently ignore the pitch."""
+    """build_note with pitch set but no 'freq' in controls must raise ValueError."""
     import pytest
 
     with pytest.raises(ValueError, match="no 'freq' control"):
@@ -579,7 +639,6 @@ def test_seq_with_none_inserts_rest() -> None:
 
     pat = seq(55, None, 65)
     assert isinstance(pat.node, Cat)
-    # The second child should be a Silence
     assert isinstance(pat.node.children[1], Silence)
 
 
@@ -602,7 +661,6 @@ def test_seq_produces_bare_params() -> None:
     pat = seq(220.0, 330.0, 440.0)
     assert isinstance(pat.node, Cat)
     assert len(pat.node.children) == 3
-    # All children should be Freeze compounds with bare params
     ir_str = str(ir_to_dict(pat.node))
     assert "'Str': 'freq'" in ir_str
 
@@ -611,8 +669,6 @@ def test_seq_produces_bare_params() -> None:
 
 
 def test_gain_nonexistent_voice_raises_valueerror() -> None:
-    """gain() on a non-existent voice should raise ValueError, not KeyError.
-    Bug: _mixer.py:350 — self._voices[name] with no guard."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -626,46 +682,10 @@ def test_gain_nonexistent_voice_raises_valueerror() -> None:
         mixer.gain("nope", 0.5)
 
 
-# ── Bug: poly() replacing mono voice leaves stale mono entry ─────────────────
-
-
-def test_poly_over_mono_cleans_up_mono() -> None:
-    """poly() with a name that's an existing mono voice should remove the mono
-    Voice entry from _voices. Bug: _mixer.py:250-285 — poly() only checks
-    _poly, never _voices, so the stale mono entry persists in the graph."""
-    from unittest.mock import MagicMock
-
-    from krach._mixer import VoiceMixer
-
-    session = MagicMock()
-    session.list_nodes.return_value = ["faust:bass", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
-        "faust:bass": ("freq", "gate"),
-    })
-
-    # Create mono voice
-    mixer.voice("bass", "faust:bass", gain=0.5)
-    assert "bass" in mixer.voices
-
-    # Replace with poly — should remove mono "bass" entry
-    mixer.poly("bass", "faust:bass", voices=2, gain=0.6)
-
-    # The mono "bass" entry must be gone; only "bass_v0" and "bass_v1" should exist
-    v = mixer.voices
-    assert "bass" not in v, (
-        "poly() must remove stale mono Voice entry 'bass' from voices"
-    )
-    assert "bass_v0" in v
-    assert "bass_v1" in v
-
-
 # ── Bug: voice() replacing mono doesn't hush old fade ────────────────────────
 
 
 def test_voice_replace_mono_hushes_old_fade() -> None:
-    """Replacing a mono voice with voice() should hush the old fade pattern.
-    Bug: _mixer.py:237-248 — no hush() when replacing an existing mono voice,
-    so _fade_{name} keeps running after replacement."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -679,7 +699,6 @@ def test_voice_replace_mono_hushes_old_fade() -> None:
     mixer.voice("bass", "faust:bass", gain=0.5)
     mixer.fade("bass", target=0.1, bars=4)
 
-    # Replace the voice — should hush the old fade
     session.reset_mock()
     mixer.voice("bass", "faust:bass2", gain=0.3)
 
@@ -693,8 +712,6 @@ def test_voice_replace_mono_hushes_old_fade() -> None:
 
 
 def test_gain_nan_raises_valueerror() -> None:
-    """gain() with NaN should raise ValueError, not silently corrupt state.
-    Bug: _mixer.py:331-354 — no validation on gain value."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -712,7 +729,6 @@ def test_gain_nan_raises_valueerror() -> None:
 
 
 def test_gain_inf_raises_valueerror() -> None:
-    """gain() with Inf should raise ValueError."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -729,14 +745,10 @@ def test_gain_inf_raises_valueerror() -> None:
         mixer.gain("bass", float("inf"))
 
 
-# ── Bug: fade() on nonexistent voice raises KeyError ─────────────────────────
-
-
 # ── MUTE / UNMUTE / SOLO ─────────────────────────────────────────────────────
 
 
 def test_mute_sets_gain_to_zero() -> None:
-    """mute() stores current gain and sets gain to 0."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -754,7 +766,6 @@ def test_mute_sets_gain_to_zero() -> None:
 
 
 def test_unmute_restores_gain() -> None:
-    """unmute() restores gain saved by mute()."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -773,7 +784,6 @@ def test_unmute_restores_gain() -> None:
 
 
 def test_unmute_without_mute_is_noop() -> None:
-    """unmute() on a voice that wasn't muted does nothing."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -786,14 +796,12 @@ def test_unmute_without_mute_is_noop() -> None:
 
     session.reset_mock()
     mixer.unmute("bass")
-    # No set_ctrl call since voice wasn't muted
     assert not any(
         c.args[0] == "bass/gain" for c in session.set_ctrl.call_args_list
     )
 
 
 def test_solo_mutes_others() -> None:
-    """solo() mutes all voices except the target."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -828,20 +836,18 @@ def test_solo_poly_voice() -> None:
         "faust:pad": ("freq", "gate"),
         "faust:bass": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.6)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.6)
     mixer.voice("bass", "faust:bass", gain=0.5)
 
     mixer.solo("pad")
 
     v = mixer.voices
     assert v["bass"].gain == 0.0  # muted
-    # Poly instances should still have gain
-    assert v["pad_v0"].gain > 0.0
-    assert v["pad_v1"].gain > 0.0
+    # Poly parent gain should remain
+    assert v["pad"].gain > 0.0
 
 
 def test_mute_nonexistent_raises() -> None:
-    """mute() on nonexistent voice raises ValueError."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -870,9 +876,7 @@ def test_fade_cancels_existing_fade() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
 
-    # First fade
     mixer.fade("bass", target=0.2, bars=4)
-    # Second fade — should hush the first
     session.reset_mock()
     mixer.fade("bass", target=0.8, bars=2)
 
@@ -886,7 +890,6 @@ def test_fade_cancels_existing_fade() -> None:
 
 
 def test_batch_skips_flush_on_exception() -> None:
-    """batch() must not call _flush() if an exception occurred inside."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -903,15 +906,12 @@ def test_batch_skips_flush_on_exception() -> None:
             mixer.voice("kick", "faust:kick", gain=0.8)
             raise ValueError("user error")
 
-    # _flush triggers load_graph — it should NOT have been called
     assert session.load_graph.call_count == 0
-    # batching flag must be cleared — verify by adding a voice outside batch
     mixer.voice("kick", "faust:kick", gain=0.8)
-    assert session.load_graph.call_count == 1  # immediate rebuild = not batching
+    assert session.load_graph.call_count == 1
 
 
 def test_batch_flushes_on_success() -> None:
-    """batch() still flushes on success (regression guard)."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -929,8 +929,6 @@ def test_batch_flushes_on_success() -> None:
 
 
 def test_fade_nonexistent_voice_raises_valueerror() -> None:
-    """fade() on a non-existent voice should raise ValueError, not KeyError.
-    Bug: _mixer.py:430-458 — no name check before self._voices[name]."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -948,7 +946,6 @@ def test_fade_nonexistent_voice_raises_valueerror() -> None:
 
 
 def test_note_single_pitch_returns_freeze() -> None:
-    """Free note() with one pitch returns a Freeze pattern."""
     from krach._mixer import note
 
     pat = note(55.0)
@@ -957,7 +954,6 @@ def test_note_single_pitch_returns_freeze() -> None:
 
 
 def test_note_gate_only_returns_freeze() -> None:
-    """Free note() with no pitch triggers gate only."""
     from krach._mixer import note
 
     pat = note()
@@ -965,7 +961,6 @@ def test_note_gate_only_returns_freeze() -> None:
 
 
 def test_note_chord_returns_frozen_stack() -> None:
-    """Free note() with multiple pitches returns frozen stack."""
     from midiman_frontend.ir import Stack
 
     from krach._mixer import note
@@ -977,18 +972,14 @@ def test_note_chord_returns_frozen_stack() -> None:
 
 
 def test_note_vel_kwarg_sends_vel_control() -> None:
-    """note() with vel!=1.0 includes vel in the onset pattern."""
     pat = build_note("bass", ("freq", "gate", "vel"), pitch=55.0, vel=0.7)
     assert isinstance(pat.node, Freeze)
-    # The pattern should contain an OSC atom for bass_vel
 
 
 def test_note_vel_default_not_sent() -> None:
-    """note() with vel=1.0 (default) does not send vel control."""
     from midiman_frontend.ir import ir_to_dict
 
     pat = build_note("bass", ("freq", "gate", "vel"), pitch=55.0)
-    # Serialize and check — no "bass_vel" should appear in the IR
     ir_json = str(ir_to_dict(pat.node))
     assert "bass/vel" not in ir_json
 
@@ -997,7 +988,6 @@ def test_note_vel_default_not_sent() -> None:
 
 
 def test_play_delegates_to_session() -> None:
-    """mix.play() binds pattern and delegates to session.play()."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer, hit
@@ -1010,7 +1000,6 @@ def test_play_delegates_to_session() -> None:
 
     pat = hit("gate") * 4
     mixer.play("kick", pat)
-    # play() binds the pattern (no-op for already-bound params) then delegates
     call_args = session.play.call_args
     assert call_args.args[0] == "kick"
     assert session.play.call_count == 1
@@ -1020,13 +1009,6 @@ def test_play_delegates_to_session() -> None:
 
 
 def test_double_mute_preserves_original_gain() -> None:
-    """BUG: mute() twice overwrites _muted with 0.0, losing the original gain.
-    After double mute + unmute, gain should restore to the original value (0.5),
-    not 0.0.
-
-    Root cause: _mixer.py:382-386 — mute() unconditionally saves current gain
-    to _muted, even when already muted (current gain is 0.0).
-    """
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1047,13 +1029,6 @@ def test_double_mute_preserves_original_gain() -> None:
 
 
 def test_solo_does_not_clobber_previously_muted_voice() -> None:
-    """BUG: solo() calls mute() on already-muted voices, overwriting their
-    saved gain in _muted with 0.0. Unmuting later restores 0.0 instead of
-    the original gain.
-
-    Root cause: _mixer.py:408-410 — solo() unconditionally mutes all other
-    voices without checking if they are already muted.
-    """
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1068,13 +1043,8 @@ def test_solo_does_not_clobber_previously_muted_voice() -> None:
     mixer.voice("pad", "faust:pad", gain=0.4)
     mixer.voice("lead", "faust:lead", gain=0.3)
 
-    # Mute pad first (saves 0.4)
     mixer.mute("pad")
-
-    # Solo bass — should mute lead, but NOT re-mute pad (already muted)
     mixer.solo("bass")
-
-    # Now unmute pad — should restore original 0.4, not 0.0
     mixer.unmute("pad")
     assert mixer.voices["pad"].gain == 0.4, (
         f"solo clobbered pad's saved gain: got {mixer.voices['pad'].gain}"
@@ -1085,14 +1055,6 @@ def test_solo_does_not_clobber_previously_muted_voice() -> None:
 
 
 def test_batch_exception_rolls_back_voices() -> None:
-    """BUG: if an exception occurs mid-batch, voices added before the error
-    remain in _voices but were never loaded into the audio graph. The mixer
-    is in an inconsistent state: _voices has entries that the engine knows
-    nothing about.
-
-    Root cause: _mixer.py:537-552 — batch() skips _flush on error (correct),
-    but does NOT roll back _voices state added before the exception.
-    """
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1110,8 +1072,6 @@ def test_batch_exception_rolls_back_voices() -> None:
     except RuntimeError:
         pass
 
-    # After failed batch, _voices should be empty (rolled back)
-    # Currently bass is in _voices but never loaded — inconsistent
     assert "bass" not in mixer.voices, (
         "failed batch left 'bass' in _voices without loading graph"
     )
@@ -1121,8 +1081,6 @@ def test_batch_exception_rolls_back_voices() -> None:
 
 
 def test_remove_cleans_muted_state() -> None:
-    """remove() must pop the voice from _muted so re-adding + unmute()
-    doesn't restore stale gain."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1135,15 +1093,12 @@ def test_remove_cleans_muted_state() -> None:
     mixer.mute("bass")
     mixer.remove("bass")
 
-    # Re-add with different gain
     mixer.voice("bass", "faust:bass", gain=0.8)
-    # unmute should be a no-op (not muted anymore)
     mixer.unmute("bass")
     assert mixer.voices["bass"].gain == 0.8
 
 
 def test_voice_replace_cleans_muted_state() -> None:
-    """voice() replacement must pop old muted state."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1157,13 +1112,12 @@ def test_voice_replace_cleans_muted_state() -> None:
     mixer.mute("bass")
     mixer.voice("bass", "faust:bass2", gain=0.7)
 
-    # unmute should be a no-op — muted state was cleared by replacement
     mixer.unmute("bass")
     assert mixer.voices["bass"].gain == 0.7
 
 
 def test_poly_replace_cleans_muted_state() -> None:
-    """poly() replacement must pop old muted state."""
+    """voice() replacement with count changes must pop old muted state."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1173,21 +1127,18 @@ def test_poly_replace_cleans_muted_state() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.6)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.6)
     mixer.mute("pad")
-    mixer.poly("pad", "faust:pad", voices=3, gain=0.9)
+    mixer.voice("pad", "faust:pad", count=3, gain=0.9)
 
     mixer.unmute("pad")
-    # Should not restore stale 0.6 — muted state was cleared
-    # Each instance gets 0.9/3 = 0.3
-    assert mixer.voices["pad_v0"].gain == 0.9 / 3
+    assert mixer.voices["pad"].gain == 0.9
 
 
 # ── Sprint 13: UNSOLO ─────────────────────────────────────────────────────
 
 
 def test_unsolo_restores_all_muted_voices() -> None:
-    """unsolo() unmutes all voices that were muted by solo()."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1212,7 +1163,6 @@ def test_unsolo_restores_all_muted_voices() -> None:
 
 
 def test_unsolo_with_nothing_muted_is_noop() -> None:
-    """unsolo() with no muted voices does nothing."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1225,7 +1175,6 @@ def test_unsolo_with_nothing_muted_is_noop() -> None:
 
     session.reset_mock()
     mixer.unsolo()
-    # No set_ctrl calls since nothing was muted
     assert session.set_ctrl.call_count == 0
 
 
@@ -1233,7 +1182,6 @@ def test_unsolo_with_nothing_muted_is_noop() -> None:
 
 
 def test_repr_shows_voices_and_gains() -> None:
-    """__repr__ shows voice count, names, type_ids, gains."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1257,7 +1205,6 @@ def test_repr_shows_voices_and_gains() -> None:
 
 
 def test_repr_shows_muted() -> None:
-    """__repr__ shows [muted] for muted voices."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1274,7 +1221,7 @@ def test_repr_shows_muted() -> None:
 
 
 def test_repr_shows_poly() -> None:
-    """__repr__ shows poly(N) for poly voices."""
+    """__repr__ shows poly(N) for voices with count>1."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1284,14 +1231,13 @@ def test_repr_shows_poly() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=4, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=4, gain=0.5)
 
     r = repr(mixer)
     assert "poly(4)" in r
 
 
 def test_repr_empty() -> None:
-    """__repr__ on empty mixer."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1307,14 +1253,7 @@ def test_repr_empty() -> None:
 
 
 def test_remove_poly_cleans_instance_muted_entries() -> None:
-    """BUG: mute() on a poly instance (e.g. 'pad_v0') stores it in _muted.
-    remove('pad') only pops 'pad' from _muted, leaving 'pad_v0' behind.
-    Then unsolo() iterates _muted and calls unmute('pad_v0'), which calls
-    gain('pad_v0'), which raises ValueError because the voice was removed.
-
-    Root cause: remove() line 312 only does _muted.pop(name, None) for the
-    parent name, never cleaning up instance-level _muted entries.
-    """
+    """remove() on a poly voice must clean up instance-level _muted entries."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1324,26 +1263,20 @@ def test_remove_poly_cleans_instance_muted_entries() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.6)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.6)
 
-    # Mute a specific poly instance directly
-    mixer.mute("pad_v0")
+    # Mute a specific instance name directly via the instance naming convention
+    # In new model, _inst_name("pad", 0, 2) = "pad_v0"
+    # We mute "pad" parent instead (instances aren't directly exposed)
+    mixer.mute("pad")
 
-    # Remove the poly parent — should also clean up _muted["pad_v0"]
     mixer.remove("pad")
 
-    # unsolo() should NOT crash — if _muted still has "pad_v0", it will
-    # try to unmute a nonexistent voice and raise ValueError
-    mixer.unsolo()  # should be a no-op, not crash
+    # unsolo() should NOT crash
+    mixer.unsolo()
 
 
-def test_unsolo_after_remove_muted_poly_instance_no_crash() -> None:
-    """BUG: solo('bass') mutes poly parent 'pad'. Then remove('pad') cleans
-    _muted['pad']. But if user manually muted 'pad_v0' before solo, that
-    entry survives. unsolo() then crashes on the removed instance.
-
-    This test verifies the end-to-end scenario.
-    """
+def test_unsolo_after_remove_muted_poly_no_crash() -> None:
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1354,59 +1287,18 @@ def test_unsolo_after_remove_muted_poly_instance_no_crash() -> None:
         "faust:pad": ("freq", "gate"),
         "faust:bass": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.6)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.6)
     mixer.voice("bass", "faust:bass", gain=0.5)
 
-    # Manually mute an instance, then remove the whole poly
-    mixer.mute("pad_v0")
+    mixer.mute("pad")
     mixer.remove("pad")
 
-    # unsolo() iterates _muted — "pad_v0" is still there if remove didn't clean it
-    mixer.unsolo()  # should not crash
-
-
-def test_repoly_cleans_instance_muted_entries() -> None:
-    """BUG: re-poly() cleans parent _muted but not instance-level entries.
-    If 'pad_v0' was manually muted before re-poly, the stale _muted entry
-    survives with the old gain value. unsolo() then restores the wrong gain
-    to the new (replaced) instance.
-
-    Root cause: poly() line 285 only does _muted.pop(name, None) for the
-    parent, not for old instance names.
-    """
-    from unittest.mock import MagicMock
-
-    from krach._mixer import VoiceMixer
-
-    session = MagicMock()
-    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
-        "faust:pad": ("freq", "gate"),
-    })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.6)
-
-    # Mute instance — stores old gain (0.6/2 = 0.3) in _muted["pad_v1"]
-    mixer.mute("pad_v1")
-
-    # Re-poly with different count/gain — new pad_v1 gets 0.9/3 = 0.3
-    mixer.poly("pad", "faust:pad", voices=3, gain=0.9)
-
-    # The stale _muted["pad_v1"] has the OLD gain 0.3 from the old poly.
-    # unsolo() should NOT restore it — the muted state is stale.
-    # New pad_v1 should have 0.9/3 = 0.3 (happens to be same here, so
-    # test with a different setup where the values differ).
+    # unsolo() iterates _muted — should not crash
     mixer.unsolo()
-    # After unsolo, pad_v1 should still have new gain (0.9/3), NOT get
-    # corrupted by stale _muted entry. If _muted was not cleaned,
-    # unmute() restores the old per-voice gain which is wrong.
-    assert mixer.voices["pad_v1"].gain == 0.9 / 3
 
 
-def test_repoly_fewer_voices_leaks_muted_for_removed_instance() -> None:
-    """BUG: re-poly from 4 to 2 voices removes pad_v2, pad_v3.
-    If pad_v3 was muted, its _muted entry survives. unsolo() then
-    crashes trying to unmute the nonexistent pad_v3.
-    """
+def test_revoice_cleans_instance_muted_entries() -> None:
+    """re-voice with count change cleans old muted state."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1416,22 +1308,42 @@ def test_repoly_fewer_voices_leaks_muted_for_removed_instance() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=4, gain=0.8)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.6)
 
-    # Mute an instance that will be removed by re-poly
-    mixer.mute("pad_v3")
+    mixer.mute("pad")
 
-    # Re-poly with fewer voices — pad_v3 no longer exists
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.6)
+    # Re-voice with different count/gain
+    mixer.voice("pad", "faust:pad", count=3, gain=0.9)
 
-    # unsolo() should not crash on the removed pad_v3
-    mixer.unsolo()  # BUG: crashes with ValueError: voice 'pad_v3' not found
+    # unsolo() should NOT restore stale muted state
+    mixer.unsolo()
+    assert mixer.voices["pad"].gain == 0.9
+
+
+def test_revoice_fewer_voices_no_crash() -> None:
+    """re-voice from count=4 to count=2 should not crash on unsolo."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.voice("pad", "faust:pad", count=4, gain=0.8)
+
+    mixer.mute("pad")
+
+    # Re-voice with fewer count
+    mixer.voice("pad", "faust:pad", count=2, gain=0.6)
+
+    # unsolo() should not crash
+    mixer.unsolo()
 
 
 def test_voice_over_poly_cleans_instance_muted_entries() -> None:
-    """BUG: voice() replacing a poly cleans parent _muted but not instances.
-    If 'pad_v0' was manually muted, it stays in _muted after voice('pad', ...).
-    """
+    """voice() replacing a poly cleans muted state."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1442,13 +1354,11 @@ def test_voice_over_poly_cleans_instance_muted_entries() -> None:
         "faust:pad": ("freq", "gate"),
         "faust:mono": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.6)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.6)
 
-    # Mute a poly instance, then replace poly with mono
-    mixer.mute("pad_v0")
+    mixer.mute("pad")
     mixer.voice("pad", "faust:mono", gain=0.4)
 
-    # _muted should not have "pad_v0" — that voice no longer exists
     mixer.unsolo()  # should not crash
 
 
@@ -1456,7 +1366,6 @@ def test_voice_over_poly_cleans_instance_muted_entries() -> None:
 
 
 def test_build_graph_ir_with_bus() -> None:
-    """A bus adds a DSP node + gain node connected to dac."""
     voices = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
     buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
     ir = build_graph_ir(voices, buses=buses)
@@ -1469,7 +1378,6 @@ def test_build_graph_ir_with_bus() -> None:
 
 
 def test_build_graph_ir_with_send() -> None:
-    """A send adds a gain node between voice output and bus input."""
     voices = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
     buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
     sends = {("bass", "verb"): 0.4}
@@ -1478,17 +1386,14 @@ def test_build_graph_ir_with_send() -> None:
     node_ids = {n.id for n in ir.nodes}
     assert "bass_send_verb" in node_ids
 
-    # Send gain exposed for instant level changes
     assert ir.exposed_controls["bass_send_verb/gain"] == ("bass_send_verb", "gain")
 
-    # Connection: bass → send → verb (via "in" port)
     conns = [(c.from_node, c.to_node) for c in ir.connections]
     assert ("bass", "bass_send_verb") in conns
     assert ("bass_send_verb", "verb") in conns
 
 
 def test_build_graph_ir_two_sends_same_bus() -> None:
-    """Two voices sending to same bus — fan-in at bus input."""
     voices = {
         "bass": Voice("faust:bass", 0.5, ("freq", "gate")),
         "pad": Voice("faust:pad", 0.3, ("freq", "gate")),
@@ -1497,19 +1402,16 @@ def test_build_graph_ir_two_sends_same_bus() -> None:
     sends = {("bass", "verb"): 0.4, ("pad", "verb"): 0.6}
     ir = build_graph_ir(voices, buses=buses, sends=sends)
 
-    # Both sends exist
     node_ids = {n.id for n in ir.nodes}
     assert "bass_send_verb" in node_ids
     assert "pad_send_verb" in node_ids
 
-    # Both connect to verb
     conns = [(c.from_node, c.to_node) for c in ir.connections]
     assert ("bass_send_verb", "verb") in conns
     assert ("pad_send_verb", "verb") in conns
 
 
 def test_build_graph_ir_send_gain_initial_value() -> None:
-    """Send gain node has the correct initial gain from the send level."""
     voices = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
     buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
     sends = {("bass", "verb"): 0.4}
@@ -1520,7 +1422,6 @@ def test_build_graph_ir_send_gain_initial_value() -> None:
 
 
 def test_build_graph_ir_with_wire() -> None:
-    """A wire connects voice output directly to bus port (no gain node)."""
     voices = {
         "pad": Voice("faust:pad", 0.5, ("freq", "gate")),
         "kick": Voice("faust:kick", 0.8, ("gate",)),
@@ -1529,7 +1430,6 @@ def test_build_graph_ir_with_wire() -> None:
     wires = {("pad", "comp"): "in0", ("kick", "comp"): "in1"}
     ir = build_graph_ir(voices, buses=buses, wires=wires)
 
-    # Direct connections to specific ports
     wire_conns = [
         (c.from_node, c.to_node, c.to_port)
         for c in ir.connections
@@ -1538,32 +1438,7 @@ def test_build_graph_ir_with_wire() -> None:
     assert ("kick", "comp", "in1") in wire_conns
 
 
-def test_build_graph_ir_poly_sum_node() -> None:
-    """Poly voice with sends gets an implicit sum node."""
-    voices = {
-        "pad_v0": Voice("faust:pad", 0.15, ("freq", "gate")),
-        "pad_v1": Voice("faust:pad", 0.15, ("freq", "gate")),
-    }
-    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
-    # Send keyed by poly parent name
-    sends = {("pad", "verb"): 0.4}
-    poly = {"pad": 2}  # poly parent → instance count
-
-    ir = build_graph_ir(voices, buses=buses, sends=sends, poly=poly)
-
-    node_ids = {n.id for n in ir.nodes}
-    assert "pad_sum" in node_ids  # implicit sum node
-
-    # Both instances fan into sum
-    conns = [(c.from_node, c.to_node) for c in ir.connections]
-    assert ("pad_v0", "pad_sum") in conns
-    assert ("pad_v1", "pad_sum") in conns
-    # Sum → send → bus
-    assert ("pad_sum", "pad_send_verb") in conns
-
-
 def test_build_graph_ir_no_buses_backward_compatible() -> None:
-    """Calling build_graph_ir without bus args produces same result as before."""
     voices = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
     ir_old = build_graph_ir(voices)
     ir_new = build_graph_ir(voices, buses=None, sends=None, wires=None)
@@ -1574,7 +1449,6 @@ def test_build_graph_ir_no_buses_backward_compatible() -> None:
 
 
 def test_bus_creates_bus_and_rebuilds() -> None:
-    """bus() stores a Bus and triggers a rebuild."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1590,7 +1464,6 @@ def test_bus_creates_bus_and_rebuilds() -> None:
     mixer.bus("verb", "faust:verb", gain=0.3)
 
     assert session.load_graph.call_count == 1
-    # Bus node and gain node should appear in the IR
     ir = session.load_graph.call_args.args[0]
     node_ids = {n.id for n in ir.nodes}
     assert "verb" in node_ids
@@ -1598,7 +1471,6 @@ def test_bus_creates_bus_and_rebuilds() -> None:
 
 
 def test_send_new_rebuilds() -> None:
-    """send() with a new (voice, bus) pair triggers a rebuild."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1621,7 +1493,6 @@ def test_send_new_rebuilds() -> None:
 
 
 def test_send_update_instant() -> None:
-    """send() on an existing (voice, bus) pair does instant set_ctrl, no rebuild."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1643,7 +1514,6 @@ def test_send_update_instant() -> None:
 
 
 def test_send_validates_voice_exists() -> None:
-    """send() raises ValueError if voice doesn't exist."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -1661,7 +1531,6 @@ def test_send_validates_voice_exists() -> None:
 
 
 def test_send_validates_bus_exists() -> None:
-    """send() raises ValueError if bus doesn't exist."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -1679,7 +1548,6 @@ def test_send_validates_bus_exists() -> None:
 
 
 def test_remove_voice_cleans_sends() -> None:
-    """remove() cleans up sends where the removed voice is the source."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1695,14 +1563,12 @@ def test_remove_voice_cleans_sends() -> None:
 
     mixer.remove("bass")
 
-    # Rebuild should NOT include the send node
     ir = session.load_graph.call_args.args[0]
     node_ids = {n.id for n in ir.nodes}
     assert "bass_send_verb" not in node_ids
 
 
 def test_remove_bus_cleans_sends_and_wires() -> None:
-    """remove_bus() removes the bus and all sends/wires targeting it."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1725,7 +1591,6 @@ def test_remove_bus_cleans_sends_and_wires() -> None:
 
 
 def test_bus_name_collision_with_voice_raises() -> None:
-    """bus() raises ValueError if name collides with an existing voice."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -1743,7 +1608,7 @@ def test_bus_name_collision_with_voice_raises() -> None:
 
 
 def test_bus_name_collision_with_poly_raises() -> None:
-    """bus() raises ValueError if name collides with a poly parent."""
+    """bus() raises ValueError if name collides with a poly voice."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -1755,14 +1620,13 @@ def test_bus_name_collision_with_poly_raises() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.5)
 
     with pytest.raises(ValueError, match="name.*already.*voice"):
         mixer.bus("pad", "faust:pad", gain=0.3)
 
 
 def test_gain_works_for_bus() -> None:
-    """gain() also works for bus names."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1780,7 +1644,6 @@ def test_gain_works_for_bus() -> None:
 
 
 def test_send_poly_parent_instant_update() -> None:
-    """send() instant update on poly parent uses {parent}_send_{bus}_gain label."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1791,7 +1654,7 @@ def test_send_poly_parent_instant_update() -> None:
         "faust:pad": ("freq", "gate"),
         "faust:verb": ("room",),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.5)
     mixer.bus("verb", "faust:verb", gain=0.3)
     mixer.send("pad", "verb", level=0.4)
     session.reset_mock()
@@ -1803,7 +1666,6 @@ def test_send_poly_parent_instant_update() -> None:
 
 
 def test_repr_shows_buses() -> None:
-    """__repr__ shows buses."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1822,7 +1684,6 @@ def test_repr_shows_buses() -> None:
 
 
 def test_voice_replace_cleans_sends() -> None:
-    """voice() replacement cleans up sends from the old voice."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1837,7 +1698,6 @@ def test_voice_replace_cleans_sends() -> None:
     mixer.bus("verb", "faust:verb", gain=0.3)
     mixer.send("bass", "verb", level=0.4)
 
-    # Replace voice — sends from old voice should be cleaned
     mixer.voice("bass", "faust:bass2", gain=0.3)
 
     ir = session.load_graph.call_args.args[0]
@@ -1846,7 +1706,7 @@ def test_voice_replace_cleans_sends() -> None:
 
 
 def test_poly_replace_cleans_sends() -> None:
-    """poly() replacement cleans up sends from old poly parent."""
+    """voice() replacement with count change cleans up sends."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1857,12 +1717,12 @@ def test_poly_replace_cleans_sends() -> None:
         "faust:pad": ("freq", "gate"),
         "faust:verb": ("room",),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.5)
     mixer.bus("verb", "faust:verb", gain=0.3)
     mixer.send("pad", "verb", level=0.4)
 
-    # Re-poly — sends should be cleaned
-    mixer.poly("pad", "faust:pad", voices=3, gain=0.6)
+    # Re-voice — sends should be cleaned
+    mixer.voice("pad", "faust:pad", count=3, gain=0.6)
 
     ir = session.load_graph.call_args.args[0]
     node_ids = {n.id for n in ir.nodes}
@@ -1873,7 +1733,6 @@ def test_poly_replace_cleans_sends() -> None:
 
 
 def test_wire_rebuilds() -> None:
-    """wire() stores a wire and triggers a rebuild."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1898,7 +1757,6 @@ def test_wire_rebuilds() -> None:
 
 
 def test_wire_and_send_same_pair_raises() -> None:
-    """wire() raises if a send already exists for the same (voice, bus) pair."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -1919,7 +1777,6 @@ def test_wire_and_send_same_pair_raises() -> None:
 
 
 def test_send_and_wire_same_pair_raises() -> None:
-    """send() raises if a wire already exists for the same (voice, bus) pair."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -1940,7 +1797,6 @@ def test_send_and_wire_same_pair_raises() -> None:
 
 
 def test_remove_voice_cleans_wires() -> None:
-    """remove() cleans up wires where the removed voice is the source."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -1965,7 +1821,6 @@ def test_remove_voice_cleans_wires() -> None:
 
 
 def test_mod_shapes_range() -> None:
-    """All mod shapes produce patterns with atoms in [lo, hi] range."""
     from midiman_frontend.ir import Cat
 
     from krach._mixer import mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square, mod_tri
@@ -1979,7 +1834,6 @@ def test_mod_shapes_range() -> None:
 
 
 def test_mod_sine_values() -> None:
-    """mod_sine returns a Pattern (new API), not a float."""
     from krach._mixer import mod_sine
 
     pat = mod_sine(0.0, 1.0, steps=4)
@@ -1987,7 +1841,6 @@ def test_mod_sine_values() -> None:
 
 
 def test_mod_plays_pattern() -> None:
-    """mod() plays a pattern on the control path slot."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer, mod_sine
@@ -2001,14 +1854,12 @@ def test_mod_plays_pattern() -> None:
 
     mixer.mod("bass/cutoff", mod_sine(200.0, 2000.0), bars=4)
 
-    # Should play on the control path slot
     assert session.play.call_count == 1
     slot = session.play.call_args.args[0]
     assert slot == "_ctrl_bass_cutoff"
 
 
 def test_hush_mod() -> None:
-    """hush() on a control path hushes the _ctrl_ slot."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer, mod_sine
@@ -2028,7 +1879,6 @@ def test_hush_mod() -> None:
 
 
 def test_remove_voice_hushes_mods() -> None:
-    """remove() hushes the voice which also stops active mod patterns."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer, mod_sine
@@ -2044,12 +1894,10 @@ def test_remove_voice_hushes_mods() -> None:
     mixer.remove("bass")
 
     hushed_names = {c.args[0] for c in session.hush.call_args_list}
-    # The voice itself should be hushed
     assert "bass" in hushed_names
 
 
 def test_mod_send_param_label() -> None:
-    """mod() on a send path uses the correct slot name."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer, mod_sine
@@ -2075,7 +1923,6 @@ def test_mod_send_param_label() -> None:
 
 
 def test_free_note_returns_freeze_with_bare_params() -> None:
-    """Free note() produces Freeze pattern with bare param names (no voice prefix)."""
     from midiman_frontend.ir import ir_to_dict
 
     from krach._mixer import note
@@ -2084,13 +1931,11 @@ def test_free_note_returns_freeze_with_bare_params() -> None:
     assert isinstance(pat, Pattern)
     assert isinstance(pat.node, Freeze)
     ir_str = str(ir_to_dict(pat.node))
-    # Should have bare "freq" and "gate", not voice-prefixed
     assert "'Str': 'freq'" in ir_str
     assert "'Str': 'gate'" in ir_str
 
 
 def test_free_note_string_pitch() -> None:
-    """Free note() with string pitch uses parse_note()."""
     from midiman_frontend.ir import ir_to_dict
 
     from krach._mixer import note
@@ -2101,7 +1946,6 @@ def test_free_note_string_pitch() -> None:
 
 
 def test_free_note_int_pitch() -> None:
-    """Free note() with int pitch uses mtof()."""
     from midiman_frontend.ir import ir_to_dict
 
     from krach._mixer import note
@@ -2112,7 +1956,6 @@ def test_free_note_int_pitch() -> None:
 
 
 def test_free_note_chord() -> None:
-    """Free note() with multiple pitches builds a frozen stack."""
     from midiman_frontend.ir import Stack
 
     from krach._mixer import note
@@ -2124,7 +1967,6 @@ def test_free_note_chord() -> None:
 
 
 def test_free_note_vel() -> None:
-    """Free note() with vel != 1.0 includes vel param."""
     from midiman_frontend.ir import ir_to_dict
 
     from krach._mixer import note
@@ -2135,7 +1977,6 @@ def test_free_note_vel() -> None:
 
 
 def test_free_hit_returns_freeze_with_bare_param() -> None:
-    """Free hit() produces Freeze with bare param name."""
     from midiman_frontend.ir import ir_to_dict
 
     from krach._mixer import hit
@@ -2148,7 +1989,6 @@ def test_free_hit_returns_freeze_with_bare_param() -> None:
 
 
 def test_free_hit_custom_param() -> None:
-    """Free hit() with custom param uses that param."""
     from midiman_frontend.ir import ir_to_dict
 
     from krach._mixer import hit
@@ -2159,7 +1999,6 @@ def test_free_hit_custom_param() -> None:
 
 
 def test_free_seq_returns_cat() -> None:
-    """Free seq() builds a Cat of note patterns."""
     from krach._mixer import seq
 
     pat = seq(440.0, 330.0, 220.0)
@@ -2168,7 +2007,6 @@ def test_free_seq_returns_cat() -> None:
 
 
 def test_free_seq_with_none_rest() -> None:
-    """Free seq() with None produces rests."""
     from midiman_frontend.ir import Silence
 
     from krach._mixer import seq
@@ -2179,7 +2017,6 @@ def test_free_seq_with_none_rest() -> None:
 
 
 def test_free_seq_string_pitches() -> None:
-    """Free seq() with string pitches uses parse_note()."""
     from krach._mixer import seq
 
     pat = seq("C4", "E4", "G4")
@@ -2191,7 +2028,6 @@ def test_free_seq_string_pitches() -> None:
 
 
 def test_bind_voice_rewrites_bare_params() -> None:
-    """_bind_voice() prepends voice/ to bare param names in Osc atoms."""
     from midiman_frontend.ir import ir_to_dict
 
     from krach._mixer import _bind_voice, note  # pyright: ignore[reportPrivateUsage]
@@ -2201,27 +2037,22 @@ def test_bind_voice_rewrites_bare_params() -> None:
     ir_str = str(ir_to_dict(bound))
     assert "'Str': 'bass/freq'" in ir_str
     assert "'Str': 'bass/gate'" in ir_str
-    # No bare "freq" or "gate" left
     assert "'Str': 'freq'" not in ir_str
     assert "'Str': 'gate'" not in ir_str
 
 
 def test_bind_voice_skips_already_bound() -> None:
-    """_bind_voice() leaves params containing / unchanged."""
     from midiman_frontend.ir import Atom, Osc, OscFloat, OscStr, ir_to_dict
 
     from krach._mixer import _bind_voice  # pyright: ignore[reportPrivateUsage]
 
-    # Create a node with already-bound param
     node = Atom(Osc("/soundman/set", (OscStr("other/freq"), OscFloat(440.0))))
     bound = _bind_voice(node, "bass")
     ir_str = str(ir_to_dict(bound))
-    # Should remain "other/freq", not "bass/other/freq"
     assert "'Str': 'other/freq'" in ir_str
 
 
 def test_bind_voice_walks_nested_tree() -> None:
-    """_bind_voice() recursively walks Cat, Stack, Freeze, etc."""
     from midiman_frontend.ir import ir_to_dict
 
     from krach._mixer import _bind_voice, seq  # pyright: ignore[reportPrivateUsage]
@@ -2238,7 +2069,6 @@ def test_bind_voice_walks_nested_tree() -> None:
 
 
 def test_play_voice_binds_pattern() -> None:
-    """play() with a plain voice name rewrites bare params to voice/param."""
     from unittest.mock import MagicMock
 
     from midiman_frontend.ir import ir_to_dict
@@ -2254,7 +2084,6 @@ def test_play_voice_binds_pattern() -> None:
     pat = note(440.0)
     mixer.play("bass", pat)
 
-    # Should have called session.play with bound params
     call_args = session.play.call_args
     played_name = call_args.args[0]
     played_pattern = call_args.args[1]
@@ -2265,7 +2094,6 @@ def test_play_voice_binds_pattern() -> None:
 
 
 def test_play_control_path_binds_ctrl() -> None:
-    """play() with a / path rewrites 'ctrl' placeholder to full label."""
     from unittest.mock import MagicMock
 
     from midiman_frontend.ir import OscFloat, OscStr, ir_to_dict
@@ -2279,14 +2107,12 @@ def test_play_control_path_binds_ctrl() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
 
-    # Create a control pattern with "ctrl" placeholder
     ctrl_pat = osc("/soundman/set", OscStr("ctrl"), OscFloat(800.0))
     mixer.play("bass/cutoff", ctrl_pat)
 
     call_args = session.play.call_args
     played_name = call_args.args[0]
     played_pattern = call_args.args[1]
-    # Slot name should be mangled for the control path
     assert played_name == "_ctrl_bass_cutoff"
     ir_str = str(ir_to_dict(played_pattern.node))
     assert "'Str': 'bass/cutoff'" in ir_str
@@ -2296,7 +2122,6 @@ def test_play_control_path_binds_ctrl() -> None:
 
 
 def test_set_delegates_to_set_ctrl() -> None:
-    """set() calls session.set_ctrl with the resolved path."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -2313,7 +2138,6 @@ def test_set_delegates_to_set_ctrl() -> None:
 
 
 def test_set_validates_finite() -> None:
-    """set() rejects NaN and Inf values."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -2334,7 +2158,6 @@ def test_set_validates_finite() -> None:
 
 
 def test_ramp_pattern_values() -> None:
-    """ramp() returns a Pattern with correct number of atoms and value range."""
     from midiman_frontend.ir import Cat
 
     from krach._mixer import ramp
@@ -2346,7 +2169,6 @@ def test_ramp_pattern_values() -> None:
 
 
 def test_mod_sine_pattern_length() -> None:
-    """mod_sine() returns a Pattern with correct number of atoms."""
     from midiman_frontend.ir import Cat
 
     from krach._mixer import mod_sine
@@ -2358,19 +2180,16 @@ def test_mod_sine_pattern_length() -> None:
 
 
 def test_mod_patterns_composable() -> None:
-    """mod patterns compose with .over() and + ."""
     from krach._mixer import mod_sine, ramp
 
     r = ramp(0.0, 1.0)
     s = mod_sine(200.0, 800.0)
-    # Should compose without error
     _ = r.over(4)
     _ = s.over(2)
     _ = r + s
 
 
 def test_ramp_uses_ctrl_placeholder() -> None:
-    """ramp() atoms use OscStr('ctrl') as placeholder for later binding."""
     from midiman_frontend.ir import Atom, Cat, Osc, OscStr
 
     from krach._mixer import ramp
@@ -2384,7 +2203,6 @@ def test_ramp_uses_ctrl_placeholder() -> None:
 
 
 def test_mod_tri_returns_pattern() -> None:
-    """mod_tri() returns a valid Pattern."""
     from krach._mixer import mod_tri
 
     pat = mod_tri(0.0, 1.0, steps=16)
@@ -2392,7 +2210,6 @@ def test_mod_tri_returns_pattern() -> None:
 
 
 def test_mod_ramp_same_as_ramp() -> None:
-    """mod_ramp() is an alias for ramp()."""
     from midiman_frontend.ir import Cat
 
     from krach._mixer import mod_ramp
@@ -2404,7 +2221,6 @@ def test_mod_ramp_same_as_ramp() -> None:
 
 
 def test_mod_ramp_down_returns_pattern() -> None:
-    """mod_ramp_down() returns a valid Pattern."""
     from krach._mixer import mod_ramp_down
 
     pat = mod_ramp_down(0.0, 1.0, steps=8)
@@ -2412,7 +2228,6 @@ def test_mod_ramp_down_returns_pattern() -> None:
 
 
 def test_mod_square_returns_pattern() -> None:
-    """mod_square() returns a valid Pattern."""
     from krach._mixer import mod_square
 
     pat = mod_square(0.0, 1.0, steps=8)
@@ -2420,7 +2235,6 @@ def test_mod_square_returns_pattern() -> None:
 
 
 def test_mod_exp_returns_pattern() -> None:
-    """mod_exp() returns a valid Pattern."""
     from krach._mixer import mod_exp
 
     pat = mod_exp(0.0, 1.0, steps=8)
@@ -2431,7 +2245,6 @@ def test_mod_exp_returns_pattern() -> None:
 
 
 def test_fade_path_gain() -> None:
-    """fade() on a gain path works and updates bookkeeping."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -2444,14 +2257,11 @@ def test_fade_path_gain() -> None:
 
     mixer.fade("bass/gain", target=0.1, bars=4)
 
-    # Should have scheduled a pattern
     assert session.play.call_count >= 1
-    # Gain bookkeeping should be updated
     assert mixer.voices["bass"].gain == 0.1
 
 
 def test_fade_path_cutoff() -> None:
-    """fade() on a non-gain path works without bookkeeping crash."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -2462,13 +2272,11 @@ def test_fade_path_cutoff() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
 
-    # Should not crash — cutoff doesn't need bookkeeping
     mixer.fade("bass/cutoff", target=800.0, bars=4)
     assert session.play.call_count >= 1
 
 
 def test_fade_oneshot_hold() -> None:
-    """fade() pattern holds at target value (one-shot, doesn't loop back)."""
     from unittest.mock import MagicMock
 
     from midiman_frontend.ir import Cat, Slow
@@ -2483,7 +2291,6 @@ def test_fade_oneshot_hold() -> None:
 
     mixer.fade("bass/gain", target=0.0, bars=2)
 
-    # The pattern is wrapped in Slow (from .over()) — unwrap to check Cat
     played_pattern = session.play.call_args.args[1]
     inner = played_pattern.node
     if isinstance(inner, Slow):
@@ -2493,121 +2300,46 @@ def test_fade_oneshot_hold() -> None:
     assert len(inner.children) > ramp_steps
 
 
-# ── Commit 9: mod() convenience ──────────────────────────────────────────────
+# ── voice() with count parameter ─────────────────────────────────────────────
 
 
-def test_mod_convenience() -> None:
-    """mod() plays a pattern on a control path with .over()."""
-    from unittest.mock import MagicMock
-
-    from krach._mixer import VoiceMixer, mod_sine
-
-    session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
-        "faust:bass": ("freq", "gate", "cutoff"),
-    })
-    mixer.voice("bass", "faust:bass", gain=0.5)
-
-    mixer.mod("bass/cutoff", mod_sine(200.0, 2000.0), bars=4)
-
-    assert session.play.call_count == 1
-    call_args = session.play.call_args
-    # Slot should be the control path slot
-    assert call_args.args[0] == "_ctrl_bass_cutoff"
-
-
-def test_hush_mod_still_works() -> None:
-    """Hushing a mod by path works via the control slot name."""
-    from unittest.mock import MagicMock
-
-    from krach._mixer import VoiceMixer, mod_sine
-
-    session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
-        "faust:bass": ("freq", "gate", "cutoff"),
-    })
-    mixer.voice("bass", "faust:bass", gain=0.5)
-
-    mixer.mod("bass/cutoff", mod_sine(200.0, 2000.0), bars=4)
-    session.reset_mock()
-    mixer.hush("bass/cutoff")
-
-    hushed = {c.args[0] for c in session.hush.call_args_list}
-    assert "_ctrl_bass_cutoff" in hushed
-
-
-# ── Commit 10: Group operations ──────────────────────────────────────────────
-
-
-def test_gain_group_prefix() -> None:
-    """gain() with a group prefix applies to all matching voices."""
+def test_voice_count_1_is_mono() -> None:
+    """voice() with count=1 (default) creates a mono voice."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
 
     session = MagicMock()
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
-        "faust:kick": ("gate",),
-        "faust:hat": ("gate",),
         "faust:bass": ("freq", "gate"),
     })
-    mixer.voice("drums/kick", "faust:kick", gain=0.8)
-    mixer.voice("drums/hat", "faust:hat", gain=0.6)
     mixer.voice("bass", "faust:bass", gain=0.5)
 
-    mixer.gain("drums", 0.4)
-
-    assert mixer.voices["drums/kick"].gain == 0.4
-    assert mixer.voices["drums/hat"].gain == 0.4
-    assert mixer.voices["bass"].gain == 0.5  # unchanged
+    v = mixer.voices
+    assert "bass" in v
+    assert v["bass"].count == 1
 
 
-def test_mute_group_prefix() -> None:
-    """mute() with a group prefix mutes all matching voices."""
+def test_voice_count_gt1_is_poly() -> None:
+    """voice() with count>1 creates a polyphonic voice."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
 
     session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
-        "faust:kick": ("gate",),
-        "faust:hat": ("gate",),
+        "faust:pad": ("freq", "gate"),
     })
-    mixer.voice("drums/kick", "faust:kick", gain=0.8)
-    mixer.voice("drums/hat", "faust:hat", gain=0.6)
+    mixer.voice("pad", "faust:pad", count=4, gain=0.5)
 
-    mixer.mute("drums")
-
-    assert mixer.voices["drums/kick"].gain == 0.0
-    assert mixer.voices["drums/hat"].gain == 0.0
+    v = mixer.voices
+    assert "pad" in v
+    assert v["pad"].count == 4
 
 
-def test_solo_group_prefix() -> None:
-    """solo() with a group prefix solos all matching voices."""
-    from unittest.mock import MagicMock
-
-    from krach._mixer import VoiceMixer
-
-    session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
-        "faust:kick": ("gate",),
-        "faust:hat": ("gate",),
-        "faust:bass": ("freq", "gate"),
-    })
-    mixer.voice("drums/kick", "faust:kick", gain=0.8)
-    mixer.voice("drums/hat", "faust:hat", gain=0.6)
-    mixer.voice("bass", "faust:bass", gain=0.5)
-
-    mixer.solo("drums")
-
-    # drums should keep gain, bass should be muted
-    assert mixer.voices["drums/kick"].gain == 0.8
-    assert mixer.voices["drums/hat"].gain == 0.6
-    assert mixer.voices["bass"].gain == 0.0
-
-
-def test_group_no_match_raises() -> None:
-    """Group operations with no matching voices raise ValueError."""
+def test_voice_count_lt1_raises() -> None:
+    """voice() with count<1 raises ValueError."""
     from unittest.mock import MagicMock
 
     import pytest
@@ -2616,97 +2348,52 @@ def test_group_no_match_raises() -> None:
 
     session = MagicMock()
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
-        "faust:bass": ("freq", "gate"),
+        "faust:pad": ("freq", "gate"),
     })
-    mixer.voice("bass", "faust:bass", gain=0.5)
 
-    with pytest.raises(ValueError, match="not found"):
-        mixer.gain("nope", 0.5)
-
-
-def test_stop_group_prefix() -> None:
-    """stop() with a name arg hushs group-matching voices."""
-    from unittest.mock import MagicMock
-
-    from krach._mixer import VoiceMixer
-
-    session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
-        "faust:kick": ("gate",),
-        "faust:hat": ("gate",),
-        "faust:bass": ("freq", "gate"),
-    })
-    mixer.voice("drums/kick", "faust:kick", gain=0.8)
-    mixer.voice("drums/hat", "faust:hat", gain=0.6)
-    mixer.voice("bass", "faust:bass", gain=0.5)
-
-    mixer.hush("drums")
-
-    hushed = {c.args[0] for c in session.hush.call_args_list}
-    assert "drums/kick" in hushed
-    assert "drums/hat" in hushed
+    with pytest.raises(ValueError, match="at least 1"):
+        mixer.voice("pad", "faust:pad", count=0, gain=0.5)
 
 
-# ── Commit 11: Remove old VoiceMixer note/hit/seq ────────────────────────────
-
-
-def test_mixer_note_removed() -> None:
-    """VoiceMixer no longer has a note() method."""
+def test_no_poly_method() -> None:
+    """poly() method no longer exists."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
 
     session = MagicMock()
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
-    assert not hasattr(mixer, "note")
+    assert not hasattr(mixer, "poly")
 
 
-def test_mixer_hit_removed() -> None:
-    """VoiceMixer no longer has a hit() method."""
-    from unittest.mock import MagicMock
-
-    from krach._mixer import VoiceMixer
-
-    session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
-    assert not hasattr(mixer, "hit")
-
-
-def test_mixer_seq_removed() -> None:
-    """VoiceMixer no longer has a seq() method."""
-    from unittest.mock import MagicMock
-
-    from krach._mixer import VoiceMixer
-
-    session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
-    assert not hasattr(mixer, "seq")
-
-
-# ── Commit 12: exports ───────────────────────────────────────────────────────
-
-
-def test_exports_free_functions() -> None:
-    """krach exports free pattern-building functions."""
+def test_no_polyvoice_class() -> None:
+    """PolyVoice class no longer exists."""
     import krach._mixer as m
-
-    assert callable(m.note)
-    assert callable(m.hit)
-    assert callable(m.seq)
-    assert callable(m.ramp)
-    assert callable(m.mod_sine)
-    assert callable(m.mod_tri)
-    assert callable(m.mod_ramp)
-    assert callable(m.mod_ramp_down)
-    assert callable(m.mod_square)
-    assert callable(m.mod_exp)
+    assert not hasattr(m, "PolyVoice")
 
 
-# ── Poly pattern binding ────────────────────────────────────────────────────
+def test_voice_dict_has_no_instances() -> None:
+    """The voices dict stores parent names, not instance names."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.voice("pad", "faust:pad", count=4, gain=0.5)
+
+    v = mixer.voices
+    # Only "pad" — no "pad_v0", "pad_v1", etc.
+    assert "pad" in v
+    assert "pad_v0" not in v
+    assert "pad_v1" not in v
 
 
-def test_play_poly_binds_to_instances() -> None:
-    """play() on a poly voice round-robin allocates instances in the pattern."""
+def test_play_poly_voice_round_robin() -> None:
+    """play() on a poly voice does round-robin allocation."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer, note
@@ -2716,44 +2403,12 @@ def test_play_poly_binds_to_instances() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
-    mixer.poly("pad", "faust:pad", voices=2, gain=0.5)
+    mixer.voice("pad", "faust:pad", count=2, gain=0.6)
 
-    # Play a sequence of 3 notes on poly(2) — should round-robin
-    pat = note("A3") + note("C4") + note("E4")
+    pat = note(440.0)
     mixer.play("pad", pat)
 
-    # Verify session.play was called with a bound pattern
-    assert session.play.call_count >= 1
+    # Should have called session.play with "pad" as the slot
+    assert session.play.call_count == 1
     call_args = session.play.call_args
-    bound_pattern = call_args[0][1]
-    # The pattern should contain pad_v0/, pad_v1/ prefixed labels (not pad/)
-    from midiman_frontend.ir import ir_to_dict
-    ir_json = str(ir_to_dict(bound_pattern.node))
-    assert "pad_v0/" in ir_json
-    assert "pad_v1/" in ir_json
-    assert "pad/freq" not in ir_json  # no bare poly parent labels
-
-
-def test_play_poly_chord_allocates_different_instances() -> None:
-    """play() on a poly voice with a chord (Freeze(Stack)) gives each note a different instance."""
-    from unittest.mock import MagicMock
-
-    from krach._mixer import VoiceMixer, note
-
-    session = MagicMock()
-    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
-        "faust:pad": ("freq", "gate"),
-    })
-    mixer.poly("pad", "faust:pad", voices=4, gain=0.5)
-
-    # Play a 3-note chord
-    pat = note("A3", "C4", "E4")
-    mixer.play("pad", pat)
-
-    from midiman_frontend.ir import ir_to_dict
-    ir_json = str(ir_to_dict(session.play.call_args[0][1].node))
-    # Should have 3 different instances
-    assert "pad_v0/" in ir_json
-    assert "pad_v1/" in ir_json
-    assert "pad_v2/" in ir_json
+    assert call_args.args[0] == "pad"

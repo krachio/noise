@@ -12,7 +12,7 @@ import math
 import textwrap
 from collections.abc import Generator
 from contextlib import contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable  # Any still used for DspDef.fn
 
@@ -28,24 +28,16 @@ from krach._pitch import mtof as _mtof
 from krach._pitch import parse_note as _parse_note
 
 
-@dataclass(frozen=True)
+@dataclass
 class Voice:
-    """A named audio voice in the mix."""
+    """A named audio voice — mono (count=1) or polyphonic (count>1)."""
 
     type_id: str
     gain: float
     controls: tuple[str, ...]
+    count: int = 1
     init: tuple[tuple[str, float], ...] = ()
-
-
-@dataclass(frozen=True)
-class PolyVoice:
-    """A polyphonic voice — N instances of the same FAUST type."""
-
-    type_id: str
-    count: int
-    gain: float
-    controls: tuple[str, ...]
+    alloc: int = field(default=0, repr=False)
 
 
 @dataclass(frozen=True)
@@ -97,6 +89,11 @@ def _check_finite(value: float, label: str) -> None:
     """Raise ValueError if value is NaN or Inf."""
     if math.isnan(value) or math.isinf(value):
         raise ValueError(f"{label} must be finite, got {value}")
+
+
+def _inst_name(name: str, i: int, count: int) -> str:
+    """Instance name: ``name_v{i}`` if count > 1, else ``name``."""
+    return f"{name}_v{i}" if count > 1 else name
 
 
 # ── Control pattern builders ──────────────────────────────────────────────────
@@ -158,11 +155,11 @@ def build_graph_ir(
     buses: dict[str, Bus] | None = None,
     sends: dict[tuple[str, str], float] | None = None,
     wires: dict[tuple[str, str], str] | None = None,
-    poly: dict[str, int] | None = None,
 ) -> GraphIr:
     """Build a complete soundman graph IR from voices, buses, sends, and wires.
 
     Each voice gets: DSP node → gain node → DAC.
+    Poly voices (count>1) expand to N instances internally.
     Each bus gets: DSP node → gain node → DAC.
     Sends: voice → send_gain → bus (fan-in at bus input).
     Wires: voice → bus:port (direct, no gain node).
@@ -171,31 +168,34 @@ def build_graph_ir(
     _buses = buses or {}
     _sends = sends or {}
     _wires = wires or {}
-    _poly = poly or {}
 
     builder = Graph()
     builder.node("out", "dac")
 
-    # Voices: DSP → gain → DAC
+    # Voices: expand instances, DSP → gain → DAC
     for name, voice in voices.items():
-        builder.node(name, voice.type_id, **dict(voice.init))
-        builder.node(f"{name}_g", "gain", gain=voice.gain)
-        builder.connect(name, "out", f"{name}_g", "in")
-        builder.connect(f"{name}_g", "out", "out", "in")
-        for param in voice.controls:
-            builder.expose(f"{name}/{param}", name, param)
-        builder.expose(f"{name}/gain", f"{name}_g", "gain")
+        for i in range(voice.count):
+            inst = _inst_name(name, i, voice.count)
+            per_gain = voice.gain / voice.count
+            builder.node(inst, voice.type_id, **dict(voice.init))
+            builder.node(f"{inst}_g", "gain", gain=per_gain)
+            builder.connect(inst, "out", f"{inst}_g", "in")
+            builder.connect(f"{inst}_g", "out", "out", "in")
+            for param in voice.controls:
+                builder.expose(f"{inst}/{param}", inst, param)
+            builder.expose(f"{inst}/gain", f"{inst}_g", "gain")
 
     # Poly sum nodes: implicit summing point for poly parents with sends/wires
     poly_with_routing: set[str] = set()
-    for voice, _bus in [*_sends.keys(), *_wires.keys()]:
-        if voice in _poly:
-            poly_with_routing.add(voice)
+    for voice_name, _bus in [*_sends.keys(), *_wires.keys()]:
+        v = voices.get(voice_name)
+        if v is not None and v.count > 1:
+            poly_with_routing.add(voice_name)
 
     for parent in poly_with_routing:
-        count = _poly[parent]
+        voice = voices[parent]
         builder.node(f"{parent}_sum", "gain", gain=1.0)
-        for i in range(count):
+        for i in range(voice.count):
             builder.connect(f"{parent}_v{i}", "out", f"{parent}_sum", "in")
 
     # Buses: DSP → gain → DAC
@@ -209,17 +209,17 @@ def build_graph_ir(
         builder.expose(f"{name}/gain", f"{name}_g", "gain")
 
     # Sends: source → send_gain → bus:in
-    for (voice, bus_name), level in _sends.items():
-        source = f"{voice}_sum" if voice in poly_with_routing else voice
-        send_id = f"{voice}_send_{bus_name}"
+    for (voice_name, bus_name), level in _sends.items():
+        source = f"{voice_name}_sum" if voice_name in poly_with_routing else voice_name
+        send_id = f"{voice_name}_send_{bus_name}"
         builder.node(send_id, "gain", gain=level)
         builder.connect(source, "out", send_id, "in")
         builder.connect(send_id, "out", bus_name, "in")
         builder.expose(f"{send_id}/gain", send_id, "gain")
 
     # Wires: source → bus:port (direct, no gain node)
-    for (voice, bus_name), port in _wires.items():
-        source = f"{voice}_sum" if voice in poly_with_routing else voice
+    for (voice_name, bus_name), port in _wires.items():
+        source = f"{voice_name}_sum" if voice_name in poly_with_routing else voice_name
         builder.connect(source, "out", bus_name, port)
 
     return builder.build()
@@ -608,8 +608,6 @@ class VoiceMixer:
         self._dsp_dir = dsp_dir
         self._node_controls: dict[str, tuple[str, ...]] = dict(node_controls or {})
         self._voices: dict[str, Voice] = {}
-        self._poly: dict[str, PolyVoice] = {}
-        self._poly_alloc: dict[str, int] = {}  # round-robin counter per poly name
         self._muted: dict[str, float] = {}  # name → gain before mute
         self._buses: dict[str, Bus] = {}
         self._sends: dict[tuple[str, str], float] = {}  # (voice, bus) → gain
@@ -651,24 +649,28 @@ class VoiceMixer:
         name: str,
         source: str | DspDef | Callable[..., Any],
         gain: float = 0.5,
+        count: int = 1,
         **init: float,
     ) -> None:
         """Add or replace a voice.  Rebuilds the graph.
 
         ``source`` is a ``@dsp``-decorated function, a registered type_id
         string, or a raw Python DSP function (transpiled on the fly).
+
+        ``count``: 1 for mono, >1 for polyphonic (N instances, round-robin).
         """
+        if count < 1:
+            raise ValueError("count must be at least 1")
         type_id, controls = self._resolve_source(name, source, tuple(init.keys()))
         self._muted.pop(name, None)
 
-        # If replacing a poly voice with a mono voice, clean up poly state first.
-        if name in self._poly:
+        # Clean up old voice state if replacing
+        if name in self._voices:
+            old = self._voices[name]
             self.hush(name)
-            old_pv = self._poly.pop(name)
-            self._poly_alloc.pop(name, None)
-            for i in range(old_pv.count):
-                self._voices.pop(f"{name}_v{i}", None)
-                self._muted.pop(f"{name}_v{i}", None)
+            # Clean instance-level muted entries from old poly
+            for i in range(old.count):
+                self._muted.pop(_inst_name(name, i, old.count), None)
 
         # Clean sends/wires from old voice
         for key in [k for k in self._sends if k[0] == name]:
@@ -677,87 +679,36 @@ class VoiceMixer:
             del self._wires[key]
 
         is_new = name not in self._voices
-        if not is_new:
-            self.hush(name)
         self._voices[name] = Voice(
             type_id=type_id,
             gain=gain,
             controls=controls,
+            count=count,
             init=tuple(init.items()),
+            alloc=0,
         )
         if not self._batching:
-            if is_new and self._graph_loaded:
+            if is_new and self._graph_loaded and count == 1:
                 self._session.add_voice(name, type_id, controls, gain)
             else:
                 self._rebuild()
 
-    def poly(
-        self,
-        name: str,
-        source: str | DspDef | Callable[..., Any],
-        voices: int = 4,
-        gain: float = 0.5,
-    ) -> None:
-        """Create a polyphonic voice with N instances of the same FAUST type.
-
-        Raises ValueError if voices < 1.
-
-        Each instance is named ``{name}_v0``, ``{name}_v1``, etc.
-        Use ``mix.note(name, freq)`` to trigger the next available instance
-        (round-robin), or ``mix.note(name, f1, f2, f3)`` for simultaneous notes.
-        """
-        if voices < 1:
-            raise ValueError("poly requires at least 1 voice")
-        type_id, controls = self._resolve_source(name, source)
-        self._muted.pop(name, None)
-
-        # Clean up old state: either poly instances or a mono voice.
-        if name in self._poly:
-            self.hush(name)
-            old = self._poly[name]
-            for i in range(old.count):
-                self._voices.pop(f"{name}_v{i}", None)
-                self._muted.pop(f"{name}_v{i}", None)
-        elif name in self._voices:
-            self.hush(name)
-            del self._voices[name]
-
-        # Clean sends/wires from old voice
-        for key in [k for k in self._sends if k[0] == name]:
-            del self._sends[key]
-        for key in [k for k in self._wires if k[0] == name]:
-            del self._wires[key]
-
-        self._poly[name] = PolyVoice(type_id=type_id, count=voices, gain=gain, controls=controls)
-        self._poly_alloc[name] = 0
-
-        per_voice_gain = gain / voices
-        for i in range(voices):
-            inst = f"{name}_v{i}"
-            self._voices[inst] = Voice(type_id=type_id, gain=per_voice_gain, controls=controls)
-
-        if not self._batching:
-            self._rebuild()
-
     def remove(self, name: str) -> None:
-        """Remove a voice or poly voice. Rebuilds the graph."""
-        if name not in self._voices and name not in self._poly:
+        """Remove a voice. Rebuilds the graph."""
+        if name not in self._voices:
             raise ValueError(f"voice '{name}' not found")
+        voice = self._voices[name]
         self._muted.pop(name, None)
         self.hush(name)
+        # Clean instance-level muted entries
+        for i in range(voice.count):
+            self._muted.pop(_inst_name(name, i, voice.count), None)
         # Clean sends/wires where this voice is the source
         for key in [k for k in self._sends if k[0] == name]:
             del self._sends[key]
         for key in [k for k in self._wires if k[0] == name]:
             del self._wires[key]
-        if name in self._poly:
-            pv = self._poly.pop(name)
-            self._poly_alloc.pop(name, None)
-            for i in range(pv.count):
-                self._voices.pop(f"{name}_v{i}", None)
-                self._muted.pop(f"{name}_v{i}", None)
-        else:
-            del self._voices[name]
+        del self._voices[name]
         self._rebuild()
 
     def hush(self, name: str) -> None:
@@ -791,31 +742,20 @@ class VoiceMixer:
         """Hush a single voice (not a group or path)."""
         self._session.hush(name)
         self._session.hush(f"_fade_{name}")
-        if name in self._poly:
-            pv = self._poly[name]
-            for i in range(pv.count):
-                inst = f"{name}_v{i}"
-                self._session.hush(inst)
-                self._session.hush(f"_fade_{inst}")
-                if "gate" in pv.controls:
+        voice = self._voices.get(name)
+        if voice is not None:
+            for i in range(voice.count):
+                inst = _inst_name(name, i, voice.count)
+                if voice.count > 1:
+                    self._session.hush(inst)
+                    self._session.hush(f"_fade_{inst}")
+                if "gate" in voice.controls:
                     self._session.set_ctrl(f"{inst}/gate", 0.0)
-        else:
-            voice = self._voices.get(name)
-            if voice and "gate" in voice.controls:
-                self._session.set_ctrl(f"{name}/gate", 0.0)
 
     def stop(self) -> None:
         """Hush all voices and release all gates."""
-        # Collect exact poly instance names to avoid prefix-matching bugs
-        # (e.g. mono "pad_vinyl" must not be skipped when poly "pad" exists).
-        poly_instances: set[str] = set()
-        for pname, pv in self._poly.items():
-            self.hush(pname)
-            for i in range(pv.count):
-                poly_instances.add(f"{pname}_v{i}")
         for name in self._voices:
-            if name not in poly_instances:
-                self.hush(name)
+            self.hush(name)
 
     def gain(self, name: str, value: float) -> None:
         """Update a voice, bus, or group gain. Instant — no graph rebuild.
@@ -829,7 +769,7 @@ class VoiceMixer:
             self._gain_single(t, value)
 
     def _gain_single(self, name: str, value: float) -> None:
-        """Set gain for a single voice, poly, or bus."""
+        """Set gain for a single voice or bus."""
         if name in self._buses:
             old_bus = self._buses[name]
             self._buses[name] = Bus(
@@ -838,25 +778,12 @@ class VoiceMixer:
             )
             self._session.set_ctrl(f"{name}/gain", float(value))
             return
-        if name in self._poly:
-            pv = self._poly[name]
-            per_voice = value / pv.count
-            for i in range(pv.count):
-                inst = f"{name}_v{i}"
-                old = self._voices[inst]
-                self._voices[inst] = Voice(
-                    type_id=old.type_id, gain=per_voice, controls=old.controls, init=old.init
-                )
-                self._session.set_ctrl(f"{inst}/gain", float(per_voice))
-            self._poly[name] = PolyVoice(
-                type_id=pv.type_id, count=pv.count, gain=value, controls=pv.controls,
-            )
-        else:
-            old = self._voices[name]
-            self._voices[name] = Voice(
-                type_id=old.type_id, gain=value, controls=old.controls, init=old.init
-            )
-            self._session.set_ctrl(f"{name}/gain", float(value))
+        voice = self._voices[name]
+        voice.gain = value
+        per_voice = value / voice.count
+        for i in range(voice.count):
+            inst = _inst_name(name, i, voice.count)
+            self._session.set_ctrl(f"{inst}/gain", float(per_voice))
 
     def mute(self, name: str) -> None:
         """Mute a voice or group — stores current gain, sets gain to 0. No-op if already muted."""
@@ -868,9 +795,7 @@ class VoiceMixer:
         """Mute a single voice."""
         if name in self._muted:
             return
-        if name in self._poly:
-            self._muted[name] = self._poly[name].gain
-        elif name in self._voices:
+        if name in self._voices:
             self._muted[name] = self._voices[name].gain
         self._gain_single(name, 0.0)
 
@@ -890,16 +815,7 @@ class VoiceMixer:
     def solo(self, name: str) -> None:
         """Solo a voice or group — mutes all others, unmutes targets."""
         targets = set(self._resolve_targets(name))
-        # Collect all top-level names (mono voices + poly parents)
-        all_names: set[str] = set()
-        for vname in self._voices:
-            all_names.add(vname)
-        for pname in self._poly:
-            all_names.add(pname)
-            # Remove poly instances from the set — they're managed via parent
-            pv = self._poly[pname]
-            for i in range(pv.count):
-                all_names.discard(f"{pname}_v{i}")
+        all_names: set[str] = set(self._voices.keys())
         for n in all_names:
             if n not in targets:
                 self._mute_single(n)
@@ -913,23 +829,24 @@ class VoiceMixer:
             self.unmute(name)
 
     def _is_voice_or_bus(self, name: str) -> bool:
-        """Check if name is a known voice, poly parent, or bus."""
-        return name in self._voices or name in self._poly or name in self._buses
+        """Check if name is a known voice or bus."""
+        return name in self._voices or name in self._buses
 
     def play(self, target: str, pattern: Pattern) -> None:
         """Play a pattern on a voice or control path.
 
-        - Known voice/bus name (exact match): binds bare params to ``voice/param``
-        - Poly voice: round-robin allocates instances
+        - Known voice name (exact match): binds bare params to ``voice/param``
+        - Poly voice (count>1): round-robin allocates instances
         - Otherwise with ``/``: control path — rewrites ``"ctrl"`` placeholder
         - Otherwise without ``/``: mono voice binding (may be a new slot)
         """
-        if target in self._poly:
+        voice = self._voices.get(target)
+        if voice is not None and voice.count > 1:
             # Poly voice: round-robin allocate instances during rewrite
-            pv = self._poly[target]
-            alloc = self._poly_alloc.get(target, 0)
-            bound_node, alloc = _bind_voice_poly(pattern.node, target, pv.count, alloc)
-            self._poly_alloc[target] = alloc
+            bound_node, new_alloc = _bind_voice_poly(
+                pattern.node, target, voice.count, voice.alloc
+            )
+            voice.alloc = new_alloc
             self._session.play(target, Pattern(bound_node))
         elif self._is_voice_or_bus(target):
             # Known mono voice or bus: rewrite bare params to voice/param
@@ -970,21 +887,21 @@ class VoiceMixer:
         return path
 
     def _resolve_targets(self, name: str) -> list[str]:
-        """Resolve name to matching voices/poly/buses. Exact match first, then prefix."""
-        if name in self._voices or name in self._poly or name in self._buses:
+        """Resolve name to matching voices/buses. Exact match first, then prefix."""
+        if name in self._voices or name in self._buses:
             return [name]
         prefix = name + "/"
-        matches = [n for n in [*self._voices, *self._poly, *self._buses] if n.startswith(prefix)]
+        matches = [n for n in [*self._voices, *self._buses] if n.startswith(prefix)]
         if not matches:
             raise ValueError(f"voice or group '{name}' not found")
         return matches
 
     def _resolve_targets_soft(self, name: str) -> list[str]:
         """Like _resolve_targets but returns empty list instead of raising."""
-        if name in self._voices or name in self._poly or name in self._buses:
+        if name in self._voices or name in self._buses:
             return [name]
         prefix = name + "/"
-        return [n for n in [*self._voices, *self._poly, *self._buses] if n.startswith(prefix)]
+        return [n for n in [*self._voices, *self._buses] if n.startswith(prefix)]
 
     def fade(
         self, path: str, target: float, bars: int = 4, steps_per_bar: int = 4
@@ -1004,20 +921,17 @@ class VoiceMixer:
             parts = path.split("/", 1)
             voice_name, param = parts[0], parts[1]
 
-            # Determine current value: check ctrl_values first, then gain bookkeeping
+            # Determine current value
             if path in self._ctrl_values:
                 current = self._ctrl_values[path]
             elif param == "gain" and voice_name in self._voices:
                 current = self._voices[voice_name].gain
-            elif param == "gain" and voice_name in self._poly:
-                current = self._poly[voice_name].gain
             else:
                 current = 0.0
 
             # Hush any existing control pattern on this path
             ctrl_slot = f"_ctrl_{path.replace('/', '_')}"
             self._session.hush(ctrl_slot)
-            # Use higher resolution for smooth fades (16 steps/bar minimum)
             effective_spb = max(steps_per_bar, 16)
             pattern = self._build_fade_pattern(current, target, bars, effective_spb)
             self.play(path, pattern)
@@ -1030,28 +944,19 @@ class VoiceMixer:
 
         # Legacy: plain voice name → fade gain
         name = path
-        if name not in self._poly and name not in self._voices:
+        if name not in self._voices:
             raise ValueError(f"voice '{name}' not found")
 
-        if name in self._poly:
-            pv = self._poly[name]
-            for i in range(pv.count):
-                inst = f"{name}_v{i}"
-                self._fade_voice(inst, target / pv.count, bars, steps_per_bar)
-            self._poly[name] = PolyVoice(
-                type_id=pv.type_id, count=pv.count, gain=target, controls=pv.controls,
-            )
-        else:
-            self._fade_voice(name, target, bars, steps_per_bar)
+        voice = self._voices[name]
+        for i in range(voice.count):
+            inst = _inst_name(name, i, voice.count)
+            self._fade_voice(inst, target / voice.count, bars, steps_per_bar)
+        voice.gain = target
 
     def _build_fade_pattern(
         self, current: float, target: float, bars: int, steps_per_bar: int
     ) -> Pattern:
-        """Build a ramp pattern over N bars.
-
-        The ramp fills exactly N bars. On loop it replays — acceptable since
-        subsequent fades read from _ctrl_values (the target).
-        """
+        """Build a ramp pattern over N bars."""
         total_steps = bars * steps_per_bar
         atoms: list[Pattern] = []
         for i in range(total_steps + 1):
@@ -1068,7 +973,19 @@ class VoiceMixer:
     ) -> None:
         """Schedule a gain fade for a single voice instance."""
         self._session.hush(f"_fade_{name}")
-        current = self._voices[name].gain
+        # Find current gain for this instance
+        # For poly instances, compute from parent
+        current = target  # fallback
+        for vname, voice in self._voices.items():
+            if voice.count == 1 and vname == name:
+                current = voice.gain
+                break
+            if voice.count > 1:
+                for i in range(voice.count):
+                    if _inst_name(vname, i, voice.count) == name:
+                        current = voice.gain / voice.count
+                        break
+
         total_steps = bars * steps_per_bar
         ramp_atoms: list[Pattern] = []
         for i in range(total_steps + 1):
@@ -1083,30 +1000,11 @@ class VoiceMixer:
         for a in all_atoms[1:]:
             pattern = pattern + a
         self._session.play(f"_fade_{name}", pattern.over(bars * 20))
-        old = self._voices[name]
-        self._voices[name] = Voice(
-            type_id=old.type_id, gain=target, controls=old.controls, init=old.init
-        )
 
     def _update_gain_bookkeeping(self, name: str, target: float) -> None:
         """Update gain bookkeeping after a path-based fade."""
-        if name in self._poly:
-            pv = self._poly[name]
-            per_voice = target / pv.count
-            for i in range(pv.count):
-                inst = f"{name}_v{i}"
-                old = self._voices[inst]
-                self._voices[inst] = Voice(
-                    type_id=old.type_id, gain=per_voice, controls=old.controls, init=old.init
-                )
-            self._poly[name] = PolyVoice(
-                type_id=pv.type_id, count=pv.count, gain=target, controls=pv.controls,
-            )
-        elif name in self._voices:
-            old = self._voices[name]
-            self._voices[name] = Voice(
-                type_id=old.type_id, gain=target, controls=old.controls, init=old.init
-            )
+        if name in self._voices:
+            self._voices[name].gain = target
 
     def bus(
         self,
@@ -1116,9 +1014,9 @@ class VoiceMixer:
     ) -> None:
         """Add an effect bus. Rebuilds the graph.
 
-        Raises ValueError if name collides with an existing voice or poly parent.
+        Raises ValueError if name collides with an existing voice.
         """
-        if name in self._voices or name in self._poly:
+        if name in self._voices:
             raise ValueError(f"name '{name}' already used as a voice")
         type_id, controls = self._resolve_source(name, source)
         num_inputs: int
@@ -1141,8 +1039,7 @@ class VoiceMixer:
         Raises ValueError if a wire exists for the same (voice, bus) pair.
         """
         _check_finite(level, f"send level for '{voice}' → '{bus}'")
-        # Resolve voice: accept poly parents or mono voices
-        if voice not in self._voices and voice not in self._poly:
+        if voice not in self._voices:
             raise ValueError(f"voice '{voice}' not found")
         if bus not in self._buses:
             raise ValueError(f"bus '{bus}' not found")
@@ -1167,7 +1064,7 @@ class VoiceMixer:
 
         Raises ValueError if a send exists for the same (voice, bus) pair.
         """
-        if voice not in self._voices and voice not in self._poly:
+        if voice not in self._voices:
             raise ValueError(f"voice '{voice}' not found")
         if bus not in self._buses:
             raise ValueError(f"bus '{bus}' not found")
@@ -1186,10 +1083,8 @@ class VoiceMixer:
         if name not in self._buses:
             raise ValueError(f"bus '{name}' not found")
         del self._buses[name]
-        # Clean sends targeting this bus
         for key in [k for k in self._sends if k[1] == name]:
             del self._sends[key]
-        # Clean wires targeting this bus
         for key in [k for k in self._wires if k[1] == name]:
             del self._wires[key]
         self._rebuild()
@@ -1207,8 +1102,6 @@ class VoiceMixer:
         """
         self._batching = True
         snap_voices = dict(self._voices)
-        snap_poly = dict(self._poly)
-        snap_alloc = dict(self._poly_alloc)
         ok = False
         try:
             yield
@@ -1219,24 +1112,9 @@ class VoiceMixer:
                 self._flush()
             else:
                 self._voices = snap_voices
-                self._poly = snap_poly
-                self._poly_alloc = snap_alloc
 
     def __repr__(self) -> str:
-        # Collect top-level names: mono voices + poly parents (skip poly instances)
-        poly_instances: set[str] = set()
-        for pname, pv in self._poly.items():
-            for i in range(pv.count):
-                poly_instances.add(f"{pname}_v{i}")
-
-        top: list[str] = []
-        for vname in self._voices:
-            if vname not in poly_instances:
-                top.append(vname)
-        for pname in self._poly:
-            if pname not in top:
-                top.append(pname)
-
+        top = list(self._voices.keys())
         count = len(top)
         lines = [f"VoiceMixer({count} voices)"]
         if not top:
@@ -1244,17 +1122,12 @@ class VoiceMixer:
 
         max_name = max(len(n) for n in top)
         for name in top:
-            if name in self._poly:
-                pv = self._poly[name]
-                parts = f"  {name + ':':.<{max_name + 2}} {pv.type_id}  gain={pv.gain:.2f}"
-                if name in self._muted:
-                    parts += "  [muted]"
-                parts += f"  poly({pv.count})"
-            else:
-                v = self._voices[name]
-                parts = f"  {name + ':':.<{max_name + 2}} {v.type_id}  gain={v.gain:.2f}"
-                if name in self._muted:
-                    parts += "  [muted]"
+            v = self._voices[name]
+            parts = f"  {name + ':':.<{max_name + 2}} {v.type_id}  gain={v.gain:.2f}"
+            if name in self._muted:
+                parts += "  [muted]"
+            if v.count > 1:
+                parts += f"  poly({v.count})"
             lines.append(parts)
 
         # Buses
@@ -1290,7 +1163,6 @@ class VoiceMixer:
             buses=self._buses,
             sends=self._sends,
             wires=self._wires,
-            poly={name: pv.count for name, pv in self._poly.items()},
         )
         self._session.load_graph(ir)
         self._graph_loaded = True
