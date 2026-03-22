@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import math
+import re
 
 _NAMES = ("C", "Cs", "D", "Ds", "E", "F", "Fs", "G", "Gs", "A", "As", "B")
+
+_SEMITONES = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
+_NOTE_RE = re.compile(r"^([A-G])([#sb]?)(\d)$")
 
 
 def mtof(note: int) -> float:
@@ -12,6 +16,32 @@ def mtof(note: int) -> float:
     if note < 0 or note > 127:
         raise ValueError(f"MIDI note must be 0-127, got {note}")
     return 440.0 * 2 ** ((note - 69) / 12.0)
+
+
+def parse_note(s: str) -> float:
+    """Parse a note name string to frequency in Hz.
+
+    Format: ``{letter}{accidental?}{octave}`` where letter is A-G,
+    accidental is ``#`` or ``s`` (sharp) or ``b`` (flat), octave is 0-8.
+
+    Examples: ``"C4"`` -> 261.63, ``"C#4"`` -> 277.18, ``"Db4"`` -> 277.18.
+    """
+    m = _NOTE_RE.match(s)
+    if m is None:
+        raise ValueError(f"invalid note name: {s!r}")
+    letter, accidental, octave_str = m.group(1), m.group(2), m.group(3)
+    octave = int(octave_str)
+    if octave < 0 or octave > 8:
+        raise ValueError(f"octave must be 0-8, got {octave}")
+    semitone = _SEMITONES[letter]
+    if accidental in ("#", "s"):
+        semitone += 1
+    elif accidental == "b":
+        semitone -= 1
+    midi = (octave + 1) * 12 + semitone
+    if midi < 0 or midi > 127:
+        raise ValueError(f"resulting MIDI note {midi} out of range 0-127")
+    return mtof(midi)
 
 
 def ftom(freq: float) -> int:

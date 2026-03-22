@@ -1,6 +1,6 @@
 import pytest
 
-from krach._pitch import NOTES, ftom, mtof
+from krach._pitch import NOTES, ftom, mtof, parse_note
 
 
 class TestMtof:
@@ -98,3 +98,35 @@ class TestFtomOutputRange:
         assert 0 <= result <= 127, (
             f"ftom(100000.0) returned {result}, outside MIDI 0-127"
         )
+
+
+# ── parse_note ────────────────────────────────────────────────────────────────
+
+
+class TestParseNote:
+    def test_parse_note_c4(self) -> None:
+        assert abs(parse_note("C4") - mtof(60)) < 0.01
+
+    def test_parse_note_a4(self) -> None:
+        assert parse_note("A4") == 440.0
+
+    def test_parse_note_sharp(self) -> None:
+        # C#4 = Cs4 = MIDI 61
+        assert abs(parse_note("C#4") - mtof(61)) < 0.01
+        assert abs(parse_note("Cs4") - mtof(61)) < 0.01
+
+    def test_parse_note_flat(self) -> None:
+        # Db4 = C#4 = MIDI 61
+        assert abs(parse_note("Db4") - mtof(61)) < 0.01
+
+    def test_parse_note_invalid(self) -> None:
+        with pytest.raises(ValueError):
+            parse_note("X4")
+        with pytest.raises(ValueError):
+            parse_note("")
+        with pytest.raises(ValueError):
+            parse_note("C")
+        with pytest.raises(ValueError):
+            parse_note("C9")
+        with pytest.raises(ValueError):
+            parse_note("H4")
