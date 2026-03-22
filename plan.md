@@ -417,35 +417,50 @@ to wavetables is a new Rust-side backend for existing IR evaluation.
 - Pattern engine already evaluates patterns each cycle in Rust (including Degrade/random)
 - Gate lifecycle is in the curve by construction — `ClearAutomation` resets to 0
 
-### Cache model (like XLA → jaxpr → HLO)
+### Three-stage compilation pipeline (like XLA: jaxpr → HLO → machine code)
 
-Wavetables are cached by hashing the evaluation output (sorted events for the cycle).
-Same events → same wavetable → cache hit. No explicit stationarity detection needed.
+Pattern compilation separates **structure** from **parameters**:
 
-- Static patterns (`hit() * 4`): compile once, permanent cache hit
-- Periodic (`.every(4, reverse)`): N unique evaluations, cached after first occurrence
-- Random (`.thin(seed=42)`): seed + cycle deterministic → cache if same seed+cycle repeats
+| Stage | Analogy | Input → Output | Cached? |
+|-------|---------|----------------|---------|
+| **1. Lower** | jaxpr → HLO | IR → EventTemplate (all possible events) | ✅ keyed on pattern structure |
+| **2. Parameterize** | bind uniforms | Template + (seed, cycle_n) → masked events | ❌ cheap O(n) |
+| **3. Fill** | codegen | Events → block-rate wavetable | ❌ cheap O(blocks) |
 
-### 6.1 `events_to_wavetables` — pure function (Rust, pattern-engine)
+An `EventTemplate` is the "compiled circuit" — all event positions and values the pattern
+CAN produce. Random nodes (Degrade) and dynamic nodes (Every) are evaluated lazily:
+the template contains ALL branches, parameterization selects which branch/mask to apply.
+
+Cache key is the **pattern structure** (IR topology + static values), not the evaluation output.
+Same pattern, different seed = cache hit at stage 1. Only stages 2+3 run (microseconds).
+
+- Static patterns (`hit() * 4`): stage 1 once, stages 2+3 are identity (no random/dynamic nodes)
+- Periodic (`.every(4, reverse)`): stage 1 produces N branch templates, stage 2 selects by cycle_n
+- Random (`.thin(0.3)`): stage 1 produces all events, stage 2 applies seed-based mask
+
+### 6.1 `EventTemplate` + `events_to_wavetable` — pure functions (Rust, pattern-engine)
 
 New module: `pattern-engine/src/curve.rs`
 
 ```rust
-/// Convert a sorted list of (onset_fraction, label, value) events for one cycle
-/// into per-parameter wavetables at the given block resolution.
-///
-/// Each wavetable has `blocks_per_cycle` entries. Values are sample-and-hold:
-/// the parameter stays at its last-set value until the next event.
+/// All possible events a pattern can produce for one cycle.
+/// This is the "compiled circuit" — cached, independent of seed/cycle.
+struct EventTemplate {
+    /// Sorted by onset. (onset_frac 0..1, label, value)
+    events: Vec<(f64, String, f32)>,
+}
+
+/// Convert events to per-parameter block-rate wavetables.
+/// Sample-and-hold: each block slot holds the most recent value.
 pub fn events_to_wavetables(
-    events: &[(f64, &str, f32)],  // (onset_frac 0..1, label, value)
+    events: &[(f64, &str, f32)],
     blocks_per_cycle: usize,
 ) -> HashMap<String, Vec<f32>> { ... }
 ```
 
-- Pure function: events in, wavetables out. No state, no side effects.
-- Sample-and-hold: each block slot holds the most recent value for that parameter.
-- Gate events produce clean pulses: `[0, 0, 1, 1, ..., 0, 0, ...]`
-- Test: `seq("C4", "E4", None)` → freq wavetable with 3 plateaus, gate with 2 pulses + rest
+- `EventTemplate`: the cacheable unit. Pattern structure → template (stage 1).
+- `events_to_wavetables`: pure function, events → wavetables (stage 3).
+- Stage 2 (parameterize) is a simple filter/select between stages 1 and 3.
 
 **Tests:**
 - Single note → freq constant, gate pulse + release
@@ -454,31 +469,42 @@ pub fn events_to_wavetables(
 - Empty events → all-zero wavetables
 - Edge: event at exactly t=0.0 and t=1.0
 
-### 6.2 Evaluation hash + wavetable cache (Rust, pattern-engine)
+### 6.2 Template cache + parameterization (Rust, pattern-engine)
 
 ```rust
-/// Cache of compiled wavetables keyed by content hash of the evaluation output.
+/// Cache of compiled EventTemplates keyed on pattern structure hash.
 struct CurveCache {
-    entries: HashMap<u64, HashMap<String, Vec<f32>>>,
-    // u64 = hash of sorted events for one cycle
+    templates: HashMap<u64, EventTemplate>,  // u64 = hash of pattern IR structure
+}
+
+impl CurveCache {
+    /// Get or compile a template for the given pattern.
+    fn get_or_compile(&mut self, pattern: &CompiledPattern, arc: Arc) -> &EventTemplate;
+
+    /// Apply Degrade/Every parameterization to a template.
+    /// Returns filtered events ready for wavetable fill.
+    fn parameterize(template: &EventTemplate, seed: u64, cycle: u64, prob: f64) -> Vec<(f64, &str, f32)>;
 }
 ```
 
-- Hash the events list (onset, label, value tuples) with a fast hasher (FxHash)
-- On cache hit: return reference to existing wavetables
-- On cache miss: call `events_to_wavetables`, insert, return
-- Cache eviction: LRU or bounded size (keep last N unique evaluations)
+- Cache key: hash of the pattern's deterministic structure (IR topology + static values)
+- Same pattern, different seed/cycle → cache hit (template reused)
+- Parameterization: O(n_events) filter — mask out events based on seed
+- Cache eviction: bounded size (keep last N templates, LRU)
 
 **Tests:**
-- Same events → same hash → cache hit
-- Different events → different hash → cache miss
-- Cache returns correct wavetables on hit
+- Same pattern, different seed → same template (cache hit), different output events
+- Different pattern → different template (cache miss)
+- Parameterize with prob=0.0 → all events survive
+- Parameterize with prob=1.0 → no events survive
 
 ### 6.3 Cycle-boundary curve generation (Rust, krach-engine)
 
 New step in the main loop: at each cycle boundary, for each active Control-voice slot:
 
-1. Evaluate pattern for the next cycle → list of `(onset_frac, label, value)` events
+1. Get or compile EventTemplate for the slot's pattern (cache hit for known patterns)
+2. Parameterize: apply seed/cycle-dependent masks (Degrade, Every selection)
+3. Fill wavetables from parameterized events
 2. Check cache → hit: reuse wavetables; miss: compile + cache
 3. For each parameter wavetable, send `SetAutomation(Custom { table }, period = 1 cycle, one_shot = true)`
 4. Automation plays for exactly one cycle, then the next cycle's curve replaces it
