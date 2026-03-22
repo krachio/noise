@@ -328,8 +328,15 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
         }
 
         // ⑥ Check FAUST background reload (non-blocking).
-        if let Err(e) = audio_engine.poll_reload() {
-            warn!("poll_reload: {e}");
+        match audio_engine.poll_reload() {
+            Ok(reloaded) if !reloaded.is_empty() => {
+                // Update shared node types so list_nodes reflects new FAUST types.
+                if let Ok(mut types) = node_types.write() {
+                    *types = audio_engine.controller_mut().list_node_types();
+                }
+            }
+            Err(e) => warn!("poll_reload: {e}"),
+            _ => {}
         }
 
         // ⑦ Drain any note-offs that are now due.
