@@ -2,10 +2,16 @@
 
 ## Current State
 
-755+ tests (218 krach, 139 midiman-frontend, 68 faust-dsl, ~330 Rust). Pyright strict clean.
+~780 tests (236 krach, 142 midiman-frontend, 68 faust-dsl, ~340 Rust). Pyright strict clean.
 Single user object `mix` with voice handles, voice-free patterns, `/` path addressing,
-effect routing, modulation-as-patterns, unified Voice model, phase-reset, meter, pattern retrieval.
+effect routing, native automation lanes (block-rate on audio thread), unified Voice model,
+phase-reset, meter, pattern retrieval, scenes, mix.load().
 Engine logs to `~/.krach/engine.log`.
+
+### Completed
+- ✅ Stage 1: Stability (master gain, bpm alias, voice/bus handles, copilot context)
+- ✅ Stage 2: Automation lanes (AutoShape, GraphSwapper integration, IPC, Python mod/fade)
+- ✅ Stage 3: Scenes + music-as-code (save/recall, mix.load())
 
 ---
 
@@ -392,3 +398,34 @@ mix.mod("bass/cutoff", "sine", lo=200, hi=2000, bars=4)  # should be ONE command
 # Log should show: set_automation bass/cutoff sine 200-2000 period=...
 # No flood of set_control messages
 ```
+
+---
+
+## Witnessed Failures (to be fixed)
+
+### Audio silence/glitch when adding voices to a running graph
+**Symptom:** Adding a new voice while others are playing causes a brief silence or
+audible cycle suppression. Existing voices cut out momentarily during the graph swap.
+
+**Root cause:** Every topology change (voice/bus/send add) triggers a full graph
+recompile + `SwapGraph` with crossfade. If the retired graph hasn't been returned
+via the lock-free channel yet, `cached_graph = None` and node reuse fails — all
+nodes are fresh (phase=0, filter state reset). The crossfade blends old (correct
+state) with new (cold state), producing audible artifacts.
+
+**Aggravating factors:**
+- FAUST JIT compilation blocks the `_wait_for_type()` poll loop (~50-200ms)
+- Multiple sequential `send()` calls trigger multiple rapid graph rebuilds
+- The crossfade is 250ms at 120 BPM — if JIT takes longer, the swap is queued
+
+**When to fix:** After Stage 2 automation lanes reduce the frequency of graph swaps
+(mod/fade no longer trigger swaps). The remaining swaps (voice/bus add) need either:
+- A faster incremental mutation path that avoids full recompile
+- Double-buffered graph with lock-free node addition
+- Longer crossfade + guaranteed node reuse via synchronous return channel drain
+
+### gain() not working in some sessions
+**Symptom:** `mix.gain("stab", 0.0)` doesn't reduce volume.
+**Status:** Likely fixed by `add_voice()` underscore→slash label fix (`d5bfc26`).
+Needs verification in fresh session with `~/.krach/engine.log` monitoring.
+Log now shows exposed labels at info level — mismatch will be visible.
