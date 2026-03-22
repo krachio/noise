@@ -34,6 +34,16 @@ class Voice:
 
 
 @dataclass(frozen=True)
+class PolyVoice:
+    """A polyphonic voice — N instances of the same FAUST type."""
+
+    type_id: str
+    count: int
+    gain: float
+    controls: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class DspDef:
     """A pre-transpiled DSP definition created by the ``@dsp`` decorator."""
 
@@ -169,6 +179,8 @@ class VoiceMixer:
         self._dsp_dir = dsp_dir
         self._node_controls: dict[str, tuple[str, ...]] = dict(node_controls or {})
         self._voices: dict[str, Voice] = {}
+        self._poly: dict[str, PolyVoice] = {}
+        self._poly_alloc: dict[str, int] = {}  # round-robin counter per poly name
         self._batching: bool = False
         self._graph_loaded: bool = False
 
@@ -215,6 +227,50 @@ class VoiceMixer:
             else:
                 self._rebuild()
 
+    def poly(
+        self,
+        name: str,
+        source: str | DspDef | Callable[..., Any],
+        voices: int = 4,
+        gain: float = 0.5,
+    ) -> None:
+        """Create a polyphonic voice with N instances of the same FAUST type.
+
+        Each instance is named ``{name}_v0``, ``{name}_v1``, etc.
+        Use ``mix.step(name, freq)`` to trigger the next available instance
+        (round-robin), or ``mix.chord(name, f1, f2, f3)`` for simultaneous notes.
+        """
+        # Resolve type_id and controls via the same logic as voice().
+        if isinstance(source, DspDef):
+            type_id = f"faust:{name}"
+            faust_code, controls = source.faust, source.controls
+            self._dsp_dir.joinpath(f"{name}.py").write_text(source.source)
+        elif callable(source):
+            type_id = f"faust:{name}"
+            result = _transpile(source)  # type: ignore[arg-type]
+            faust_code, controls = result.source, tuple(c.name for c in result.schema.controls)
+        else:
+            type_id = source
+            faust_code, controls = None, self._node_controls.get(type_id, ())
+
+        if faust_code is not None:
+            self._dsp_dir.joinpath(f"{name}.dsp").write_text(faust_code)
+            self._node_controls[type_id] = controls
+            if not self._batching:
+                self._wait_for_type(type_id)
+
+        self._poly[name] = PolyVoice(type_id=type_id, count=voices, gain=gain, controls=controls)
+        self._poly_alloc[name] = 0
+
+        # Create N individual voice instances.
+        per_voice_gain = gain / voices
+        for i in range(voices):
+            inst = f"{name}_v{i}"
+            self._voices[inst] = Voice(type_id=type_id, gain=per_voice_gain, controls=controls)
+
+        if not self._batching:
+            self._rebuild()
+
     def remove(self, name: str) -> None:
         """Remove a voice.  Rebuilds the graph."""
         self.hush(name)
@@ -222,11 +278,18 @@ class VoiceMixer:
         self._rebuild()
 
     def hush(self, name: str) -> None:
-        """Stop the pattern and release the gate for a voice."""
+        """Stop the pattern and release the gate for a voice (or all poly instances)."""
         self._session.hush(name)
-        voice = self._voices.get(name)
-        if voice and "gate" in voice.controls:
-            self._session.set_ctrl(f"{name}_gate", 0.0)
+        if name in self._poly:
+            pv = self._poly[name]
+            for i in range(pv.count):
+                inst = f"{name}_v{i}"
+                if "gate" in pv.controls:
+                    self._session.set_ctrl(f"{inst}_gate", 0.0)
+        else:
+            voice = self._voices.get(name)
+            if voice and "gate" in voice.controls:
+                self._session.set_ctrl(f"{name}_gate", 0.0)
 
     def stop(self) -> None:
         """Hush all voices and release all gates."""
@@ -242,12 +305,48 @@ class VoiceMixer:
         self._session.set_ctrl(f"{name}_gain", float(value))
 
     def step(self, name: str, pitch: float | None = None, **params: float) -> Pattern:
-        """Melodic trigger: set freq + optional params + gate trig/reset."""
-        return build_step(name, self._voices[name].controls, pitch, **params)
+        """Melodic trigger: set freq + optional params + gate trig/reset.
+
+        For poly voices, allocates the next instance (round-robin).
+        """
+        inst = self._alloc_voice(name)
+        return build_step(inst, self._voices[inst].controls, pitch, **params)
 
     def hit(self, name: str, param: str) -> Pattern:
-        """Percussive trigger: trig + reset on a specific control."""
-        return build_hit(name, param)
+        """Percussive trigger: trig + reset on a specific control.
+
+        For poly voices, allocates the next instance (round-robin).
+        """
+        inst = self._alloc_voice(name)
+        return build_hit(inst, param)
+
+    def chord(self, name: str, *pitches: float, **params: float) -> Pattern:
+        """Simultaneous notes on a poly voice — one pitch per instance.
+
+        Returns a frozen stack so it counts as one atom for cycle division.
+        """
+        if name not in self._poly:
+            raise ValueError(f"'{name}' is not a poly voice — use mix.poly() first")
+        atoms: list[Pattern] = []
+        for pitch in pitches:
+            inst = self._alloc_voice(name)
+            atoms.append(build_step(inst, self._voices[inst].controls, pitch, **params))
+        if not atoms:
+            raise ValueError("chord requires at least one pitch")
+        result = atoms[0]
+        for a in atoms[1:]:
+            result = result | a  # Stack: fire simultaneously
+        return _freeze(result)
+
+    def _alloc_voice(self, name: str) -> str:
+        """Resolve a voice name to a concrete instance. For poly voices,
+        returns the next instance via round-robin. For mono voices, returns name."""
+        if name in self._poly:
+            pv = self._poly[name]
+            idx = self._poly_alloc[name] % pv.count
+            self._poly_alloc[name] = idx + 1
+            return f"{name}_v{idx}"
+        return name
 
     def fade(
         self, name: str, target: float, bars: int = 4, steps_per_bar: int = 4
