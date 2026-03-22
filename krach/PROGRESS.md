@@ -5,20 +5,19 @@
 Live coding REPL integrating midiman (patterns) + soundman (audio) + faust-dsl (synth design).
 
 ### VoiceMixer (`mix`)
-- `mix.voice(name, source, gain)` — add/replace voice (string type_id or Python DSP function)
-- `mix.poly(name, source, voices, gain)` — polyphonic voice (round-robin allocation)
-- `mix.note(name, *pitches, vel, **params)` — unified melodic trigger (single, chord, gate-only)
-- `mix.hit(name, param)` — percussive trigger pattern atom
-- `mix.seq(name, *notes, **params)` — sequence builder shorthand (None = rest)
-- `mix.play(name, pattern)` — play pattern on slot (delegates to Session)
-- `mix.gain/fade/mute/unmute/solo` — gain control + live performance ops
-- Labels always `{voice_name}_{param}` — patterns survive graph changes
-- Voice handles: returned from `mix.voice()` / `mix.poly()` for direct access
-- Voice-free patterns: patterns without a bound voice (effect routing, modulation)
-- `/` path addressing — hierarchical slot naming
-- Effect routing: send/return via path addressing
-- Modulation as patterns: LFO-style control via pattern slots
-- `mix.tempo` / `mix.meter` — tempo and meter control (no `mm` in namespace)
+- `mix.voice(name, source, gain, count)` — add voice, returns `VoiceHandle`. `count > 1` = poly.
+- `mix.bus(name, source, gain)` — add effect bus, returns `BusHandle`
+- `mix.play(name, pattern)` / `mix.set(path, value)` / `mix.fade(path, target, bars)`
+- `mix.send(voice, bus, level)` / `mix.wire(voice, bus, port)` — effect routing
+- `mix.gain/mute/unmute/solo/unsolo/hush/stop` — live performance ops
+- `mix.mod(path, pattern, bars)` — convenience for modulation
+- `mix.tempo` / `mix.meter` — transport (no `mm` in namespace)
+- Voice handles: `kick = mix.voice(...)` then `kick.play(hit() * 4)`
+
+### Free pattern functions
+- `note("C4")`, `hit()`, `seq("A2", "D3", None)` — bind to voice at play time
+- `mod_sine(lo, hi)`, `ramp(start, end)` — modulation as patterns
+- `/` path addressing: `mix.set("bass/cutoff", v)`, group ops: `mix.mute("drums")`
 
 ### Pitch utilities
 - `mtof(note)` / `ftom(freq)` — MIDI↔Hz conversion
