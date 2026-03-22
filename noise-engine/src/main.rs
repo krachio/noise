@@ -263,7 +263,15 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
         //    OSC → SetControl: schedule in pending vec for sample-accurate dispatch.
         //    MIDI notes/CC: dispatch immediately when due (no lookahead for MIDI).
         for timed_event in pattern_engine.drain(now + LOOKAHEAD) {
-            if let Some((label, value)) = parse_set_control(&timed_event) {
+            if let Value::Control { ref label, value } = timed_event.event.value {
+                // Direct typed control — no OSC string parsing needed.
+                pending.push(PendingEvent::Control {
+                    fire_at: timed_event.fire_at,
+                    label: label.clone(),
+                    value,
+                });
+            } else if let Some((label, value)) = parse_set_control(&timed_event) {
+                // Legacy OSC-based control (backward compatible).
                 pending.push(PendingEvent::Control {
                     fire_at: timed_event.fire_at,
                     label: label.to_owned(),
@@ -503,6 +511,35 @@ mod tests {
     fn parse_set_gain_returns_none_for_empty_args() {
         let event = make_osc_event("/soundman/gain", vec![]);
         assert!(parse_set_gain(&event).is_none());
+    }
+
+    // ── Control variant dispatch ────────────────────────────────────────
+
+    #[test]
+    fn test_control_event_dispatches() {
+        // Value::Control should be recognized directly (no OSC parsing needed)
+        let event = TimedEvent {
+            fire_at: Instant::now(),
+            event: Event::new(
+                Some(Arc::new(Time::zero(), Time::one())),
+                Arc::new(Time::zero(), Time::one()),
+                Value::Control { label: "bass/cutoff".into(), value: 1200.0 },
+            ),
+            slot_idx: 0,
+        };
+        // parse_set_control should return None for Control variant (it only handles Osc)
+        assert!(parse_set_control(&event).is_none());
+        // parse_set_gain should also return None
+        assert!(parse_set_gain(&event).is_none());
+
+        // The dispatch code should match Value::Control directly
+        match &event.event.value {
+            Value::Control { label, value } => {
+                assert_eq!(label, "bass/cutoff");
+                assert!((value - 1200.0).abs() < f32::EPSILON);
+            }
+            _ => panic!("expected Control variant"),
+        }
     }
 
     // ── crossfade_samples ───────────────────────────────────────────────

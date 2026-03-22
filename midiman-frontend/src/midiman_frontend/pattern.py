@@ -9,6 +9,7 @@ from midiman_frontend.ir import (
     Atom,
     Cat,
     Cc,
+    Control,
     Degrade,
     Early,
     Euclid,
@@ -130,6 +131,10 @@ def cc(controller: int, value: int, channel: int = 0) -> Pattern:
 
 def osc(address: str, *args: OscArg) -> Pattern:
     return Pattern(Atom(Osc(address=address, args=tuple(args))))
+
+
+def ctrl(label: str, value: float) -> Pattern:
+    return Pattern(Atom(Control(label=label, value=value)))
 
 
 def freeze(pat: Pattern) -> Pattern:

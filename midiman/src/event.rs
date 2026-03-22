@@ -51,6 +51,11 @@ pub enum Value {
         address: String,
         args: Vec<OscArg>,
     },
+    /// Typed control change — label + float value, no OSC parsing needed.
+    Control {
+        label: String,
+        value: f32,
+    },
 }
 
 /// An argument in an OSC message.
@@ -155,6 +160,21 @@ mod tests {
             },
         );
         assert!(event.has_onset());
+    }
+
+    #[test]
+    fn test_control_value_serde_roundtrip() {
+        let val = Value::Control {
+            label: "bass/cutoff".into(),
+            value: 1200.0,
+        };
+        let json = serde_json::to_string(&val).unwrap();
+        let parsed: Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(val, parsed);
+
+        // Check wire format matches Python frontend
+        let expected = r#"{"type":"Control","label":"bass/cutoff","value":1200.0}"#;
+        assert_eq!(json, expected);
     }
 
     #[test]

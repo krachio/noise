@@ -113,7 +113,7 @@ impl OutputSink for MidiSink {
                 let status = 0xB0 | (channel & 0x0F);
                 self.send_bytes(&[status, *controller & 0x7F, *value & 0x7F])
             }
-            Value::Osc { .. } => Ok(()), // Not handled by MIDI sink
+            Value::Osc { .. } | Value::Control { .. } => Ok(()), // Not handled by MIDI sink
         }
     }
 

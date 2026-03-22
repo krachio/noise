@@ -1,9 +1,26 @@
 from pathlib import Path
 
-from midiman_frontend.ir import Cat, Freeze
+from midiman_frontend.ir import Atom, Cat, Control, Freeze, IrNode, Osc, Silence, Stack
 from midiman_frontend.pattern import Pattern
 
 from krach._mixer import Bus, Voice, build_graph_ir, build_hit, build_note
+
+
+def _collect_values(node: IrNode) -> list[object]:
+    """Walk an IR tree and collect all Atom values."""
+    match node:
+        case Atom(value):
+            return [value]
+        case Freeze(child):
+            return _collect_values(child)
+        case Cat(children):
+            return [v for c in children for v in _collect_values(c)]
+        case Stack(children):
+            return [v for c in children for v in _collect_values(c)]
+        case Silence():
+            return []
+        case _:
+            return []
 
 
 # ── build_graph_ir ────────────────────────────────────────────────────────────
@@ -662,7 +679,7 @@ def test_seq_produces_bare_params() -> None:
     assert isinstance(pat.node, Cat)
     assert len(pat.node.children) == 3
     ir_str = str(ir_to_dict(pat.node))
-    assert "'Str': 'freq'" in ir_str
+    assert "'label': 'freq'" in ir_str
 
 
 # ── Bug: gain() on nonexistent voice raises KeyError ─────────────────────────
@@ -1931,8 +1948,8 @@ def test_free_note_returns_freeze_with_bare_params() -> None:
     assert isinstance(pat, Pattern)
     assert isinstance(pat.node, Freeze)
     ir_str = str(ir_to_dict(pat.node))
-    assert "'Str': 'freq'" in ir_str
-    assert "'Str': 'gate'" in ir_str
+    assert "'label': 'freq'" in ir_str
+    assert "'label': 'gate'" in ir_str
 
 
 def test_free_note_string_pitch() -> None:
@@ -1942,7 +1959,7 @@ def test_free_note_string_pitch() -> None:
 
     pat = note("C4")
     ir_str = str(ir_to_dict(pat.node))
-    assert "'Str': 'freq'" in ir_str
+    assert "'label': 'freq'" in ir_str
 
 
 def test_free_note_int_pitch() -> None:
@@ -1952,7 +1969,7 @@ def test_free_note_int_pitch() -> None:
 
     pat = note(60)  # MIDI note 60 = C4
     ir_str = str(ir_to_dict(pat.node))
-    assert "'Str': 'freq'" in ir_str
+    assert "'label': 'freq'" in ir_str
 
 
 def test_free_note_chord() -> None:
@@ -1973,7 +1990,7 @@ def test_free_note_vel() -> None:
 
     pat = note(440.0, vel=0.7)
     ir_str = str(ir_to_dict(pat.node))
-    assert "'Str': 'vel'" in ir_str
+    assert "'label': 'vel'" in ir_str
 
 
 def test_free_hit_returns_freeze_with_bare_param() -> None:
@@ -1985,7 +2002,7 @@ def test_free_hit_returns_freeze_with_bare_param() -> None:
     assert isinstance(pat, Pattern)
     assert isinstance(pat.node, Freeze)
     ir_str = str(ir_to_dict(pat.node))
-    assert "'Str': 'gate'" in ir_str
+    assert "'label': 'gate'" in ir_str
 
 
 def test_free_hit_custom_param() -> None:
@@ -1995,7 +2012,7 @@ def test_free_hit_custom_param() -> None:
 
     pat = hit("kick")
     ir_str = str(ir_to_dict(pat.node))
-    assert "'Str': 'kick'" in ir_str
+    assert "'label': 'kick'" in ir_str
 
 
 def test_free_seq_returns_cat() -> None:
@@ -2035,10 +2052,10 @@ def test_bind_voice_rewrites_bare_params() -> None:
     pat = note(440.0)
     bound = _bind_voice(pat.node, "bass")
     ir_str = str(ir_to_dict(bound))
-    assert "'Str': 'bass/freq'" in ir_str
-    assert "'Str': 'bass/gate'" in ir_str
-    assert "'Str': 'freq'" not in ir_str
-    assert "'Str': 'gate'" not in ir_str
+    assert "'label': 'bass/freq'" in ir_str
+    assert "'label': 'bass/gate'" in ir_str
+    assert "'label': 'freq'" not in ir_str
+    assert "'label': 'gate'" not in ir_str
 
 
 def test_bind_voice_skips_already_bound() -> None:
@@ -2060,9 +2077,9 @@ def test_bind_voice_walks_nested_tree() -> None:
     pat = seq(440.0, 330.0)
     bound = _bind_voice(pat.node, "pad")
     ir_str = str(ir_to_dict(bound))
-    assert "'Str': 'pad/freq'" in ir_str
-    assert "'Str': 'pad/gate'" in ir_str
-    assert "'Str': 'freq'" not in ir_str
+    assert "'label': 'pad/freq'" in ir_str
+    assert "'label': 'pad/gate'" in ir_str
+    assert "'label': 'freq'" not in ir_str
 
 
 # ── mix.play() path dispatch ─────────────────────────────────────────────────
@@ -2089,8 +2106,8 @@ def test_play_voice_binds_pattern() -> None:
     played_pattern = call_args.args[1]
     assert played_name == "bass"
     ir_str = str(ir_to_dict(played_pattern.node))
-    assert "'Str': 'bass/freq'" in ir_str
-    assert "'Str': 'bass/gate'" in ir_str
+    assert "'label': 'bass/freq'" in ir_str
+    assert "'label': 'bass/gate'" in ir_str
 
 
 def test_play_control_path_binds_ctrl() -> None:
@@ -2190,16 +2207,14 @@ def test_mod_patterns_composable() -> None:
 
 
 def test_ramp_uses_ctrl_placeholder() -> None:
-    from midiman_frontend.ir import Atom, Cat, Osc, OscStr
-
     from krach._mixer import ramp
 
     pat = ramp(0.0, 1.0, steps=4)
     assert isinstance(pat.node, Cat)
     first = pat.node.children[0]
     assert isinstance(first, Atom)
-    assert isinstance(first.value, Osc)
-    assert any(isinstance(a, OscStr) and a.value == "ctrl" for a in first.value.args)
+    assert isinstance(first.value, Control)
+    assert first.value.label == "ctrl"
 
 
 def test_mod_tri_returns_pattern() -> None:
@@ -3179,3 +3194,44 @@ def test_load_missing_file_raises() -> None:
 
     with pytest.raises(FileNotFoundError, match="scene file not found"):
         mixer.load("/nonexistent/nope.py")
+
+
+# ── Control IR value ─────────────────────────────────────────────────────────
+
+
+def test_note_uses_control_not_osc() -> None:
+    """note() should produce Control atoms, not Osc atoms."""
+    from krach._mixer import note
+
+    pat = note("C4")
+    values = _collect_values(pat.node)
+    # Every value should be Control, not Osc
+    for v in values:
+        assert isinstance(v, Control), f"expected Control, got {type(v).__name__}: {v}"
+        assert not isinstance(v, Osc), f"found Osc atom in note() output: {v}"
+
+
+def test_hit_uses_control_not_osc() -> None:
+    """hit() should produce Control atoms, not Osc atoms."""
+    from krach._mixer import hit
+
+    pat = hit("gate")
+    values = _collect_values(pat.node)
+    for v in values:
+        assert isinstance(v, Control), f"expected Control, got {type(v).__name__}: {v}"
+
+
+def test_build_note_uses_control_not_osc() -> None:
+    """build_note() should produce Control atoms, not Osc atoms."""
+    pat = build_note("bass", ("freq", "gate"), pitch=55.0)
+    values = _collect_values(pat.node)
+    for v in values:
+        assert isinstance(v, Control), f"expected Control, got {type(v).__name__}: {v}"
+
+
+def test_build_hit_uses_control_not_osc() -> None:
+    """build_hit() should produce Control atoms, not Osc atoms."""
+    pat = build_hit("kit", "kick")
+    values = _collect_values(pat.node)
+    for v in values:
+        assert isinstance(v, Control), f"expected Control, got {type(v).__name__}: {v}"

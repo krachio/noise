@@ -46,7 +46,13 @@ class Osc:
     args: tuple[OscArg, ...]
 
 
-Value = Note | Cc | Osc
+@dataclass(frozen=True)
+class Control:
+    label: str
+    value: float
+
+
+Value = Note | Cc | Osc | Control
 
 # ── IR node types ────────────────────────────────────────────────────────────
 
@@ -272,6 +278,8 @@ def _value_to_dict(v: Value) -> dict[str, Any]:
                 "address": address,
                 "args": [_osc_arg_to_dict(a) for a in args],
             }
+        case Control(label=label, value=value):
+            return {"type": "Control", "label": label, "value": value}
 
 
 def ir_to_dict(node: IrNode) -> dict[str, Any]:

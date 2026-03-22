@@ -10,6 +10,7 @@ from midiman_frontend.ir import (
     Batch,
     Cat,
     Cc,
+    Control,
     Degrade,
     Early,
     Euclid,
@@ -69,6 +70,17 @@ class TestValueSerialization:
                 "type": "Osc",
                 "address": "/test",
                 "args": [{"Float": 1.0}, {"Int": 42}, {"Str": "hi"}],
+            },
+        }
+
+    def test_control_value_serializes(self) -> None:
+        node = Atom(Control(label="bass/cutoff", value=1200.0))
+        assert ir_to_dict(node) == {
+            "op": "Atom",
+            "value": {
+                "type": "Control",
+                "label": "bass/cutoff",
+                "value": 1200.0,
             },
         }
 

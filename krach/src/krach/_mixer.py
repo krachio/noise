@@ -18,10 +18,10 @@ from typing import Any, Callable  # Any still used for DspDef.fn
 
 from faust_dsl import transpile as _transpile
 from midiman_frontend import Graph, GraphIr, Session
-from midiman_frontend.ir import IrNode, OscFloat, OscStr
+from midiman_frontend.ir import IrNode, OscStr
 from midiman_frontend.pattern import Pattern
+from midiman_frontend.pattern import ctrl as _ctrl
 from midiman_frontend.pattern import freeze as _freeze
-from midiman_frontend.pattern import osc as _osc
 from midiman_frontend.pattern import rest as _rest
 
 from krach._pitch import mtof as _mtof
@@ -119,7 +119,7 @@ def _build_mod(shape: Callable[[float], float], lo: float, hi: float, steps: int
     for i in range(steps):
         t = i / steps
         val = lo + (hi - lo) * shape(t)
-        atoms.append(_osc("/soundman/set", OscStr("ctrl"), OscFloat(val)))
+        atoms.append(_ctrl("ctrl", val))
     result = atoms[0]
     for a in atoms[1:]:
         result = result + a
@@ -263,19 +263,17 @@ def build_note(
     onset_atoms: list[Pattern] = []
 
     if pitch is not None and "freq" in controls:
-        onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}/freq"), OscFloat(pitch)))
+        onset_atoms.append(_ctrl(f"{voice_name}/freq", pitch))
 
     if vel != 1.0 and "vel" in controls:
-        onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}/vel"), OscFloat(vel)))
+        onset_atoms.append(_ctrl(f"{voice_name}/vel", vel))
 
     for param, value in params.items():
         if param in controls:
-            onset_atoms.append(
-                _osc("/soundman/set", OscStr(f"{voice_name}/{param}"), OscFloat(value))
-            )
+            onset_atoms.append(_ctrl(f"{voice_name}/{param}", value))
 
     if "gate" in controls:
-        onset_atoms.append(_osc("/soundman/set", OscStr(f"{voice_name}/gate"), OscFloat(1.0)))
+        onset_atoms.append(_ctrl(f"{voice_name}/gate", 1.0))
 
     if not onset_atoms:
         raise ValueError(f"voice '{voice_name}' has no triggerable controls")
@@ -286,7 +284,7 @@ def build_note(
         onset = onset | a  # Stack: fire simultaneously
 
     if "gate" in controls:
-        reset = _osc("/soundman/set", OscStr(f"{voice_name}/gate"), OscFloat(0.0))
+        reset = _ctrl(f"{voice_name}/gate", 0.0)
         return _freeze(onset + reset)
     return _freeze(onset)
 
@@ -300,8 +298,8 @@ def build_hit(voice_name: str, param: str) -> Pattern:
     before the next atom's onset for FAUST to detect the rising edge.
     """
     label = f"{voice_name}/{param}"
-    trig = _osc("/soundman/set", OscStr(label), OscFloat(1.0))
-    reset = _osc("/soundman/set", OscStr(label), OscFloat(0.0))
+    trig = _ctrl(label, 1.0)
+    reset = _ctrl(label, 0.0)
     return _freeze(trig + reset)
 
 
@@ -330,26 +328,26 @@ def note(*pitches: str | int | float, vel: float = 1.0, **params: float) -> Patt
     """
     if not pitches:
         # Gate-only trigger
-        onset: Pattern = _osc("/soundman/set", OscStr("gate"), OscFloat(1.0))
-        reset = _osc("/soundman/set", OscStr("gate"), OscFloat(0.0))
+        onset: Pattern = _ctrl("gate", 1.0)
+        reset = _ctrl("gate", 0.0)
         return _freeze(onset + reset)
 
     atoms: list[Pattern] = []
     for p in pitches:
         hz = _resolve_pitch(p)
         onset_parts: list[Pattern] = []
-        onset_parts.append(_osc("/soundman/set", OscStr("freq"), OscFloat(hz)))
+        onset_parts.append(_ctrl("freq", hz))
         if vel != 1.0:
-            onset_parts.append(_osc("/soundman/set", OscStr("vel"), OscFloat(vel)))
+            onset_parts.append(_ctrl("vel", vel))
         for param, value in params.items():
-            onset_parts.append(_osc("/soundman/set", OscStr(param), OscFloat(value)))
-        onset_parts.append(_osc("/soundman/set", OscStr("gate"), OscFloat(1.0)))
+            onset_parts.append(_ctrl(param, value))
+        onset_parts.append(_ctrl("gate", 1.0))
 
         onset_stack = onset_parts[0]
         for a in onset_parts[1:]:
             onset_stack = onset_stack | a
 
-        reset = _osc("/soundman/set", OscStr("gate"), OscFloat(0.0))
+        reset = _ctrl("gate", 0.0)
         atoms.append(_freeze(onset_stack + reset))
 
     if len(atoms) == 1:
@@ -368,15 +366,15 @@ def hit(param: str = "gate", **kwargs: float) -> Pattern:
     Bind to a voice at play time via ``_bind_voice()``.
     Default param is ``"gate"``.
     """
-    onset_parts: list[Pattern] = [_osc("/soundman/set", OscStr(param), OscFloat(1.0))]
+    onset_parts: list[Pattern] = [_ctrl(param, 1.0)]
     for k, v in kwargs.items():
-        onset_parts.append(_osc("/soundman/set", OscStr(k), OscFloat(v)))
+        onset_parts.append(_ctrl(k, v))
 
     onset = onset_parts[0]
     for a in onset_parts[1:]:
         onset = onset | a
 
-    reset = _osc("/soundman/set", OscStr(param), OscFloat(0.0))
+    reset = _ctrl(param, 0.0)
     return _freeze(onset + reset)
 
 
@@ -405,7 +403,7 @@ def seq(*notes: str | int | float | None, vel: float = 1.0, **params: float) -> 
 
 
 def _bind_voice(node: IrNode, voice: str) -> IrNode:
-    """Prepend ``voice/`` to bare param names in all Osc atoms.
+    """Prepend ``voice/`` to bare param names in Control and Osc atoms.
 
     A param is "bare" if it does not contain ``/``.  Already-bound params
     (containing ``/``) are left unchanged.  Walks the full IR tree.
@@ -413,6 +411,7 @@ def _bind_voice(node: IrNode, voice: str) -> IrNode:
     from midiman_frontend.ir import (
         Atom,
         Cat,
+        Control,
         Degrade,
         Early,
         Euclid,
@@ -428,6 +427,10 @@ def _bind_voice(node: IrNode, voice: str) -> IrNode:
     )
 
     match node:
+        case Atom(Control(label=label, value=val)):
+            if "/" not in label:
+                return Atom(Control(label=f"{voice}/{label}", value=val))
+            return node
         case Atom(Osc(addr, args)):
             new_args = tuple(
                 OscStr(f"{voice}/{a.value}") if isinstance(a, OscStr) and "/" not in a.value else a
@@ -546,7 +549,7 @@ def _bind_voice_poly(
 
 
 def _bind_ctrl(node: IrNode, label: str) -> IrNode:
-    """Replace the ``"ctrl"`` placeholder param in Osc atoms with ``label``.
+    """Replace the ``"ctrl"`` placeholder param in Control and Osc atoms with ``label``.
 
     Similar to ``_bind_voice()`` but replaces the specific placeholder
     ``"ctrl"`` rather than prepending a prefix.
@@ -554,6 +557,7 @@ def _bind_ctrl(node: IrNode, label: str) -> IrNode:
     from midiman_frontend.ir import (
         Atom,
         Cat,
+        Control,
         Degrade,
         Early,
         Euclid,
@@ -569,6 +573,10 @@ def _bind_ctrl(node: IrNode, label: str) -> IrNode:
     )
 
     match node:
+        case Atom(Control(label=ctrl_label, value=val)):
+            if ctrl_label == "ctrl":
+                return Atom(Control(label=label, value=val))
+            return node
         case Atom(Osc(addr, args)):
             new_args = tuple(
                 OscStr(label) if isinstance(a, OscStr) and a.value == "ctrl" else a
@@ -1059,7 +1067,7 @@ class VoiceMixer:
         for i in range(total_steps + 1):
             t = i / total_steps
             value = current + (target - current) * t
-            atoms.append(_osc("/soundman/set", OscStr("ctrl"), OscFloat(value)))
+            atoms.append(_ctrl("ctrl", value))
         pattern = atoms[0]
         for a in atoms[1:]:
             pattern = pattern + a
@@ -1088,9 +1096,9 @@ class VoiceMixer:
         for i in range(total_steps + 1):
             t = i / total_steps
             value = current + (target - current) * t
-            ramp_atoms.append(_osc("/soundman/set", OscStr(f"{name}/gain"), OscFloat(value)))
+            ramp_atoms.append(_ctrl(f"{name}/gain", value))
         # Hold: repeat target for 19x (one-shot behavior)
-        hold_atom = _osc("/soundman/set", OscStr(f"{name}/gain"), OscFloat(target))
+        hold_atom = _ctrl(f"{name}/gain", target)
         hold_atoms = [hold_atom] * (total_steps * 19)
         all_atoms = ramp_atoms + hold_atoms
         pattern = all_atoms[0]
