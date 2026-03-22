@@ -1001,9 +1001,12 @@ class VoiceMixer:
             else:
                 current = 0.0
 
-            slot = f"_fade_{path.replace('/', '_')}"
-            self._session.hush(slot)
-            pattern = self._build_fade_pattern(current, target, bars, steps_per_bar)
+            # Hush any existing control pattern on this path
+            ctrl_slot = f"_ctrl_{path.replace('/', '_')}"
+            self._session.hush(ctrl_slot)
+            # Use higher resolution for smooth fades (16 steps/bar minimum)
+            effective_spb = max(steps_per_bar, 16)
+            pattern = self._build_fade_pattern(current, target, bars, effective_spb)
             self.play(path, pattern)
             self._ctrl_values[path] = target
 
