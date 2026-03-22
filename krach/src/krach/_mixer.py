@@ -53,6 +53,17 @@ class DspDef:
     source: str
     faust: str
     controls: tuple[str, ...]
+    num_inputs: int = 0
+
+
+@dataclass(frozen=True)
+class Bus:
+    """An effect bus — a FAUST DSP that takes audio input."""
+
+    type_id: str
+    gain: float
+    controls: tuple[str, ...]
+    num_inputs: int
 
 
 def dsp(fn: Callable[..., Any]) -> DspDef:
@@ -75,6 +86,7 @@ def dsp(fn: Callable[..., Any]) -> DspDef:
         source=source,
         faust=result.source,
         controls=tuple(c.name for c in result.schema.controls),
+        num_inputs=result.num_inputs,
     )
 
 
@@ -87,24 +99,74 @@ def _check_finite(value: float, label: str) -> None:
 # ── Pure builders (testable without I/O) ──────────────────────────────────────
 
 
-def build_graph_ir(voices: dict[str, Voice]) -> GraphIr:
-    """Build a complete soundman graph IR from the voice set.
+def build_graph_ir(
+    voices: dict[str, Voice],
+    buses: dict[str, Bus] | None = None,
+    sends: dict[tuple[str, str], float] | None = None,
+    wires: dict[tuple[str, str], str] | None = None,
+    poly: dict[str, int] | None = None,
+) -> GraphIr:
+    """Build a complete soundman graph IR from voices, buses, sends, and wires.
 
     Each voice gets: DSP node → gain node → DAC.
-    Controls exposed as ``{name}_{param}``.  Gain exposed as ``{name}_gain``.
+    Each bus gets: DSP node → gain node → DAC.
+    Sends: voice → send_gain → bus (fan-in at bus input).
+    Wires: voice → bus:port (direct, no gain node).
+    Poly sum: if a poly parent has sends/wires, an implicit sum node collects instances.
     """
+    _buses = buses or {}
+    _sends = sends or {}
+    _wires = wires or {}
+    _poly = poly or {}
+
     builder = Graph()
     builder.node("out", "dac")
 
+    # Voices: DSP → gain → DAC
     for name, voice in voices.items():
         builder.node(name, voice.type_id, **dict(voice.init))
         builder.node(f"{name}_g", "gain", gain=voice.gain)
         builder.connect(name, "out", f"{name}_g", "in")
         builder.connect(f"{name}_g", "out", "out", "in")
-
         for param in voice.controls:
             builder.expose(f"{name}_{param}", name, param)
         builder.expose(f"{name}_gain", f"{name}_g", "gain")
+
+    # Poly sum nodes: implicit summing point for poly parents with sends/wires
+    poly_with_routing: set[str] = set()
+    for voice, _bus in [*_sends.keys(), *_wires.keys()]:
+        if voice in _poly:
+            poly_with_routing.add(voice)
+
+    for parent in poly_with_routing:
+        count = _poly[parent]
+        builder.node(f"{parent}_sum", "gain", gain=1.0)
+        for i in range(count):
+            builder.connect(f"{parent}_v{i}", "out", f"{parent}_sum", "in")
+
+    # Buses: DSP → gain → DAC
+    for name, bus in _buses.items():
+        builder.node(name, bus.type_id)
+        builder.node(f"{name}_g", "gain", gain=bus.gain)
+        builder.connect(name, "out", f"{name}_g", "in")
+        builder.connect(f"{name}_g", "out", "out", "in")
+        for param in bus.controls:
+            builder.expose(f"{name}_{param}", name, param)
+        builder.expose(f"{name}_gain", f"{name}_g", "gain")
+
+    # Sends: source → send_gain → bus:in
+    for (voice, bus_name), level in _sends.items():
+        source = f"{voice}_sum" if voice in poly_with_routing else voice
+        send_id = f"{voice}_send_{bus_name}"
+        builder.node(send_id, "gain", gain=level)
+        builder.connect(source, "out", send_id, "in")
+        builder.connect(send_id, "out", bus_name, "in")
+        builder.expose(f"{send_id}_gain", send_id, "gain")
+
+    # Wires: source → bus:port (direct, no gain node)
+    for (voice, bus_name), port in _wires.items():
+        source = f"{voice}_sum" if voice in poly_with_routing else voice
+        builder.connect(source, "out", bus_name, port)
 
     return builder.build()
 
@@ -199,6 +261,10 @@ class VoiceMixer:
         self._poly: dict[str, PolyVoice] = {}
         self._poly_alloc: dict[str, int] = {}  # round-robin counter per poly name
         self._muted: dict[str, float] = {}  # name → gain before mute
+        self._buses: dict[str, Bus] = {}
+        self._sends: dict[tuple[str, str], float] = {}  # (voice, bus) → gain
+        self._wires: dict[tuple[str, str], str] = {}    # (voice, bus) → port
+        self._mods: set[str] = set()                     # active mod slot names
         self._batching: bool = False
         self._graph_loaded: bool = False
 

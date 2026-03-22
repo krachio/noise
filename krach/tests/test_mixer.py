@@ -3,7 +3,7 @@ from pathlib import Path
 from midiman_frontend.ir import Cat, Freeze
 from midiman_frontend.pattern import Pattern
 
-from krach._mixer import Voice, build_graph_ir, build_hit, build_note
+from krach._mixer import Bus, Voice, build_graph_ir, build_hit, build_note
 
 
 # ── build_graph_ir ────────────────────────────────────────────────────────────
@@ -1549,3 +1549,121 @@ def test_voice_over_poly_cleans_instance_muted_entries() -> None:
 
     # _muted should not have "pad_v0" — that voice no longer exists
     mixer.unsolo()  # should not crash
+
+
+# ── build_graph_ir with buses/sends/wires ────────────────────────────────────
+
+
+def test_build_graph_ir_with_bus() -> None:
+    """A bus adds a DSP node + gain node connected to dac."""
+    voices = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
+    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
+    ir = build_graph_ir(voices, buses=buses)
+
+    node_ids = {n.id for n in ir.nodes}
+    assert "verb" in node_ids
+    assert "verb_g" in node_ids
+    assert ir.exposed_controls["verb_room"] == ("verb", "room")
+    assert ir.exposed_controls["verb_gain"] == ("verb_g", "gain")
+
+
+def test_build_graph_ir_with_send() -> None:
+    """A send adds a gain node between voice output and bus input."""
+    voices = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
+    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
+    sends = {("bass", "verb"): 0.4}
+    ir = build_graph_ir(voices, buses=buses, sends=sends)
+
+    node_ids = {n.id for n in ir.nodes}
+    assert "bass_send_verb" in node_ids
+
+    # Send gain exposed for instant level changes
+    assert ir.exposed_controls["bass_send_verb_gain"] == ("bass_send_verb", "gain")
+
+    # Connection: bass → send → verb (via "in" port)
+    conns = [(c.from_node, c.to_node) for c in ir.connections]
+    assert ("bass", "bass_send_verb") in conns
+    assert ("bass_send_verb", "verb") in conns
+
+
+def test_build_graph_ir_two_sends_same_bus() -> None:
+    """Two voices sending to same bus — fan-in at bus input."""
+    voices = {
+        "bass": Voice("faust:bass", 0.5, ("freq", "gate")),
+        "pad": Voice("faust:pad", 0.3, ("freq", "gate")),
+    }
+    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
+    sends = {("bass", "verb"): 0.4, ("pad", "verb"): 0.6}
+    ir = build_graph_ir(voices, buses=buses, sends=sends)
+
+    # Both sends exist
+    node_ids = {n.id for n in ir.nodes}
+    assert "bass_send_verb" in node_ids
+    assert "pad_send_verb" in node_ids
+
+    # Both connect to verb
+    conns = [(c.from_node, c.to_node) for c in ir.connections]
+    assert ("bass_send_verb", "verb") in conns
+    assert ("pad_send_verb", "verb") in conns
+
+
+def test_build_graph_ir_send_gain_initial_value() -> None:
+    """Send gain node has the correct initial gain from the send level."""
+    voices = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
+    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
+    sends = {("bass", "verb"): 0.4}
+    ir = build_graph_ir(voices, buses=buses, sends=sends)
+
+    send_node = next(n for n in ir.nodes if n.id == "bass_send_verb")
+    assert send_node.controls["gain"] == 0.4
+
+
+def test_build_graph_ir_with_wire() -> None:
+    """A wire connects voice output directly to bus port (no gain node)."""
+    voices = {
+        "pad": Voice("faust:pad", 0.5, ("freq", "gate")),
+        "kick": Voice("faust:kick", 0.8, ("gate",)),
+    }
+    buses = {"comp": Bus("faust:comp", 1.0, ("threshold",), num_inputs=2)}
+    wires = {("pad", "comp"): "in0", ("kick", "comp"): "in1"}
+    ir = build_graph_ir(voices, buses=buses, wires=wires)
+
+    # Direct connections to specific ports
+    wire_conns = [
+        (c.from_node, c.to_node, c.to_port)
+        for c in ir.connections
+    ]
+    assert ("pad", "comp", "in0") in wire_conns
+    assert ("kick", "comp", "in1") in wire_conns
+
+
+def test_build_graph_ir_poly_sum_node() -> None:
+    """Poly voice with sends gets an implicit sum node."""
+    voices = {
+        "pad_v0": Voice("faust:pad", 0.15, ("freq", "gate")),
+        "pad_v1": Voice("faust:pad", 0.15, ("freq", "gate")),
+    }
+    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
+    # Send keyed by poly parent name
+    sends = {("pad", "verb"): 0.4}
+    poly = {"pad": 2}  # poly parent → instance count
+
+    ir = build_graph_ir(voices, buses=buses, sends=sends, poly=poly)
+
+    node_ids = {n.id for n in ir.nodes}
+    assert "pad_sum" in node_ids  # implicit sum node
+
+    # Both instances fan into sum
+    conns = [(c.from_node, c.to_node) for c in ir.connections]
+    assert ("pad_v0", "pad_sum") in conns
+    assert ("pad_v1", "pad_sum") in conns
+    # Sum → send → bus
+    assert ("pad_sum", "pad_send_verb") in conns
+
+
+def test_build_graph_ir_no_buses_backward_compatible() -> None:
+    """Calling build_graph_ir without bus args produces same result as before."""
+    voices = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
+    ir_old = build_graph_ir(voices)
+    ir_new = build_graph_ir(voices, buses=None, sends=None, wires=None)
+    assert ir_old == ir_new
