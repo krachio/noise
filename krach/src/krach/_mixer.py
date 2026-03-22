@@ -170,6 +170,7 @@ class VoiceMixer:
         self._node_controls: dict[str, tuple[str, ...]] = dict(node_controls or {})
         self._voices: dict[str, Voice] = {}
         self._batching: bool = False
+        self._graph_loaded: bool = False
 
     def voice(
         self,
@@ -201,6 +202,7 @@ class VoiceMixer:
             if not self._batching:
                 self._wait_for_type(type_id)
 
+        is_new = name not in self._voices
         self._voices[name] = Voice(
             type_id=type_id,
             gain=gain,
@@ -208,7 +210,10 @@ class VoiceMixer:
             init=tuple(init.items()),
         )
         if not self._batching:
-            self._rebuild()
+            if is_new and self._graph_loaded:
+                self._session.add_voice(name, type_id, controls, gain)
+            else:
+                self._rebuild()
 
     def remove(self, name: str) -> None:
         """Remove a voice.  Rebuilds the graph."""
@@ -298,6 +303,7 @@ class VoiceMixer:
     def _rebuild(self) -> None:
         ir = build_graph_ir(self._voices)
         self._session.load_graph(ir)
+        self._graph_loaded = True
 
     def _wait_for_type(self, type_id: str) -> None:
         """Poll until the engine has loaded the given FAUST type."""

@@ -161,6 +161,29 @@ class Session:
         self._sock.sendall((msg + "\n").encode())
         _parse_response(self._reader.readline())
 
+    def add_voice(
+        self,
+        name: str,
+        type_id: str,
+        controls: tuple[str, ...],
+        gain: float,
+    ) -> None:
+        """Add a voice to the existing graph without full rebuild.
+
+        Sends a GraphBatch of AddNode + Connect + ExposeControl — one
+        recompile, one SwapGraph, existing nodes reused.
+        """
+        commands: list[dict[str, Any]] = [
+            {"type": "add_node", "id": name, "type_id": type_id, "controls": {}},
+            {"type": "add_node", "id": f"{name}_g", "type_id": "gain", "controls": {"gain": gain}},
+            {"type": "connect", "from_node": name, "from_port": "out", "to_node": f"{name}_g", "to_port": "in"},
+            {"type": "connect", "from_node": f"{name}_g", "from_port": "out", "to_node": "out", "to_port": "in"},
+        ]
+        for param in controls:
+            commands.append({"type": "expose_control", "label": f"{name}_{param}", "node_id": name, "control_name": param})
+        commands.append({"type": "expose_control", "label": f"{name}_gain", "node_id": f"{name}_g", "control_name": "gain"})
+        self._send_json({"type": "graph_batch", "commands": commands})
+
     def set_ctrl(self, label: str, value: float) -> None:
         """Set an exposed control parameter on the audio engine."""
         self._send_json({"type": "set_control", "label": label, "value": value})
