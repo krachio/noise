@@ -651,7 +651,7 @@ class VoiceMixer:
         gain: float = 0.5,
         count: int = 1,
         **init: float,
-    ) -> None:
+    ) -> VoiceHandle:
         """Add or replace a voice.  Rebuilds the graph.
 
         ``source`` is a ``@dsp``-decorated function, a registered type_id
@@ -692,6 +692,7 @@ class VoiceMixer:
                 self._session.add_voice(name, type_id, controls, gain)
             else:
                 self._rebuild()
+        return VoiceHandle(self, name)
 
     def remove(self, name: str) -> None:
         """Remove a voice. Rebuilds the graph."""
@@ -1011,7 +1012,7 @@ class VoiceMixer:
         name: str,
         source: str | DspDef | Callable[..., Any],
         gain: float = 0.5,
-    ) -> None:
+    ) -> BusHandle:
         """Add an effect bus. Rebuilds the graph.
 
         Raises ValueError if name collides with an existing voice.
@@ -1030,6 +1031,7 @@ class VoiceMixer:
         self._buses[name] = Bus(type_id=type_id, gain=gain, controls=controls, num_inputs=num_inputs)
         if not self._batching:
             self._rebuild()
+        return BusHandle(self, name)
 
     def send(self, voice: str, bus: str, level: float = 0.5) -> None:
         """Route a voice to a bus via a gain-controlled send.
@@ -1139,6 +1141,32 @@ class VoiceMixer:
         return "\n".join(lines)
 
     @property
+    def tempo(self) -> float:
+        """Current tempo (BPM), delegated to session."""
+        return self._session.tempo
+
+    @tempo.setter
+    def tempo(self, bpm: float) -> None:
+        self._session.tempo = bpm
+
+    @property
+    def slots(self) -> dict[str, Any]:
+        """Read-only snapshot of session slots."""
+        return self._session.slots
+
+    def get_voice(self, name: str) -> Voice | None:
+        """Look up a single voice by name, or None if not found."""
+        return self._voices.get(name)
+
+    def is_muted(self, name: str) -> bool:
+        """Check if a voice is currently muted."""
+        return name in self._muted
+
+    def get_bus(self, name: str) -> Bus | None:
+        """Look up a single bus by name, or None if not found."""
+        return self._buses.get(name)
+
+    @property
     def voices(self) -> dict[str, Voice]:
         """Read-only snapshot of active voices."""
         return dict(self._voices)
@@ -1183,3 +1211,79 @@ class VoiceMixer:
                 pass
             time.sleep(0.1)
         raise TimeoutError(f"FAUST type '{type_id}' not ready after {timeout}s")
+
+
+class VoiceHandle:
+    """Proxy for a named voice — delegates all operations to VoiceMixer."""
+
+    def __init__(self, mixer: VoiceMixer, name: str) -> None:
+        self._mixer = mixer
+        self._name = name
+
+    def play(self, target_or_pattern: str | Pattern, pattern: Pattern | None = None) -> None:
+        if pattern is not None and isinstance(target_or_pattern, str):
+            self._mixer.play(f"{self._name}/{target_or_pattern}", pattern)
+        else:
+            assert isinstance(target_or_pattern, Pattern)
+            self._mixer.play(self._name, target_or_pattern)
+
+    def set(self, param: str, value: float) -> None:
+        self._mixer.set(f"{self._name}/{param}", value)
+
+    def fade(self, param: str, target: float, bars: int = 4) -> None:
+        self._mixer.fade(f"{self._name}/{param}", target, bars=bars)
+
+    def send(self, bus: BusHandle | str, level: float = 0.5) -> None:
+        bus_name = bus.name if isinstance(bus, BusHandle) else bus
+        self._mixer.send(self._name, bus_name, level)
+
+    def mute(self) -> None:
+        self._mixer.mute(self._name)
+
+    def unmute(self) -> None:
+        self._mixer.unmute(self._name)
+
+    def hush(self) -> None:
+        self._mixer.hush(self._name)
+
+    def gain(self, value: float) -> None:
+        self._mixer.gain(self._name, value)
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def __repr__(self) -> str:
+        v = self._mixer.get_voice(self._name)
+        if not v:
+            return f"VoiceHandle('{self._name}', removed)"
+        parts = f"VoiceHandle('{self._name}', {v.type_id}, gain={v.gain:.2f}"
+        if v.count > 1:
+            parts += f", count={v.count}"
+        if self._mixer.is_muted(self._name):
+            parts += ", muted"
+        return parts + ")"
+
+
+class BusHandle:
+    """Proxy for a named bus — delegates to VoiceMixer."""
+
+    def __init__(self, mixer: VoiceMixer, name: str) -> None:
+        self._mixer = mixer
+        self._name = name
+
+    def set(self, param: str, value: float) -> None:
+        self._mixer.set(f"{self._name}/{param}", value)
+
+    def gain(self, value: float) -> None:
+        self._mixer.gain(self._name, value)
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    def __repr__(self) -> str:
+        b = self._mixer.get_bus(self._name)
+        if not b:
+            return f"BusHandle('{self._name}', removed)"
+        return f"BusHandle('{self._name}', {b.type_id}, gain={b.gain:.2f})"

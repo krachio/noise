@@ -74,8 +74,8 @@ def main() -> None:
 
     from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, parse_dsp_controls, split_cells
     from krach._mixer import (
-        VoiceMixer, dsp, hit, mod_exp, mod_ramp, mod_ramp_down, mod_sine,
-        mod_square, mod_tri, note, ramp, seq,
+        VoiceMixer, dsp, hit, mod_exp, mod_ramp,
+        mod_ramp_down, mod_sine, mod_square, mod_tri, note, ramp, seq,
     )
     from krach._pitch import NOTES as _NOTES, ftom, mtof, parse_note
 
@@ -95,9 +95,9 @@ def main() -> None:
 
     def _session_state() -> SessionState:
         return SessionState(
-            bpm=mm.tempo,
-            playing=tuple(k for k, v in mm.slots.items() if v.playing),
-            stopped=tuple(k for k, v in mm.slots.items() if not v.playing),
+            bpm=mix.tempo,
+            playing=tuple(k for k, v in mix.slots.items() if v.playing),
+            stopped=tuple(k for k, v in mix.slots.items() if not v.playing),
             nodes=tuple(mix.node_controls.keys()),
             node_controls=tuple(mix.node_controls.items()),
             in_scope=_user_ns_keys,
@@ -170,7 +170,7 @@ def main() -> None:
     print(f"  nodes    {nodes}")
     print(f"  dsp dir  {dsp_dir}")
     print()
-    print("  in scope: mix  mm  dsp()  note()  hit()  seq()  rest  ramp()  mtof  ftom  parse_note"
+    print("  in scope: mix  dsp()  note()  hit()  seq()  rest  ramp()  mtof  ftom  parse_note"
           "  C0..B8  status()  c()  cn()"
           "  mod_sine  mod_tri  mod_ramp  mod_ramp_down  mod_square  mod_exp"
           "  + faust-dsl: control sine_osc saw lowpass adsr ...")
@@ -181,7 +181,6 @@ def main() -> None:
     user_ns = {
         # Primary API — voices and patterns
         "mix": mix,
-        "mm": mm,
         "rest": rest,
         # Free pattern builders (shadow midiman_frontend.pattern.note)
         "note": note,
