@@ -376,9 +376,11 @@ class VoiceMixer:
             self._session.set_ctrl(f"{name}_gain", float(value))
 
     def mute(self, name: str) -> None:
-        """Mute a voice — stores current gain, sets gain to 0."""
+        """Mute a voice — stores current gain, sets gain to 0. No-op if already muted."""
         if name not in self._voices and name not in self._poly:
             raise ValueError(f"voice '{name}' not found")
+        if name in self._muted:
+            return
         if name in self._poly:
             self._muted[name] = self._poly[name].gain
         else:
@@ -542,6 +544,9 @@ class VoiceMixer:
         graph loading until the context manager exits.
         """
         self._batching = True
+        snap_voices = dict(self._voices)
+        snap_poly = dict(self._poly)
+        snap_alloc = dict(self._poly_alloc)
         ok = False
         try:
             yield
@@ -550,6 +555,10 @@ class VoiceMixer:
             self._batching = False
             if ok:
                 self._flush()
+            else:
+                self._voices = snap_voices
+                self._poly = snap_poly
+                self._poly_alloc = snap_alloc
 
     @property
     def voices(self) -> dict[str, Voice]:

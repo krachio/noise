@@ -14,8 +14,12 @@
 - [x] MIX_PLAY — mix.play(name, pattern) delegation to Session
 - [x] WIRE_EXPORTS — mtof/ftom/notes in REPL namespace, context.md updated
 
-## Sprint 12 — adversarial
-(to be filled after adversarial pass)
+## Sprint 12 — adversarial fixes
+- [x] DOUBLE_MUTE — mute() twice overwrites saved gain with 0; guard with early return
+- [x] SOLO_CLOBBER — solo() clobbers previously-muted voices; mute() now no-ops if already muted
+- [x] BATCH_ROLLBACK — batch() exception left ghost voices; now snapshots/restores on error
+- [x] FTOM_RANGE — ftom() returned values outside 0-127; now clamped
+- [x] FAST_INF_NAN — fast()/over() with inf/nan gave confusing Fraction errors; now validated
 
 ---
 

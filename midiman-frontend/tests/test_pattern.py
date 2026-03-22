@@ -214,3 +214,40 @@ class TestChaining:
         rev_child = p.node.child
         assert isinstance(rev_child, Rev)
         assert isinstance(rev_child.child, Fast)
+
+
+# ── Sprint 12 adversarial: fast()/over() with inf/nan ────────────────────────
+
+
+class TestFastInfNan:
+    """BUG: fast(float('inf')) raises OverflowError and fast(float('nan'))
+    raises ValueError with confusing Fraction internals messages. These should
+    raise ValueError with a clear message before reaching _to_rational().
+
+    Root cause: pattern.py:76-82 — fast() checks `factor <= 0` which passes
+    for inf and nan, then Fraction(value) crashes with internal errors.
+    """
+
+    def test_fast_inf_raises_valueerror(self) -> None:
+        """fast(inf) should raise ValueError, not OverflowError."""
+        import pytest
+        with pytest.raises(ValueError, match="positive factor"):
+            note(60).fast(float("inf"))
+
+    def test_fast_nan_raises_valueerror_with_clear_message(self) -> None:
+        """fast(nan) should raise ValueError with 'positive factor' message."""
+        import pytest
+        with pytest.raises(ValueError, match="positive factor"):
+            note(60).fast(float("nan"))
+
+    def test_over_inf_raises_valueerror(self) -> None:
+        """over(inf) should raise ValueError, not OverflowError."""
+        import pytest
+        with pytest.raises(ValueError, match="positive cycles"):
+            note(60).over(float("inf"))
+
+    def test_over_nan_raises_valueerror_with_clear_message(self) -> None:
+        """over(nan) should raise ValueError with 'positive cycles' message."""
+        import pytest
+        with pytest.raises(ValueError, match="positive cycles"):
+            note(60).over(float("nan"))

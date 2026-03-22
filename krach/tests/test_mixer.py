@@ -1113,3 +1113,104 @@ def test_play_delegates_to_session() -> None:
     pat = mixer.hit("kick", "gate") * 4
     mixer.play("kick", pat)
     session.play.assert_called_once_with("kick", pat)
+
+
+# ── Sprint 12 adversarial: mute/unmute/solo bugs ─────────────────────────────
+
+
+def test_double_mute_preserves_original_gain() -> None:
+    """BUG: mute() twice overwrites _muted with 0.0, losing the original gain.
+    After double mute + unmute, gain should restore to the original value (0.5),
+    not 0.0.
+
+    Root cause: _mixer.py:382-386 — mute() unconditionally saves current gain
+    to _muted, even when already muted (current gain is 0.0).
+    """
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    mixer.mute("bass")
+    mixer.mute("bass")  # second mute should be no-op
+    mixer.unmute("bass")
+
+    assert mixer.voices["bass"].gain == 0.5, (
+        f"double mute lost original gain: got {mixer.voices['bass'].gain}"
+    )
+
+
+def test_solo_does_not_clobber_previously_muted_voice() -> None:
+    """BUG: solo() calls mute() on already-muted voices, overwriting their
+    saved gain in _muted with 0.0. Unmuting later restores 0.0 instead of
+    the original gain.
+
+    Root cause: _mixer.py:408-410 — solo() unconditionally mutes all other
+    voices without checking if they are already muted.
+    """
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:pad": ("freq", "gate"),
+        "faust:lead": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.voice("pad", "faust:pad", gain=0.4)
+    mixer.voice("lead", "faust:lead", gain=0.3)
+
+    # Mute pad first (saves 0.4)
+    mixer.mute("pad")
+
+    # Solo bass — should mute lead, but NOT re-mute pad (already muted)
+    mixer.solo("bass")
+
+    # Now unmute pad — should restore original 0.4, not 0.0
+    mixer.unmute("pad")
+    assert mixer.voices["pad"].gain == 0.4, (
+        f"solo clobbered pad's saved gain: got {mixer.voices['pad'].gain}"
+    )
+
+
+# ── Sprint 12 adversarial: batch exception inconsistency ─────────────────────
+
+
+def test_batch_exception_rolls_back_voices() -> None:
+    """BUG: if an exception occurs mid-batch, voices added before the error
+    remain in _voices but were never loaded into the audio graph. The mixer
+    is in an inconsistent state: _voices has entries that the engine knows
+    nothing about.
+
+    Root cause: _mixer.py:537-552 — batch() skips _flush on error (correct),
+    but does NOT roll back _voices state added before the exception.
+    """
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:pad": ("freq", "gate"),
+    })
+
+    try:
+        with mixer.batch():
+            mixer.voice("bass", "faust:bass", gain=0.5)
+            raise RuntimeError("simulated error")
+    except RuntimeError:
+        pass
+
+    # After failed batch, _voices should be empty (rolled back)
+    # Currently bass is in _voices but never loaded — inconsistent
+    assert "bass" not in mixer.voices, (
+        "failed batch left 'bass' in _voices without loading graph"
+    )

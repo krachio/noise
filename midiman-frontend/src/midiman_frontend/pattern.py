@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
@@ -66,6 +67,8 @@ class Pattern:
     # ── Time transforms ──────────────────────────────────────────────────
 
     def over(self, cycles: int | float) -> Pattern:
+        if not isinstance(cycles, int) and not math.isfinite(cycles):
+            raise ValueError(f"over() requires positive cycles, got {cycles}")
         if cycles <= 0:
             raise ValueError(f"over() requires positive cycles, got {cycles}")
         r = _to_rational(cycles)
@@ -74,6 +77,8 @@ class Pattern:
         return Pattern(Fast(factor=_invert_rational(r), child=self.node))
 
     def fast(self, factor: int | float) -> Pattern:
+        if not isinstance(factor, int) and not math.isfinite(factor):
+            raise ValueError(f"fast() requires a positive factor, got {factor}")
         if factor <= 0:
             raise ValueError(f"fast() requires a positive factor, got {factor}")
         r = _to_rational(factor)

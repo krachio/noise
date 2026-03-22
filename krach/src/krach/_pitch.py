@@ -15,10 +15,10 @@ def mtof(note: int) -> float:
 
 
 def ftom(freq: float) -> int:
-    """Frequency in Hz to nearest MIDI note number."""
+    """Frequency in Hz to nearest MIDI note number, clamped to 0-127."""
     if freq <= 0:
         raise ValueError(f"frequency must be positive, got {freq}")
-    return round(69 + 12 * math.log2(freq / 440.0))
+    return max(0, min(127, round(69 + 12 * math.log2(freq / 440.0))))
 
 
 # Note name constants: C0=12 .. B8=107

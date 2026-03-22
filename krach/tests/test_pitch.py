@@ -71,3 +71,30 @@ class TestConstants:
         assert len(NOTES) == 108
         assert NOTES["C4"] == 60
         assert NOTES["A4"] == 69
+
+
+# ── Sprint 12 adversarial: ftom output range ─────────────────────────────────
+
+
+class TestFtomOutputRange:
+    """BUG: ftom() returns values outside MIDI 0-127 range without any
+    validation or clamping. ftom(1.0) returns -36, ftom(100000.0) returns 163.
+
+    Root cause: _pitch.py:17-21 — ftom() only validates input > 0 but does
+    not validate/clamp the output to 0-127 range. If mtof() validates 0-127
+    on input, ftom() should at minimum warn or clamp on output.
+    """
+
+    def test_ftom_very_low_freq_returns_valid_midi(self) -> None:
+        """ftom(1.0) returns -36 — should either clamp to 0 or raise."""
+        result = ftom(1.0)
+        assert 0 <= result <= 127, (
+            f"ftom(1.0) returned {result}, outside MIDI 0-127"
+        )
+
+    def test_ftom_very_high_freq_returns_valid_midi(self) -> None:
+        """ftom(100000.0) returns 163 — should either clamp to 127 or raise."""
+        result = ftom(100000.0)
+        assert 0 <= result <= 127, (
+            f"ftom(100000.0) returned {result}, outside MIDI 0-127"
+        )
