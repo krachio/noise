@@ -82,7 +82,7 @@ pub fn validate(node: &IrNode) -> Result<(), IrError> {
 }
 
 fn validate_time_pair(pair: [i64; 2]) -> Result<(), IrError> {
-    if pair[1] == 0 {
+    if pair[1] <= 0 {
         return Err(IrError::ZeroDenominator);
     }
     Ok(())
@@ -198,6 +198,36 @@ mod tests {
                 }],
             }),
         };
+        assert_eq!(validate(&node), Err(IrError::ZeroDenominator));
+    }
+
+    #[test]
+    fn negative_denominator_in_early_fails() {
+        // Negative denominators wrap to huge u64 in time_from_pair,
+        // producing wrong Time values. Must be rejected by validation.
+        let node = IrNode::Early {
+            offset: [1, -3],
+            child: Box::new(atom()),
+        };
+        assert_eq!(validate(&node), Err(IrError::ZeroDenominator));
+    }
+
+    #[test]
+    fn negative_denominator_in_late_fails() {
+        let node = IrNode::Late {
+            offset: [-1, -4],
+            child: Box::new(atom()),
+        };
+        assert_eq!(validate(&node), Err(IrError::ZeroDenominator));
+    }
+
+    #[test]
+    fn negative_denominator_in_fast_fails() {
+        let node = IrNode::Fast {
+            factor: [2, -1],
+            child: Box::new(atom()),
+        };
+        // validate_time_pair runs first, catches negative den
         assert_eq!(validate(&node), Err(IrError::ZeroDenominator));
     }
 }
