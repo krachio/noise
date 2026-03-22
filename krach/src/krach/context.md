@@ -195,6 +195,25 @@ mix.unsolo()               # unmute everything
 mix.stop()                 # hush all voices
 ```
 
+### Scenes (save / recall / load)
+```python
+mix.save("verse")          # snapshot current state
+mix.recall("verse")        # restore saved state
+mix.load("songs/verse.py") # exec a Python file with mix in scope
+```
+
+### Live audio input
+```python
+mic = mix.input("mic", channel=0, gain=0.5)  # ADC input from CoreAudio
+mic.send(verb, 0.4)                           # route to effects like any voice
+```
+
+### MIDI controller mapping
+```python
+mix.midi_map(cc=74, path="bass/cutoff", lo=200.0, hi=4000.0)
+mix.midi_map(cc=1, path="bass/gain", lo=0.0, hi=1.0, channel=5)
+```
+
 ---
 
 ## Patterns + Transport

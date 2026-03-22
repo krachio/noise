@@ -11,7 +11,7 @@ Ableton-inspired Python DSL frontend for the midiman Rust kernel.
 - `session.py` — Session with flat slot→pattern model: `play()`, `play_from_zero()`, `hush()`, `resume()`, `remove()`, `stop()`, `launch()`. SlotState (frozen) tracks playing/stopped per slot. KernelError on bad responses. `meter` property for beats-per-cycle control.
 
 ### Test coverage
-139 tests, 0 pyright strict errors. Covers IR serialization (incl. Batch), pattern algebra, transforms, session slot management, launch/batch, response handling, end-to-end integration, and IR validation.
+146 tests, 0 pyright strict errors. Covers IR serialization (incl. Batch), pattern algebra, transforms, session slot management, launch/batch, response handling, end-to-end integration, IR validation, and MIDI CC mapping.
 
 ### Wire compatibility
 JSON output matches the Rust kernel's serde-tagged format: `{"op": ...}` for IrNode, `{"type": ...}` for Value, `{"cmd": ...}` for ClientMessage. Batch: `{"cmd":"Batch","commands":[...]}`.

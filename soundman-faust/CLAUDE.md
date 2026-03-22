@@ -13,10 +13,6 @@
 - Package manager: Cargo
 - External dependency: libfaust (homebrew on macOS)
 
-## soundman ↔ soundman-faust ↔ midiman
+## Architecture
 
-soundman is the graph wiring / audio rendering engine. soundman-faust is the primary DSP provider — it compiles FAUST code via LLVM JIT and registers nodes through soundman's `NodeFactory`/`DspNode` traits. soundman is agnostic to the DSP provider.
-
-midiman is a pattern sequencer that sends timed OSC messages. It controls soundman (not soundman-faust directly) via OSC. soundman routes control to FAUST nodes through exposed controls.
-
-Control flow: `midiman → soundman (OSC) → soundman-faust nodes (via registry)`
+soundman-core is the graph wiring / audio rendering engine. soundman-faust is the primary DSP provider -- it compiles FAUST code via LLVM JIT and registers nodes through soundman-core's `NodeFactory`/`DspNode` traits. Both are linked into noise-engine (the unified binary). Control flow: `krach (Python) → noise-engine (Unix socket) → soundman-core → soundman-faust nodes (via registry)`

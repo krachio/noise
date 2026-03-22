@@ -2,7 +2,7 @@
 
 ## Current state
 
-Audio engine with node reuse — 122 tests, 0 unsafe, clippy clean.
+Audio engine with node reuse — 160 tests, 0 unsafe, clippy clean.
 
 ### Key features
 - **Graph compiler** with `compile_with_reuse()` — reuses node instances across graph swaps, preserving ADSR phase, filter memory, reverb tails for unchanged voices. `LoadGraph` uses node reuse (not fresh-only).
@@ -14,9 +14,11 @@ Audio engine with node reuse — 122 tests, 0 unsafe, clippy clean.
 - **Lock-free audio**: EngineController + AudioProcessor split via rtrb SPSC
 - **GraphSwapper** with linear crossfade, pre-allocated buffers
 - **OSC control**: Float/Double/Int accepted for numeric args
+- **Automation lanes**: block-rate AutoShape modulation in GraphSwapper (sine, tri, ramp, etc.)
+- **ADC input node**: `AdcNode` reads CoreAudio input via lock-free ring buffer
+- **MIDI CC input**: CC messages mapped to SetControl commands
 
 ## Next
 
-- Effects routing: send/return buses in the graph
 - Incremental graph mutations (AddNode/Connect without full recompile)
 - Sub-block sample splitting for ~0ms scheduling jitter

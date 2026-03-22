@@ -27,9 +27,17 @@ Live coding REPL integrating midiman (patterns) + soundman (audio) + faust-dsl (
 - Claude generates `mix.voice()` + `mix.note()` code, not raw Graph builder
 - Session context includes active voices, their labels, and node controls
 
+### Additional features
+- `mix.save("verse")` / `mix.recall("chorus")` — scene snapshot + restore
+- `mix.load("songs/verse.py")` — music-as-code (exec Python files as scenes)
+- `p("x . x . x . . x")` — mini-notation parser
+- `mix.input("mic")` — ADC input node (live audio from CoreAudio)
+- `mix.midi_map(cc=74, path="bass/cutoff", lo=200, hi=4000)` — MIDI CC mapping
+- `seq()` accepts mixed pitches + `note()` objects
+- Voice handles: `kick = mix.voice(...)` then `kick.play(hit() * 4)`
+
 ## Stats
-- 218 krach tests (pyright strict, 0 errors)
+- 263 krach tests (pyright strict, 0 errors)
 
 ## Next
-- Scene support: scene snapshot switching
-- Mini-notation parser: `p("bd sd ~ bd")` shorthand
+- Library restructure: merge midiman-frontend into krach

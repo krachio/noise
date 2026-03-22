@@ -20,7 +20,7 @@ early (~100ms ahead), queues in `BinaryHeap<Reverse<Timed>>`, fires at the audio
 containing `fire_at`. Error: ±5.8ms (one 256-sample block @ 44100Hz) vs previously 1–7ms late.
 
 ### Stats
-- 129 tests passing
+- 141 tests passing
 - Rust edition 2024, strict clippy, `unsafe_code = "forbid"`
 
 ### Additional features

@@ -16,14 +16,14 @@ noise/
 ```
 
 ### Test counts
-- soundman-core: 142 Rust tests
-- soundman-faust: 14 Rust tests
-- midiman: 130 Rust tests
+- soundman-core: 160 Rust tests
+- soundman-faust: 22 Rust tests
+- midiman: 141 Rust tests
 - noise-engine: 25 Rust tests
-- midiman-frontend: 143 Python tests
+- midiman-frontend: 146 Python tests
 - faust-dsl: 68 Python tests
-- krach: 257 Python tests
-- **Total: 817 tests**, all green. Pyright strict clean.
+- krach: 263 Python tests
+- **Total: 838 tests**, all green. Pyright strict clean.
 
 ## Usage
 
@@ -69,6 +69,8 @@ mix.mute("drums")
 - **Music as code**: `mix.load("songs/verse.py")` — exec Python files as scenes
 - **Master gain**: `mix.master = 0.7` — prevents CoreAudio clipping
 - **Group operations**: `mix.mute("drums")` — prefix matching for `/`-grouped voices
+- **ADC input**: `mix.input("mic")` — live audio from CoreAudio input into the graph
+- **MIDI CC mapping**: `mix.midi_map(cc=74, path="bass/cutoff", lo=200, hi=4000)`
 - **Phase-reset**: fades/mods start from beat 1 via `SetPatternFromZero`
 - **Meter**: `mix.meter = 3` for waltz, 7 for 7/8
 - **Pattern retrieval**: `mix.pattern("kick")` returns unbound pattern
@@ -77,9 +79,5 @@ mix.mute("drums")
 
 ## Next
 
-- **Live audio input**: `mix.input(channel=0)` — ADC node for mic/instruments
-- **MIDI controller mapping**: `mix.midi_map(cc=74, path="bass/cutoff", lo=200, hi=4000)`
 - **Library restructure**: Merge midiman-frontend into krach, rename Rust crates
-- **Live audio input**: `mix.input(channel=0)` — mic/instruments in the graph
-- **Mini-notation**: `p("x . x . x . . x")` shorthand
-- **Library restructure**: Merge midiman-frontend into krach, rename Rust crates
+- **Looper**: Record live input into buffer, play back as pattern-triggered voice

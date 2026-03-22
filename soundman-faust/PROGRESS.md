@@ -2,7 +2,7 @@
 
 ## Current state
 
-FAUST LLVM JIT plugin for soundman with hot reload. 14 tests, clippy clean (all + pedantic + nursery).
+FAUST LLVM JIT plugin for soundman with hot reload. 22 tests, clippy clean (all + pedantic + nursery).
 
 ### Modules
 - **FFI** (`ffi.rs`): Raw bindings to libfaust C API (`llvm-dsp-c.h`, `CInterface.h`)
