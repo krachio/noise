@@ -111,6 +111,19 @@ fn compile_node(ir: &IrNode, pattern: &mut CompiledPattern) -> usize {
                 child: child_idx,
             })
         }
+        IrNode::Warp { kind, amount, grid, child } => {
+            let child_idx = compile_node(child, pattern);
+            let kind_id = match kind.as_str() {
+                "swing" => crate::pattern::WARP_SWING,
+                _ => 0, // validation catches unknown kinds before we get here
+            };
+            pattern.push(PatternNode::Warp {
+                kind: kind_id,
+                amount: *amount,
+                grid: *grid,
+                child: child_idx,
+            })
+        }
     }
 }
 
@@ -304,6 +317,27 @@ mod tests {
         for (i, e) in events.iter().enumerate() {
             assert!(e.has_onset(), "event {i} should have onset");
         }
+    }
+
+    #[test]
+    fn compile_warp_from_json() {
+        let json = r#"{
+            "op": "Warp",
+            "kind": "swing",
+            "amount": 0.67,
+            "grid": 8,
+            "child": {
+                "op": "Cat",
+                "children": [
+                    {"op": "Atom", "value": {"type": "Note", "channel": 0, "note": 60, "velocity": 100, "dur": 0.5}},
+                    {"op": "Atom", "value": {"type": "Note", "channel": 0, "note": 64, "velocity": 100, "dur": 0.5}}
+                ]
+            }
+        }"#;
+        let ir: IrNode = serde_json::from_str(json).unwrap();
+        let pat = compile(&ir).unwrap();
+        // 2 atoms + 1 cat + 1 warp = 4 nodes
+        assert_eq!(pat.nodes.len(), 4);
     }
 
     #[test]

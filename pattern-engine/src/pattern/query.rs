@@ -39,7 +39,65 @@ pub fn query(pattern: &CompiledPattern, node_idx: usize, arc: Arc) -> Vec<Event<
         PatternNode::Degrade { prob, seed, child } => {
             query_degrade(pattern, *prob, *seed, *child, arc)
         }
+        PatternNode::Warp { kind, amount, grid, child } => {
+            query_warp(pattern, *kind, *amount, *grid, *child, arc)
+        }
     }
+}
+
+/// Time warp: query child, then remap event onset times per grid pair.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+fn query_warp(
+    pattern: &CompiledPattern,
+    kind: u8,
+    amount: f64,
+    grid: u32,
+    child: usize,
+    arc: Arc,
+) -> Vec<Event<Value>> {
+    let mut events = query(pattern, child, arc);
+    for event in &mut events {
+        if let Some(whole) = event.whole {
+            event.whole = Some(Arc::new(
+                warp_time(whole.start, kind, amount, grid),
+                warp_time(whole.end, kind, amount, grid),
+            ));
+        }
+        event.part = Arc::new(
+            warp_time(event.part.start, kind, amount, grid),
+            warp_time(event.part.end, kind, amount, grid),
+        );
+    }
+    events
+}
+
+/// Warp a single time value according to the warp function.
+/// For swing: remap positions within each grid pair using piecewise linear scaling.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+fn warp_time(t: Time, _kind: u8, amount: f64, grid: u32) -> Time {
+    let cycle = t.floor();
+    let frac = t.fract();
+    let pos = frac.num as f64 / frac.den as f64;
+
+    // Each pair of grid cells is one "swing unit".
+    let pair_width = 2.0 / grid as f64;
+    let pair_idx = (pos / pair_width).floor();
+    let pair_start = pair_idx * pair_width;
+    let pos_in_pair = (pos - pair_start) / pair_width; // [0, 1)
+
+    // Piecewise linear: first half stretched to [0, amount), second to [amount, 1).
+    let warped_in_pair = if pos_in_pair < 0.5 {
+        pos_in_pair * 2.0 * amount
+    } else {
+        amount + (pos_in_pair - 0.5) * 2.0 * (1.0 - amount)
+    };
+
+    let warped_pos = pair_start + warped_in_pair * pair_width;
+
+    // Reconstruct as rational with fixed precision (1/10000 cycle ≈ 0.2ms at 120 BPM).
+    let precision: u64 = 10000;
+    let warped_num = (warped_pos * precision as f64).round() as i64;
+    Time::whole(cycle) + Time::new(warped_num, precision)
 }
 
 /// An atom occupies one full cycle. Query splits into per-cycle arcs,
@@ -389,7 +447,7 @@ fn hash_combine(a: u64, b: u64) -> u64 {
 mod tests {
     use super::*;
     use crate::event::Value;
-    use crate::pattern::PatternNode;
+    use crate::pattern::{PatternNode, WARP_SWING};
     use smallvec::smallvec;
 
     fn note(n: u8) -> Value {
@@ -1047,5 +1105,114 @@ mod tests {
         assert!(events[1].has_onset(), "reset should have onset");
         assert_eq!(events[1].part.start, Time::new(3, 4), "reset at 3/4 cycle");
         assert_eq!(events[1].value, gate_off);
+    }
+
+    // ── Warp / Swing ───────────────────────────────────────────────────
+
+    #[test]
+    fn swing_0_5_is_identity() {
+        // amount=0.5 (straight) should not shift any events.
+        let mut pat = CompiledPattern {
+            nodes: vec![
+                PatternNode::Atom { value: note(60) },
+                PatternNode::Atom { value: note(64) },
+            ],
+            root: 0,
+            is_control: false,
+        };
+        let cat = pat.push(PatternNode::Cat { children: smallvec![0, 1] });
+        let warp = pat.push(PatternNode::Warp {
+            kind: WARP_SWING, amount: 0.5, grid: 2, child: cat,
+        });
+        pat.root = warp;
+
+        let events = query(&pat, pat.root, Arc::cycle(0));
+        assert_eq!(events.len(), 2);
+        // With amount=0.5, onsets should be at 0/2=0 and 1/2=0.5 (same as unwrapped Cat).
+        let onset0 = events[0].whole.unwrap().start;
+        let onset1 = events[1].whole.unwrap().start;
+        assert!((onset0.num as f64 / onset0.den as f64).abs() < 1e-3,
+            "first event at cycle start, got {onset0:?}");
+        assert!(((onset1.num as f64 / onset1.den as f64) - 0.5).abs() < 1e-3,
+            "second event at 0.5, got {onset1:?}");
+    }
+
+    #[test]
+    fn swing_shifts_upbeats_later() {
+        // Cat of 4 atoms, grid=4, amount=0.67.
+        // Downbeats (0, 2) stay, upbeats (1, 3) shift later.
+        let mut pat = CompiledPattern {
+            nodes: vec![
+                PatternNode::Atom { value: note(60) },
+                PatternNode::Atom { value: note(62) },
+                PatternNode::Atom { value: note(64) },
+                PatternNode::Atom { value: note(65) },
+            ],
+            root: 0,
+            is_control: false,
+        };
+        let cat = pat.push(PatternNode::Cat { children: smallvec![0, 1, 2, 3] });
+        let warp = pat.push(PatternNode::Warp {
+            kind: WARP_SWING, amount: 0.67, grid: 4, child: cat,
+        });
+        pat.root = warp;
+
+        let events = query(&pat, pat.root, Arc::cycle(0));
+        assert_eq!(events.len(), 4, "swing should preserve event count");
+
+        let onsets: Vec<f64> = events.iter()
+            .map(|e| {
+                let w = e.whole.unwrap().start;
+                w.num as f64 / w.den as f64
+            })
+            .collect();
+
+        // Without swing: [0, 0.25, 0.5, 0.75]
+        // With swing 0.67 on grid 4 (pair_width = 0.5):
+        //   pair 0: pos 0 → 0.0 (downbeat), pos 0.25 → 0.335 (upbeat shifted)
+        //   pair 1: pos 0.5 → 0.5 (downbeat), pos 0.75 → 0.835 (upbeat shifted)
+        assert!((onsets[0] - 0.0).abs() < 0.01, "downbeat 0 unchanged");
+        assert!(onsets[1] > 0.30, "upbeat 1 shifted later than 0.25: {}", onsets[1]);
+        assert!((onsets[2] - 0.5).abs() < 0.01, "downbeat 2 unchanged");
+        assert!(onsets[3] > 0.80, "upbeat 3 shifted later than 0.75: {}", onsets[3]);
+
+        // Verify order is preserved.
+        for w in onsets.windows(2) {
+            assert!(w[0] < w[1], "events must stay in order: {} >= {}", w[0], w[1]);
+        }
+    }
+
+    #[test]
+    fn swing_preserves_event_count() {
+        // 8 atoms with grid=8 swing.
+        let mut pat = CompiledPattern::empty();
+        for i in 0..8 {
+            pat.push(PatternNode::Atom { value: note(60 + i) });
+        }
+        let cat = pat.push(PatternNode::Cat { children: smallvec![0, 1, 2, 3, 4, 5, 6, 7] });
+        let warp = pat.push(PatternNode::Warp {
+            kind: WARP_SWING, amount: 0.67, grid: 8, child: cat,
+        });
+        pat.root = warp;
+
+        let events = query(&pat, pat.root, Arc::cycle(0));
+        assert_eq!(events.len(), 8);
+    }
+
+    #[test]
+    fn swing_composes_with_fast() {
+        // Fast(2, Cat([a, b])) produces 4 events. Warp should swing all 4.
+        let mut pat = CompiledPattern::empty();
+        pat.push(PatternNode::Atom { value: note(60) });
+        pat.push(PatternNode::Atom { value: note(64) });
+        let cat = pat.push(PatternNode::Cat { children: smallvec![0, 1] });
+        let fast = pat.push(PatternNode::Fast { factor: Time::new(2, 1), child: cat });
+        let warp = pat.push(PatternNode::Warp {
+            kind: WARP_SWING, amount: 0.67, grid: 4, child: fast,
+        });
+        pat.root = warp;
+
+        let events = query(&pat, pat.root, Arc::cycle(0));
+        assert_eq!(events.len(), 4, "fast 2 produces 4 events, warp preserves them");
     }
 }

@@ -78,6 +78,24 @@ pub fn validate(node: &IrNode) -> Result<(), IrError> {
             }
             validate(child)
         }
+        IrNode::Warp { kind, amount, grid, child } => {
+            if kind != "swing" {
+                return Err(IrError::InvalidWarp {
+                    msg: format!("unknown warp kind: {kind}"),
+                });
+            }
+            if *grid == 0 || *grid % 2 != 0 {
+                return Err(IrError::InvalidWarp {
+                    msg: "grid must be even and > 0".into(),
+                });
+            }
+            if !(*amount > 0.0 && *amount < 1.0) {
+                return Err(IrError::InvalidWarp {
+                    msg: "amount must be in (0, 1)".into(),
+                });
+            }
+            validate(child)
+        }
     }
 }
 
@@ -229,5 +247,57 @@ mod tests {
         };
         // validate_time_pair runs first, catches negative den
         assert_eq!(validate(&node), Err(IrError::ZeroDenominator));
+    }
+
+    // ── Warp validation ────────────────────────────────────────────────
+
+    fn swing(amount: f64, grid: u32) -> IrNode {
+        IrNode::Warp {
+            kind: "swing".into(),
+            amount,
+            grid,
+            child: Box::new(atom()),
+        }
+    }
+
+    #[test]
+    fn valid_swing() {
+        assert!(validate(&swing(0.67, 8)).is_ok());
+    }
+
+    #[test]
+    fn warp_unknown_kind_fails() {
+        let node = IrNode::Warp {
+            kind: "groove".into(),
+            amount: 0.5,
+            grid: 8,
+            child: Box::new(atom()),
+        };
+        assert!(matches!(validate(&node), Err(IrError::InvalidWarp { .. })));
+    }
+
+    #[test]
+    fn warp_grid_zero_fails() {
+        assert!(matches!(validate(&swing(0.67, 0)), Err(IrError::InvalidWarp { .. })));
+    }
+
+    #[test]
+    fn warp_grid_odd_fails() {
+        assert!(matches!(validate(&swing(0.67, 7)), Err(IrError::InvalidWarp { .. })));
+    }
+
+    #[test]
+    fn warp_amount_zero_fails() {
+        assert!(matches!(validate(&swing(0.0, 8)), Err(IrError::InvalidWarp { .. })));
+    }
+
+    #[test]
+    fn warp_amount_one_fails() {
+        assert!(matches!(validate(&swing(1.0, 8)), Err(IrError::InvalidWarp { .. })));
+    }
+
+    #[test]
+    fn warp_amount_nan_fails() {
+        assert!(matches!(validate(&swing(f64::NAN, 8)), Err(IrError::InvalidWarp { .. })));
     }
 }

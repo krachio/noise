@@ -84,6 +84,10 @@ pub enum IrNode {
     Euclid { pulses: u32, steps: u32, rotation: u32, child: Box<IrNode> },
     /// Randomly drop events with the given probability (0.0 = keep all, 1.0 = drop all).
     Degrade { prob: f64, seed: u64, child: Box<IrNode> },
+    /// Time warp: remap event onset times within each grid pair.
+    /// `kind` selects the warp function ("swing"), `amount` parameterizes it,
+    /// `grid` is subdivisions per cycle (must be even).
+    Warp { kind: String, amount: f64, grid: u32, child: Box<IrNode> },
 }
 
 /// Error from IR validation or compilation.
@@ -102,6 +106,8 @@ pub enum IrError {
     InvalidDegrade { msg: String },
     /// Invalid `Every` combinator parameters.
     InvalidEvery { msg: String },
+    /// Invalid `Warp` parameters.
+    InvalidWarp { msg: String },
 }
 
 impl std::fmt::Display for IrError {
@@ -113,6 +119,7 @@ impl std::fmt::Display for IrError {
             Self::InvalidEuclid { msg } => write!(f, "euclid: {msg}"),
             Self::InvalidDegrade { msg } => write!(f, "degrade: {msg}"),
             Self::InvalidEvery { msg } => write!(f, "every: {msg}"),
+            Self::InvalidWarp { msg } => write!(f, "warp: {msg}"),
         }
     }
 }

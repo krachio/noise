@@ -72,7 +72,12 @@ pub enum PatternNode {
     Euclid { pulses: u32, steps: u32, rotation: u32, child: usize },
     /// Randomly drop events with probability `prob`, seeded for reproducibility.
     Degrade { prob: f64, seed: u64, child: usize },
+    /// Time warp: remap event onset times within each grid pair.
+    Warp { kind: u8, amount: f64, grid: u32, child: usize },
 }
+
+/// Swing warp: piecewise linear remap within beat pairs.
+pub const WARP_SWING: u8 = 0;
 
 impl CompiledPattern {
     /// Create a pattern with a single atom.
