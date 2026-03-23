@@ -1,8 +1,8 @@
-"""VoiceMixer — named voices with stable control labels.
+"""VoiceMixer — named audio nodes with stable control labels.
 
-Manages FAUST DSP voices, per-voice gain, and the underlying audio graph.
-Control labels follow a deterministic convention: ``{voice_name}/{param}``.
-Adding or removing a voice rebuilds the graph; gain updates are instant.
+Manages FAUST DSP nodes (sources and effects), per-node gain, and the
+underlying audio graph. Control labels: ``{node_name}/{param}``.
+Adding or removing a node rebuilds the graph; gain updates are instant.
 """
 
 from __future__ import annotations
