@@ -19,7 +19,8 @@ from typing import Any, Callable  # Any still used for DspDef.fn
 
 from faust_dsl import transpile as _transpile
 from krach._bind import bind_ctrl, bind_voice, bind_voice_poly
-from krach.patterns import Graph, GraphIr, Session
+from krach._graph import inst_name as _inst_name, build_graph_ir
+from krach.patterns import Session
 from krach.patterns.ir import IrNode
 from krach.patterns.pattern import Pattern
 from krach.patterns.pattern import ctrl as _ctrl
@@ -104,11 +105,6 @@ def _check_finite(value: float, label: str) -> None:
     """Raise ValueError if value is NaN or Inf."""
     if math.isnan(value) or math.isinf(value):
         raise ValueError(f"{label} must be finite, got {value}")
-
-
-def _inst_name(name: str, i: int, count: int) -> str:
-    """Instance name: ``name_v{i}`` if count > 1, else ``name``."""
-    return f"{name}_v{i}" if count > 1 else name
 
 
 # ── Control pattern builders ──────────────────────────────────────────────────
@@ -269,81 +265,6 @@ def struct(rhythm: Pattern, melody: Pattern) -> Pattern:
 
 
 # ── Pure builders (testable without I/O) ──────────────────────────────────────
-
-
-def build_graph_ir(
-    nodes: dict[str, Node],
-    sends: dict[tuple[str, str], float] | None = None,
-    wires: dict[tuple[str, str], str] | None = None,
-) -> GraphIr:
-    """Build a complete audio graph IR from nodes, sends, and wires.
-
-    Source nodes (num_inputs=0): DSP node → gain node → DAC.
-    Effect nodes (num_inputs>0): DSP node → gain node → DAC (receives sends).
-    Poly nodes (count>1): expand to N instances.
-    Sends: source → send_gain → target (fan-in at target input).
-    Wires: source → target:port (direct, no gain node).
-    """
-    # Split into sources and effects for graph topology
-    _sources = {n: v for n, v in nodes.items() if v.num_inputs == 0}
-    _effects = {n: v for n, v in nodes.items() if v.num_inputs > 0}
-    _sends = sends or {}
-    _wires = wires or {}
-
-    builder = Graph()
-    builder.node("out", "dac")
-
-    # Source nodes (num_inputs=0): expand instances, DSP → gain → DAC
-    for name, node in _sources.items():
-        for i in range(node.count):
-            inst = _inst_name(name, i, node.count)
-            per_gain = node.gain / node.count
-            builder.node(inst, node.type_id, **dict(node.init))
-            builder.node(f"{inst}_g", "gain", gain=per_gain)
-            builder.connect(inst, "out", f"{inst}_g", "in")
-            builder.connect(f"{inst}_g", "out", "out", "in")
-            for param in node.controls:
-                builder.expose(f"{inst}/{param}", inst, param)
-            builder.expose(f"{inst}/gain", f"{inst}_g", "gain")
-
-    # Poly sum nodes: implicit summing point for poly parents with sends/wires
-    poly_with_routing: set[str] = set()
-    for src_name, _tgt in [*_sends.keys(), *_wires.keys()]:
-        n = _sources.get(src_name)
-        if n is not None and n.count > 1:
-            poly_with_routing.add(src_name)
-
-    for parent in poly_with_routing:
-        node = _sources[parent]
-        builder.node(f"{parent}_sum", "gain", gain=1.0)
-        for i in range(node.count):
-            builder.connect(f"{parent}_v{i}", "out", f"{parent}_sum", "in")
-
-    # Effect nodes (num_inputs>0): DSP → gain → DAC
-    for name, node in _effects.items():
-        builder.node(name, node.type_id)
-        builder.node(f"{name}_g", "gain", gain=node.gain)
-        builder.connect(name, "out", f"{name}_g", "in")
-        builder.connect(f"{name}_g", "out", "out", "in")
-        for param in node.controls:
-            builder.expose(f"{name}/{param}", name, param)
-        builder.expose(f"{name}/gain", f"{name}_g", "gain")
-
-    # Sends: source → send_gain → target:in
-    for (src_name, tgt_name), level in _sends.items():
-        source = f"{src_name}_sum" if src_name in poly_with_routing else src_name
-        send_id = f"{src_name}_send_{tgt_name}"
-        builder.node(send_id, "gain", gain=level)
-        builder.connect(source, "out", send_id, "in")
-        builder.connect(send_id, "out", tgt_name, "in")
-        builder.expose(f"{send_id}/gain", send_id, "gain")
-
-    # Wires: source → target:port (direct, no gain node)
-    for (src_name, tgt_name), port in _wires.items():
-        source = f"{src_name}_sum" if src_name in poly_with_routing else src_name
-        builder.connect(source, "out", tgt_name, port)
-
-    return builder.build()
 
 
 def build_note(
