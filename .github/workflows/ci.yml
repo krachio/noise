@@ -17,8 +17,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
-      - run: cargo check --workspace
-      - run: cargo test --workspace
+      # Exclude audio-faust and krach-engine (require libfaust + LLVM, not available in CI)
+      - run: cargo check -p audio-engine -p pattern-engine
+      - run: cargo test -p audio-engine -p pattern-engine
 
   python-krach:
     name: Python krach (pyright + pytest)
