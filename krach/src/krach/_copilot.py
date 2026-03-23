@@ -19,7 +19,14 @@ class SessionState:
     # (voice_name, type_id, gain, (param1, param2, ...))
 
 
-_CONTEXT_MD = (Path(__file__).parent / "context.md").read_text()
+def _load_context() -> str:
+    p = Path(__file__).parent / "context.md"
+    if p.exists():
+        return p.read_text()
+    return ""  # graceful fallback if context.md missing
+
+
+_CONTEXT_MD = _load_context()
 
 _HSLIDER_RE = re.compile(r'hslider\("([^"]+)"')
 _CODE_BLOCK_RE = re.compile(r"```(?:python)?\n(.*?)```", re.DOTALL)

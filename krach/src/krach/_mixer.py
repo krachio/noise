@@ -505,7 +505,10 @@ class VoiceMixer:
             raise FileNotFoundError(f"scene file not found: {path}")
         code = p.read_text()
         ns: dict[str, object] = {"kr": self, "mix": self}
-        exec(compile(code, path, "exec"), ns)  # noqa: S102
+        try:
+            exec(compile(code, path, "exec"), ns)  # noqa: S102
+        except Exception as e:
+            raise RuntimeError(f"error loading {path}: {e}") from e
 
     def export(self, path: str) -> None:
         """Export current session state to a reloadable Python script."""
@@ -731,50 +734,45 @@ class VoiceMixer:
             self._rebuild()
         return NodeHandle(self, name)
 
-    def send(self, voice: str, bus: str, level: float = 0.5) -> None:
+    def send(self, source: str, target: str, level: float = 0.5) -> None:
         """Route a source node to a target node via a gain-controlled send.
 
-        If the (voice, bus) pair already exists, does an instant level update
-        (no rebuild). Otherwise stores the send and rebuilds.
-        Raises ValueError if a wire exists for the same (voice, bus) pair.
+        If the pair already exists, does an instant level update (no rebuild).
         """
-        _check_finite(level, f"send level for '{voice}' → '{bus}'")
-        if voice not in self._nodes or bus not in self._nodes:
-            missing = [n for n in (voice, bus) if n not in self._nodes]
+        _check_finite(level, f"send level for '{source}' → '{target}'")
+        if source not in self._nodes or target not in self._nodes:
+            missing = [n for n in (source, target) if n not in self._nodes]
             import warnings
             warnings.warn(f"send: skipped — node(s) not found: {missing}", stacklevel=2)
             return
 
-        key = (voice, bus)
+        key = (source, target)
 
         if key in self._wires:
-            raise ValueError(f"wire already exists for ('{voice}', '{bus}') — cannot also send")
+            raise ValueError(f"wire already exists for ('{source}', '{target}') — cannot also send")
 
         if key in self._sends:
             # Instant update — no rebuild
             self._sends[key] = level
-            self._session.set_ctrl(f"{voice}_send_{bus}/gain", level)
+            self._session.set_ctrl(f"{source}_send_{target}/gain", level)
             return
 
         self._sends[key] = level
         if not self._batching:
             self._rebuild()
 
-    def wire(self, voice: str, bus: str, port: str = "in0") -> None:
-        """Wire a source node directly to a target node port (no gain stage).
-
-        Raises ValueError if a send exists for the same (voice, bus) pair.
-        """
-        if voice not in self._nodes or bus not in self._nodes:
-            missing = [n for n in (voice, bus) if n not in self._nodes]
+    def wire(self, source: str, target: str, port: str = "in0") -> None:
+        """Wire a source node directly to a target node port (no gain stage)."""
+        if source not in self._nodes or target not in self._nodes:
+            missing = [n for n in (source, target) if n not in self._nodes]
             import warnings
             warnings.warn(f"wire: skipped — node(s) not found: {missing}", stacklevel=2)
             return
 
-        key = (voice, bus)
+        key = (source, target)
 
         if key in self._sends:
-            raise ValueError(f"send already exists for ('{voice}', '{bus}') — cannot also wire")
+            raise ValueError(f"send already exists for ('{source}', '{target}') — cannot also wire")
 
         self._wires[key] = port
         if not self._batching:

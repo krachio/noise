@@ -32,7 +32,10 @@ class TestSessionConnection:
         s = Session()
         s.connect()
         mock_cls.assert_called_once_with(socket.AF_UNIX, socket.SOCK_STREAM)
-        mock_cls.return_value.connect.assert_called_once_with("/tmp/krach.sock")
+        import tempfile
+        from pathlib import Path as P
+        expected = str(P(tempfile.gettempdir()) / "krach-engine.sock")
+        mock_cls.return_value.connect.assert_called_once_with(expected)
 
     @patch("krach.patterns.session.socket.socket")
     def test_env_var_override(self, mock_cls: MagicMock) -> None:
