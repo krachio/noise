@@ -2036,16 +2036,17 @@ def test_free_seq_string_pitches() -> None:
     assert len(pat.node.children) == 3
 
 
-# ── _bind_voice() ────────────────────────────────────────────────────────────
+# ── bind_voice() ────────────────────────────────────────────────────────────
 
 
 def test_bind_voice_rewrites_bare_params() -> None:
     from krach.patterns.ir import ir_to_dict
 
-    from krach._mixer import _bind_voice, note  # pyright: ignore[reportPrivateUsage]
+    from krach._bind import bind_voice
+    from krach._mixer import note
 
     pat = note(440.0)
-    bound = _bind_voice(pat.node, "bass")
+    bound = bind_voice(pat.node, "bass")
     ir_str = str(ir_to_dict(bound))
     assert "'label': 'bass/freq'" in ir_str
     assert "'label': 'bass/gate'" in ir_str
@@ -2056,10 +2057,10 @@ def test_bind_voice_rewrites_bare_params() -> None:
 def test_bind_voice_skips_already_bound() -> None:
     from krach.patterns.ir import Atom, Osc, OscFloat, OscStr, ir_to_dict
 
-    from krach._mixer import _bind_voice  # pyright: ignore[reportPrivateUsage]
+    from krach._bind import bind_voice
 
     node = Atom(Osc("/audio/set", (OscStr("other/freq"), OscFloat(440.0))))
-    bound = _bind_voice(node, "bass")
+    bound = bind_voice(node, "bass")
     ir_str = str(ir_to_dict(bound))
     assert "'Str': 'other/freq'" in ir_str
 
@@ -2067,10 +2068,11 @@ def test_bind_voice_skips_already_bound() -> None:
 def test_bind_voice_walks_nested_tree() -> None:
     from krach.patterns.ir import ir_to_dict
 
-    from krach._mixer import _bind_voice, seq  # pyright: ignore[reportPrivateUsage]
+    from krach._bind import bind_voice
+    from krach._mixer import seq
 
     pat = seq(440.0, 330.0)
-    bound = _bind_voice(pat.node, "pad")
+    bound = bind_voice(pat.node, "pad")
     ir_str = str(ir_to_dict(bound))
     assert "'label': 'pad/freq'" in ir_str
     assert "'label': 'pad/gate'" in ir_str

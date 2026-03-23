@@ -18,8 +18,9 @@ from pathlib import Path
 from typing import Any, Callable  # Any still used for DspDef.fn
 
 from faust_dsl import transpile as _transpile
+from krach._bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach.patterns import Graph, GraphIr, Session
-from krach.patterns.ir import IrNode, OscStr
+from krach.patterns.ir import IrNode
 from krach.patterns.pattern import Pattern
 from krach.patterns.pattern import ctrl as _ctrl
 from krach.patterns.pattern import freeze as _freeze
@@ -424,7 +425,7 @@ def _resolve_pitch(p: str | int | float) -> float:
 def note(*pitches: str | int | float, vel: float = 1.0, **params: float) -> Pattern:
     """Build a note trigger pattern with bare param names.
 
-    Bind to a voice at play time via ``_bind_voice()``.
+    Bind to a voice at play time via ``bind_voice()``.
 
     - str pitch: parsed via ``parse_note()`` (e.g. ``"C4"``)
     - int pitch: converted via ``mtof()`` (MIDI note number)
@@ -469,7 +470,7 @@ def note(*pitches: str | int | float, vel: float = 1.0, **params: float) -> Patt
 def hit(param: str = "gate", **kwargs: float) -> Pattern:
     """Build a trigger pattern with bare param name.
 
-    Bind to a voice at play time via ``_bind_voice()``.
+    Bind to a voice at play time via ``bind_voice()``.
     Default param is ``"gate"``.
     """
     onset_parts: list[Pattern] = [_ctrl(param, 1.0)]
@@ -487,7 +488,7 @@ def hit(param: str = "gate", **kwargs: float) -> Pattern:
 def seq(*notes: str | int | float | None, vel: float = 1.0, **params: float) -> Pattern:
     """Build a sequence of notes/rests with bare param names.
 
-    Bind to a voice at play time via ``_bind_voice()``.
+    Bind to a voice at play time via ``bind_voice()``.
     """
     if not notes:
         raise ValueError("seq requires at least one note")
@@ -506,229 +507,6 @@ def seq(*notes: str | int | float | None, vel: float = 1.0, **params: float) -> 
 
 
 # ── Tree rewriters ────────────────────────────────────────────────────────────
-
-
-def _bind_voice(node: IrNode, voice: str) -> IrNode:
-    """Prepend ``voice/`` to bare param names in Control and Osc atoms.
-
-    A param is "bare" if it does not contain ``/``.  Already-bound params
-    (containing ``/``) are left unchanged.  Walks the full IR tree.
-    """
-    from krach.patterns.ir import (
-        Atom,
-        Cat,
-        Control,
-        Degrade,
-        Early,
-        Euclid,
-        Every,
-        Fast,
-        Freeze,
-        Late,
-        Osc,
-        Rev,
-        Silence,
-        Slow,
-        Stack,
-        Warp,
-    )
-
-    match node:
-        case Atom(Control(label=label, value=val)):
-            if "/" not in label:
-                return Atom(Control(label=f"{voice}/{label}", value=val))
-            return node
-        case Atom(Osc(addr, args)):
-            new_args = tuple(
-                OscStr(f"{voice}/{a.value}") if isinstance(a, OscStr) and "/" not in a.value else a
-                for a in args
-            )
-            return Atom(Osc(addr, new_args))
-        case Atom():
-            return node
-        case Silence():
-            return node
-        case Freeze(child):
-            return Freeze(_bind_voice(child, voice))
-        case Cat(children):
-            return Cat(tuple(_bind_voice(c, voice) for c in children))
-        case Stack(children):
-            return Stack(tuple(_bind_voice(c, voice) for c in children))
-        case Fast(factor, child):
-            return Fast(factor, _bind_voice(child, voice))
-        case Slow(factor, child):
-            return Slow(factor, _bind_voice(child, voice))
-        case Early(offset, child):
-            return Early(offset, _bind_voice(child, voice))
-        case Late(offset, child):
-            return Late(offset, _bind_voice(child, voice))
-        case Rev(child):
-            return Rev(_bind_voice(child, voice))
-        case Every(n, transform, child):
-            return Every(n, _bind_voice(transform, voice), _bind_voice(child, voice))
-        case Euclid(pulses, steps, rotation, child):
-            return Euclid(pulses, steps, rotation, _bind_voice(child, voice))
-        case Degrade(prob, seed, child):
-            return Degrade(prob, seed, _bind_voice(child, voice))
-        case Warp(kind, amount, grid, child):
-            return Warp(kind, amount, grid, _bind_voice(child, voice))
-        case _:
-            return node
-
-
-def _bind_voice_poly(
-    node: IrNode, parent: str, count: int, alloc: int,
-) -> tuple[IrNode, int]:
-    """Bind a pattern to a poly voice, round-robin allocating instances.
-
-    Each Freeze compound (note/hit event) binds to the next instance.
-    Returns (rewritten_node, updated_alloc_counter).
-    """
-    from krach.patterns.ir import (
-        Cat,
-        Degrade,
-        Early,
-        Euclid,
-        Every,
-        Fast,
-        Freeze,
-        Late,
-        Rev,
-        Silence,
-        Slow,
-        Stack,
-        Warp,
-    )
-
-    match node:
-        case Freeze(Stack(children)):
-            # Freeze(Stack) = chord — each child gets a different instance
-            new_children: list[IrNode] = []
-            for c in children:
-                bound_c, alloc = _bind_voice_poly(c, parent, count, alloc)
-                new_children.append(bound_c)
-            return Freeze(Stack(tuple(new_children))), alloc
-        case Freeze(child):
-            # A Freeze is one "event" (note/hit compound) — allocate one instance
-            inst = f"{parent}_v{alloc % count}"
-            alloc += 1
-            return Freeze(_bind_voice(child, inst)), alloc
-        case Cat(children):
-            # Sequence: each child gets the next instance
-            new_children: list[IrNode] = []
-            for c in children:
-                bound_c, alloc = _bind_voice_poly(c, parent, count, alloc)
-                new_children.append(bound_c)
-            return Cat(tuple(new_children)), alloc
-        case Stack(children):
-            # Simultaneous: each child gets a different instance (chord)
-            new_children_s: list[IrNode] = []
-            for c in children:
-                bound_c, alloc = _bind_voice_poly(c, parent, count, alloc)
-                new_children_s.append(bound_c)
-            return Stack(tuple(new_children_s)), alloc
-        case Silence():
-            return node, alloc
-        case Fast(factor, child):
-            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
-            return Fast(factor, bound), alloc
-        case Slow(factor, child):
-            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
-            return Slow(factor, bound), alloc
-        case Early(offset, child):
-            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
-            return Early(offset, bound), alloc
-        case Late(offset, child):
-            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
-            return Late(offset, bound), alloc
-        case Rev(child):
-            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
-            return Rev(bound), alloc
-        case Every(n, transform, child):
-            bt, alloc = _bind_voice_poly(transform, parent, count, alloc)
-            bc, alloc = _bind_voice_poly(child, parent, count, alloc)
-            return Every(n, bt, bc), alloc
-        case Euclid(pulses, steps, rotation, child):
-            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
-            return Euclid(pulses, steps, rotation, bound), alloc
-        case Degrade(prob, seed, child):
-            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
-            return Degrade(prob, seed, bound), alloc
-        case Warp(kind, amount, grid, child):
-            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
-            return Warp(kind, amount, grid, bound), alloc
-        case _:
-            # Atom without Freeze — bind to current instance (non-compound event)
-            inst = f"{parent}_v{alloc % count}"
-            return _bind_voice(node, inst), alloc
-
-
-def _bind_ctrl(node: IrNode, label: str) -> IrNode:
-    """Replace the ``"ctrl"`` placeholder param in Control and Osc atoms with ``label``.
-
-    Similar to ``_bind_voice()`` but replaces the specific placeholder
-    ``"ctrl"`` rather than prepending a prefix.
-    """
-    from krach.patterns.ir import (
-        Atom,
-        Cat,
-        Control,
-        Degrade,
-        Early,
-        Euclid,
-        Every,
-        Fast,
-        Freeze,
-        Late,
-        Osc,
-        Rev,
-        Silence,
-        Slow,
-        Stack,
-        Warp,
-    )
-
-    match node:
-        case Atom(Control(label=ctrl_label, value=val)):
-            if ctrl_label == "ctrl":
-                return Atom(Control(label=label, value=val))
-            return node
-        case Atom(Osc(addr, args)):
-            new_args = tuple(
-                OscStr(label) if isinstance(a, OscStr) and a.value == "ctrl" else a
-                for a in args
-            )
-            return Atom(Osc(addr, new_args))
-        case Atom():
-            return node
-        case Silence():
-            return node
-        case Freeze(child):
-            return Freeze(_bind_ctrl(child, label))
-        case Cat(children):
-            return Cat(tuple(_bind_ctrl(c, label) for c in children))
-        case Stack(children):
-            return Stack(tuple(_bind_ctrl(c, label) for c in children))
-        case Fast(factor, child):
-            return Fast(factor, _bind_ctrl(child, label))
-        case Slow(factor, child):
-            return Slow(factor, _bind_ctrl(child, label))
-        case Early(offset, child):
-            return Early(offset, _bind_ctrl(child, label))
-        case Late(offset, child):
-            return Late(offset, _bind_ctrl(child, label))
-        case Rev(child):
-            return Rev(_bind_ctrl(child, label))
-        case Every(n, transform, child):
-            return Every(n, _bind_ctrl(transform, label), _bind_ctrl(child, label))
-        case Euclid(pulses, steps, rotation, child):
-            return Euclid(pulses, steps, rotation, _bind_ctrl(child, label))
-        case Degrade(prob, seed, child):
-            return Degrade(prob, seed, _bind_ctrl(child, label))
-        case Warp(kind, amount, grid, child):
-            return Warp(kind, amount, grid, _bind_ctrl(child, label))
-        case _:
-            return node
 
 
 # ── VoiceMixer ────────────────────────────────────────────────────────────────
@@ -1302,21 +1080,21 @@ class VoiceMixer:
         send = self._session.play_from_zero if from_zero else self._session.play
         voice = self._nodes.get(target)
         if voice is not None and voice.count > 1:
-            bound_node, new_alloc = _bind_voice_poly(
+            bound_node, new_alloc = bind_voice_poly(
                 pattern.node, target, voice.count, voice.alloc
             )
             voice.alloc = new_alloc
             send(target, Pattern(bound_node))
         elif self._is_voice_or_bus(target):
-            bound = Pattern(_bind_voice(pattern.node, target))
+            bound = Pattern(bind_voice(pattern.node, target))
             send(target, bound)
         elif "/" in target:
             label = self._resolve_path(target)
-            bound = Pattern(_bind_ctrl(pattern.node, label))
+            bound = Pattern(bind_ctrl(pattern.node, label))
             slot = f"_ctrl_{target.replace('/', '_')}"
             send(slot, bound)
         else:
-            bound = Pattern(_bind_voice(pattern.node, target))
+            bound = Pattern(bind_voice(pattern.node, target))
             send(target, bound)
 
     def pattern(self, name: str) -> Pattern | None:
