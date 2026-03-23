@@ -6,8 +6,6 @@
 
 pub mod command;
 
-use std::collections::HashMap;
-
 use crate::automation::Automation;
 use crate::graph::DspGraph;
 
@@ -33,7 +31,9 @@ pub struct GraphSwapper {
     master_gain: f32,
     fade_buf_old: Vec<f32>,
     fade_buf_new: Vec<f32>,
-    automations: HashMap<String, Automation>,
+    /// Active automations. Vec for RT-safety (no HashMap alloc on audio thread).
+    /// Linear scan for lookup — n < 100 per style guide.
+    automations: Vec<(String, Automation)>,
 }
 
 impl GraphSwapper {
@@ -48,7 +48,7 @@ impl GraphSwapper {
             master_gain: 1.0,
             fade_buf_old: vec![0.0; block_size],
             fade_buf_new: vec![0.0; block_size],
-            automations: HashMap::new(),
+            automations: Vec::with_capacity(32),
         }
     }
 
@@ -71,10 +71,15 @@ impl GraphSwapper {
                 Command::SetMasterGain(gain) => self.master_gain = gain,
                 Command::SetCrossfade(samples) => self.crossfade_samples = samples,
                 Command::SetAutomation { id, automation } => {
-                    self.automations.insert(id, automation);
+                    // Replace existing or push new (linear scan, n < 100).
+                    if let Some(entry) = self.automations.iter_mut().find(|(k, _)| *k == id) {
+                        entry.1 = automation;
+                    } else {
+                        self.automations.push((id, automation));
+                    }
                 }
                 Command::ClearAutomation { id } => {
-                    self.automations.remove(&id);
+                    self.automations.retain(|(k, _)| *k != id);
                 }
                 Command::Shutdown => {}
             }
@@ -159,7 +164,7 @@ impl GraphSwapper {
     }
 
     fn tick_automations(&mut self, block_size: usize) {
-        for auto in self.automations.values_mut() {
+        for (_, auto) in &mut self.automations {
             if !auto.active {
                 continue;
             }
@@ -687,7 +692,7 @@ mod tests {
         }
 
         // The automation should have deactivated
-        let auto_ref = swapper.automations.get("a1").unwrap();
+        let auto_ref = swapper.automations.iter().find(|(k, _)| k == "a1").map(|(_, a)| a).unwrap();
         assert!(!auto_ref.active, "one-shot should deactivate after period");
     }
 
@@ -735,7 +740,7 @@ mod tests {
         }));
 
         assert_eq!(swapper.automations.len(), 1, "same id should replace, not add");
-        let a = swapper.automations.get("a1").unwrap();
+        let a = swapper.automations.iter().find(|(k, _)| k == "a1").map(|(_, a)| a).unwrap();
         assert!((a.lo - 0.2).abs() < 1e-5, "should have the second automation's lo");
     }
 
