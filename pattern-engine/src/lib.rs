@@ -25,10 +25,13 @@
 
 pub mod engine;
 pub mod event;
+#[cfg(feature = "native")]
 pub mod ipc;
 pub mod ir;
+#[cfg(feature = "native")]
 pub mod output;
 pub mod pattern;
+#[cfg(feature = "native")]
 pub mod rt;
-pub mod scheduler; // clock module remains for BPM clock types
+pub mod scheduler;
 pub mod time;

@@ -10,13 +10,17 @@ unsafe_code = "forbid"
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 
+[features]
+default = ["native"]
+native = ["dep:arc-swap", "dep:crossbeam-channel", "dep:midir", "dep:rosc", "dep:spin_sleep", "dep:thread-priority"]
+
 [dependencies]
-arc-swap = "1"
-crossbeam-channel = "0.5"
-midir = "0.10"
-rosc = "0.10"
+arc-swap = { version = "1", optional = true }
+crossbeam-channel = { version = "0.5", optional = true }
+midir = { version = "0.10", optional = true }
+rosc = { version = "0.10", optional = true }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 smallvec = "1"
-spin_sleep = "1"
-thread-priority = "1"
+spin_sleep = { version = "1", optional = true }
+thread-priority = { version = "1", optional = true }

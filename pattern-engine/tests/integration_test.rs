@@ -1,3 +1,5 @@
+#![cfg(feature = "native")]
+
 mod helpers;
 
 use std::net::UdpSocket;
