@@ -116,6 +116,39 @@ class Pattern:
         """Apply swing. amount=0.5 is straight, 0.67 is standard, 0.75 is heavy."""
         return Pattern(Warp(kind="swing", amount=amount, grid=grid, child=self.node))
 
+    def mask(self, mask_str: str) -> Pattern:
+        """Suppress events where mask has gaps.
+
+        ``kr.seq("A2", "D3", "E2").mask("1 1 0")`` silences the third event.
+        Mask tokens: ``1``/``x`` = keep, ``0``/``.``/``~`` = silence.
+        """
+        tokens = mask_str.split()
+        keep = [t in ("1", "x", "X") for t in tokens]
+        # Walk the Cat children and replace masked positions with Silence
+        node = self.node
+        if isinstance(node, Cat):
+            new_children: list[IrNode] = []
+            for i, child in enumerate(node.children):
+                if i < len(keep) and not keep[i]:
+                    new_children.append(Silence())
+                else:
+                    new_children.append(child)
+            return Pattern(Cat(tuple(new_children)))
+        return self
+
+    def sometimes(self, prob: float, fn: Callable[[Pattern], Pattern], seed: int = 0) -> Pattern:
+        """Apply transform with probability ``prob`` each cycle.
+
+        ``p.sometimes(0.3, reverse)`` reverses 30% of cycles.
+        Uses ``Degrade`` internally for deterministic randomness.
+        """
+        transformed = fn(self)
+        # Interleave: degrade the original, reverse-degrade the transform
+        return Pattern(Stack((
+            Degrade(prob=1.0 - prob, seed=seed, child=transformed.node),
+            Degrade(prob=prob, seed=seed + 1, child=self.node),
+        )))
+
 
 # ── Atom constructors ────────────────────────────────────────────────────
 

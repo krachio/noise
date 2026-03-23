@@ -165,6 +165,112 @@ def mod_exp(lo: float, hi: float, steps: int = 64) -> Pattern:
     return _build_mod(lambda t: t * t, lo, hi, steps)
 
 
+# ── Continuous pattern values (renamed aliases for clarity) ──────────────
+
+
+def sine(lo: float, hi: float, steps: int = 64) -> Pattern:
+    """Sine sweep from lo to hi over one cycle. Use ``.over(N)`` for longer."""
+    return mod_sine(lo, hi, steps)
+
+
+def saw(lo: float, hi: float, steps: int = 64) -> Pattern:
+    """Sawtooth ramp from lo to hi over one cycle."""
+    return ramp(lo, hi, steps)
+
+
+def rand(lo: float, hi: float, steps: int = 64) -> Pattern:
+    """Random values between lo and hi. Different each cycle (seeded by step count)."""
+    import random as _rng
+
+    atoms = [_ctrl("ctrl", lo + _rng.random() * (hi - lo)) for _ in range(steps)]
+    result = atoms[0]
+    for a in atoms[1:]:
+        result = result + a
+    return result
+
+
+# ── Multi-pattern combinators ────────────────────────────────────────────
+
+
+def cat(*patterns: Pattern) -> Pattern:
+    """Concatenate patterns: play each for one cycle, then loop.
+
+    ``kr.cat(a, b, c)`` = play ``a`` for 1 cycle, ``b`` for 1, ``c`` for 1, repeat.
+    """
+    if not patterns:
+        raise ValueError("cat() requires at least one pattern")
+    result = patterns[0]
+    for p in patterns[1:]:
+        result = result + p
+    return result.over(len(patterns))
+
+
+def stack(*patterns: Pattern) -> Pattern:
+    """Layer patterns simultaneously.
+
+    ``kr.stack(a, b, c)`` = play all three at the same time.
+    Same as ``a | b | c``.
+    """
+    if not patterns:
+        raise ValueError("stack() requires at least one pattern")
+    result = patterns[0]
+    for p in patterns[1:]:
+        result = result | p
+    return result
+
+
+def struct(rhythm: Pattern, melody: Pattern) -> Pattern:
+    """Impose rhythm's onset structure onto melody's values.
+
+    Takes the time positions where ``rhythm`` has events and fills them
+    with values from ``melody`` (cycling if melody is shorter).
+
+    ``kr.struct(kr.p("x . x x"), kr.seq("A2", "D3"))`` plays A2 and D3
+    at the rhythm's hit positions.
+    """
+    from krach.patterns.ir import Cat, Freeze, Silence
+
+    # Evaluate: walk rhythm's IR, replace hit atoms with melody atoms
+    melody_atoms: list[Pattern] = []
+
+    def _extract_atoms(node: object) -> None:
+        if isinstance(node, Freeze):
+            melody_atoms.append(Pattern(node))
+        elif hasattr(node, "children"):
+            for c in getattr(node, "children", ()):
+                _extract_atoms(c)  # type: ignore[arg-type]
+        elif hasattr(node, "child"):
+            _extract_atoms(getattr(node, "child"))  # type: ignore[arg-type]
+
+    _extract_atoms(melody.node)
+
+    if not melody_atoms:
+        return rhythm  # no melody atoms, return rhythm as-is
+
+    idx = 0
+
+    def _replace(node: object) -> object:
+        nonlocal idx
+        if isinstance(node, Freeze):
+            result = melody_atoms[idx % len(melody_atoms)]
+            idx += 1
+            return result.node
+        if isinstance(node, Silence):
+            return node
+        if isinstance(node, Cat):
+            return Cat(tuple(_replace(c) for c in node.children))  # type: ignore[misc]
+        if hasattr(node, "child"):
+            from dataclasses import replace as _dc_replace
+            return _dc_replace(node, child=_replace(node.child))  # type: ignore[type-var,misc]
+        if hasattr(node, "children"):
+            from dataclasses import replace as _dc_replace
+            return _dc_replace(node, children=tuple(_replace(c) for c in node.children))  # type: ignore[type-var,misc]
+        return node
+
+    new_ir: IrNode = _replace(rhythm.node)  # type: ignore[assignment]
+    return Pattern(new_ir)
+
+
 # ── Pure builders (testable without I/O) ──────────────────────────────────────
 
 
@@ -656,6 +762,14 @@ class VoiceMixer:
     mod_square = staticmethod(mod_square)
     mod_exp = staticmethod(mod_exp)
     dsp = staticmethod(dsp)
+
+    # ── Continuous pattern values + combinators ─────────────────────────
+    sine = staticmethod(sine)
+    saw = staticmethod(saw)
+    rand = staticmethod(rand)
+    cat = staticmethod(cat)
+    stack = staticmethod(stack)
+    struct = staticmethod(struct)
 
     # ── Pitch utilities (static) ──────────────────────────────────────────
     mtof = staticmethod(_mtof)

@@ -20,14 +20,42 @@ Rules (MUST follow):
 
 ## Two namespaces
 
-- `kr` — VoiceMixer instance. All live coding ops.
-- `krs` — `krach.dsp` module. All DSP synthesis primitives.
+- `kr` — the audio graph. Nodes, routing, patterns, transport.
+- `krs` — DSP primitives. Oscillators, filters, envelopes.
 
-Pattern builders are on `kr`: `kr.note()`, `kr.hit()`, `kr.seq()`, `kr.rest()`,
-`kr.ramp()`, `kr.mod_sine()`, etc.
+## Operator DSL (fast, for REPL)
 
-DSP primitives are on `krs`: `krs.Signal`, `krs.control()`, `krs.saw()`,
-`krs.lowpass()`, `krs.adsr()`, etc.
+```python
+bass = kr.node("bass", bass_fn, gain=0.3)    # create node
+verb = kr.node("verb", reverb_fn, gain=0.3)  # create effect node
+bass >> verb                                   # route signal
+bass >> (verb, 0.4)                            # route with send level
+bass @ kr.seq("A2", "D3").over(2)             # play pattern
+bass @ "A2 D3 ~ E2"                           # play mini-notation
+bass @ ("cutoff", kr.sine(200, 2000).over(4)) # modulate param
+bass @ None                                    # hush
+bass["cutoff"] = 1200                          # set control
+kr["bass/cutoff"]                              # get control value
+kr["bass"]                                     # get node handle
+
+with kr.transition(bars=8):                    # all changes fade over 8 bars
+    bass["gain"] = 0.8
+    kr.tempo = 140
+```
+
+## Explicit API (for building abstractions)
+
+```python
+kr.node("bass", bass_fn, gain=0.3)
+kr.connect("bass", "verb", level=0.4)
+kr.play("bass", pattern)
+kr.set("bass/cutoff", 1200)
+kr.fade("bass/gain", 0.0, bars=4)
+kr.mute("bass")
+kr.hush("bass")
+```
+
+Both `kr.voice()`/`kr.bus()` still work as aliases for `kr.node()`.
 
 ---
 

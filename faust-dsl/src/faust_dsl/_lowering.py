@@ -273,11 +273,20 @@ faust_expr_p.def_lowering(_lower_faust_expr)
 # ---------------------------------------------------------------------------
 
 
+_GATE_NAMES = ("gate", "trig", "trigger")
+
+
 def _lower_control(_ctx: LoweringContext, eqn: Equation) -> str:
     if not isinstance(eqn.params, ControlParams):
         raise TypeError(f"Expected ControlParams, got {type(eqn.params).__name__}")
     p = eqn.params
-    return f'hslider("{p.name}", {p.init}, {p.lo}, {p.hi}, {p.step})'
+    hslider = f'hslider("{p.name}", {p.init}, {p.lo}, {p.hi}, {p.step})'
+    # Auto-smooth non-gate parameters to prevent zipper noise at block-rate control.
+    # si.smoo is a one-pole lowpass (~5ms) — eliminates discontinuities while
+    # preserving fast response for musical control changes.
+    if any(g in p.name.lower() for g in _GATE_NAMES):
+        return hslider
+    return f"{hslider} : si.smoo"
 
 
 control_p.def_lowering(_lower_control)
