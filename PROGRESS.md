@@ -17,11 +17,11 @@ noise/
 ### Test counts
 - audio-engine: 161 Rust tests
 - audio-faust: 22 Rust tests
-- pattern-engine: 154 Rust tests
+- pattern-engine: 160 Rust tests
 - krach-engine: 25 Rust tests
 - faust-dsl: 68 Python tests
 - krach: 442 Python tests (includes patterns module, namespace tests)
-- **Total: 872 tests**, all green. Pyright strict clean.
+- **Total: 878 tests**, all green. Pyright strict clean.
 
 ## Usage
 
@@ -72,6 +72,7 @@ kr.mute("drums")
 - **Group operations**: `kr.mute("drums")` — prefix matching for `/`-grouped voices
 - **ADC input**: `kr.input("mic")` — live audio from CoreAudio input into the graph
 - **MIDI CC mapping**: `kr.midi_map(cc=74, path="bass/cutoff", lo=200, hi=4000)`
+- **Pattern compiler**: Control-voice patterns compile to block-rate wavetables (172 updates/sec)
 - **Phase-reset**: fades/mods start from beat 1 via `SetPatternFromZero`
 - **Meter**: `kr.meter = 3` for waltz, 7 for 7/8
 - **Pattern retrieval**: `kr.pattern("kick")` returns unbound pattern
