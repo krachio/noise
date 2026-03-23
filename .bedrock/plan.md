@@ -128,10 +128,25 @@ Each iteration of the ralph loop follows this exact sequence:
 | Yara | 8 | Improved, Callable[..., Any] remains |
 | Nils | 7 | Minor doc issues |
 
+### Iteration 6 scores
+
+| Reviewer | Score | Trend |
+|----------|-------|-------|
+| Kira | 6 | ↓ |
+| Tomás | 7 | ↑ |
+| Suki | 7 | = |
+| Renzo | 6 | ↓ |
+| Maren | 7 | ↑↑ |
+| Diego | 8 | = |
+| Yara | 7 | ↓ |
+| Nils | 7 | = |
+
+Range: 6-8. Need to identify specific blockers keeping each below 9.
+
 ### Priority for next iteration
-1. **Further VoiceMixer decomposition** — extract scene mgmt (~70 lines) + fade logic (~90 lines) to get closer to 500
-2. **Fix mininotation monkey-patch** — VoiceMixer should import p explicitly
-3. **Narrow Callable[..., Any]** for DSP source type
+1. Extract specific top-3 issues from each reviewer's output
+2. Address the concrete blockers preventing 9/10
+3. Focus on Kira (6) and Renzo (6) as lowest scorers
 
 ### Iteration 2 scores
 
