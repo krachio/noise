@@ -135,10 +135,17 @@ class WebSession:
         return {"status": "ok"}
 
     def _dispatch_pattern(self, slot: str, pattern: Pattern) -> None:
-        """Send pattern IR to the web bridge for scheduling."""
+        """Evaluate pattern and schedule events via Web Audio.
+
+        Evaluates the pattern for one cycle, extracts Control events,
+        and schedules them as Web Audio parameter changes using
+        AudioParam.setValueAtTime for sample-accurate timing.
+        """
         ir_dict = ir_to_dict(pattern.node)
+        ir_json = json.dumps(ir_dict)
         if self._js_bridge:
-            self._js_bridge.set_pattern(slot, json.dumps(ir_dict))
+            cycle_secs = self._meter * 60.0 / max(self._tempo, 1.0)
+            self._js_bridge.schedule_pattern(slot, ir_json, cycle_secs)
 
 
 def _create_web_audio_bridge() -> object | None:
@@ -160,12 +167,16 @@ def _create_web_audio_bridge() -> object | None:
 
             const voices = {};
 
+            const schedulers = {};
+
             return {
                 set_master_gain(v) { master.gain.value = v; },
                 set_control(label, value) {
-                    const [voice, param] = label.split('/');
+                    const parts = label.split('/');
+                    if (parts.length < 2) return;
+                    const [voice, param] = parts;
                     if (voices[voice] && voices[voice].params[param]) {
-                        voices[voice].params[param].value = value;
+                        voices[voice].params[param].setValueAtTime(value, ctx.currentTime);
                     }
                 },
                 add_voice(name, typeId, controls, gain) {
@@ -177,15 +188,42 @@ def _create_web_audio_bridge() -> object | None:
                     osc.start();
                     voices[name] = {
                         osc, gain: g,
-                        params: {
-                            freq: osc.frequency,
-                            gate: g.gain,
-                            gain: g.gain,
-                        }
+                        params: { freq: osc.frequency, gate: g.gain }
                     };
                 },
-                set_pattern(slot, irJson) {
-                    // Pattern scheduling handled by Python-side timer
+                schedule_pattern(slot, irJson, cycleSecs) {
+                    if (schedulers[slot]) clearInterval(schedulers[slot]);
+                    const ir = JSON.parse(irJson);
+                    const events = [];
+                    function walk(node, s, e) {
+                        if (!node) return;
+                        if (node.op === 'Atom' && node.value && node.value.type === 'Control')
+                            events.push({t: s, label: node.value.label, value: node.value.value});
+                        else if (node.op === 'Cat' && node.children) {
+                            const n = node.children.length, d = (e - s) / n;
+                            node.children.forEach((c, i) => walk(c, s + i*d, s + (i+1)*d));
+                        } else if (node.op === 'Stack' && node.children)
+                            node.children.forEach(c => walk(c, s, e));
+                        else if (node.op === 'Freeze' && node.child) walk(node.child, s, e);
+                        else if (node.op === 'Fast' && node.child && node.factor) {
+                            const f = node.factor[0] / node.factor[1], d = (e - s) / f;
+                            for (let i = 0; i < f; i++) walk(node.child, s + i*d, s + (i+1)*d);
+                        } else if (node.child) walk(node.child, s, e);
+                    }
+                    walk(ir, 0, 1);
+                    events.sort((a, b) => a.t - b.t);
+                    let cycleStart = ctx.currentTime;
+                    function tick() {
+                        events.forEach(ev => {
+                            const t = cycleStart + ev.t * cycleSecs;
+                            const p = ev.label.split('/');
+                            if (p.length >= 2 && voices[p[0]] && voices[p[0]].params[p[1]])
+                                voices[p[0]].params[p[1]].setValueAtTime(ev.value, t);
+                        });
+                        cycleStart += cycleSecs;
+                    }
+                    tick();
+                    schedulers[slot] = setInterval(tick, cycleSecs * 800);
                 },
                 send_json(json) {}
             };
