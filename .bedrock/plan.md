@@ -146,6 +146,11 @@ Each iteration of the ralph loop follows this exact sequence:
 | Yara | 7 | Scene frozen but mutable; Callable[..., Any]; Scene uses positional tuples |
 | Nils | 6 | Shadowed _check_finite; stale terminology in __repr__ |
 
+### Resolved in iteration 6
+- Fixed mininotation monkey-patch — VoiceMixer.p is now a direct import
+- Dependency direction corrected: _mixer → _mininotation (not reverse)
+- Removed side-effect import from __init__.py
+
 ### Resolved in iteration 5
 - Extracted export() into _export.py (100 lines)
 - Removed backward compat aliases (Voice, Bus, VoiceHandle, BusHandle)
