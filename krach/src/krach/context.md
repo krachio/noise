@@ -225,10 +225,12 @@ kr.unsolo()               # unmute everything
 kr.stop()                 # hush all voices
 ```
 
-### Scenes (save / recall / load)
+### Scenes and persistence
 ```python
-kr.save("verse")          # snapshot current state
-kr.recall("verse")        # restore saved state
+kr.export("verse.py")     # save full session to reloadable Python file
+kr.load("verse.py")       # reload a saved session (exec Python with kr in scope)
+kr.save("verse")          # in-memory snapshot (lost on exit)
+kr.recall("verse")        # restore in-memory snapshot
 kr.load("songs/verse.py") # exec a Python file with kr in scope
 ```
 
