@@ -879,7 +879,17 @@ class VoiceMixer:
 
         Creates a gain-controlled send. If ``port`` is specified,
         creates a direct wire to that port instead.
+
+        If target is a voice (not a bus), auto-promotes it to a bus
+        so audio routing works correctly.
         """
+        # Auto-promote voice to bus if needed for routing
+        if target in self._voices and target not in self._buses:
+            voice = self._voices.pop(target)
+            self._buses[target] = Bus(
+                type_id=voice.type_id, gain=voice.gain,
+                controls=voice.controls, num_inputs=1,
+            )
         if port is not None:
             self.wire(source, target, port=port)
         else:
@@ -1509,10 +1519,10 @@ class VoiceMixer:
         Raises ValueError if a wire exists for the same (voice, bus) pair.
         """
         _check_finite(level, f"send level for '{voice}' → '{bus}'")
-        if voice not in self._voices:
-            raise ValueError(f"voice '{voice}' not found")
-        if bus not in self._buses:
-            raise ValueError(f"bus '{bus}' not found")
+        if voice not in self._voices and voice not in self._buses:
+            raise ValueError(f"node '{voice}' not found")
+        if bus not in self._buses and bus not in self._voices:
+            raise ValueError(f"node '{bus}' not found")
 
         key = (voice, bus)
 

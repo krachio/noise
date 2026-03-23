@@ -1554,7 +1554,7 @@ def test_send_validates_voice_exists() -> None:
     })
     mixer.bus("verb", "faust:verb", gain=0.3)
 
-    with pytest.raises(ValueError, match="voice.*not found"):
+    with pytest.raises(ValueError, match="node.*not found"):
         mixer.send("nope", "verb", level=0.4)
 
 
@@ -1571,7 +1571,7 @@ def test_send_validates_bus_exists() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
 
-    with pytest.raises(ValueError, match="bus.*not found"):
+    with pytest.raises(ValueError, match="node.*not found"):
         mixer.send("bass", "nope", level=0.4)
 
 
@@ -3439,3 +3439,38 @@ def test_export_contains_pattern_json() -> None:
         code = out.read_text()
         assert "_patterns = json.loads(" in code
         assert "dict_to_ir" in code
+
+
+# ── node() auto-detection ───────────────────────────────────────────────
+
+
+def test_node_with_zero_inputs_creates_voice() -> None:
+    """node() with a 0-input source creates a voice, not a bus."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    handle = mixer.node("bass", "faust:bass", gain=0.3)
+    assert mixer.get_voice("bass") is not None
+    assert mixer.get_bus("bass") is None
+
+
+def test_connect_voice_to_voice_as_send() -> None:
+    """>> between two voices should work as a send (voice used as effect)."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("in", "room"),
+    })
+    bass = mixer.node("bass", "faust:bass", gain=0.3)
+    verb = mixer.node("verb", "faust:verb", gain=0.3)
+
+    # This should not raise — connect should work even when target is a voice
+    # (the DSP might have control-based inputs, which is a valid pattern)
+    bass >> verb

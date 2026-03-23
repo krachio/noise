@@ -6,3 +6,7 @@ Tests must verify real behavior. Reject:
 - Mock-heavy tests that don't verify real behavior
 
 Tests must cover edge cases and failure modes.
+
+When encountering a bug: ALWAYS write a failing test FIRST that reproduces
+the bug, THEN fix the implementation until the test passes. Never fix a bug
+without a regression test that would catch it if it returned.
