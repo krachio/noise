@@ -1,0 +1,55 @@
+site_name: krach docs
+site_url: https://krach.io/docs/
+site_description: Live coding audio system — user and developer documentation
+repo_url: https://github.com/krachio/noise
+repo_name: krachio/noise
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: black
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - scheme: default
+      primary: black
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  font:
+    code: JetBrains Mono
+  features:
+    - content.code.copy
+    - navigation.sections
+    - navigation.expand
+    - search.highlight
+
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - User Guide:
+    - Synth Design: synth-design.md
+    - Patterns: patterns.md
+    - Mini-notation: mini-notation.md
+    - Effect Routing: effect-routing.md
+    - Swing & Warps: swing-and-warps.md
+    - Scenes & Persistence: scenes.md
+    - MIDI & Hardware: midi-hardware.md
+  - Developer Guide:
+    - Architecture: architecture.md
+    - IPC Protocol: protocol.md
+    - Contributing: contributing.md
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - toc:
+      permalink: true

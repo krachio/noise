@@ -1,0 +1,59 @@
+name: Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - 'README.md'
+      - '.github/workflows/docs.yml'
+      - '**/*.rs'  # Rust source changes affect cargo doc
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # Python docs (mkdocs-material)
+      - uses: astral-sh/setup-uv@v6
+      - name: Build mkdocs
+        working-directory: docs
+        run: |
+          uv sync
+          uv run mkdocs build -d ../site/docs
+
+      # Rust docs (cargo doc)
+      - uses: dtolnay/rust-toolchain@stable
+      - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
+      - name: Build cargo doc
+        run: |
+          cargo doc --workspace --no-deps
+          cp -r target/doc site/rust
+          echo '<meta http-equiv="refresh" content="0;url=pattern_engine/index.html">' > site/rust/index.html
+
+      # Upload combined site
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment
