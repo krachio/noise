@@ -1,3 +1,3 @@
 [workspace]
-members = ["audio-engine", "audio-faust", "pattern-engine", "krach-engine"]
+members = ["audio-engine", "audio-faust", "pattern-engine", "pattern-engine-py", "krach-engine"]
 resolver = "2"
