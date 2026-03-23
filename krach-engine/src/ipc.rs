@@ -38,6 +38,7 @@ impl Drop for IpcHandle {
         self.stop.store(true, Ordering::Relaxed);
         let _ = std::os::unix::net::UnixStream::connect(&self.socket_path);
         let _ = std::fs::remove_file(&self.socket_path);
+        let _ = std::fs::remove_file(self.socket_path.with_extension("pid"));
     }
 }
 
@@ -47,7 +48,32 @@ pub fn start(
     cmd_tx: crossbeam_channel::Sender<LoopCommand>,
     node_types: Arc<RwLock<Vec<String>>>,
 ) -> Result<IpcHandle, String> {
+    // Stale socket detection: check PID lock file.
+    let lock_path = socket_path.with_extension("pid");
+    if socket_path.exists() && lock_path.exists() {
+        if let Ok(pid_str) = std::fs::read_to_string(&lock_path) {
+            if let Ok(pid) = pid_str.trim().parse::<u32>() {
+                // Check if /proc/{pid} exists (Linux) or try connecting (macOS).
+                let proc_path = format!("/proc/{pid}");
+                if std::path::Path::new(&proc_path).exists() {
+                    return Err(format!(
+                        "another krach-engine (PID {pid}) owns {}",
+                        socket_path.display()
+                    ));
+                }
+                // macOS: try connecting — if it succeeds, another instance is running.
+                if std::os::unix::net::UnixStream::connect(&socket_path).is_ok() {
+                    return Err(format!(
+                        "another krach-engine (PID {pid}) owns {}",
+                        socket_path.display()
+                    ));
+                }
+            }
+        }
+    }
     let _ = std::fs::remove_file(&socket_path);
+    std::fs::write(&lock_path, std::process::id().to_string())
+        .map_err(|e| format!("write PID lock: {e}"))?;
     let listener = std::os::unix::net::UnixListener::bind(&socket_path)
         .map_err(|e| format!("bind {}: {e}", socket_path.display()))?;
     listener
@@ -97,6 +123,13 @@ fn handle_connection(
     let reader = BufReader::new(stream.try_clone().expect("clone stream"));
     let mut writer = stream;
 
+    // Protocol version handshake: engine announces version on connect.
+    let version_line = r#"{"protocol":1,"engine":"krach-engine"}"#;
+    let _ = writer.write_all(format!("{version_line}\n").as_bytes());
+
+    // Message size limit: 1MB per line.
+    const MAX_LINE_BYTES: usize = 1_048_576;
+
     for line in reader.lines() {
         if stop.load(Ordering::Relaxed) {
             break;
@@ -107,6 +140,15 @@ fn handle_connection(
             Err(_) => break,
         };
         if line.trim().is_empty() {
+            continue;
+        }
+        if line.len() > MAX_LINE_BYTES {
+            let err = IpcResponse::Error {
+                msg: format!("message too large ({} bytes, max {MAX_LINE_BYTES})", line.len()),
+            };
+            let mut json = serde_json::to_string(&err).expect("serialize");
+            json.push('\n');
+            let _ = writer.write_all(json.as_bytes());
             continue;
         }
 

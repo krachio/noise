@@ -63,6 +63,15 @@ class Session:
         self._sock.connect(self.socket_path)
         self._sock.settimeout(5.0)
         self._reader = self._sock.makefile("rb")
+        # Read engine's protocol version handshake.
+        try:
+            version_line = self._reader.readline()
+            if version_line:
+                import json as _json
+                info = _json.loads(version_line)
+                self._engine_protocol = info.get("protocol", 0)
+        except Exception:
+            self._engine_protocol = 0  # pre-handshake engine
 
     def disconnect(self) -> None:
         if self._reader is not None:
