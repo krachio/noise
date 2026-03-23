@@ -12,13 +12,13 @@ import json
 import textwrap
 from collections.abc import Generator
 from contextlib import contextmanager
-from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable  # Any still used for DspDef.fn
 
 from faust_dsl import transpile as _transpile
 from krach._bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
+from krach._types import DspDef, Node, NodeSnapshot, Scene, dsp
 from krach._graph import inst_name as _inst_name, build_graph_ir
 from krach._patterns import (  # noqa: F401 — re-exported for backward compat
     build_hit as build_hit,
@@ -38,82 +38,6 @@ from krach._pitch import mtof as _mtof
 from krach._pitch import parse_note as _parse_note
 
 
-@dataclass(frozen=True)
-class NodeSnapshot:
-    """Frozen snapshot of a Node's state for scene storage."""
-
-    type_id: str
-    gain: float
-    controls: tuple[str, ...]
-    num_inputs: int = 0
-    count: int = 1
-    init: tuple[tuple[str, float], ...] = ()
-    source_text: str = ""
-
-
-@dataclass(frozen=True)
-class Scene:
-    """Snapshot of the mixer state — nodes, sends, patterns, controls."""
-
-    nodes: dict[str, NodeSnapshot]
-    sends: dict[tuple[str, str], float]
-    wires: dict[tuple[str, str], str]
-    patterns: dict[str, Pattern]
-    ctrl_values: dict[str, float]
-    tempo: float
-    master: float
-    muted: dict[str, float]
-
-
-@dataclass
-class Node:
-    """A node in the audio graph — source (num_inputs=0) or effect (num_inputs>0)."""
-
-    type_id: str
-    gain: float
-    controls: tuple[str, ...]
-    num_inputs: int = 0
-    count: int = 1
-    init: tuple[tuple[str, float], ...] = ()
-    source_text: str = field(default="", repr=False)
-    alloc: int = field(default=0, repr=False)
-
-
-
-
-@dataclass(frozen=True)
-class DspDef:
-    """A pre-transpiled DSP definition created by the ``@dsp`` decorator."""
-
-    fn: Callable[..., Any]
-    source: str
-    faust: str
-    controls: tuple[str, ...]
-    num_inputs: int = 0
-
-
-def dsp(fn: Callable[..., Any]) -> DspDef:
-    """Decorator: captures Python source + pre-transpiles to FAUST.
-
-    Usage::
-
-        @dsp
-        def acid_bass() -> Signal:
-            freq = control("freq", 55.0, 20.0, 800.0)
-            gate = control("gate", 0.0, 0.0, 1.0)
-            return lowpass(saw(freq), 800.0) * adsr(...) * 0.55
-
-        kr.voice("bass", acid_bass, gain=0.3)
-    """
-    source = textwrap.dedent(inspect.getsource(fn))
-    result = _transpile(fn)  # type: ignore[arg-type]
-    return DspDef(
-        fn=fn,
-        source=source,
-        faust=result.source,
-        controls=tuple(c.name for c in result.schema.controls),
-        num_inputs=result.num_inputs,
-    )
 
 
 
