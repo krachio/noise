@@ -7,7 +7,8 @@ on:
       - 'docs/**'
       - 'README.md'
       - '.github/workflows/docs.yml'
-      - '**/*.rs'  # Rust source changes affect cargo doc
+      - '**/*.rs'
+  workflow_dispatch:  # allow manual trigger
 
 permissions:
   contents: read
