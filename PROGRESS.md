@@ -67,7 +67,7 @@ kr.mute("drums")
 - **Node handles**: `bass = kr.node(...)` returns proxy — `bass @ pattern`, `bass["cutoff"] = 1200`, `bass >> verb`
 - **Unified routing**: `kr.connect()` / `>>` replaces send/wire split — level and port as params
 - **FAUST auto-smoothing**: DSP controls with si.smoo applied automatically, no zipper noise
-- **Protocol hardening**: IPC message validation, length-prefixed framing, reconnect on stale socket
+- **Protocol hardening**: IPC message validation, length-prefixed framing, reconnect on stale socket, acknowledged graph commands (compile errors surface to Python)
 - **Native automation lanes**: block-rate modulation on audio thread (AutoShape + GraphSwapper)
 - **Typed Control IR**: `Control(label, value)` replaces OSC string convention
 - **Continuous patterns**: `kr.sine()`, `kr.saw()`, `kr.rand()` — smooth control sweeps
