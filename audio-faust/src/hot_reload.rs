@@ -3,12 +3,12 @@
 use std::path::Path;
 use std::sync::mpsc;
 
-use log::info;
 use audio_engine::engine::config::EngineConfig;
 use audio_engine::engine::{self, AudioProcessor, EngineController};
 use audio_engine::ir::GraphIr;
 use audio_engine::protocol::ClientMessage;
 use audio_engine::registry::NodeRegistry;
+use log::info;
 
 use crate::loader;
 use crate::watcher::{self, DspWatcher, WatchEvent};
@@ -86,10 +86,7 @@ impl HotReloadEngine {
         }
 
         if let (false, Some(graph)) = (reloaded.is_empty(), &self.current_graph) {
-            let graph_uses_reloaded = graph
-                .nodes
-                .iter()
-                .any(|n| reloaded.contains(&n.type_id));
+            let graph_uses_reloaded = graph.nodes.iter().any(|n| reloaded.contains(&n.type_id));
 
             if graph_uses_reloaded {
                 info!("reloading graph after FAUST hot-reload");

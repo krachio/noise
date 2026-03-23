@@ -14,11 +14,7 @@ pub trait AudioOutput {
     ///
     /// # Errors
     /// Returns an error string if the output device cannot be opened.
-    fn start(
-        &mut self,
-        config: &EngineConfig,
-        callback: AudioCallback,
-    ) -> Result<(), String>;
+    fn start(&mut self, config: &EngineConfig, callback: AudioCallback) -> Result<(), String>;
 
     /// Stop playback and release the device.
     fn stop(&mut self);
@@ -79,10 +75,14 @@ mod tests {
 
         let mut counter = 0_u32;
         #[allow(clippy::cast_precision_loss)]
-        mock.run_blocks(&config, &mut |buf: &mut [f32]| {
-            buf[0] = counter as f32;
-            counter += 1;
-        }, 3);
+        mock.run_blocks(
+            &config,
+            &mut |buf: &mut [f32]| {
+                buf[0] = counter as f32;
+                counter += 1;
+            },
+            3,
+        );
 
         assert_eq!(mock.captured_blocks().len(), 3);
         assert!((mock.captured_blocks()[0][0]).abs() < f32::EPSILON);

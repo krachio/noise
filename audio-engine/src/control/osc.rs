@@ -18,9 +18,14 @@ pub fn instant_to_osc_time(t: Instant) -> OscTime {
     let target_sys = if t >= now_inst {
         now_sys + t.duration_since(now_inst)
     } else {
-        now_sys.checked_sub(now_inst.duration_since(t)).unwrap_or(now_sys)
+        now_sys
+            .checked_sub(now_inst.duration_since(t))
+            .unwrap_or(now_sys)
     };
-    OscTime::try_from(target_sys).unwrap_or(OscTime { seconds: 0, fractional: 0 })
+    OscTime::try_from(target_sys).unwrap_or(OscTime {
+        seconds: 0,
+        fractional: 0,
+    })
 }
 
 /// Decode an OSC NTP time tag back to an [`Instant`].
@@ -83,7 +88,11 @@ impl OscControlInput {
             "set" => {
                 // /audio/set <label> <value>
                 let label = msg.args.first().and_then(|a| {
-                    if let OscType::String(s) = a { Some(s.clone()) } else { None }
+                    if let OscType::String(s) = a {
+                        Some(s.clone())
+                    } else {
+                        None
+                    }
                 })?;
                 let value = msg.args.get(1).and_then(Self::osc_as_f32)?;
                 Some(ClientMessage::SetControl { label, value })
@@ -91,7 +100,11 @@ impl OscControlInput {
             "load_graph" => {
                 // /audio/load_graph <json_string>
                 let json = msg.args.first().and_then(|a| {
-                    if let OscType::String(s) = a { Some(s.as_str()) } else { None }
+                    if let OscType::String(s) = a {
+                        Some(s.as_str())
+                    } else {
+                        None
+                    }
                 })?;
                 let ir = serde_json::from_str(json).ok()?;
                 Some(ClientMessage::LoadGraph(ir))
@@ -104,7 +117,11 @@ impl OscControlInput {
             "list_nodes" => {
                 // /audio/list_nodes <reply_port: int>
                 let port = msg.args.first().and_then(|a| {
-                    if let OscType::Int(p) = a { u16::try_from(*p).ok() } else { None }
+                    if let OscType::Int(p) = a {
+                        u16::try_from(*p).ok()
+                    } else {
+                        None
+                    }
                 })?;
                 Some(ClientMessage::ListNodes { reply_port: port })
             }
@@ -119,9 +136,7 @@ impl OscControlInput {
 
     fn decode_packet(packet: &OscPacket) -> Vec<ClientMessage> {
         match packet {
-            OscPacket::Message(msg) => {
-                Self::parse_osc_message(msg).into_iter().collect()
-            }
+            OscPacket::Message(msg) => Self::parse_osc_message(msg).into_iter().collect(),
             OscPacket::Bundle(bundle) => bundle
                 .content
                 .iter()
@@ -168,9 +183,7 @@ impl OscControlInput {
         loop {
             match socket.recv_from(&mut self.buf) {
                 Ok((size, addr)) => {
-                    if let Ok((_remaining, packet)) =
-                        rosc::decoder::decode_udp(&self.buf[..size])
-                    {
+                    if let Ok((_remaining, packet)) = rosc::decoder::decode_udp(&self.buf[..size]) {
                         let decoded = Self::decode_packet_timed(&packet, None);
                         for (_, msg) in &decoded {
                             debug!("OSC from {addr}: {msg:?}");
@@ -192,13 +205,19 @@ impl OscControlInput {
 /// The reply carries a single JSON-encoded string arg: `["type1", "type2", ...]`.
 /// Errors are logged and silently dropped — this is a best-effort reply.
 pub fn send_node_types_reply(host: &str, port: u16, types: &[String]) {
-    let Ok(json) = serde_json::to_string(types) else { return };
+    let Ok(json) = serde_json::to_string(types) else {
+        return;
+    };
     let msg = OscPacket::Message(OscMessage {
         addr: "/audio/node_types".to_string(),
         args: vec![OscType::String(json)],
     });
-    let Ok(encoded) = rosc::encoder::encode(&msg) else { return };
-    let Ok(socket) = UdpSocket::bind("0.0.0.0:0") else { return };
+    let Ok(encoded) = rosc::encoder::encode(&msg) else {
+        return;
+    };
+    let Ok(socket) = UdpSocket::bind("0.0.0.0:0") else {
+        return;
+    };
     let addr = format!("{host}:{port}");
     if socket.send_to(&encoded, &addr).is_err() {
         warn!("failed to send node_types reply to {addr}");
@@ -208,9 +227,7 @@ pub fn send_node_types_reply(host: &str, port: u16, types: &[String]) {
 impl ControlInput for OscControlInput {
     fn start(&mut self) -> Result<(), String> {
         let socket = UdpSocket::bind(&self.addr).map_err(|e| e.to_string())?;
-        socket
-            .set_nonblocking(true)
-            .map_err(|e| e.to_string())?;
+        socket.set_nonblocking(true).map_err(|e| e.to_string())?;
         self.socket = Some(socket);
         Ok(())
     }
@@ -225,8 +242,7 @@ impl ControlInput for OscControlInput {
         loop {
             match socket.recv_from(&mut self.buf) {
                 Ok((size, addr)) => {
-                    if let Ok((_remaining, packet)) = rosc::decoder::decode_udp(&self.buf[..size])
-                    {
+                    if let Ok((_remaining, packet)) = rosc::decoder::decode_udp(&self.buf[..size]) {
                         let decoded = Self::decode_packet(&packet);
                         for msg in &decoded {
                             debug!("OSC from {addr}: {msg:?}");
@@ -264,10 +280,7 @@ mod tests {
     fn parse_set_control() {
         let msg = OscMessage {
             addr: "/audio/set".into(),
-            args: vec![
-                OscType::String("pitch".into()),
-                OscType::Float(880.0),
-            ],
+            args: vec![OscType::String("pitch".into()), OscType::Float(880.0)],
         };
         let result = OscControlInput::parse_osc_message(&msg).unwrap();
         assert!(matches!(
@@ -281,10 +294,7 @@ mod tests {
     fn parse_set_control_double() {
         let msg = OscMessage {
             addr: "/audio/set".into(),
-            args: vec![
-                OscType::String("pitch".into()),
-                OscType::Double(440.0),
-            ],
+            args: vec![OscType::String("pitch".into()), OscType::Double(440.0)],
         };
         let result = OscControlInput::parse_osc_message(&msg).unwrap();
         assert!(matches!(
@@ -301,7 +311,9 @@ mod tests {
             args: vec![OscType::Double(0.75)],
         };
         let result = OscControlInput::parse_osc_message(&msg).unwrap();
-        assert!(matches!(result, ClientMessage::SetMasterGain { gain } if (gain - 0.75).abs() < f32::EPSILON));
+        assert!(
+            matches!(result, ClientMessage::SetMasterGain { gain } if (gain - 0.75).abs() < f32::EPSILON)
+        );
     }
 
     #[test]
@@ -311,7 +323,9 @@ mod tests {
             args: vec![OscType::Float(0.5)],
         };
         let result = OscControlInput::parse_osc_message(&msg).unwrap();
-        assert!(matches!(result, ClientMessage::SetMasterGain { gain } if (gain - 0.5).abs() < f32::EPSILON));
+        assert!(
+            matches!(result, ClientMessage::SetMasterGain { gain } if (gain - 0.5).abs() < f32::EPSILON)
+        );
     }
 
     #[test]
@@ -347,10 +361,7 @@ mod tests {
     fn parse_wrong_namespace_returns_none() {
         let msg = OscMessage {
             addr: "/other/set".into(),
-            args: vec![
-                OscType::String("pitch".into()),
-                OscType::Float(440.0),
-            ],
+            args: vec![OscType::String("pitch".into()), OscType::Float(440.0)],
         };
         assert!(OscControlInput::parse_osc_message(&msg).is_none());
     }
@@ -379,10 +390,7 @@ mod tests {
         let sender = UdpSocket::bind("127.0.0.1:0").unwrap();
         let msg = rosc::encoder::encode(&OscPacket::Message(OscMessage {
             addr: "/audio/set".into(),
-            args: vec![
-                OscType::String("pitch".into()),
-                OscType::Float(880.0),
-            ],
+            args: vec![OscType::String("pitch".into()), OscType::Float(880.0)],
         }))
         .unwrap();
         sender.send_to(&msg, local_addr).unwrap();
@@ -405,7 +413,10 @@ mod tests {
             args: vec![OscType::Int(12345)],
         };
         let result = OscControlInput::parse_osc_message(&msg).unwrap();
-        assert!(matches!(result, ClientMessage::ListNodes { reply_port: 12345 }));
+        assert!(matches!(
+            result,
+            ClientMessage::ListNodes { reply_port: 12345 }
+        ));
     }
 
     #[test]
@@ -496,10 +507,7 @@ mod tests {
             timetag: osc_time,
             content: vec![OscPacket::Message(OscMessage {
                 addr: "/audio/set".into(),
-                args: vec![
-                    OscType::String("pitch".into()),
-                    OscType::Float(440.0),
-                ],
+                args: vec![OscType::String("pitch".into()), OscType::Float(440.0)],
             })],
         }))
         .unwrap();

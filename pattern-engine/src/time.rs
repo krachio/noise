@@ -462,14 +462,8 @@ mod tests {
         let a = Arc::new(Time::new(1, 2), Time::new(3, 2));
         let splits = a.split_cycles();
         assert_eq!(splits.len(), 2);
-        assert_eq!(
-            splits[0],
-            Arc::new(Time::new(1, 2), Time::one())
-        );
-        assert_eq!(
-            splits[1],
-            Arc::new(Time::one(), Time::new(3, 2))
-        );
+        assert_eq!(splits[0], Arc::new(Time::new(1, 2), Time::one()));
+        assert_eq!(splits[1], Arc::new(Time::one(), Time::new(3, 2)));
     }
 
     #[test]
@@ -502,8 +496,14 @@ mod tests {
     fn large_cross_product_comparison() {
         // num * other.den must exceed i64::MAX to test i128 path
         // 2_000_000_000 * 5_000_000_000 = 10^19 > i64::MAX (9.2×10^18)
-        let a = Time { num: 2_000_000_001, den: 5_000_000_000 };
-        let b = Time { num: 2_000_000_000, den: 5_000_000_000 };
+        let a = Time {
+            num: 2_000_000_001,
+            den: 5_000_000_000,
+        };
+        let b = Time {
+            num: 2_000_000_000,
+            den: 5_000_000_000,
+        };
         assert!(a > b);
         assert!(b < a);
         assert_ne!(a, b);
@@ -512,8 +512,14 @@ mod tests {
     #[test]
     fn large_cross_product_equality() {
         // 2/5B == 4/10B after cross-multiply
-        let a = Time { num: 2_000_000_000, den: 5_000_000_000 };
-        let b = Time { num: 4_000_000_000, den: 10_000_000_000 };
+        let a = Time {
+            num: 2_000_000_000,
+            den: 5_000_000_000,
+        };
+        let b = Time {
+            num: 4_000_000_000,
+            den: 10_000_000_000,
+        };
         assert_eq!(a, b);
     }
 

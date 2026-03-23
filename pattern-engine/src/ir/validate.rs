@@ -54,7 +54,11 @@ fn validate_depth(node: &IrNode, depth: usize) -> Result<(), IrError> {
             validate_depth(child, depth + 1)
         }
         IrNode::Rev { child } => validate_depth(child, depth + 1),
-        IrNode::Every { n, transform, child } => {
+        IrNode::Every {
+            n,
+            transform,
+            child,
+        } => {
             if *n == 0 {
                 return Err(IrError::InvalidEvery {
                     msg: "n must be > 0".into(),
@@ -89,7 +93,12 @@ fn validate_depth(node: &IrNode, depth: usize) -> Result<(), IrError> {
             }
             validate_depth(child, depth + 1)
         }
-        IrNode::Warp { kind, amount, grid, child } => {
+        IrNode::Warp {
+            kind,
+            amount,
+            grid,
+            child,
+        } => {
             if kind != "swing" {
                 return Err(IrError::InvalidWarp {
                     msg: format!("unknown warp kind: {kind}"),
@@ -161,24 +170,14 @@ mod tests {
 
     #[test]
     fn empty_cat_fails() {
-        let node = IrNode::Cat {
-            children: vec![],
-        };
-        assert_eq!(
-            validate(&node),
-            Err(IrError::EmptyChildren { op: "Cat" })
-        );
+        let node = IrNode::Cat { children: vec![] };
+        assert_eq!(validate(&node), Err(IrError::EmptyChildren { op: "Cat" }));
     }
 
     #[test]
     fn empty_stack_fails() {
-        let node = IrNode::Stack {
-            children: vec![],
-        };
-        assert_eq!(
-            validate(&node),
-            Err(IrError::EmptyChildren { op: "Stack" })
-        );
+        let node = IrNode::Stack { children: vec![] };
+        assert_eq!(validate(&node), Err(IrError::EmptyChildren { op: "Stack" }));
     }
 
     #[test]
@@ -289,26 +288,41 @@ mod tests {
 
     #[test]
     fn warp_grid_zero_fails() {
-        assert!(matches!(validate(&swing(0.67, 0)), Err(IrError::InvalidWarp { .. })));
+        assert!(matches!(
+            validate(&swing(0.67, 0)),
+            Err(IrError::InvalidWarp { .. })
+        ));
     }
 
     #[test]
     fn warp_grid_odd_fails() {
-        assert!(matches!(validate(&swing(0.67, 7)), Err(IrError::InvalidWarp { .. })));
+        assert!(matches!(
+            validate(&swing(0.67, 7)),
+            Err(IrError::InvalidWarp { .. })
+        ));
     }
 
     #[test]
     fn warp_amount_zero_fails() {
-        assert!(matches!(validate(&swing(0.0, 8)), Err(IrError::InvalidWarp { .. })));
+        assert!(matches!(
+            validate(&swing(0.0, 8)),
+            Err(IrError::InvalidWarp { .. })
+        ));
     }
 
     #[test]
     fn warp_amount_one_fails() {
-        assert!(matches!(validate(&swing(1.0, 8)), Err(IrError::InvalidWarp { .. })));
+        assert!(matches!(
+            validate(&swing(1.0, 8)),
+            Err(IrError::InvalidWarp { .. })
+        ));
     }
 
     #[test]
     fn warp_amount_nan_fails() {
-        assert!(matches!(validate(&swing(f64::NAN, 8)), Err(IrError::InvalidWarp { .. })));
+        assert!(matches!(
+            validate(&swing(f64::NAN, 8)),
+            Err(IrError::InvalidWarp { .. })
+        ));
     }
 }

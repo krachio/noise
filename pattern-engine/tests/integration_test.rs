@@ -112,7 +112,9 @@ fn e2e_hotswap_pattern() {
     conn.send(r#"{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Atom","value":{"type":"Note","channel":0,"note":60,"velocity":100,"dur":0.5}}}"#);
     let events_before = tk.collect_events(Duration::from_millis(100));
     assert!(
-        events_before.iter().any(|e| matches!(e.event.value, Value::Note { note: 60, .. })),
+        events_before
+            .iter()
+            .any(|e| matches!(e.event.value, Value::Note { note: 60, .. })),
         "expected note 60 before swap"
     );
 
@@ -122,7 +124,9 @@ fn e2e_hotswap_pattern() {
     tk.drain_events();
     let events_after = tk.collect_events(Duration::from_millis(100));
     assert!(
-        events_after.iter().any(|e| matches!(e.event.value, Value::Note { note: 72, .. })),
+        events_after
+            .iter()
+            .any(|e| matches!(e.event.value, Value::Note { note: 72, .. })),
         "expected note 72 after swap"
     );
 
@@ -167,7 +171,10 @@ fn e2e_combinators() {
     // Verify the engine produces events from the compiled pattern.
     // Pattern correctness (event counts) is covered by pattern unit tests.
     let events = tk.collect_events(Duration::from_millis(100));
-    assert!(!events.is_empty(), "combinators pattern should produce events");
+    assert!(
+        !events.is_empty(),
+        "combinators pattern should produce events"
+    );
     assert_eq!(tk.slot_name(events[0].slot_idx), "d1");
 
     tk.stop();
@@ -187,7 +194,10 @@ fn e2e_error_empty_cat() {
     let resp = tk.send(r#"{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Cat","children":[]}}"#);
     match resp {
         ServerMessage::Error { msg } => {
-            assert!(msg.contains("at least one child"), "error should mention empty children: {msg}");
+            assert!(
+                msg.contains("at least one child"),
+                "error should mention empty children: {msg}"
+            );
         }
         other => panic!("expected Error, got {other:?}"),
     }
@@ -202,7 +212,10 @@ fn e2e_error_zero_denom_fast() {
     );
     match resp {
         ServerMessage::Error { msg } => {
-            assert!(msg.contains("zero denominator"), "error should mention zero denominator: {msg}");
+            assert!(
+                msg.contains("zero denominator"),
+                "error should mention zero denominator: {msg}"
+            );
         }
         other => panic!("expected Error, got {other:?}"),
     }

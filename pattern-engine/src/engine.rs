@@ -20,7 +20,7 @@ use std::collections::{BinaryHeap, HashMap};
 use std::time::{Duration, Instant};
 
 use crate::event::{Event, Value};
-use crate::pattern::{query, CompiledPattern};
+use crate::pattern::{CompiledPattern, query};
 use crate::scheduler::clock::Clock;
 use crate::time;
 
@@ -171,9 +171,7 @@ impl Engine {
                 self.phase_offset.fill(0);
             }
             EngineCommand::SetBpm { bpm } => {
-                if !bpm.is_finite() || bpm <= 0.0
-                    || (bpm - self.clock.bpm()).abs() < f64::EPSILON
-                {
+                if !bpm.is_finite() || bpm <= 0.0 || (bpm - self.clock.bpm()).abs() < f64::EPSILON {
                     return;
                 }
                 self.clock = Clock::new(bpm, self.clock.beats_per_cycle());
@@ -182,7 +180,8 @@ impl Engine {
                 self.phase_offset.fill(0);
             }
             EngineCommand::SetBeatsPerCycle { beats } => {
-                if !beats.is_finite() || beats <= 0.0
+                if !beats.is_finite()
+                    || beats <= 0.0
                     || (beats - self.clock.beats_per_cycle()).abs() < f64::EPSILON
                 {
                     return;
@@ -198,7 +197,8 @@ impl Engine {
     /// Remove all heap events belonging to a specific slot.
     fn clear_slot_events(&mut self, slot_idx: usize) {
         let old = std::mem::take(&mut self.heap);
-        self.heap = old.into_iter()
+        self.heap = old
+            .into_iter()
             .filter(|Reverse(e)| e.slot_idx != slot_idx)
             .collect();
     }
@@ -371,7 +371,12 @@ mod tests {
     }
 
     fn note(n: u8) -> Value {
-        Value::Note { channel: 0, note: n, velocity: 100, dur: 0.5 }
+        Value::Note {
+            channel: 0,
+            note: n,
+            velocity: 100,
+            dur: 0.5,
+        }
     }
 
     fn fast_engine() -> Engine {
@@ -414,7 +419,9 @@ mod tests {
             name: "kick".into(),
             pattern: CompiledPattern::atom(note(36)),
         });
-        e.apply(EngineCommand::Hush { name: "kick".into() });
+        e.apply(EngineCommand::Hush {
+            name: "kick".into(),
+        });
 
         // Slot still exists but is silence — fill produces no events.
         std::thread::sleep(Duration::from_millis(10));
@@ -456,7 +463,10 @@ mod tests {
         assert_eq!(e.heap.len(), 0, "BPM change should clear heap");
         // next_cycle resets to 0 for a fresh clock (not first_future_cycle,
         // since the new clock's epoch is now).
-        assert!(e.next_cycle.iter().all(|&c| c == 0), "BPM change should reset cycle counters");
+        assert!(
+            e.next_cycle.iter().all(|&c| c == 0),
+            "BPM change should reset cycle counters"
+        );
     }
 
     #[test]
@@ -472,7 +482,10 @@ mod tests {
 
         e.apply(EngineCommand::SetBeatsPerCycle { beats: 3.0 });
         assert_eq!(e.heap.len(), 0, "meter change should clear heap");
-        assert!(e.next_cycle.iter().all(|&c| c == 0), "meter change should reset cycle counters");
+        assert!(
+            e.next_cycle.iter().all(|&c| c == 0),
+            "meter change should reset cycle counters"
+        );
         assert_eq!(e.clock.beats_per_cycle(), 3.0);
     }
 
@@ -507,7 +520,10 @@ mod tests {
         // Same BPM as fast_engine() — should be a no-op.
         e.apply(EngineCommand::SetBpm { bpm: 6000.0 });
         assert_eq!(e.heap.len(), before, "same BPM should preserve heap");
-        assert_eq!(e.next_cycle, before_cycle, "same BPM should preserve cycle counter");
+        assert_eq!(
+            e.next_cycle, before_cycle,
+            "same BPM should preserve cycle counter"
+        );
     }
 
     // ── fill ─────────────────────────────────────────────────────────────────
@@ -555,8 +571,10 @@ mod tests {
         // Drain immediately: most events should still be in the future.
         let due_now = e.drain(Instant::now());
         // Nothing should be due yet (we just filled — all events are future).
-        assert!(due_now.is_empty() || e.heap.len() > 0,
-            "heap should retain future events after drain");
+        assert!(
+            due_now.is_empty() || e.heap.len() > 0,
+            "heap should retain future events after drain"
+        );
     }
 
     #[test]
@@ -581,8 +599,10 @@ mod tests {
                 window[0].fire_at <= window[1].fire_at,
                 "events must be in fire_at order — burst detected: \
                  slot={} t={:?} then slot={} t={:?}",
-                window[0].slot_idx, window[0].fire_at,
-                window[1].slot_idx, window[1].fire_at,
+                window[0].slot_idx,
+                window[0].fire_at,
+                window[1].slot_idx,
+                window[1].fire_at,
             );
         }
     }
@@ -607,7 +627,9 @@ mod tests {
                 root: 0,
                 is_control: false,
             };
-            let cat = pat.push(PatternNode::Cat { children: smallvec![0, 1] });
+            let cat = pat.push(PatternNode::Cat {
+                children: smallvec![0, 1],
+            });
             pat.root = cat;
             pat
         }
@@ -632,8 +654,10 @@ mod tests {
             assert!(
                 window[0].fire_at <= window[1].fire_at,
                 "multi-slot burst: {} fire_at={:?} then {} fire_at={:?}",
-                window[0].slot_idx, window[0].fire_at,
-                window[1].slot_idx, window[1].fire_at,
+                window[0].slot_idx,
+                window[0].fire_at,
+                window[1].slot_idx,
+                window[1].fire_at,
             );
         }
     }
@@ -687,7 +711,10 @@ mod tests {
         // The key point: the effective cycle is near 0, not near `current`.
         let idx = *e.names.get("mod").unwrap();
         let effective = e.next_cycle[idx] + e.phase_offset[idx];
-        assert!(effective.abs() <= 1, "effective cycle should be near 0, got {effective}");
+        assert!(
+            effective.abs() <= 1,
+            "effective cycle should be near 0, got {effective}"
+        );
     }
 
     #[test]
@@ -707,7 +734,10 @@ mod tests {
         });
 
         let idx = *e.names.get("s").unwrap();
-        assert!(e.phase_offset[idx] < 0, "phase_offset should be negative (= -current_cycle)");
+        assert!(
+            e.phase_offset[idx] < 0,
+            "phase_offset should be negative (= -current_cycle)"
+        );
     }
 
     #[test]
@@ -721,7 +751,10 @@ mod tests {
         });
 
         let idx = *e.names.get("s").unwrap();
-        assert_eq!(e.phase_offset[idx], 0, "normal SetPattern should have offset 0");
+        assert_eq!(
+            e.phase_offset[idx], 0,
+            "normal SetPattern should have offset 0"
+        );
     }
 
     #[test]
@@ -739,7 +772,10 @@ mod tests {
 
         e.fill(Instant::now());
         // Should have events — the pattern starts from effective cycle 0.
-        assert!(e.heap.len() > 0, "fill with phase offset should produce events");
+        assert!(
+            e.heap.len() > 0,
+            "fill with phase offset should produce events"
+        );
     }
 
     #[test]
@@ -759,7 +795,10 @@ mod tests {
     // ── fill_control_curves ────────────────────────────────────────────
 
     fn control(label: &str, value: f32) -> Value {
-        Value::Control { label: label.into(), value }
+        Value::Control {
+            label: label.into(),
+            value,
+        }
     }
 
     #[test]
@@ -767,17 +806,27 @@ mod tests {
         let mut e = fast_engine();
         let ir = crate::ir::IrNode::Cat {
             children: vec![
-                crate::ir::IrNode::Atom { value: control("gate", 1.0) },
-                crate::ir::IrNode::Atom { value: control("gate", 0.0) },
+                crate::ir::IrNode::Atom {
+                    value: control("gate", 1.0),
+                },
+                crate::ir::IrNode::Atom {
+                    value: control("gate", 0.0),
+                },
             ],
         };
         let pat = crate::ir::compile(&ir).unwrap();
         assert!(pat.is_control, "pattern should be detected as control");
 
-        e.apply(EngineCommand::SetPattern { name: "bass".into(), pattern: pat });
+        e.apply(EngineCommand::SetPattern {
+            name: "bass".into(),
+            pattern: pat,
+        });
         e.fill(Instant::now());
         let events = e.drain(Instant::now() + Duration::from_secs(1));
-        assert!(events.is_empty(), "control slots should not produce discrete events");
+        assert!(
+            events.is_empty(),
+            "control slots should not produce discrete events"
+        );
     }
 
     #[test]
@@ -785,16 +834,29 @@ mod tests {
         let mut e = fast_engine();
         let ir = crate::ir::IrNode::Cat {
             children: vec![
-                crate::ir::IrNode::Atom { value: control("gate", 1.0) },
-                crate::ir::IrNode::Atom { value: control("gate", 0.0) },
+                crate::ir::IrNode::Atom {
+                    value: control("gate", 1.0),
+                },
+                crate::ir::IrNode::Atom {
+                    value: control("gate", 0.0),
+                },
             ],
         };
         let pat = crate::ir::compile(&ir).unwrap();
-        e.apply(EngineCommand::SetPattern { name: "bass".into(), pattern: pat });
+        e.apply(EngineCommand::SetPattern {
+            name: "bass".into(),
+            pattern: pat,
+        });
 
         let curves = e.fill_control_curves(Instant::now(), 8);
-        assert!(!curves.is_empty(), "control slot should produce curve outputs");
-        assert!(curves.iter().any(|c| c.label == "gate"), "should have gate wavetable");
+        assert!(
+            !curves.is_empty(),
+            "control slot should produce curve outputs"
+        );
+        assert!(
+            curves.iter().any(|c| c.label == "gate"),
+            "should have gate wavetable"
+        );
     }
 
     #[test]
@@ -810,7 +872,10 @@ mod tests {
 
         e.fill(Instant::now());
         let events = e.drain(Instant::now() + Duration::from_secs(1));
-        assert!(!events.is_empty(), "MIDI slot should produce discrete events");
+        assert!(
+            !events.is_empty(),
+            "MIDI slot should produce discrete events"
+        );
     }
 
     #[test]

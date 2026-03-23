@@ -54,8 +54,7 @@ fn compile_gain_dsp() {
 
 #[test]
 fn sine_produces_audio() {
-    let mut dsp =
-        audio_faust::dsp::FaustDsp::from_code("sine", SINE_DSP, 48000, 256).unwrap();
+    let mut dsp = audio_faust::dsp::FaustDsp::from_code("sine", SINE_DSP, 48000, 256).unwrap();
 
     let inputs: Vec<&[f32]> = vec![];
     let mut out_buf = vec![0.0_f32; 256];
@@ -65,13 +64,15 @@ fn sine_produces_audio() {
     }
 
     let energy: f32 = out_buf.iter().map(|s| s * s).sum();
-    assert!(energy > 0.0, "sine DSP should produce audio, energy={energy}");
+    assert!(
+        energy > 0.0,
+        "sine DSP should produce audio, energy={energy}"
+    );
 }
 
 #[test]
 fn gain_processes_input() {
-    let mut dsp =
-        audio_faust::dsp::FaustDsp::from_code("gain", GAIN_DSP, 48000, 256).unwrap();
+    let mut dsp = audio_faust::dsp::FaustDsp::from_code("gain", GAIN_DSP, 48000, 256).unwrap();
 
     // Feed a DC signal of 1.0
     let input = vec![1.0_f32; 256];
@@ -186,8 +187,7 @@ fn invalid_code_factory_probe_returns_error() {
 fn register_invalid_faust_node_returns_error() {
     let config = EngineConfig::default();
     let (mut ctrl, _proc) = engine::engine(&config);
-    let result =
-        register_faust_node(ctrl.registry_mut(), "faust:bad", "bad", INVALID_DSP);
+    let result = register_faust_node(ctrl.registry_mut(), "faust:bad", "bad", INVALID_DSP);
     assert!(result.is_err());
 }
 
@@ -195,8 +195,7 @@ fn register_invalid_faust_node_returns_error() {
 
 #[test]
 fn reset_changes_sample_rate_affects_output() {
-    let mut dsp =
-        audio_faust::dsp::FaustDsp::from_code("sine", SINE_DSP, 48000, 256).unwrap();
+    let mut dsp = audio_faust::dsp::FaustDsp::from_code("sine", SINE_DSP, 48000, 256).unwrap();
 
     // Compute one block at 48kHz
     let mut out_48k = vec![0.0_f32; 256];
@@ -231,16 +230,14 @@ fn reset_changes_sample_rate_affects_output() {
 
 #[test]
 fn stereo_passthrough_channels() {
-    let dsp =
-        audio_faust::dsp::FaustDsp::from_code("stereo", STEREO_DSP, 48000, 256).unwrap();
+    let dsp = audio_faust::dsp::FaustDsp::from_code("stereo", STEREO_DSP, 48000, 256).unwrap();
     assert_eq!(dsp.num_inputs(), 2);
     assert_eq!(dsp.num_outputs(), 2);
 }
 
 #[test]
 fn stereo_passthrough_copies_input_to_output() {
-    let mut dsp =
-        audio_faust::dsp::FaustDsp::from_code("stereo", STEREO_DSP, 48000, 256).unwrap();
+    let mut dsp = audio_faust::dsp::FaustDsp::from_code("stereo", STEREO_DSP, 48000, 256).unwrap();
 
     let left_in: Vec<f32> = (0..256u16).map(|i| f32::from(i) / 256.0).collect();
     let right_in: Vec<f32> = (0..256u16).map(|i| 1.0 - f32::from(i) / 256.0).collect();

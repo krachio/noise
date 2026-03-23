@@ -4,13 +4,13 @@
 //! Used by the WASM REPL (JupyterLite/Pyodide) and can also be used
 //! natively for testing.
 
-use pyo3::prelude::*;
 use pyo3::exceptions::PyValueError;
+use pyo3::prelude::*;
 
 use pattern_engine::event::Value;
 use pattern_engine::ir;
-use pattern_engine::pattern::query;
 use pattern_engine::pattern::curve::compile_wavetable;
+use pattern_engine::pattern::query;
 use pattern_engine::time::Arc;
 
 /// Compile a pattern from JSON IR and query it for one cycle.

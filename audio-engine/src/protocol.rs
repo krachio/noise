@@ -207,7 +207,15 @@ mod tests {
 
         let parsed: ClientMessage = serde_json::from_str(&json).unwrap();
         match parsed {
-            ClientMessage::SetAutomation { id, label, shape, lo, hi, period_secs, one_shot } => {
+            ClientMessage::SetAutomation {
+                id,
+                label,
+                shape,
+                lo,
+                hi,
+                period_secs,
+                one_shot,
+            } => {
                 assert_eq!(id, "bass/cutoff");
                 assert_eq!(label, "bass/cutoff");
                 assert_eq!(shape, "sine");
@@ -224,12 +232,16 @@ mod tests {
     fn set_automation_from_json() {
         let json = r#"{"type":"set_automation","id":"bass/cutoff","label":"bass/cutoff","shape":"tri","lo":0.0,"hi":1.0,"period_secs":4.0,"one_shot":true}"#;
         let msg: ClientMessage = serde_json::from_str(json).unwrap();
-        assert!(matches!(msg, ClientMessage::SetAutomation { ref shape, one_shot: true, .. } if shape == "tri"));
+        assert!(
+            matches!(msg, ClientMessage::SetAutomation { ref shape, one_shot: true, .. } if shape == "tri")
+        );
     }
 
     #[test]
     fn clear_automation_serde_roundtrip() {
-        let msg = ClientMessage::ClearAutomation { id: "bass/cutoff".into() };
+        let msg = ClientMessage::ClearAutomation {
+            id: "bass/cutoff".into(),
+        };
         let json = serde_json::to_string(&msg).unwrap();
         assert!(json.contains("clear_automation"));
         let parsed: ClientMessage = serde_json::from_str(&json).unwrap();
@@ -274,7 +286,13 @@ mod tests {
         assert!(json.contains("bass/cutoff"));
         let parsed: ClientMessage = serde_json::from_str(&json).unwrap();
         match parsed {
-            ClientMessage::MidiMap { channel, cc, label, lo, hi } => {
+            ClientMessage::MidiMap {
+                channel,
+                cc,
+                label,
+                lo,
+                hi,
+            } => {
                 assert_eq!(channel, 0);
                 assert_eq!(cc, 74);
                 assert_eq!(label, "bass/cutoff");
@@ -289,6 +307,13 @@ mod tests {
     fn midi_map_from_json() {
         let json = r#"{"type":"midi_map","channel":1,"cc":1,"label":"vol","lo":0.0,"hi":1.0}"#;
         let msg: ClientMessage = serde_json::from_str(json).unwrap();
-        assert!(matches!(msg, ClientMessage::MidiMap { channel: 1, cc: 1, .. }));
+        assert!(matches!(
+            msg,
+            ClientMessage::MidiMap {
+                channel: 1,
+                cc: 1,
+                ..
+            }
+        ));
     }
 }

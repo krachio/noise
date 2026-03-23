@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use log::{error, info};
 use audio_engine::control::ControlInput;
 use audio_engine::control::osc::{OscControlInput, send_node_types_reply};
 use audio_engine::engine::config::EngineConfig;
@@ -8,6 +7,7 @@ use audio_engine::ir::{ConnectionIr, GraphIr, NodeInstance};
 use audio_engine::output::AudioOutput;
 use audio_engine::output::cpal_backend::CpalBackend;
 use audio_engine::protocol::ClientMessage;
+use log::{error, info};
 
 fn default_graph() -> GraphIr {
     GraphIr {
@@ -39,7 +39,10 @@ fn main() {
         .init();
 
     let device = CpalBackend::query_device().expect("no audio device");
-    info!("audio device: {}Hz, {} ch", device.sample_rate, device.channels);
+    info!(
+        "audio device: {}Hz, {} ch",
+        device.sample_rate, device.channels
+    );
 
     let config = EngineConfig {
         sample_rate: device.sample_rate,
@@ -62,26 +65,32 @@ fn main() {
     let mut processor = processor;
 
     backend
-        .start(&config, Box::new(move |data: &mut [f32]| {
-            let total_frames = data.len() / channels;
-            let mut frame_offset = 0;
+        .start(
+            &config,
+            Box::new(move |data: &mut [f32]| {
+                let total_frames = data.len() / channels;
+                let mut frame_offset = 0;
 
-            while frame_offset < total_frames {
-                let chunk_frames = block_size.min(total_frames - frame_offset);
-                mono_buf[..chunk_frames].fill(0.0);
-                processor.process(&mut mono_buf[..chunk_frames]);
+                while frame_offset < total_frames {
+                    let chunk_frames = block_size.min(total_frames - frame_offset);
+                    mono_buf[..chunk_frames].fill(0.0);
+                    processor.process(&mut mono_buf[..chunk_frames]);
 
-                for i in 0..chunk_frames {
-                    for ch in 0..channels {
-                        data[(frame_offset + i) * channels + ch] = mono_buf[i];
+                    for i in 0..chunk_frames {
+                        for ch in 0..channels {
+                            data[(frame_offset + i) * channels + ch] = mono_buf[i];
+                        }
                     }
+                    frame_offset += chunk_frames;
                 }
-                frame_offset += chunk_frames;
-            }
-        }))
+            }),
+        )
         .expect("failed to start audio output");
 
-    info!("audio output started ({}Hz, {} ch, block={})", config.sample_rate, config.channels, config.block_size);
+    info!(
+        "audio output started ({}Hz, {} ch, block={})",
+        config.sample_rate, config.channels, config.block_size
+    );
 
     info!("audio-engine running — 440 Hz sine on default output");
     info!("OSC control on 127.0.0.1:9000");
@@ -105,7 +114,9 @@ fn main() {
 
         for msg in messages {
             match &msg {
-                ClientMessage::Shutdown => { should_shutdown = true; }
+                ClientMessage::Shutdown => {
+                    should_shutdown = true;
+                }
                 ClientMessage::ListNodes { reply_port } => {
                     let types = controller.list_node_types();
                     send_node_types_reply("127.0.0.1", *reply_port, &types);

@@ -9,10 +9,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-use log::warn;
-use pattern_engine::ipc::{compile_command, describe};
-use pattern_engine::ipc::protocol::ClientMessage as PatternMsg;
 use audio_engine::protocol::ClientMessage;
+use log::warn;
+use pattern_engine::ipc::protocol::ClientMessage as PatternMsg;
+use pattern_engine::ipc::{compile_command, describe};
 
 use crate::LoopCommand;
 
@@ -76,9 +76,7 @@ pub fn start(
         .map_err(|e| format!("write PID lock: {e}"))?;
     let listener = std::os::unix::net::UnixListener::bind(&socket_path)
         .map_err(|e| format!("bind {}: {e}", socket_path.display()))?;
-    listener
-        .set_nonblocking(false)
-        .map_err(|e| e.to_string())?;
+    listener.set_nonblocking(false).map_err(|e| e.to_string())?;
 
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = Arc::clone(&stop);
@@ -89,7 +87,11 @@ pub fn start(
         .spawn(move || run_server(listener, cmd_tx, node_types, stop_clone))
         .expect("failed to spawn IPC thread");
 
-    Ok(IpcHandle { socket_path: path, stop, _thread: thread })
+    Ok(IpcHandle {
+        socket_path: path,
+        stop,
+        _thread: thread,
+    })
 }
 
 fn run_server(
@@ -104,7 +106,9 @@ fn run_server(
         }
         match stream {
             Ok(stream) => {
-                stream.set_read_timeout(Some(Duration::from_millis(100))).ok();
+                stream
+                    .set_read_timeout(Some(Duration::from_millis(100)))
+                    .ok();
                 handle_connection(stream, &cmd_tx, &node_types, &stop);
             }
             Err(_) => break,
@@ -144,7 +148,10 @@ fn handle_connection(
         }
         if line.len() > MAX_LINE_BYTES {
             let err = IpcResponse::Error {
-                msg: format!("message too large ({} bytes, max {MAX_LINE_BYTES})", line.len()),
+                msg: format!(
+                    "message too large ({} bytes, max {MAX_LINE_BYTES})",
+                    line.len()
+                ),
             };
             let mut json = serde_json::to_string(&err).expect("serialize");
             json.push('\n');
@@ -174,13 +181,12 @@ fn dispatch(
     if let Ok(msg) = serde_json::from_str::<ClientMessage>(line) {
         return handle_graph(msg, cmd_tx, node_types);
     }
-    IpcResponse::Error { msg: format!("unrecognized message: {line}") }
+    IpcResponse::Error {
+        msg: format!("unrecognized message: {line}"),
+    }
 }
 
-fn handle_pattern(
-    msg: PatternMsg,
-    cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
-) -> IpcResponse {
+fn handle_pattern(msg: PatternMsg, cmd_tx: &crossbeam_channel::Sender<LoopCommand>) -> IpcResponse {
     match msg {
         PatternMsg::Ping => IpcResponse::Pong,
         PatternMsg::Batch { commands } => {
@@ -198,7 +204,9 @@ fn handle_pattern(
                     warn!("main loop disconnected");
                 }
             }
-            IpcResponse::Ok { msg: format!("batch applied ({n} commands)") }
+            IpcResponse::Ok {
+                msg: format!("batch applied ({n} commands)"),
+            }
         }
         other => match compile_command(&other) {
             Ok(Some(engine_cmd)) => {
@@ -226,22 +234,49 @@ fn handle_graph(
             IpcResponse::NodeTypes { types }
         }
         ClientMessage::StartInput { channel } => {
-            if cmd_tx.send(LoopCommand::Graph(ClientMessage::StartInput { channel })).is_err() {
+            if cmd_tx
+                .send(LoopCommand::Graph(ClientMessage::StartInput { channel }))
+                .is_err()
+            {
                 warn!("main loop disconnected");
             }
-            IpcResponse::Ok { msg: format!("input started (ch {channel})") }
+            IpcResponse::Ok {
+                msg: format!("input started (ch {channel})"),
+            }
         }
-        ClientMessage::MidiMap { channel, cc, label, lo, hi } => {
-            if cmd_tx.send(LoopCommand::Graph(ClientMessage::MidiMap { channel, cc, label: label.clone(), lo, hi })).is_err() {
+        ClientMessage::MidiMap {
+            channel,
+            cc,
+            label,
+            lo,
+            hi,
+        } => {
+            if cmd_tx
+                .send(LoopCommand::Graph(ClientMessage::MidiMap {
+                    channel,
+                    cc,
+                    label: label.clone(),
+                    lo,
+                    hi,
+                }))
+                .is_err()
+            {
                 warn!("main loop disconnected");
             }
-            IpcResponse::Ok { msg: format!("midi_map: ch{channel} cc{cc} → {label}") }
+            IpcResponse::Ok {
+                msg: format!("midi_map: ch{channel} cc{cc} → {label}"),
+            }
         }
         ClientMessage::Shutdown => {
-            if cmd_tx.send(LoopCommand::Graph(ClientMessage::Shutdown)).is_err() {
+            if cmd_tx
+                .send(LoopCommand::Graph(ClientMessage::Shutdown))
+                .is_err()
+            {
                 warn!("main loop disconnected");
             }
-            IpcResponse::Ok { msg: "shutting down".into() }
+            IpcResponse::Ok {
+                msg: "shutting down".into(),
+            }
         }
         other => {
             if cmd_tx.send(LoopCommand::Graph(other)).is_err() {
@@ -283,7 +318,9 @@ mod tests {
 
     #[test]
     fn ipc_response_node_types_roundtrip() {
-        let resp = IpcResponse::NodeTypes { types: vec!["osc".into(), "dac".into()] };
+        let resp = IpcResponse::NodeTypes {
+            types: vec!["osc".into(), "dac".into()],
+        };
         let json = serde_json::to_string(&resp).unwrap();
         let parsed: IpcResponse = serde_json::from_str(&json).unwrap();
         match parsed {
@@ -335,7 +372,9 @@ mod tests {
         let resp = dispatch(msg, &tx, &types);
         assert!(matches!(resp, IpcResponse::Ok { .. }));
         let cmd = rx.try_recv().unwrap();
-        assert!(matches!(cmd, LoopCommand::Pattern(EngineCommand::SetPattern { name, .. }) if name == "d1"));
+        assert!(
+            matches!(cmd, LoopCommand::Pattern(EngineCommand::SetPattern { name, .. }) if name == "d1")
+        );
     }
 
     #[test]
@@ -346,6 +385,9 @@ mod tests {
         let resp = dispatch(msg, &tx, &types);
         assert!(matches!(resp, IpcResponse::Ok { .. }));
         let cmd = rx.try_recv().unwrap();
-        assert!(matches!(cmd, LoopCommand::Graph(ClientMessage::LoadGraph(_))));
+        assert!(matches!(
+            cmd,
+            LoopCommand::Graph(ClientMessage::LoadGraph(_))
+        ));
     }
 }

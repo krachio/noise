@@ -100,9 +100,7 @@ mod tests {
 
     #[test]
     fn client_message_hush_roundtrip() {
-        let msg = ClientMessage::Hush {
-            slot: "d2".into(),
-        };
+        let msg = ClientMessage::Hush { slot: "d2".into() };
         let json = serde_json::to_string(&msg).unwrap();
         let decoded: ClientMessage = serde_json::from_str(&json).unwrap();
         match decoded {
@@ -178,10 +176,7 @@ mod tests {
 
     #[test]
     fn server_message_roundtrip() {
-        let ok = serde_json::to_string(&ServerMessage::Ok {
-            msg: "done".into(),
-        })
-        .unwrap();
+        let ok = serde_json::to_string(&ServerMessage::Ok { msg: "done".into() }).unwrap();
         let decoded: ServerMessage = serde_json::from_str(&ok).unwrap();
         assert!(matches!(decoded, ServerMessage::Ok { .. }));
 

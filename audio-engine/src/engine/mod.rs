@@ -13,9 +13,9 @@ use crate::graph::DspGraph;
 use crate::graph::compiler::{self, CompileError};
 use crate::ir::{ConnectionIr, GraphIr, NodeInstance};
 use crate::nodes::adc::adc_type_decl;
-use crate::nodes::dac::{dac_type_decl, DacFactory};
-use crate::nodes::gain::{gain_type_decl, GainFactory};
-use crate::nodes::oscillator::{oscillator_type_decl, OscillatorFactory};
+use crate::nodes::dac::{DacFactory, dac_type_decl};
+use crate::nodes::gain::{GainFactory, gain_type_decl};
+use crate::nodes::oscillator::{OscillatorFactory, oscillator_type_decl};
 use crate::protocol::ClientMessage;
 use crate::registry::NodeRegistry;
 use crate::swap::GraphSwapper;
@@ -114,14 +114,25 @@ impl EngineController {
     pub fn handle_message(&mut self, msg: ClientMessage) -> Result<(), CompileError> {
         match msg {
             ClientMessage::LoadGraph(ir) => {
-                info!("load_graph: {} nodes, {} connections, {} controls",
-                    ir.nodes.len(), ir.connections.len(), ir.exposed_controls.len());
+                info!(
+                    "load_graph: {} nodes, {} connections, {} controls",
+                    ir.nodes.len(),
+                    ir.connections.len(),
+                    ir.exposed_controls.len()
+                );
                 self.exposed_controls = ir.exposed_controls.clone();
                 self.shadow_graph = ir;
                 self.recompile_and_send(true)?; // reuse — preserves DSP state for existing voices
-                info!("graph compiled — exposed: {:?}", self.exposed_controls.keys().collect::<Vec<_>>());
+                info!(
+                    "graph compiled — exposed: {:?}",
+                    self.exposed_controls.keys().collect::<Vec<_>>()
+                );
             }
-            ClientMessage::AddNode { id, type_id, controls } => {
+            ClientMessage::AddNode {
+                id,
+                type_id,
+                controls,
+            } => {
                 debug!("add_node: id={id}, type={type_id}, controls={controls:?}");
                 self.shadow_graph.nodes.push(NodeInstance {
                     id,
@@ -174,8 +185,7 @@ impl EngineController {
                 control_name,
             } => {
                 debug!("expose_control: {label} -> {node_id}:{control_name}");
-                self.exposed_controls
-                    .insert(label, (node_id, control_name));
+                self.exposed_controls.insert(label, (node_id, control_name));
             }
             ClientMessage::SetControl { label, value } => {
                 if let Some((node_id, control_name)) = self.exposed_controls.get(&label) {
@@ -187,7 +197,10 @@ impl EngineController {
                         value,
                     });
                 } else {
-                    warn!("set_control: unknown label '{label}', available: {:?}", self.exposed_controls.keys().collect::<Vec<_>>());
+                    warn!(
+                        "set_control: unknown label '{label}', available: {:?}",
+                        self.exposed_controls.keys().collect::<Vec<_>>()
+                    );
                 }
             }
             ClientMessage::SetMasterGain { gain } => {
@@ -201,7 +214,15 @@ impl EngineController {
                 }
                 self.recompile_and_send(true)?; // reuse — incremental batch
             }
-            ClientMessage::SetAutomation { id, label, shape, lo, hi, period_secs, one_shot } => {
+            ClientMessage::SetAutomation {
+                id,
+                label,
+                shape,
+                lo,
+                hi,
+                period_secs,
+                one_shot,
+            } => {
                 if let Some((node_id, param)) = self.exposed_controls.get(&label) {
                     let period_samples = if period_secs.is_finite() && period_secs > 0.0 {
                         (period_secs * self.config.sample_rate as f64) as usize
@@ -220,12 +241,16 @@ impl EngineController {
                         active: true,
                         one_shot,
                     };
-                    debug!("set_automation: {id} -> {}/{} shape={shape} lo={lo} hi={hi} period={period_samples}samp",
-                        node_id, param);
+                    debug!(
+                        "set_automation: {id} -> {}/{} shape={shape} lo={lo} hi={hi} period={period_samples}samp",
+                        node_id, param
+                    );
                     self.send_command(Command::SetAutomation { id, automation });
                 } else {
-                    warn!("set_automation: unknown label '{label}', available: {:?}",
-                        self.exposed_controls.keys().collect::<Vec<_>>());
+                    warn!(
+                        "set_automation: unknown label '{label}', available: {:?}",
+                        self.exposed_controls.keys().collect::<Vec<_>>()
+                    );
                 }
             }
             ClientMessage::ClearAutomation { id } => {
@@ -238,9 +263,15 @@ impl EngineController {
             ClientMessage::MidiMap { .. } => {
                 debug!("midi_map (handled by caller)");
             }
-            ClientMessage::Ping => { debug!("ping"); }
-            ClientMessage::Shutdown => { debug!("shutdown"); }
-            ClientMessage::ListNodes { .. } => { debug!("list_nodes (reply handled by caller)"); }
+            ClientMessage::Ping => {
+                debug!("ping");
+            }
+            ClientMessage::Shutdown => {
+                debug!("shutdown");
+            }
+            ClientMessage::ListNodes { .. } => {
+                debug!("list_nodes (reply handled by caller)");
+            }
             ClientMessage::RegisterNodeType(_) => {}
         }
         Ok(())
@@ -277,30 +308,65 @@ impl EngineController {
     /// Returns the type IDs of all registered node types.
     #[must_use]
     pub fn list_node_types(&self) -> Vec<String> {
-        self.registry.type_ids().into_iter().map(str::to_owned).collect()
+        self.registry
+            .type_ids()
+            .into_iter()
+            .map(str::to_owned)
+            .collect()
     }
 
     /// Apply a graph mutation to the shadow graph without recompiling.
     /// Used by `GraphBatch` to batch multiple mutations before one recompile.
     fn apply_mutation(&mut self, msg: ClientMessage) {
         match msg {
-            ClientMessage::AddNode { id, type_id, controls } => {
-                self.shadow_graph.nodes.push(NodeInstance { id, type_id, controls });
+            ClientMessage::AddNode {
+                id,
+                type_id,
+                controls,
+            } => {
+                self.shadow_graph.nodes.push(NodeInstance {
+                    id,
+                    type_id,
+                    controls,
+                });
             }
             ClientMessage::RemoveNode { id } => {
                 self.shadow_graph.nodes.retain(|n| n.id != id);
-                self.shadow_graph.connections.retain(|c| c.from_node != id && c.to_node != id);
+                self.shadow_graph
+                    .connections
+                    .retain(|c| c.from_node != id && c.to_node != id);
             }
-            ClientMessage::Connect { from_node, from_port, to_node, to_port } => {
-                self.shadow_graph.connections.push(ConnectionIr { from_node, from_port, to_node, to_port });
-            }
-            ClientMessage::Disconnect { from_node, from_port, to_node, to_port } => {
-                self.shadow_graph.connections.retain(|c| {
-                    !(c.from_node == from_node && c.from_port == from_port
-                      && c.to_node == to_node && c.to_port == to_port)
+            ClientMessage::Connect {
+                from_node,
+                from_port,
+                to_node,
+                to_port,
+            } => {
+                self.shadow_graph.connections.push(ConnectionIr {
+                    from_node,
+                    from_port,
+                    to_node,
+                    to_port,
                 });
             }
-            ClientMessage::ExposeControl { label, node_id, control_name } => {
+            ClientMessage::Disconnect {
+                from_node,
+                from_port,
+                to_node,
+                to_port,
+            } => {
+                self.shadow_graph.connections.retain(|c| {
+                    !(c.from_node == from_node
+                        && c.from_port == from_port
+                        && c.to_node == to_node
+                        && c.to_port == to_port)
+                });
+            }
+            ClientMessage::ExposeControl {
+                label,
+                node_id,
+                control_name,
+            } => {
                 self.exposed_controls.insert(label, (node_id, control_name));
             }
             other => {
@@ -327,7 +393,12 @@ impl EngineController {
             self.cached_graph = Some(*returned);
         }
 
-        let previous = if reuse { self.cached_graph.take() } else { self.cached_graph.take(); None };
+        let previous = if reuse {
+            self.cached_graph.take()
+        } else {
+            self.cached_graph.take();
+            None
+        };
         let mut graph = compiler::compile_with_reuse_and_injected(
             &self.shadow_graph,
             &self.registry,
@@ -495,11 +566,8 @@ mod tests {
         let mut buf2 = vec![0.0_f32; 256];
         proc.process(&mut buf2);
 
-        let count_crossings = |buf: &[f32]| -> usize {
-            buf.windows(2)
-                .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
-                .count()
-        };
+        let count_crossings =
+            |buf: &[f32]| -> usize { buf.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count() };
         assert!(count_crossings(&buf2) > count_crossings(&buf1));
     }
 
@@ -589,7 +657,10 @@ mod tests {
         let mut output = vec![0.0_f32; 64];
         proc.process(&mut output);
         let energy: f32 = output.iter().map(|s| s * s).sum();
-        assert!(energy > 0.0, "incrementally built graph should produce audio");
+        assert!(
+            energy > 0.0,
+            "incrementally built graph should produce audio"
+        );
     }
 
     #[test]
@@ -606,7 +677,11 @@ mod tests {
         let config = EngineConfig::default();
         let (ctrl, _) = engine(&config);
         let types = ctrl.list_node_types();
-        assert_eq!(types.len(), 4, "oscillator, dac, gain, and adc_input are registered by default");
+        assert_eq!(
+            types.len(),
+            4,
+            "oscillator, dac, gain, and adc_input are registered by default"
+        );
         assert!(types.contains(&"gain".to_string()));
         assert!(types.contains(&"adc_input".to_string()));
     }
@@ -615,7 +690,10 @@ mod tests {
     fn graph_swap_preserves_oscillator_state_via_return_channel() {
         // Verify the full pipeline: load graph → process → swap graph →
         // retired graph returned → recompile reuses nodes → phase continuous.
-        let config = EngineConfig { block_size: 64, ..Default::default() };
+        let config = EngineConfig {
+            block_size: 64,
+            ..Default::default()
+        };
         let (mut ctrl, mut proc) = engine(&config);
 
         // Load initial graph and process several blocks to advance oscillator phase
@@ -649,7 +727,10 @@ mod tests {
         // We can't assert exact continuity (crossfade + timing makes it inexact)
         // but we CAN assert the system doesn't crash and produces audio.
         let energy: f32 = buf.iter().map(|s| s * s).sum();
-        assert!(energy > 0.0, "graph should produce audio after swap with reuse");
+        assert!(
+            energy > 0.0,
+            "graph should produce audio after swap with reuse"
+        );
         // Just verify no panic and audio works — phase exactness tested in compiler tests
         let _ = jump; // acknowledged but not strictly asserted here
     }
@@ -659,11 +740,15 @@ mod tests {
         // The critical live-coding scenario: set pitch=880 via exposed control,
         // then load a new graph (e.g. adding a voice). The new graph's oscillator
         // must start at 880, not the IR default of 440.
-        let config = EngineConfig { block_size: 256, ..Default::default() };
+        let config = EngineConfig {
+            block_size: 256,
+            ..Default::default()
+        };
         let (mut ctrl, mut proc) = engine(&config);
 
         // Load graph, process a block so it's active.
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir()))
+            .unwrap();
         let mut buf = vec![0.0_f32; 256];
         proc.process(&mut buf);
 
@@ -671,12 +756,14 @@ mod tests {
         ctrl.handle_message(ClientMessage::SetControl {
             label: "pitch".into(),
             value: 880.0,
-        }).unwrap();
+        })
+        .unwrap();
         proc.process(&mut buf);
         // Reload the SAME graph — simulates adding a voice (new LoadGraph).
         // No cached retired graph available yet (first swap still crossfading).
         // Without live control tracking, the new graph's osc would revert to 440.
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir()))
+            .unwrap();
 
         // Process enough blocks for crossfade to complete.
         for _ in 0..40 {
@@ -684,19 +771,24 @@ mod tests {
         }
 
         // Count crossings at 440 for reference (baseline from IR default).
-        let config_440 = EngineConfig { block_size: 256, ..Default::default() };
+        let config_440 = EngineConfig {
+            block_size: 256,
+            ..Default::default()
+        };
         let (mut ctrl_ref, mut proc_ref) = engine(&config_440);
-        ctrl_ref.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        ctrl_ref
+            .handle_message(ClientMessage::LoadGraph(simple_graph_ir()))
+            .unwrap();
         let mut buf_ref = vec![0.0_f32; 256];
         proc_ref.process(&mut buf_ref);
-        let crossings_at_440: usize = buf_ref.windows(2)
+        let crossings_at_440: usize = buf_ref
+            .windows(2)
             .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
             .count();
 
         // The oscillator should still be at 880 (more crossings than 440).
-        let crossings_after_reload: usize = buf.windows(2)
-            .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
-            .count();
+        let crossings_after_reload: usize =
+            buf.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count();
         assert!(
             crossings_after_reload > crossings_at_440,
             "after graph reload, oscillator should still be at 880 Hz (got {crossings_after_reload} \
@@ -707,11 +799,15 @@ mod tests {
     #[test]
     fn graph_batch_applies_all_mutations_with_single_swap() {
         // GraphBatch should apply AddNode + Connect atomically with one recompile.
-        let config = EngineConfig { block_size: 64, ..Default::default() };
+        let config = EngineConfig {
+            block_size: 64,
+            ..Default::default()
+        };
         let (mut ctrl, mut proc) = engine(&config);
 
         // Load initial graph.
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir()))
+            .unwrap();
         let mut buf = vec![0.0_f32; 64];
         proc.process(&mut buf);
         assert!(proc.has_active_graph());
@@ -736,7 +832,8 @@ mod tests {
                     control_name: "gain".into(),
                 },
             ],
-        }).unwrap();
+        })
+        .unwrap();
 
         // Process — should produce audio (graph compiled with new node).
         proc.process(&mut buf);
@@ -746,9 +843,13 @@ mod tests {
 
     #[test]
     fn set_automation_creates_automation_on_audio_thread() {
-        let config = EngineConfig { block_size: 64, ..Default::default() };
+        let config = EngineConfig {
+            block_size: 64,
+            ..Default::default()
+        };
         let (mut ctrl, mut proc) = engine(&config);
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir()))
+            .unwrap();
         let mut buf = vec![0.0_f32; 64];
         proc.process(&mut buf);
 
@@ -761,13 +862,17 @@ mod tests {
             hi: 800.0,
             period_secs: 1.0,
             one_shot: false,
-        }).unwrap();
+        })
+        .unwrap();
 
         // Process a few blocks — the automation should modulate pitch
         let mut buf1 = vec![0.0_f32; 64];
         proc.process(&mut buf1);
         let energy: f32 = buf1.iter().map(|s| s * s).sum();
-        assert!(energy > 0.0, "graph should produce audio with automation active");
+        assert!(
+            energy > 0.0,
+            "graph should produce audio with automation active"
+        );
 
         // Process more blocks: pitch should be changing
         let mut buf2 = vec![0.0_f32; 64];
@@ -778,9 +883,13 @@ mod tests {
 
     #[test]
     fn clear_automation_removes_automation() {
-        let config = EngineConfig { block_size: 64, ..Default::default() };
+        let config = EngineConfig {
+            block_size: 64,
+            ..Default::default()
+        };
         let (mut ctrl, mut proc) = engine(&config);
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir()))
+            .unwrap();
         let mut buf = vec![0.0_f32; 64];
         proc.process(&mut buf);
 
@@ -793,24 +902,33 @@ mod tests {
             hi: 800.0,
             period_secs: 1.0,
             one_shot: false,
-        }).unwrap();
+        })
+        .unwrap();
         proc.process(&mut buf);
 
         ctrl.handle_message(ClientMessage::ClearAutomation {
             id: "pitch_lfo".into(),
-        }).unwrap();
+        })
+        .unwrap();
         proc.process(&mut buf);
 
         // After clearing, the automation is gone. Audio still plays (with last set freq).
         let energy: f32 = buf.iter().map(|s| s * s).sum();
-        assert!(energy > 0.0, "graph should still produce audio after clearing automation");
+        assert!(
+            energy > 0.0,
+            "graph should still produce audio after clearing automation"
+        );
     }
 
     #[test]
     fn set_automation_unknown_label_is_noop() {
-        let config = EngineConfig { block_size: 64, ..Default::default() };
+        let config = EngineConfig {
+            block_size: 64,
+            ..Default::default()
+        };
         let (mut ctrl, mut proc) = engine(&config);
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir()))
+            .unwrap();
         let mut buf = vec![0.0_f32; 64];
         proc.process(&mut buf);
 
@@ -823,7 +941,8 @@ mod tests {
             hi: 1.0,
             period_secs: 1.0,
             one_shot: false,
-        }).unwrap();
+        })
+        .unwrap();
         proc.process(&mut buf);
         let energy: f32 = buf.iter().map(|s| s * s).sum();
         assert!(energy > 0.0, "unknown label should not break audio");
@@ -834,18 +953,27 @@ mod tests {
         // Incremental AddNode should reuse existing nodes via the return channel,
         // preserving oscillator phase. A fresh node restarts from phase 0, producing
         // a detectable discontinuity in the first sample after swap.
-        let config = EngineConfig { block_size: 64, ..Default::default() };
+        let config = EngineConfig {
+            block_size: 64,
+            ..Default::default()
+        };
         let (mut ctrl, mut proc) = engine(&config);
 
         // Load graph and advance oscillator well past phase 0.
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir()))
+            .unwrap();
         let mut buf = vec![0.0_f32; 64];
-        for _ in 0..50 { proc.process(&mut buf); }
+        for _ in 0..50 {
+            proc.process(&mut buf);
+        }
         let last_sample = buf[63];
 
         // Do a second LoadGraph to populate the return channel with a retired graph.
-        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir())).unwrap();
-        for _ in 0..50 { proc.process(&mut buf); }
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir()))
+            .unwrap();
+        for _ in 0..50 {
+            proc.process(&mut buf);
+        }
         // Return channel now has the retired graph from the first swap.
 
         // Now do an incremental AddNode. With reuse, osc1 keeps its phase.
@@ -854,14 +982,18 @@ mod tests {
             id: "extra".into(),
             type_id: "gain".into(),
             controls: HashMap::new(),
-        }).unwrap();
+        })
+        .unwrap();
 
         // Process a single block right after the swap command.
         // With reuse: osc1 continues from current phase → audio present.
         // Without reuse: osc1 starts from 0 → first sample is 0.0.
         proc.process(&mut buf);
         let energy: f32 = buf.iter().map(|s| s * s).sum();
-        assert!(energy > 0.0, "oscillator should produce audio after AddNode (reuse)");
+        assert!(
+            energy > 0.0,
+            "oscillator should produce audio after AddNode (reuse)"
+        );
 
         // Verify the phase didn't jump drastically (continuity).
         // A reused oscillator has sub-0.1 jump; a fresh one may jump by up to 1.0.

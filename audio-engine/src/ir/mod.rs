@@ -58,10 +58,7 @@ mod tests {
                 NodeInstance {
                     id: "osc1".into(),
                     type_id: "oscillator".into(),
-                    controls: HashMap::from([
-                        ("freq".into(), 440.0),
-                        ("waveform".into(), 0.0),
-                    ]),
+                    controls: HashMap::from([("freq".into(), 440.0), ("waveform".into(), 0.0)]),
                 },
                 NodeInstance {
                     id: "out".into(),

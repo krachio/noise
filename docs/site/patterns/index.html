@@ -1,0 +1,2343 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="Live coding audio system — user and developer documentation">
+      
+      
+      
+        <link rel="canonical" href="https://krach.io/docs/patterns/">
+      
+      
+        <link rel="prev" href="../synth-design/">
+      
+      
+        <link rel="next" href="../mini-notation/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>Patterns - krach docs</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CJetBrains+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"JetBrains Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="amber">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#patterns" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="krach docs" class="md-header__button md-logo" aria-label="krach docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            krach docs
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Patterns
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="slate" data-md-color-primary="black" data-md-color-accent="amber"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="" data-md-color-scheme="default" data-md-color-primary="black" data-md-color-accent="amber"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/krachio/noise" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    krachio/noise
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="krach docs" class="md-nav__button md-logo" aria-label="krach docs" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    krach docs
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/krachio/noise" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    krachio/noise
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting Started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_3" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_3" id="__nav_3_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    User Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_3_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_3">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    User Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../synth-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Synth Design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patterns
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Patterns
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-a-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is a pattern?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#atoms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Atoms
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Atoms">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#krnote-melodic-trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.note() -- melodic trigger
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="kr.note() -- melodic trigger">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#note-syntax-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Note syntax details
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chords-multiple-simultaneous-pitches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chords (multiple simultaneous pitches)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krhit-percussive-trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.hit() -- percussive trigger
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krrest-silence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.rest() -- silence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krseq-sequential-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.seq() -- sequential notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operators
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Operators">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        + -- sequence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-layer-simultaneous" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        | -- layer (simultaneous)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-repeat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        * -- repeat
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#time-transforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time transforms
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Time transforms">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overn-stretch-to-n-cycles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .over(n) -- stretch to N cycles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fastn-speed-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .fast(n) -- speed up
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slown-slow-down" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .slow(n) -- slow down
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#combinators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Combinators
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Combinators">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#everyn-fn-periodic-transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .every(n, fn) -- periodic transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reverse-reverse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .reverse() -- reverse
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#spreadhits-steps-euclidean-rhythm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .spread(hits, steps) -- euclidean rhythm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#thinprobability-degrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .thin(probability) -- degrade
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#maskmask_str-selective-silence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .mask(mask_str) -- selective silence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sometimesprob-fn-probabilistic-transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .sometimes(prob, fn) -- probabilistic transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-pattern-combinators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-pattern combinators
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multi-pattern combinators">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#krcat-cycle-level-concatenation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.cat() -- cycle-level concatenation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krstack-layer-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.stack() -- layer patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krstruct-impose-rhythm-onto-melody" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.struct() -- impose rhythm onto melody
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Continuous patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#krsinelo-hi-sine-sweep" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.sine(lo, hi) -- sine sweep
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krsawlo-hi-sawtooth-ramp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.saw(lo, hi) -- sawtooth ramp
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krrandlo-hi-random-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.rand(lo, hi) -- random values
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-continuous-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using continuous patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modulation-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modulation patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Modulation patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#using-modulation-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using modulation patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#playing-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Playing patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Playing patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#operator-repl-friendly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @ operator (REPL-friendly)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krplaytarget-pattern-explicit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.play(target, pattern) (explicit)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#node-handles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Node handles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#convenience-kwargs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Convenience kwargs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern retrieval
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-binding-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How binding works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-recipes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common recipes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common recipes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#4-on-the-floor-kick" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4-on-the-floor kick
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#offbeat-hi-hat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Offbeat hi-hat
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bass-line-with-rests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bass line with rests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chord-stabs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chord stabs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#euclidean-hi-hat-with-degradation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Euclidean hi-hat with degradation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evolving-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evolving pattern
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../mini-notation/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Mini-notation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../effect-routing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Effect Routing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../swing-and-warps/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Swing & Warps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../scenes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Scenes & Persistence
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../midi-hardware/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    MIDI & Hardware
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+          
+        
+        <input class="md-nav__toggle md-toggle md-toggle--indeterminate" type="checkbox" id="__nav_4" >
+        
+          
+          <label class="md-nav__link" for="__nav_4" id="__nav_4_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Developer Guide
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_4_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_4">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Developer Guide
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    IPC Protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../contributing/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-a-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is a pattern?
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#atoms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Atoms
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Atoms">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#krnote-melodic-trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.note() -- melodic trigger
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="kr.note() -- melodic trigger">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#note-syntax-details" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Note syntax details
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chords-multiple-simultaneous-pitches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chords (multiple simultaneous pitches)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krhit-percussive-trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.hit() -- percussive trigger
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krrest-silence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.rest() -- silence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krseq-sequential-notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.seq() -- sequential notes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#operators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Operators
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Operators">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        + -- sequence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-layer-simultaneous" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        | -- layer (simultaneous)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-repeat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        * -- repeat
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#time-transforms" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Time transforms
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Time transforms">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#overn-stretch-to-n-cycles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .over(n) -- stretch to N cycles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fastn-speed-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .fast(n) -- speed up
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#slown-slow-down" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .slow(n) -- slow down
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#combinators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Combinators
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Combinators">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#everyn-fn-periodic-transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .every(n, fn) -- periodic transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#reverse-reverse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .reverse() -- reverse
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#spreadhits-steps-euclidean-rhythm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .spread(hits, steps) -- euclidean rhythm
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#thinprobability-degrade" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .thin(probability) -- degrade
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#maskmask_str-selective-silence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .mask(mask_str) -- selective silence
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sometimesprob-fn-probabilistic-transform" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        .sometimes(prob, fn) -- probabilistic transform
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#multi-pattern-combinators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Multi-pattern combinators
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Multi-pattern combinators">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#krcat-cycle-level-concatenation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.cat() -- cycle-level concatenation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krstack-layer-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.stack() -- layer patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krstruct-impose-rhythm-onto-melody" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.struct() -- impose rhythm onto melody
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Continuous patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Continuous patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#krsinelo-hi-sine-sweep" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.sine(lo, hi) -- sine sweep
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krsawlo-hi-sawtooth-ramp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.saw(lo, hi) -- sawtooth ramp
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krrandlo-hi-random-values" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.rand(lo, hi) -- random values
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#using-continuous-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using continuous patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#modulation-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Modulation patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Modulation patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#using-modulation-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Using modulation patterns
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#playing-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Playing patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Playing patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#operator-repl-friendly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        @ operator (REPL-friendly)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#krplaytarget-pattern-explicit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        kr.play(target, pattern) (explicit)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#node-handles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Node handles
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#convenience-kwargs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Convenience kwargs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#pattern-retrieval" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pattern retrieval
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-binding-works" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How binding works
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-recipes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common recipes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common recipes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#4-on-the-floor-kick" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4-on-the-floor kick
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#offbeat-hi-hat" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Offbeat hi-hat
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#bass-line-with-rests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bass line with rests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#chord-stabs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Chord stabs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#euclidean-hi-hat-with-degradation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Euclidean hi-hat with degradation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#evolving-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Evolving pattern
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="patterns">Patterns<a class="headerlink" href="#patterns" title="Permanent link">&para;</a></h1>
+<p>Patterns are the sequencing system in krach. They describe <em>what</em> happens and
+<em>when</em>, using composable IR trees with rational time. Patterns are independent
+of voices -- you build a pattern, then bind it to a voice with <code>kr.play()</code>.</p>
+<h2 id="what-is-a-pattern">What is a pattern?<a class="headerlink" href="#what-is-a-pattern" title="Permanent link">&para;</a></h2>
+<p>A pattern is a tree of events distributed over a <strong>cycle</strong> (one bar by
+default). The tree is pure data -- an intermediate representation that the
+Rust engine compiles to block-rate automation curves. No per-event IPC happens
+during playback.</p>
+<p>Patterns are:</p>
+<ul>
+<li><strong>Composable</strong> -- combine with <code>+</code>, <code>|</code>, <code>*</code>, and transforms</li>
+<li><strong>Rational time</strong> -- subdivisions are exact, no floating-point drift</li>
+<li><strong>Reusable</strong> -- the same pattern can play on different voices</li>
+</ul>
+<h2 id="atoms">Atoms<a class="headerlink" href="#atoms" title="Permanent link">&para;</a></h2>
+<p>Atoms are the smallest pattern elements. All pattern builders live on the <code>kr</code>
+namespace.</p>
+<h3 id="krnote-melodic-trigger"><code>kr.note()</code> -- melodic trigger<a class="headerlink" href="#krnote-melodic-trigger" title="Permanent link">&para;</a></h3>
+<p>Sets <code>freq</code> and fires <code>gate</code> (trigger + reset). Accepts multiple pitch formats:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="mf">440.0</span><span class="p">)</span>                          <span class="c1"># float Hz</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;C4&quot;</span><span class="p">)</span>                           <span class="c1"># string pitch name</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="mi">60</span><span class="p">)</span>                             <span class="c1"># int MIDI note number (converted via mtof)</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="mf">440.0</span><span class="p">,</span> <span class="n">vel</span><span class="o">=</span><span class="mf">0.7</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="mf">1200.0</span><span class="p">)</span>  <span class="c1"># extra params set alongside freq/gate</span>
+</code></pre></div>
+<h4 id="note-syntax-details">Note syntax details<a class="headerlink" href="#note-syntax-details" title="Permanent link">&para;</a></h4>
+<p><strong>Float</strong> -- interpreted as Hz directly:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="mf">440.0</span><span class="p">)</span>   <span class="c1"># A4</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="mf">55.0</span><span class="p">)</span>    <span class="c1"># A1</span>
+</code></pre></div>
+<p><strong>String</strong> -- pitch name with octave. Sharps use <code>s</code> or <code>#</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;C4&quot;</span><span class="p">)</span>    <span class="c1"># middle C</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;Cs4&quot;</span><span class="p">)</span>   <span class="c1"># C sharp 4</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;C#4&quot;</span><span class="p">)</span>   <span class="c1"># also C sharp 4</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;Bb3&quot;</span><span class="p">)</span>   <span class="c1"># B flat 3</span>
+</code></pre></div>
+<p><strong>Integer</strong> -- MIDI note number, converted to Hz internally:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="mi">60</span><span class="p">)</span>      <span class="c1"># middle C (261.63 Hz)</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="mi">69</span><span class="p">)</span>      <span class="c1"># A4 (440 Hz)</span>
+</code></pre></div>
+<h4 id="chords-multiple-simultaneous-pitches">Chords (multiple simultaneous pitches)<a class="headerlink" href="#chords-multiple-simultaneous-pitches" title="Permanent link">&para;</a></h4>
+<p>Pass multiple pitches to <code>kr.note()</code> for a chord:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;A4&quot;</span><span class="p">,</span> <span class="s2">&quot;C5&quot;</span><span class="p">,</span> <span class="s2">&quot;E5&quot;</span><span class="p">)</span>           <span class="c1"># A minor triad</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="mf">220.0</span><span class="p">,</span> <span class="mf">330.0</span><span class="p">,</span> <span class="mf">440.0</span><span class="p">)</span>        <span class="c1"># same as Hz</span>
+</code></pre></div>
+<p>Or use the <code>|</code> (layer) operator:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;A4&quot;</span><span class="p">)</span> <span class="o">|</span> <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;C5&quot;</span><span class="p">)</span> <span class="o">|</span> <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;E5&quot;</span><span class="p">)</span>
+</code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title">Chords require polyphony</p>
+<p>The voice <strong>must</strong> have <code>count</code> &gt;= the number of simultaneous pitches:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">voice</span><span class="p">(</span><span class="s2">&quot;rhodes&quot;</span><span class="p">,</span> <span class="n">rhodes_fn</span><span class="p">,</span> <span class="n">gain</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>  <span class="c1"># poly voice</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;rhodes&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;A4&quot;</span><span class="p">,</span> <span class="s2">&quot;C5&quot;</span><span class="p">,</span> <span class="s2">&quot;E5&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="n">kr</span><span class="o">.</span><span class="n">rest</span><span class="p">())</span>
+</code></pre></div>
+</div>
+<h3 id="krhit-percussive-trigger"><code>kr.hit()</code> -- percussive trigger<a class="headerlink" href="#krhit-percussive-trigger" title="Permanent link">&para;</a></h3>
+<p>Fires a gate trigger without setting pitch. Use for drums and one-shot sounds:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span>           <span class="c1"># triggers &quot;gate&quot; control</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">(</span><span class="s2">&quot;kick&quot;</span><span class="p">)</span>     <span class="c1"># triggers a custom-named control</span>
+</code></pre></div>
+<h3 id="krrest-silence"><code>kr.rest()</code> -- silence<a class="headerlink" href="#krrest-silence" title="Permanent link">&para;</a></h3>
+<p>A single beat of silence:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">rest</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="krseq-sequential-notes"><code>kr.seq()</code> -- sequential notes<a class="headerlink" href="#krseq-sequential-notes" title="Permanent link">&para;</a></h3>
+<p>Plays notes <strong>one at a time</strong>, in sequence. Use <code>None</code> for rests:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="mf">55.0</span><span class="p">,</span> <span class="mf">73.0</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="mf">65.0</span><span class="p">)</span>     <span class="c1"># Hz values, with a rest</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;C4&quot;</span><span class="p">,</span> <span class="s2">&quot;E4&quot;</span><span class="p">,</span> <span class="s2">&quot;G4&quot;</span><span class="p">)</span>           <span class="c1"># pitch names</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a><span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;A2&quot;</span><span class="p">,</span> <span class="s2">&quot;D3&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;E2&quot;</span><span class="p">)</span>     <span class="c1"># bass line with rest</span>
+</code></pre></div>
+<p><code>kr.seq()</code> also accepts <code>kr.note()</code> objects, letting you set per-note params:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span>
+<a id="__codelineno-10-2" name="__codelineno-10-2" href="#__codelineno-10-2"></a>    <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="mf">220.0</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="mf">800.0</span><span class="p">),</span>
+<a id="__codelineno-10-3" name="__codelineno-10-3" href="#__codelineno-10-3"></a>    <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="mf">330.0</span><span class="p">,</span> <span class="n">cutoff</span><span class="o">=</span><span class="mf">1200.0</span><span class="p">),</span>
+<a id="__codelineno-10-4" name="__codelineno-10-4" href="#__codelineno-10-4"></a>    <span class="kc">None</span><span class="p">,</span>
+<a id="__codelineno-10-5" name="__codelineno-10-5" href="#__codelineno-10-5"></a>    <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="mf">440.0</span><span class="p">)</span>
+<a id="__codelineno-10-6" name="__codelineno-10-6" href="#__codelineno-10-6"></a><span class="p">)</span>
+<a id="__codelineno-10-7" name="__codelineno-10-7" href="#__codelineno-10-7"></a>
+<a id="__codelineno-10-8" name="__codelineno-10-8" href="#__codelineno-10-8"></a><span class="c1"># Mix pitch strings and note objects freely:</span>
+<a id="__codelineno-10-9" name="__codelineno-10-9" href="#__codelineno-10-9"></a><span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;A2&quot;</span><span class="p">,</span> <span class="s2">&quot;D3&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;E2&quot;</span><span class="p">,</span> <span class="n">vel</span><span class="o">=</span><span class="mf">0.5</span><span class="p">),</span> <span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+<div class="admonition warning">
+<p class="admonition-title"><code>kr.seq()</code> is NOT for chords</p>
+<p><code>kr.seq("A4", "C5", "E5")</code> plays three notes <strong>one after another</strong> -- it
+is a melody, not a chord. For chords, use <code>kr.note("A4", "C5", "E5")</code>.</p>
+</div>
+<h2 id="operators">Operators<a class="headerlink" href="#operators" title="Permanent link">&para;</a></h2>
+<h3 id="-sequence"><code>+</code> -- sequence<a class="headerlink" href="#-sequence" title="Permanent link">&para;</a></h3>
+<p>Concatenates patterns in time, dividing the cycle equally:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;C4&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;E4&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;G4&quot;</span><span class="p">)</span>  <span class="c1"># 3 notes, each 1/3 cycle</span>
+</code></pre></div>
+<h3 id="-layer-simultaneous"><code>|</code> -- layer (simultaneous)<a class="headerlink" href="#-layer-simultaneous" title="Permanent link">&para;</a></h3>
+<p>Stacks patterns to play at the same time:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;A4&quot;</span><span class="p">)</span> <span class="o">|</span> <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;C5&quot;</span><span class="p">)</span> <span class="o">|</span> <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;E5&quot;</span><span class="p">)</span>  <span class="c1"># chord</span>
+</code></pre></div>
+<h3 id="-repeat"><code>*</code> -- repeat<a class="headerlink" href="#-repeat" title="Permanent link">&para;</a></h3>
+<p>Repeats a pattern N times within one cycle:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span> <span class="o">*</span> <span class="mi">4</span>           <span class="c1"># 4-on-the-floor</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span> <span class="o">*</span> <span class="mi">8</span>           <span class="c1"># 8th notes</span>
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a><span class="p">(</span><span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span> <span class="o">+</span> <span class="n">kr</span><span class="o">.</span><span class="n">rest</span><span class="p">())</span> <span class="o">*</span> <span class="mi">4</span>  <span class="c1"># offbeat pattern, repeated 4x</span>
+</code></pre></div>
+<h2 id="time-transforms">Time transforms<a class="headerlink" href="#time-transforms" title="Permanent link">&para;</a></h2>
+<h3 id="overn-stretch-to-n-cycles"><code>.over(n)</code> -- stretch to N cycles<a class="headerlink" href="#overn-stretch-to-n-cycles" title="Permanent link">&para;</a></h3>
+<p>Stretches a pattern to span multiple bars:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;A2&quot;</span><span class="p">,</span> <span class="s2">&quot;D3&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;E2&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>   <span class="c1"># 4 notes over 2 bars</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">ramp</span><span class="p">(</span><span class="mf">200.0</span><span class="p">,</span> <span class="mf">2000.0</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>           <span class="c1"># 4-bar ramp</span>
+</code></pre></div>
+<h3 id="fastn-speed-up"><code>.fast(n)</code> -- speed up<a class="headerlink" href="#fastn-speed-up" title="Permanent link">&para;</a></h3>
+<p>Doubles (or triples, etc.) the playback speed:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="n">p</span> <span class="o">=</span> <span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span> <span class="o">*</span> <span class="mi">4</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;kick&quot;</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">fast</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>   <span class="c1"># 8 hits per cycle</span>
+</code></pre></div>
+<h3 id="slown-slow-down"><code>.slow(n)</code> -- slow down<a class="headerlink" href="#slown-slow-down" title="Permanent link">&para;</a></h3>
+<p>The inverse of <code>.fast()</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="n">p</span><span class="o">.</span><span class="n">slow</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>   <span class="c1"># half speed, pattern spans 2 cycles</span>
+</code></pre></div>
+<h2 id="combinators">Combinators<a class="headerlink" href="#combinators" title="Permanent link">&para;</a></h2>
+<h3 id="everyn-fn-periodic-transform"><code>.every(n, fn)</code> -- periodic transform<a class="headerlink" href="#everyn-fn-periodic-transform" title="Permanent link">&para;</a></h3>
+<p>Apply a transform every Nth cycle:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="n">p</span> <span class="o">=</span> <span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span> <span class="o">*</span> <span class="mi">4</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="n">p</span><span class="o">.</span><span class="n">every</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">reverse</span><span class="p">())</span>    <span class="c1"># reverse every 4th bar</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="n">p</span><span class="o">.</span><span class="n">every</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">fast</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>      <span class="c1"># double time every 3rd bar</span>
+</code></pre></div>
+<h3 id="reverse-reverse"><code>.reverse()</code> -- reverse<a class="headerlink" href="#reverse-reverse" title="Permanent link">&para;</a></h3>
+<p>Plays the pattern backwards:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;A2&quot;</span><span class="p">,</span> <span class="s2">&quot;D3&quot;</span><span class="p">,</span> <span class="s2">&quot;E3&quot;</span><span class="p">,</span> <span class="s2">&quot;G3&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">reverse</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="spreadhits-steps-euclidean-rhythm"><code>.spread(hits, steps)</code> -- euclidean rhythm<a class="headerlink" href="#spreadhits-steps-euclidean-rhythm" title="Permanent link">&para;</a></h3>
+<p>Distributes <code>hits</code> evenly across <code>steps</code> slots:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span><span class="o">.</span><span class="n">spread</span><span class="p">(</span><span class="mi">3</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>    <span class="c1"># 3 hits in 8 steps (tresillo)</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span><span class="o">.</span><span class="n">spread</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span>    <span class="c1"># 5 hits in 8 steps (cinquillo)</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a><span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span><span class="o">.</span><span class="n">spread</span><span class="p">(</span><span class="mi">7</span><span class="p">,</span> <span class="mi">16</span><span class="p">)</span>   <span class="c1"># 7 hits in 16 steps</span>
+</code></pre></div>
+<h3 id="thinprobability-degrade"><code>.thin(probability)</code> -- degrade<a class="headerlink" href="#thinprobability-degrade" title="Permanent link">&para;</a></h3>
+<p>Randomly drops events with the given probability:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span> <span class="o">*</span> <span class="mi">8</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a><span class="p">(</span><span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span> <span class="o">*</span> <span class="mi">8</span><span class="p">)</span><span class="o">.</span><span class="n">thin</span><span class="p">(</span><span class="mf">0.3</span><span class="p">)</span>   <span class="c1"># randomly drop 30% of hits</span>
+</code></pre></div>
+<h3 id="maskmask_str-selective-silence"><code>.mask(mask_str)</code> -- selective silence<a class="headerlink" href="#maskmask_str-selective-silence" title="Permanent link">&para;</a></h3>
+<p>Suppress events at specific positions using a mask string. <code>1</code>/<code>x</code> = keep,
+<code>0</code>/<code>.</code>/<code>~</code> = silence:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;A2&quot;</span><span class="p">,</span> <span class="s2">&quot;D3&quot;</span><span class="p">,</span> <span class="s2">&quot;E2&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">mask</span><span class="p">(</span><span class="s2">&quot;1 1 0&quot;</span><span class="p">)</span>   <span class="c1"># silences the third event</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;C4&quot;</span><span class="p">,</span> <span class="s2">&quot;E4&quot;</span><span class="p">,</span> <span class="s2">&quot;G4&quot;</span><span class="p">,</span> <span class="s2">&quot;B4&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">mask</span><span class="p">(</span><span class="s2">&quot;x . x .&quot;</span><span class="p">)</span>  <span class="c1"># play 1st and 3rd only</span>
+</code></pre></div>
+<h3 id="sometimesprob-fn-probabilistic-transform"><code>.sometimes(prob, fn)</code> -- probabilistic transform<a class="headerlink" href="#sometimesprob-fn-probabilistic-transform" title="Permanent link">&para;</a></h3>
+<p>Apply a transform with probability <code>prob</code> each cycle. On cycles where it
+does not fire, the original pattern plays:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="n">p</span> <span class="o">=</span> <span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span> <span class="o">*</span> <span class="mi">4</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">p</span><span class="o">.</span><span class="n">sometimes</span><span class="p">(</span><span class="mf">0.3</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">reverse</span><span class="p">())</span>   <span class="c1"># reverse 30% of cycles</span>
+<a id="__codelineno-22-3" name="__codelineno-22-3" href="#__codelineno-22-3"></a><span class="n">p</span><span class="o">.</span><span class="n">sometimes</span><span class="p">(</span><span class="mf">0.5</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">fast</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>     <span class="c1"># double time 50% of the time</span>
+</code></pre></div>
+<h2 id="multi-pattern-combinators">Multi-pattern combinators<a class="headerlink" href="#multi-pattern-combinators" title="Permanent link">&para;</a></h2>
+<h3 id="krcat-cycle-level-concatenation"><code>kr.cat()</code> -- cycle-level concatenation<a class="headerlink" href="#krcat-cycle-level-concatenation" title="Permanent link">&para;</a></h3>
+<p>Plays each pattern for one full cycle, then loops:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="n">a</span> <span class="o">=</span> <span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;A2&quot;</span><span class="p">,</span> <span class="s2">&quot;D3&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;E2&quot;</span><span class="p">)</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a><span class="n">b</span> <span class="o">=</span> <span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;C3&quot;</span><span class="p">,</span> <span class="s2">&quot;E3&quot;</span><span class="p">,</span> <span class="s2">&quot;G3&quot;</span><span class="p">,</span> <span class="s2">&quot;B3&quot;</span><span class="p">)</span>
+<a id="__codelineno-23-3" name="__codelineno-23-3" href="#__codelineno-23-3"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;bass&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">cat</span><span class="p">(</span><span class="n">a</span><span class="p">,</span> <span class="n">b</span><span class="p">))</span>  <span class="c1"># a for 1 cycle, b for 1 cycle, repeat</span>
+</code></pre></div>
+<p>This is equivalent to <code>(a + b).over(2)</code> but reads more clearly for
+multi-cycle structures.</p>
+<h3 id="krstack-layer-patterns"><code>kr.stack()</code> -- layer patterns<a class="headerlink" href="#krstack-layer-patterns" title="Permanent link">&para;</a></h3>
+<p>Plays all patterns simultaneously. Same as the <code>|</code> operator, but
+accepts any number of arguments:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-24-1" name="__codelineno-24-1" href="#__codelineno-24-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">stack</span><span class="p">(</span>
+<a id="__codelineno-24-2" name="__codelineno-24-2" href="#__codelineno-24-2"></a>    <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;A4&quot;</span><span class="p">),</span>
+<a id="__codelineno-24-3" name="__codelineno-24-3" href="#__codelineno-24-3"></a>    <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;C5&quot;</span><span class="p">),</span>
+<a id="__codelineno-24-4" name="__codelineno-24-4" href="#__codelineno-24-4"></a>    <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;E5&quot;</span><span class="p">),</span>
+<a id="__codelineno-24-5" name="__codelineno-24-5" href="#__codelineno-24-5"></a><span class="p">)</span>
+<a id="__codelineno-24-6" name="__codelineno-24-6" href="#__codelineno-24-6"></a><span class="c1"># equivalent to: kr.note(&quot;A4&quot;) | kr.note(&quot;C5&quot;) | kr.note(&quot;E5&quot;)</span>
+</code></pre></div>
+<h3 id="krstruct-impose-rhythm-onto-melody"><code>kr.struct()</code> -- impose rhythm onto melody<a class="headerlink" href="#krstruct-impose-rhythm-onto-melody" title="Permanent link">&para;</a></h3>
+<p>Takes the onset positions from a rhythm pattern and fills them with
+values from a melody pattern (cycling if melody is shorter):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-25-1" name="__codelineno-25-1" href="#__codelineno-25-1"></a><span class="n">rhythm</span> <span class="o">=</span> <span class="n">kr</span><span class="o">.</span><span class="n">p</span><span class="p">(</span><span class="s2">&quot;x . x x . x . .&quot;</span><span class="p">)</span>
+<a id="__codelineno-25-2" name="__codelineno-25-2" href="#__codelineno-25-2"></a><span class="n">melody</span> <span class="o">=</span> <span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;A2&quot;</span><span class="p">,</span> <span class="s2">&quot;D3&quot;</span><span class="p">,</span> <span class="s2">&quot;E2&quot;</span><span class="p">)</span>
+<a id="__codelineno-25-3" name="__codelineno-25-3" href="#__codelineno-25-3"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;bass&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">struct</span><span class="p">(</span><span class="n">rhythm</span><span class="p">,</span> <span class="n">melody</span><span class="p">))</span>
+<a id="__codelineno-25-4" name="__codelineno-25-4" href="#__codelineno-25-4"></a><span class="c1"># plays A2, D3, E2, A2 at the rhythm&#39;s hit positions</span>
+</code></pre></div>
+<h2 id="continuous-patterns">Continuous patterns<a class="headerlink" href="#continuous-patterns" title="Permanent link">&para;</a></h2>
+<p>Continuous patterns generate smooth control sweeps. Use them for
+modulation, filter control, and automation. All return <code>Pattern</code> objects
+and compose with <code>.over()</code>, <code>+</code>, etc.</p>
+<h3 id="krsinelo-hi-sine-sweep"><code>kr.sine(lo, hi)</code> -- sine sweep<a class="headerlink" href="#krsinelo-hi-sine-sweep" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-26-1" name="__codelineno-26-1" href="#__codelineno-26-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">sine</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">2000</span><span class="p">)</span>             <span class="c1"># one-cycle sine from 200..2000</span>
+<a id="__codelineno-26-2" name="__codelineno-26-2" href="#__codelineno-26-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">sine</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">2000</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">4</span><span class="p">)</span>     <span class="c1"># 4-cycle sine sweep</span>
+</code></pre></div>
+<h3 id="krsawlo-hi-sawtooth-ramp"><code>kr.saw(lo, hi)</code> -- sawtooth ramp<a class="headerlink" href="#krsawlo-hi-sawtooth-ramp" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-27-1" name="__codelineno-27-1" href="#__codelineno-27-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">saw</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">2000</span><span class="p">)</span>              <span class="c1"># ramp up from 200 to 2000</span>
+<a id="__codelineno-27-2" name="__codelineno-27-2" href="#__codelineno-27-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">saw</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">2000</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">8</span><span class="p">)</span>      <span class="c1"># 8-cycle ramp</span>
+</code></pre></div>
+<h3 id="krrandlo-hi-random-values"><code>kr.rand(lo, hi)</code> -- random values<a class="headerlink" href="#krrandlo-hi-random-values" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-28-1" name="__codelineno-28-1" href="#__codelineno-28-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">rand</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">2000</span><span class="p">)</span>             <span class="c1"># random values between 200..2000</span>
+</code></pre></div>
+<p>Different values each cycle. Use <code>.over(N)</code> to slow the change rate.</p>
+<h3 id="using-continuous-patterns">Using continuous patterns<a class="headerlink" href="#using-continuous-patterns" title="Permanent link">&para;</a></h3>
+<p>Play them on a control path or use the <code>@</code> operator:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-29-1" name="__codelineno-29-1" href="#__codelineno-29-1"></a><span class="c1"># With @ operator</span>
+<a id="__codelineno-29-2" name="__codelineno-29-2" href="#__codelineno-29-2"></a><span class="n">bass</span> <span class="o">@</span> <span class="p">(</span><span class="s2">&quot;cutoff&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">sine</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">2000</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span>
+<a id="__codelineno-29-3" name="__codelineno-29-3" href="#__codelineno-29-3"></a>
+<a id="__codelineno-29-4" name="__codelineno-29-4" href="#__codelineno-29-4"></a><span class="c1"># With kr.play()</span>
+<a id="__codelineno-29-5" name="__codelineno-29-5" href="#__codelineno-29-5"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;bass/cutoff&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">sine</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">2000</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span>
+</code></pre></div>
+<h2 id="modulation-patterns">Modulation patterns<a class="headerlink" href="#modulation-patterns" title="Permanent link">&para;</a></h2>
+<p>Modulation patterns generate continuous control values instead of note
+triggers. All return <code>Pattern</code> objects and compose like any other pattern.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-30-1" name="__codelineno-30-1" href="#__codelineno-30-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">mod_sine</span><span class="p">(</span><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">)</span>         <span class="c1"># sine LFO between lo and hi</span>
+<a id="__codelineno-30-2" name="__codelineno-30-2" href="#__codelineno-30-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">mod_tri</span><span class="p">(</span><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">)</span>          <span class="c1"># triangle LFO</span>
+<a id="__codelineno-30-3" name="__codelineno-30-3" href="#__codelineno-30-3"></a><span class="n">kr</span><span class="o">.</span><span class="n">mod_ramp</span><span class="p">(</span><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">)</span>         <span class="c1"># ramp up (sawtooth)</span>
+<a id="__codelineno-30-4" name="__codelineno-30-4" href="#__codelineno-30-4"></a><span class="n">kr</span><span class="o">.</span><span class="n">mod_ramp_down</span><span class="p">(</span><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">)</span>    <span class="c1"># ramp down</span>
+<a id="__codelineno-30-5" name="__codelineno-30-5" href="#__codelineno-30-5"></a><span class="n">kr</span><span class="o">.</span><span class="n">mod_square</span><span class="p">(</span><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">)</span>       <span class="c1"># square LFO</span>
+<a id="__codelineno-30-6" name="__codelineno-30-6" href="#__codelineno-30-6"></a><span class="n">kr</span><span class="o">.</span><span class="n">mod_exp</span><span class="p">(</span><span class="n">lo</span><span class="p">,</span> <span class="n">hi</span><span class="p">)</span>          <span class="c1"># exponential curve</span>
+<a id="__codelineno-30-7" name="__codelineno-30-7" href="#__codelineno-30-7"></a><span class="n">kr</span><span class="o">.</span><span class="n">ramp</span><span class="p">(</span><span class="n">start</span><span class="p">,</span> <span class="n">end</span><span class="p">)</span>         <span class="c1"># one-shot linear ramp</span>
+</code></pre></div>
+<p>All accept an optional <code>steps=64</code> parameter to control resolution.</p>
+<h3 id="using-modulation-patterns">Using modulation patterns<a class="headerlink" href="#using-modulation-patterns" title="Permanent link">&para;</a></h3>
+<p>Play them on a control path:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-31-1" name="__codelineno-31-1" href="#__codelineno-31-1"></a><span class="c1"># Sine LFO on bass cutoff over 4 bars</span>
+<a id="__codelineno-31-2" name="__codelineno-31-2" href="#__codelineno-31-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;bass/cutoff&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">mod_sine</span><span class="p">(</span><span class="mf">200.0</span><span class="p">,</span> <span class="mf">2000.0</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span>
+<a id="__codelineno-31-3" name="__codelineno-31-3" href="#__codelineno-31-3"></a>
+<a id="__codelineno-31-4" name="__codelineno-31-4" href="#__codelineno-31-4"></a><span class="c1"># Triangle LFO on gain</span>
+<a id="__codelineno-31-5" name="__codelineno-31-5" href="#__codelineno-31-5"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;bass/gain&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">mod_tri</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">8</span><span class="p">))</span>
+<a id="__codelineno-31-6" name="__codelineno-31-6" href="#__codelineno-31-6"></a>
+<a id="__codelineno-31-7" name="__codelineno-31-7" href="#__codelineno-31-7"></a><span class="c1"># One-shot ramp</span>
+<a id="__codelineno-31-8" name="__codelineno-31-8" href="#__codelineno-31-8"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;bass/cutoff&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">ramp</span><span class="p">(</span><span class="mf">200.0</span><span class="p">,</span> <span class="mf">2000.0</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span>
+</code></pre></div>
+<p>Or use the <code>kr.mod()</code> shorthand:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-32-1" name="__codelineno-32-1" href="#__codelineno-32-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">mod</span><span class="p">(</span><span class="s2">&quot;bass/cutoff&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">mod_sine</span><span class="p">(</span><span class="mf">200.0</span><span class="p">,</span> <span class="mf">2000.0</span><span class="p">),</span> <span class="n">bars</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+<a id="__codelineno-32-2" name="__codelineno-32-2" href="#__codelineno-32-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">mod</span><span class="p">(</span><span class="s2">&quot;bass/gain&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">mod_tri</span><span class="p">(</span><span class="mf">0.1</span><span class="p">,</span> <span class="mf">0.5</span><span class="p">),</span> <span class="n">bars</span><span class="o">=</span><span class="mi">8</span><span class="p">)</span>
+</code></pre></div>
+<p>Stop a modulation with <code>kr.hush()</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-33-1" name="__codelineno-33-1" href="#__codelineno-33-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">hush</span><span class="p">(</span><span class="s2">&quot;bass/cutoff&quot;</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="playing-patterns">Playing patterns<a class="headerlink" href="#playing-patterns" title="Permanent link">&para;</a></h2>
+<h3 id="operator-repl-friendly"><code>@</code> operator (REPL-friendly)<a class="headerlink" href="#operator-repl-friendly" title="Permanent link">&para;</a></h3>
+<p>The <code>@</code> operator on a node handle plays a pattern immediately:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-34-1" name="__codelineno-34-1" href="#__codelineno-34-1"></a><span class="n">bass</span> <span class="o">@</span> <span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;A2&quot;</span><span class="p">,</span> <span class="s2">&quot;D3&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;E2&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>    <span class="c1"># play pattern</span>
+<a id="__codelineno-34-2" name="__codelineno-34-2" href="#__codelineno-34-2"></a><span class="n">bass</span> <span class="o">@</span> <span class="s2">&quot;A2 D3 ~ E2&quot;</span>                               <span class="c1"># play mini-notation string</span>
+<a id="__codelineno-34-3" name="__codelineno-34-3" href="#__codelineno-34-3"></a><span class="n">bass</span> <span class="o">@</span> <span class="p">(</span><span class="s2">&quot;cutoff&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">sine</span><span class="p">(</span><span class="mi">200</span><span class="p">,</span> <span class="mi">2000</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span>      <span class="c1"># modulate a control</span>
+<a id="__codelineno-34-4" name="__codelineno-34-4" href="#__codelineno-34-4"></a><span class="n">bass</span> <span class="o">@</span> <span class="kc">None</span>                                         <span class="c1"># hush</span>
+</code></pre></div>
+<h3 id="krplaytarget-pattern-explicit"><code>kr.play(target, pattern)</code> (explicit)<a class="headerlink" href="#krplaytarget-pattern-explicit" title="Permanent link">&para;</a></h3>
+<p>Binds a pattern to a node or control path. The pattern starts on the next
+cycle boundary:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-35-1" name="__codelineno-35-1" href="#__codelineno-35-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;kick&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span> <span class="o">*</span> <span class="mi">4</span><span class="p">)</span>
+<a id="__codelineno-35-2" name="__codelineno-35-2" href="#__codelineno-35-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;bass&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;A2&quot;</span><span class="p">,</span> <span class="s2">&quot;D3&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;E2&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+<a id="__codelineno-35-3" name="__codelineno-35-3" href="#__codelineno-35-3"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;bass/cutoff&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">ramp</span><span class="p">(</span><span class="mf">200.0</span><span class="p">,</span> <span class="mf">2000.0</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span>
+</code></pre></div>
+<h3 id="node-handles">Node handles<a class="headerlink" href="#node-handles" title="Permanent link">&para;</a></h3>
+<p><code>kr.node()</code>, <code>kr.voice()</code>, and <code>kr.bus()</code> all return a handle:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-36-1" name="__codelineno-36-1" href="#__codelineno-36-1"></a><span class="n">bass</span> <span class="o">=</span> <span class="n">kr</span><span class="o">.</span><span class="n">node</span><span class="p">(</span><span class="s2">&quot;bass&quot;</span><span class="p">,</span> <span class="n">acid_bass</span><span class="p">,</span> <span class="n">gain</span><span class="o">=</span><span class="mf">0.3</span><span class="p">)</span>
+<a id="__codelineno-36-2" name="__codelineno-36-2" href="#__codelineno-36-2"></a>
+<a id="__codelineno-36-3" name="__codelineno-36-3" href="#__codelineno-36-3"></a><span class="n">bass</span> <span class="o">@</span> <span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;A2&quot;</span><span class="p">,</span> <span class="s2">&quot;D3&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;E2&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-36-4" name="__codelineno-36-4" href="#__codelineno-36-4"></a><span class="n">bass</span><span class="p">[</span><span class="s2">&quot;cutoff&quot;</span><span class="p">]</span> <span class="o">=</span> <span class="mi">1200</span>
+<a id="__codelineno-36-5" name="__codelineno-36-5" href="#__codelineno-36-5"></a><span class="n">bass</span><span class="o">.</span><span class="n">fade</span><span class="p">(</span><span class="s2">&quot;cutoff&quot;</span><span class="p">,</span> <span class="mi">200</span><span class="p">,</span> <span class="n">bars</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+<a id="__codelineno-36-6" name="__codelineno-36-6" href="#__codelineno-36-6"></a><span class="n">bass</span> <span class="o">@</span> <span class="p">(</span><span class="s2">&quot;cutoff&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">sine</span><span class="p">(</span><span class="mi">400</span><span class="p">,</span> <span class="mi">2000</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">4</span><span class="p">))</span>
+<a id="__codelineno-36-7" name="__codelineno-36-7" href="#__codelineno-36-7"></a><span class="n">bass</span><span class="o">.</span><span class="n">mute</span><span class="p">()</span>
+</code></pre></div>
+<h3 id="convenience-kwargs">Convenience kwargs<a class="headerlink" href="#convenience-kwargs" title="Permanent link">&para;</a></h3>
+<p><code>kr.play()</code> accepts <code>swing=</code> as a keyword argument:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-37-1" name="__codelineno-37-1" href="#__codelineno-37-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;kick&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span> <span class="o">*</span> <span class="mi">8</span><span class="p">,</span> <span class="n">swing</span><span class="o">=</span><span class="mf">0.67</span><span class="p">)</span>
+</code></pre></div>
+<h2 id="pattern-retrieval">Pattern retrieval<a class="headerlink" href="#pattern-retrieval" title="Permanent link">&para;</a></h2>
+<p>Get the current pattern from a voice to modify and replay:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-38-1" name="__codelineno-38-1" href="#__codelineno-38-1"></a><span class="n">p</span> <span class="o">=</span> <span class="n">kr</span><span class="o">.</span><span class="n">pattern</span><span class="p">(</span><span class="s2">&quot;kick&quot;</span><span class="p">)</span>            <span class="c1"># get current pattern by name</span>
+<a id="__codelineno-38-2" name="__codelineno-38-2" href="#__codelineno-38-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;kick&quot;</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">fast</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>       <span class="c1"># modify and replay</span>
+<a id="__codelineno-38-3" name="__codelineno-38-3" href="#__codelineno-38-3"></a>
+<a id="__codelineno-38-4" name="__codelineno-38-4" href="#__codelineno-38-4"></a><span class="c1"># Or via a voice handle:</span>
+<a id="__codelineno-38-5" name="__codelineno-38-5" href="#__codelineno-38-5"></a><span class="n">kick</span> <span class="o">=</span> <span class="n">kr</span><span class="o">.</span><span class="n">voice</span><span class="p">(</span><span class="s2">&quot;drums/kick&quot;</span><span class="p">,</span> <span class="n">kick_fn</span><span class="p">,</span> <span class="n">gain</span><span class="o">=</span><span class="mf">0.8</span><span class="p">)</span>
+<a id="__codelineno-38-6" name="__codelineno-38-6" href="#__codelineno-38-6"></a><span class="n">p</span> <span class="o">=</span> <span class="n">kick</span><span class="o">.</span><span class="n">pattern</span><span class="p">()</span>
+<a id="__codelineno-38-7" name="__codelineno-38-7" href="#__codelineno-38-7"></a><span class="n">kick</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="n">p</span><span class="o">.</span><span class="n">every</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">reverse</span><span class="p">()))</span>
+</code></pre></div>
+<h2 id="how-binding-works">How binding works<a class="headerlink" href="#how-binding-works" title="Permanent link">&para;</a></h2>
+<p>Pattern atoms like <code>kr.note()</code> and <code>kr.hit()</code> produce <strong>bare parameter
+names</strong> (e.g., <code>freq</code>, <code>gate</code>). When you call <code>kr.play("bass", pattern)</code>, the
+system binds those bare names to the voice's control namespace:</p>
+<ul>
+<li><code>freq</code> becomes <code>bass/freq</code></li>
+<li><code>gate</code> becomes <code>bass/gate</code></li>
+<li><code>cutoff</code> becomes <code>bass/cutoff</code></li>
+</ul>
+<p>This means the same pattern can be reused on different voices:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-39-1" name="__codelineno-39-1" href="#__codelineno-39-1"></a><span class="n">melody</span> <span class="o">=</span> <span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;A2&quot;</span><span class="p">,</span> <span class="s2">&quot;D3&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;E2&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-39-2" name="__codelineno-39-2" href="#__codelineno-39-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;bass&quot;</span><span class="p">,</span> <span class="n">melody</span><span class="p">)</span>
+<a id="__codelineno-39-3" name="__codelineno-39-3" href="#__codelineno-39-3"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;lead&quot;</span><span class="p">,</span> <span class="n">melody</span><span class="p">)</span>   <span class="c1"># same pattern, different voice</span>
+</code></pre></div>
+<h2 id="common-recipes">Common recipes<a class="headerlink" href="#common-recipes" title="Permanent link">&para;</a></h2>
+<h3 id="4-on-the-floor-kick">4-on-the-floor kick<a class="headerlink" href="#4-on-the-floor-kick" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-40-1" name="__codelineno-40-1" href="#__codelineno-40-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;kick&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span> <span class="o">*</span> <span class="mi">4</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="offbeat-hi-hat">Offbeat hi-hat<a class="headerlink" href="#offbeat-hi-hat" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-41-1" name="__codelineno-41-1" href="#__codelineno-41-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;hat&quot;</span><span class="p">,</span> <span class="p">(</span><span class="n">kr</span><span class="o">.</span><span class="n">rest</span><span class="p">()</span> <span class="o">+</span> <span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">())</span> <span class="o">*</span> <span class="mi">4</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="bass-line-with-rests">Bass line with rests<a class="headerlink" href="#bass-line-with-rests" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-42-1" name="__codelineno-42-1" href="#__codelineno-42-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;bass&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">seq</span><span class="p">(</span><span class="s2">&quot;A2&quot;</span><span class="p">,</span> <span class="s2">&quot;C3&quot;</span><span class="p">,</span> <span class="s2">&quot;D3&quot;</span><span class="p">,</span> <span class="s2">&quot;E3&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">over</span><span class="p">(</span><span class="mi">2</span><span class="p">))</span>
+</code></pre></div>
+<h3 id="chord-stabs">Chord stabs<a class="headerlink" href="#chord-stabs" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-43-1" name="__codelineno-43-1" href="#__codelineno-43-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">voice</span><span class="p">(</span><span class="s2">&quot;rhodes&quot;</span><span class="p">,</span> <span class="n">rhodes_fn</span><span class="p">,</span> <span class="n">gain</span><span class="o">=</span><span class="mf">0.3</span><span class="p">,</span> <span class="n">count</span><span class="o">=</span><span class="mi">4</span><span class="p">)</span>
+<a id="__codelineno-43-2" name="__codelineno-43-2" href="#__codelineno-43-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;rhodes&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">note</span><span class="p">(</span><span class="s2">&quot;A4&quot;</span><span class="p">,</span> <span class="s2">&quot;C5&quot;</span><span class="p">,</span> <span class="s2">&quot;E5&quot;</span><span class="p">)</span> <span class="o">+</span> <span class="n">kr</span><span class="o">.</span><span class="n">rest</span><span class="p">())</span>
+</code></pre></div>
+<h3 id="euclidean-hi-hat-with-degradation">Euclidean hi-hat with degradation<a class="headerlink" href="#euclidean-hi-hat-with-degradation" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-44-1" name="__codelineno-44-1" href="#__codelineno-44-1"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;hat&quot;</span><span class="p">,</span> <span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span><span class="o">.</span><span class="n">spread</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">8</span><span class="p">)</span><span class="o">.</span><span class="n">thin</span><span class="p">(</span><span class="mf">0.2</span><span class="p">))</span>
+</code></pre></div>
+<h3 id="evolving-pattern">Evolving pattern<a class="headerlink" href="#evolving-pattern" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-45-1" name="__codelineno-45-1" href="#__codelineno-45-1"></a><span class="n">p</span> <span class="o">=</span> <span class="n">kr</span><span class="o">.</span><span class="n">hit</span><span class="p">()</span> <span class="o">*</span> <span class="mi">4</span>
+<a id="__codelineno-45-2" name="__codelineno-45-2" href="#__codelineno-45-2"></a><span class="n">kr</span><span class="o">.</span><span class="n">play</span><span class="p">(</span><span class="s2">&quot;kick&quot;</span><span class="p">,</span> <span class="n">p</span><span class="o">.</span><span class="n">every</span><span class="p">(</span><span class="mi">4</span><span class="p">,</span> <span class="k">lambda</span> <span class="n">p</span><span class="p">:</span> <span class="n">p</span><span class="o">.</span><span class="n">fast</span><span class="p">(</span><span class="mi">2</span><span class="p">)))</span>
+</code></pre></div>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["content.code.copy", "navigation.sections", "navigation.expand", "search.highlight"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

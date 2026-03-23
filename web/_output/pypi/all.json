@@ -1,0 +1,54 @@
+{
+  "faust-dsl": {
+    "releases": {
+      "0.1.0": [
+        {
+          "comment_text": "",
+          "digests": {
+            "md5": "431cabe627d5c3a1a087b237e95ef187",
+            "sha256": "51cf45f5568432d1585d2e7b68ab95ae530b297579d3ee58ba769101ca442e34"
+          },
+          "downloads": -1,
+          "filename": "faust_dsl-0.1.0-py3-none-any.whl",
+          "has_sig": false,
+          "md5_digest": "431cabe627d5c3a1a087b237e95ef187",
+          "packagetype": "bdist_wheel",
+          "python_version": "py3",
+          "requires_python": ">=3.13",
+          "size": 27450,
+          "upload_time": "2026-03-23T13:07:12.103982Z",
+          "upload_time_iso_8601": "2026-03-23T13:07:12.103982Z",
+          "url": "./faust_dsl-0.1.0-py3-none-any.whl",
+          "yanked": false,
+          "yanked_reason": null
+        }
+      ]
+    }
+  },
+  "krach": {
+    "releases": {
+      "0.1.0": [
+        {
+          "comment_text": "",
+          "digests": {
+            "md5": "510406a3c3eb9325b53d06d255dba0fb",
+            "sha256": "5dda916031a44dfff8e477c9df36d062d9c2217d4c4dd87fbe8877d40c4216a3"
+          },
+          "downloads": -1,
+          "filename": "krach-0.1.0-py3-none-any.whl",
+          "has_sig": false,
+          "md5_digest": "510406a3c3eb9325b53d06d255dba0fb",
+          "packagetype": "bdist_wheel",
+          "python_version": "py3",
+          "requires_python": ">=3.13",
+          "size": 43413,
+          "upload_time": "2026-03-23T13:06:58.966327Z",
+          "upload_time_iso_8601": "2026-03-23T13:06:58.966327Z",
+          "url": "./krach-0.1.0-py3-none-any.whl",
+          "yanked": false,
+          "yanked_reason": null
+        }
+      ]
+    }
+  }
+}

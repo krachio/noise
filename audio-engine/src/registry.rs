@@ -168,12 +168,18 @@ mod tests {
 
     impl DspNode for StubNode {
         fn process(&mut self, _inputs: &[&[f32]], _outputs: &mut [&mut [f32]]) {}
-        fn num_inputs(&self) -> usize { 0 }
-        fn num_outputs(&self) -> usize { 1 }
+        fn num_inputs(&self) -> usize {
+            0
+        }
+        fn num_outputs(&self) -> usize {
+            1
+        }
         fn set_param(&mut self, name: &str, _value: f32) -> Result<(), ParamError> {
             Err(ParamError::NotFound(name.into()))
         }
-        fn reset(&mut self, sample_rate: u32) { self.sample_rate = sample_rate; }
+        fn reset(&mut self, sample_rate: u32) {
+            self.sample_rate = sample_rate;
+        }
     }
 
     struct StubFactory;
@@ -235,7 +241,10 @@ mod tests {
         registry.register(oscillator_decl(), StubFactory).unwrap();
 
         let result = registry.register(oscillator_decl(), StubFactory);
-        assert_eq!(result.unwrap_err(), RegistryError::DuplicateType("oscillator".into()));
+        assert_eq!(
+            result.unwrap_err(),
+            RegistryError::DuplicateType("oscillator".into())
+        );
     }
 
     #[test]
@@ -260,8 +269,12 @@ mod tests {
 
     impl DspNode for StubNode2 {
         fn process(&mut self, _inputs: &[&[f32]], _outputs: &mut [&mut [f32]]) {}
-        fn num_inputs(&self) -> usize { 0 }
-        fn num_outputs(&self) -> usize { 2 }
+        fn num_inputs(&self) -> usize {
+            0
+        }
+        fn num_outputs(&self) -> usize {
+            2
+        }
         fn set_param(&mut self, name: &str, _value: f32) -> Result<(), ParamError> {
             Err(ParamError::NotFound(name.into()))
         }
@@ -271,7 +284,11 @@ mod tests {
     struct StubFactory2;
 
     impl NodeFactory for StubFactory2 {
-        fn create(&self, _sample_rate: u32, _block_size: usize) -> Result<Box<dyn DspNode>, String> {
+        fn create(
+            &self,
+            _sample_rate: u32,
+            _block_size: usize,
+        ) -> Result<Box<dyn DspNode>, String> {
             Ok(Box::new(StubNode2))
         }
     }
@@ -281,8 +298,14 @@ mod tests {
             type_id: "oscillator".into(),
             audio_inputs: vec![],
             audio_outputs: vec![
-                PortDecl { name: "left".into(), channels: ChannelLayout::Mono },
-                PortDecl { name: "right".into(), channels: ChannelLayout::Mono },
+                PortDecl {
+                    name: "left".into(),
+                    channels: ChannelLayout::Mono,
+                },
+                PortDecl {
+                    name: "right".into(),
+                    channels: ChannelLayout::Mono,
+                },
             ],
             controls: vec![],
         }
@@ -299,7 +322,9 @@ mod tests {
         assert_eq!(registry.get_type("oscillator").unwrap().controls.len(), 1);
 
         // Reregister with stereo factory
-        registry.reregister(oscillator_decl_stereo(), StubFactory2).unwrap();
+        registry
+            .reregister(oscillator_decl_stereo(), StubFactory2)
+            .unwrap();
 
         // Now: 2 outputs, no controls
         let node = registry.create_node("oscillator", 48000, 512).unwrap();
@@ -331,10 +356,14 @@ mod tests {
         registry.register(oscillator_decl(), StubFactory).unwrap();
         assert_eq!(registry.version("oscillator"), 1);
 
-        registry.reregister(oscillator_decl_stereo(), StubFactory2).unwrap();
+        registry
+            .reregister(oscillator_decl_stereo(), StubFactory2)
+            .unwrap();
         assert_eq!(registry.version("oscillator"), 2);
 
-        registry.reregister(oscillator_decl_stereo(), StubFactory2).unwrap();
+        registry
+            .reregister(oscillator_decl_stereo(), StubFactory2)
+            .unwrap();
         assert_eq!(registry.version("oscillator"), 3);
     }
 
@@ -345,7 +374,10 @@ mod tests {
 
         let dac_decl = NodeTypeDecl {
             type_id: "dac".into(),
-            audio_inputs: vec![PortDecl { name: "in".into(), channels: ChannelLayout::Mono }],
+            audio_inputs: vec![PortDecl {
+                name: "in".into(),
+                channels: ChannelLayout::Mono,
+            }],
             audio_outputs: vec![],
             controls: vec![],
         };
@@ -354,7 +386,9 @@ mod tests {
         assert_eq!(registry.version("oscillator"), 1);
         assert_eq!(registry.version("dac"), 1);
 
-        registry.reregister(oscillator_decl_stereo(), StubFactory2).unwrap();
+        registry
+            .reregister(oscillator_decl_stereo(), StubFactory2)
+            .unwrap();
         assert_eq!(registry.version("oscillator"), 2);
         assert_eq!(registry.version("dac"), 1); // unchanged
     }

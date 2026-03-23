@@ -46,8 +46,7 @@ fn register_dsp_dir_registers_all_dsp_files() {
     let config = EngineConfig::default();
     let (mut ctrl, _proc) = engine::engine(&config);
 
-    let registered =
-        loader::register_dsp_dir(ctrl.registry_mut(), dir.path()).unwrap();
+    let registered = loader::register_dsp_dir(ctrl.registry_mut(), dir.path()).unwrap();
 
     assert_eq!(registered.len(), 2);
     assert!(registered.contains(&"faust:sine".to_string()));
@@ -66,8 +65,7 @@ fn register_dsp_dir_skips_non_dsp_files() {
     let config = EngineConfig::default();
     let (mut ctrl, _proc) = engine::engine(&config);
 
-    let registered =
-        loader::register_dsp_dir(ctrl.registry_mut(), dir.path()).unwrap();
+    let registered = loader::register_dsp_dir(ctrl.registry_mut(), dir.path()).unwrap();
 
     assert_eq!(registered.len(), 2); // only .dsp files
 }

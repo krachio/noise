@@ -146,10 +146,21 @@ impl DspGraph {
     pub fn into_reusable_nodes(self) -> std::collections::HashMap<String, ReusableNode> {
         self.node_ids
             .into_iter()
-            .zip(self.node_type_ids.into_iter().zip(self.node_versions.into_iter()))
+            .zip(
+                self.node_type_ids
+                    .into_iter()
+                    .zip(self.node_versions.into_iter()),
+            )
             .zip(self.nodes.into_iter())
             .map(|((id, (type_id, version)), node)| {
-                (id, ReusableNode { type_id, version, node })
+                (
+                    id,
+                    ReusableNode {
+                        type_id,
+                        version,
+                        node,
+                    },
+                )
             })
             .collect()
     }
@@ -204,8 +215,7 @@ impl DspGraph {
             // Copy scratch outputs back into buffer pool
             for (port, &buf_idx) in self.output_buffer_map[idx].iter().enumerate() {
                 if port < num_outputs {
-                    self.buffers.buffers[buf_idx]
-                        .copy_from_slice(&self.scratch_outputs[port]);
+                    self.buffers.buffers[buf_idx].copy_from_slice(&self.scratch_outputs[port]);
                 }
             }
         }
@@ -306,8 +316,12 @@ mod tests {
                 out.fill(self.0);
             }
         }
-        fn num_inputs(&self) -> usize { 0 }
-        fn num_outputs(&self) -> usize { 1 }
+        fn num_inputs(&self) -> usize {
+            0
+        }
+        fn num_outputs(&self) -> usize {
+            1
+        }
         fn set_param(&mut self, name: &str, _value: f32) -> Result<(), ParamError> {
             Err(ParamError::NotFound(name.into()))
         }
@@ -319,10 +333,16 @@ mod tests {
 
     impl DspNode for NanNode {
         fn process(&mut self, _: &[&[f32]], outputs: &mut [&mut [f32]]) {
-            if let Some(out) = outputs.first_mut() { out.fill(f32::NAN); }
+            if let Some(out) = outputs.first_mut() {
+                out.fill(f32::NAN);
+            }
         }
-        fn num_inputs(&self) -> usize { 0 }
-        fn num_outputs(&self) -> usize { 1 }
+        fn num_inputs(&self) -> usize {
+            0
+        }
+        fn num_outputs(&self) -> usize {
+            1
+        }
         fn set_param(&mut self, name: &str, _: f32) -> Result<(), ParamError> {
             Err(ParamError::NotFound(name.into()))
         }
@@ -341,8 +361,12 @@ mod tests {
                 out.fill(in0 - in1);
             }
         }
-        fn num_inputs(&self) -> usize { 2 }
-        fn num_outputs(&self) -> usize { 1 }
+        fn num_inputs(&self) -> usize {
+            2
+        }
+        fn num_outputs(&self) -> usize {
+            1
+        }
         fn set_param(&mut self, name: &str, _value: f32) -> Result<(), ParamError> {
             Err(ParamError::NotFound(name.into()))
         }
@@ -370,9 +394,15 @@ mod tests {
             .collect();
         let n = node_ids.len();
         DspGraph::new(
-            nodes, node_ids,
-            vec!["test".into(); n], vec![0; n],
-            connections, process_order, output_node, buffers, output_buffer_map,
+            nodes,
+            node_ids,
+            vec!["test".into(); n],
+            vec![0; n],
+            connections,
+            process_order,
+            output_node,
+            buffers,
+            output_buffer_map,
         )
     }
 
@@ -380,8 +410,18 @@ mod tests {
     fn topo_sort_linear_chain() {
         // A -> B -> C
         let connections = vec![
-            Connection { from_node: NodeId(0), from_port: 0, to_node: NodeId(1), to_port: 0 },
-            Connection { from_node: NodeId(1), from_port: 0, to_node: NodeId(2), to_port: 0 },
+            Connection {
+                from_node: NodeId(0),
+                from_port: 0,
+                to_node: NodeId(1),
+                to_port: 0,
+            },
+            Connection {
+                from_node: NodeId(1),
+                from_port: 0,
+                to_node: NodeId(2),
+                to_port: 0,
+            },
         ];
         let order = topological_sort(3, &connections).unwrap();
         assert_eq!(order.len(), 3);
@@ -395,10 +435,30 @@ mod tests {
     fn topo_sort_diamond() {
         // A -> B, A -> C, B -> D, C -> D
         let connections = vec![
-            Connection { from_node: NodeId(0), from_port: 0, to_node: NodeId(1), to_port: 0 },
-            Connection { from_node: NodeId(0), from_port: 0, to_node: NodeId(2), to_port: 0 },
-            Connection { from_node: NodeId(1), from_port: 0, to_node: NodeId(3), to_port: 0 },
-            Connection { from_node: NodeId(2), from_port: 0, to_node: NodeId(3), to_port: 0 },
+            Connection {
+                from_node: NodeId(0),
+                from_port: 0,
+                to_node: NodeId(1),
+                to_port: 0,
+            },
+            Connection {
+                from_node: NodeId(0),
+                from_port: 0,
+                to_node: NodeId(2),
+                to_port: 0,
+            },
+            Connection {
+                from_node: NodeId(1),
+                from_port: 0,
+                to_node: NodeId(3),
+                to_port: 0,
+            },
+            Connection {
+                from_node: NodeId(2),
+                from_port: 0,
+                to_node: NodeId(3),
+                to_port: 0,
+            },
         ];
         let order = topological_sort(4, &connections).unwrap();
         assert_eq!(order.len(), 4);
@@ -419,8 +479,18 @@ mod tests {
     #[test]
     fn topo_sort_cycle_detected() {
         let connections = vec![
-            Connection { from_node: NodeId(0), from_port: 0, to_node: NodeId(1), to_port: 0 },
-            Connection { from_node: NodeId(1), from_port: 0, to_node: NodeId(0), to_port: 0 },
+            Connection {
+                from_node: NodeId(0),
+                from_port: 0,
+                to_node: NodeId(1),
+                to_port: 0,
+            },
+            Connection {
+                from_node: NodeId(1),
+                from_port: 0,
+                to_node: NodeId(0),
+                to_port: 0,
+            },
         ];
         let result = topological_sort(2, &connections);
         assert!(result.is_err());
@@ -444,10 +514,8 @@ mod tests {
         let block_size = 64;
         let sample_rate = 48000;
 
-        let nodes: Vec<Box<dyn DspNode>> = vec![
-            Box::new(Oscillator::new(sample_rate)),
-            Box::new(DacNode),
-        ];
+        let nodes: Vec<Box<dyn DspNode>> =
+            vec![Box::new(Oscillator::new(sample_rate)), Box::new(DacNode)];
         let connections = vec![Connection {
             from_node: NodeId(0),
             from_port: 0,
@@ -488,10 +556,8 @@ mod tests {
         let block_size = 256;
         let sample_rate = 48000;
 
-        let nodes: Vec<Box<dyn DspNode>> = vec![
-            Box::new(Oscillator::new(sample_rate)),
-            Box::new(DacNode),
-        ];
+        let nodes: Vec<Box<dyn DspNode>> =
+            vec![Box::new(Oscillator::new(sample_rate)), Box::new(DacNode)];
         let connections = vec![Connection {
             from_node: NodeId(0),
             from_port: 0,
@@ -524,21 +590,28 @@ mod tests {
         graph.process(&mut output_880);
 
         // Count zero crossings — 880 Hz should have roughly 2x the crossings of 440 Hz
-        let count_crossings = |buf: &[f32]| -> usize {
-            buf.windows(2)
-                .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
-                .count()
-        };
+        let count_crossings =
+            |buf: &[f32]| -> usize { buf.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count() };
         let c440 = count_crossings(&output_440);
         let c880 = count_crossings(&output_880);
-        assert!(c880 > c440, "880 Hz should have more zero crossings than 440 Hz");
+        assert!(
+            c880 > c440,
+            "880 Hz should have more zero crossings than 440 Hz"
+        );
     }
 
     #[test]
     fn graph_set_param_unknown_node() {
         let graph = DspGraph::new(
-            vec![], vec![], vec![], vec![],
-            vec![], vec![], None, BufferPool::new(0, 64), vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            vec![],
+            None,
+            BufferPool::new(0, 64),
+            vec![],
         );
         // set_param requires &mut but we need to test the error path
         let mut graph = graph;
@@ -552,11 +625,25 @@ mod tests {
         // Output must be their sum (0.5 + 0.3 = 0.8), not just one of them.
         let block_size = 16;
         let mut graph = make_graph(
-            vec![Box::new(ConstantNode(0.5)), Box::new(ConstantNode(0.3)), Box::new(DacNode)],
+            vec![
+                Box::new(ConstantNode(0.5)),
+                Box::new(ConstantNode(0.3)),
+                Box::new(DacNode),
+            ],
             vec!["c1".into(), "c2".into(), "out".into()],
             vec![
-                Connection { from_node: NodeId(0), from_port: 0, to_node: NodeId(2), to_port: 0 },
-                Connection { from_node: NodeId(1), from_port: 0, to_node: NodeId(2), to_port: 0 },
+                Connection {
+                    from_node: NodeId(0),
+                    from_port: 0,
+                    to_node: NodeId(2),
+                    to_port: 0,
+                },
+                Connection {
+                    from_node: NodeId(1),
+                    from_port: 0,
+                    to_node: NodeId(2),
+                    to_port: 0,
+                },
             ],
             vec![NodeId(0), NodeId(1), NodeId(2)],
             Some(NodeId(2)),
@@ -580,17 +667,32 @@ mod tests {
         let block_size = 16;
         let mut graph = make_graph(
             vec![
-                Box::new(ConstantNode(0.7)),  // NodeId(0) → port 0
-                Box::new(ConstantNode(0.3)),  // NodeId(1) → port 1
+                Box::new(ConstantNode(0.7)), // NodeId(0) → port 0
+                Box::new(ConstantNode(0.3)), // NodeId(1) → port 1
                 Box::new(SubtractNode),
                 Box::new(DacNode),
             ],
             vec!["c1".into(), "c2".into(), "sub".into(), "out".into()],
             vec![
                 // Reversed: port 1 connection listed before port 0
-                Connection { from_node: NodeId(1), from_port: 0, to_node: NodeId(2), to_port: 1 },
-                Connection { from_node: NodeId(0), from_port: 0, to_node: NodeId(2), to_port: 0 },
-                Connection { from_node: NodeId(2), from_port: 0, to_node: NodeId(3), to_port: 0 },
+                Connection {
+                    from_node: NodeId(1),
+                    from_port: 0,
+                    to_node: NodeId(2),
+                    to_port: 1,
+                },
+                Connection {
+                    from_node: NodeId(0),
+                    from_port: 0,
+                    to_node: NodeId(2),
+                    to_port: 0,
+                },
+                Connection {
+                    from_node: NodeId(2),
+                    from_port: 0,
+                    to_node: NodeId(3),
+                    to_port: 0,
+                },
             ],
             vec![NodeId(0), NodeId(1), NodeId(2), NodeId(3)],
             Some(NodeId(3)),
@@ -601,7 +703,10 @@ mod tests {
         graph.process(&mut output);
 
         for &s in &output {
-            assert!((s - 0.4).abs() < 1e-6, "expected input[0]-input[1] = 0.4, got {s}");
+            assert!(
+                (s - 0.4).abs() < 1e-6,
+                "expected input[0]-input[1] = 0.4, got {s}"
+            );
         }
     }
 
@@ -611,11 +716,25 @@ mod tests {
         // and silence other voices (e.g. drums when acid bass diverges).
         let block_size = 16;
         let mut graph = make_graph(
-            vec![Box::new(ConstantNode(0.5)), Box::new(NanNode), Box::new(DacNode)],
+            vec![
+                Box::new(ConstantNode(0.5)),
+                Box::new(NanNode),
+                Box::new(DacNode),
+            ],
             vec!["good".into(), "nan".into(), "out".into()],
             vec![
-                Connection { from_node: NodeId(0), from_port: 0, to_node: NodeId(2), to_port: 0 },
-                Connection { from_node: NodeId(1), from_port: 0, to_node: NodeId(2), to_port: 0 },
+                Connection {
+                    from_node: NodeId(0),
+                    from_port: 0,
+                    to_node: NodeId(2),
+                    to_port: 0,
+                },
+                Connection {
+                    from_node: NodeId(1),
+                    from_port: 0,
+                    to_node: NodeId(2),
+                    to_port: 0,
+                },
             ],
             vec![NodeId(0), NodeId(1), NodeId(2)],
             Some(NodeId(2)),
@@ -626,8 +745,14 @@ mod tests {
         graph.process(&mut output);
 
         for &s in &output {
-            assert!(s.is_finite(), "NaN from one source must not poison the output");
-            assert!((s - 0.5).abs() < 1e-6, "healthy source output must survive NaN neighbour");
+            assert!(
+                s.is_finite(),
+                "NaN from one source must not poison the output"
+            );
+            assert!(
+                (s - 0.5).abs() < 1e-6,
+                "healthy source output must survive NaN neighbour"
+            );
         }
     }
 }

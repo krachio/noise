@@ -16,11 +16,12 @@ use crate::event::{Event, Value};
 /// their first event.
 ///
 /// Non-Control events are silently ignored.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
-pub fn compile_wavetable(
-    events: &[Event<Value>],
-    table_len: usize,
-) -> HashMap<String, Vec<f32>> {
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
+pub fn compile_wavetable(events: &[Event<Value>], table_len: usize) -> HashMap<String, Vec<f32>> {
     if table_len == 0 {
         return HashMap::new();
     }
@@ -100,8 +101,12 @@ mod tests {
         // Cat([gate=1, gate=0]) → first half 1.0, second half 0.0
         let ir = IrNode::Cat {
             children: vec![
-                IrNode::Atom { value: control_event("gate", 1.0) },
-                IrNode::Atom { value: control_event("gate", 0.0) },
+                IrNode::Atom {
+                    value: control_event("gate", 1.0),
+                },
+                IrNode::Atom {
+                    value: control_event("gate", 0.0),
+                },
             ],
         };
         let pat = ir::compile(&ir).unwrap();
@@ -110,11 +115,15 @@ mod tests {
         let gate = &tables["gate"];
         assert_eq!(gate.len(), 8);
         // First half = 1.0 (gate on at t=0)
-        assert!(gate[0..4].iter().all(|&v| (v - 1.0).abs() < 1e-5),
-            "first half should be 1.0, got {gate:?}");
+        assert!(
+            gate[0..4].iter().all(|&v| (v - 1.0).abs() < 1e-5),
+            "first half should be 1.0, got {gate:?}"
+        );
         // Second half = 0.0 (gate off at t=0.5)
-        assert!(gate[4..8].iter().all(|&v| v.abs() < 1e-5),
-            "second half should be 0.0, got {gate:?}");
+        assert!(
+            gate[4..8].iter().all(|&v| v.abs() < 1e-5),
+            "second half should be 0.0, got {gate:?}"
+        );
     }
 
     #[test]
@@ -122,8 +131,12 @@ mod tests {
         // Cat([freq=261, freq=330, silence]) → 3-step freq table
         let ir = IrNode::Cat {
             children: vec![
-                IrNode::Atom { value: control_event("freq", 261.0) },
-                IrNode::Atom { value: control_event("freq", 330.0) },
+                IrNode::Atom {
+                    value: control_event("freq", 261.0),
+                },
+                IrNode::Atom {
+                    value: control_event("freq", 330.0),
+                },
                 IrNode::Silence,
             ],
         };
@@ -145,8 +158,12 @@ mod tests {
         // Stack([freq=440, gate=1]) → two separate tables
         let ir = IrNode::Stack {
             children: vec![
-                IrNode::Atom { value: control_event("freq", 440.0) },
-                IrNode::Atom { value: control_event("gate", 1.0) },
+                IrNode::Atom {
+                    value: control_event("freq", 440.0),
+                },
+                IrNode::Atom {
+                    value: control_event("gate", 1.0),
+                },
             ],
         };
         let pat = ir::compile(&ir).unwrap();
@@ -183,8 +200,12 @@ mod tests {
             factor: [4, 1],
             child: Box::new(IrNode::Cat {
                 children: vec![
-                    IrNode::Atom { value: control_event("gate", 1.0) },
-                    IrNode::Atom { value: control_event("gate", 0.0) },
+                    IrNode::Atom {
+                        value: control_event("gate", 1.0),
+                    },
+                    IrNode::Atom {
+                        value: control_event("gate", 0.0),
+                    },
                 ],
             }),
         };
@@ -196,8 +217,14 @@ mod tests {
         // 4 pulses: each takes 4 blocks (2 on, 2 off)
         for pulse in 0..4 {
             let start = pulse * 4;
-            assert!((gate[start] - 1.0).abs() < 1e-5, "pulse {pulse} should start with 1.0");
-            assert!((gate[start + 2]).abs() < 1e-5, "pulse {pulse} should end with 0.0");
+            assert!(
+                (gate[start] - 1.0).abs() < 1e-5,
+                "pulse {pulse} should start with 1.0"
+            );
+            assert!(
+                (gate[start + 2]).abs() < 1e-5,
+                "pulse {pulse} should end with 0.0"
+            );
         }
     }
 }

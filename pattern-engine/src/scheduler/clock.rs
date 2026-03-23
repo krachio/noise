@@ -1,7 +1,7 @@
 //! BPM-based clock mapping between wall time and cycle time.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Instant;
 
 use crate::time::Time;

@@ -56,7 +56,11 @@ impl GraphSwapper {
         for cmd in commands {
             match cmd {
                 Command::SwapGraph(new_graph) => self.begin_swap(new_graph),
-                Command::SetParam { node_id, name, value } => {
+                Command::SetParam {
+                    node_id,
+                    name,
+                    value,
+                } => {
                     // Audio thread: silently ignore unknown nodes/params.
                     // New voices' controls may arrive before/after the graph
                     // that contains them. The retiring graph may not have
@@ -120,7 +124,8 @@ impl GraphSwapper {
                     let remaining_f = (samples_remaining as f32 - i as f32).max(0.0);
                     let fade_out = remaining_f / total;
                     let fade_in = 1.0 - fade_out;
-                    *sample = self.fade_buf_old[i].mul_add(fade_out, self.fade_buf_new[i] * fade_in);
+                    *sample =
+                        self.fade_buf_old[i].mul_add(fade_out, self.fade_buf_new[i] * fade_in);
                 }
 
                 let new_remaining = samples_remaining.saturating_sub(fade_len);
@@ -141,7 +146,11 @@ impl GraphSwapper {
         // Both NaN and clipping can kill the CoreAudio stream.
         for sample in output.iter_mut() {
             let s = *sample * self.master_gain;
-            *sample = if s.is_finite() { s.clamp(-1.0, 1.0) } else { 0.0 };
+            *sample = if s.is_finite() {
+                s.clamp(-1.0, 1.0)
+            } else {
+                0.0
+            };
         }
     }
 
@@ -213,11 +222,11 @@ mod tests {
 
     use super::*;
     use crate::graph::compiler::compile;
-    use crate::graph::{BufferPool, Connection, DspGraph};
     use crate::graph::node::{DspNode, NodeId, ParamError};
+    use crate::graph::{BufferPool, Connection, DspGraph};
     use crate::ir::{ConnectionIr, GraphIr, NodeInstance};
-    use crate::nodes::dac::{DacNode, dac_type_decl, DacFactory};
-    use crate::nodes::oscillator::{oscillator_type_decl, OscillatorFactory};
+    use crate::nodes::dac::{DacFactory, DacNode, dac_type_decl};
+    use crate::nodes::oscillator::{OscillatorFactory, oscillator_type_decl};
     use crate::registry::NodeRegistry;
 
     /// Node that outputs NaN on every sample — simulates an unstable IIR filter.
@@ -225,10 +234,16 @@ mod tests {
 
     impl DspNode for NanNode {
         fn process(&mut self, _: &[&[f32]], outputs: &mut [&mut [f32]]) {
-            if let Some(out) = outputs.first_mut() { out.fill(f32::NAN); }
+            if let Some(out) = outputs.first_mut() {
+                out.fill(f32::NAN);
+            }
         }
-        fn num_inputs(&self) -> usize { 0 }
-        fn num_outputs(&self) -> usize { 1 }
+        fn num_inputs(&self) -> usize {
+            0
+        }
+        fn num_outputs(&self) -> usize {
+            1
+        }
         fn set_param(&mut self, name: &str, _: f32) -> Result<(), ParamError> {
             Err(ParamError::NotFound(name.into()))
         }
@@ -238,7 +253,10 @@ mod tests {
     fn nan_graph(block_size: usize) -> Box<DspGraph> {
         let nodes: Vec<Box<dyn DspNode>> = vec![Box::new(NanNode), Box::new(DacNode)];
         let connections = vec![Connection {
-            from_node: NodeId(0), from_port: 0, to_node: NodeId(1), to_port: 0,
+            from_node: NodeId(0),
+            from_port: 0,
+            to_node: NodeId(1),
+            to_port: 0,
         }];
         let buffers = BufferPool::new(2, block_size);
         Box::new(DspGraph::new(
@@ -336,10 +354,16 @@ mod tests {
         assert!(swapper.is_crossfading());
 
         swapper.process(&mut buf);
-        assert!(swapper.is_crossfading(), "should still be crossfading after 1 block");
+        assert!(
+            swapper.is_crossfading(),
+            "should still be crossfading after 1 block"
+        );
 
         swapper.process(&mut buf);
-        assert!(!swapper.is_crossfading(), "should finish crossfade after 2 blocks");
+        assert!(
+            !swapper.is_crossfading(),
+            "should finish crossfade after 2 blocks"
+        );
     }
 
     #[test]
@@ -378,10 +402,8 @@ mod tests {
 
         let graph = make_graph(&registry, 440.0, block_size);
         let mut swapper = GraphSwapper::new(480, block_size);
-        swapper.drain_commands(
-            [Command::SwapGraph(graph), Command::SetMasterGain(0.5)]
-                .into_iter(),
-        );
+        swapper
+            .drain_commands([Command::SwapGraph(graph), Command::SetMasterGain(0.5)].into_iter());
 
         let mut output = vec![0.0_f32; block_size];
         swapper.process(&mut output);
@@ -403,10 +425,8 @@ mod tests {
 
         let graph = make_graph(&registry, 440.0, block_size);
         let mut swapper = GraphSwapper::new(480, block_size);
-        swapper.drain_commands(
-            [Command::SwapGraph(graph), Command::SetMasterGain(5.0)]
-                .into_iter(),
-        );
+        swapper
+            .drain_commands([Command::SwapGraph(graph), Command::SetMasterGain(5.0)].into_iter());
 
         let mut output = vec![0.0_f32; block_size];
         swapper.process(&mut output);
@@ -460,11 +480,8 @@ mod tests {
         let mut buf2 = vec![0.0_f32; block_size];
         swapper.process(&mut buf2);
 
-        let count_crossings = |buf: &[f32]| -> usize {
-            buf.windows(2)
-                .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
-                .count()
-        };
+        let count_crossings =
+            |buf: &[f32]| -> usize { buf.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count() };
         assert!(
             count_crossings(&buf2) > count_crossings(&buf1),
             "880 Hz should have more crossings than 440 Hz"
@@ -503,16 +520,12 @@ mod tests {
 
         // Process during crossfade.
         swapper.process(&mut buf);
-        let crossings_during: usize = buf.windows(2)
-            .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
-            .count();
+        let crossings_during: usize = buf.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count();
 
         // After crossfade completes, process at 880Hz for reference.
         swapper.process(&mut buf); // finishes crossfade
         swapper.process(&mut buf); // pure 880Hz
-        let crossings_after: usize = buf.windows(2)
-            .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
-            .count();
+        let crossings_after: usize = buf.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count();
 
         // If retiring graph got the SetParam, crossings_during ≈ crossings_after
         // (both graphs at 880). If not, crossings_during is a blend of 440+880.
@@ -557,13 +570,16 @@ mod tests {
 
         // The old retiring graph (g1) should now be in retired_ready.
         let retired = swapper.take_retired();
-        assert!(retired.is_some(), "old retiring graph must be preserved in retired_ready");
+        assert!(
+            retired.is_some(),
+            "old retiring graph must be preserved in retired_ready"
+        );
     }
 
     // ---- Automation integration tests ----
 
     use crate::automation::{AutoShape, Automation};
-    use crate::nodes::gain::{gain_type_decl, GainFactory};
+    use crate::nodes::gain::{GainFactory, gain_type_decl};
 
     fn gain_registry() -> NodeRegistry {
         let mut registry = NodeRegistry::new();
@@ -571,13 +587,16 @@ mod tests {
             .register(oscillator_type_decl(), OscillatorFactory)
             .unwrap();
         registry.register(dac_type_decl(), DacFactory).unwrap();
-        registry
-            .register(gain_type_decl(), GainFactory)
-            .unwrap();
+        registry.register(gain_type_decl(), GainFactory).unwrap();
         registry
     }
 
-    fn make_gain_graph(registry: &NodeRegistry, freq: f32, gain: f32, block_size: usize) -> Box<DspGraph> {
+    fn make_gain_graph(
+        registry: &NodeRegistry,
+        freq: f32,
+        gain: f32,
+        block_size: usize,
+    ) -> Box<DspGraph> {
         let ir = GraphIr {
             nodes: vec![
                 NodeInstance {
@@ -692,7 +711,12 @@ mod tests {
         }
 
         // The automation should have deactivated
-        let auto_ref = swapper.automations.iter().find(|(k, _)| k == "a1").map(|(_, a)| a).unwrap();
+        let auto_ref = swapper
+            .automations
+            .iter()
+            .find(|(k, _)| k == "a1")
+            .map(|(_, a)| a)
+            .unwrap();
         assert!(!auto_ref.active, "one-shot should deactivate after period");
     }
 
@@ -739,9 +763,21 @@ mod tests {
             automation: auto2,
         }));
 
-        assert_eq!(swapper.automations.len(), 1, "same id should replace, not add");
-        let a = swapper.automations.iter().find(|(k, _)| k == "a1").map(|(_, a)| a).unwrap();
-        assert!((a.lo - 0.2).abs() < 1e-5, "should have the second automation's lo");
+        assert_eq!(
+            swapper.automations.len(),
+            1,
+            "same id should replace, not add"
+        );
+        let a = swapper
+            .automations
+            .iter()
+            .find(|(k, _)| k == "a1")
+            .map(|(_, a)| a)
+            .unwrap();
+        assert!(
+            (a.lo - 0.2).abs() < 1e-5,
+            "should have the second automation's lo"
+        );
     }
 
     #[test]
@@ -760,9 +796,10 @@ mod tests {
             one_shot: false,
         };
         swapper.drain_commands(
-            [
-                Command::SetAutomation { id: "a1".into(), automation: auto },
-            ]
+            [Command::SetAutomation {
+                id: "a1".into(),
+                automation: auto,
+            }]
             .into_iter(),
         );
         assert_eq!(swapper.automations.len(), 1);
@@ -770,6 +807,10 @@ mod tests {
         swapper.drain_commands(std::iter::once(Command::ClearAutomation {
             id: "a1".into(),
         }));
-        assert_eq!(swapper.automations.len(), 0, "clear should remove the automation");
+        assert_eq!(
+            swapper.automations.len(),
+            0,
+            "clear should remove the automation"
+        );
     }
 }

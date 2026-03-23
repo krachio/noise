@@ -49,8 +49,12 @@ impl DspNode for GainNode {
         }
     }
 
-    fn num_inputs(&self) -> usize { 1 }
-    fn num_outputs(&self) -> usize { 1 }
+    fn num_inputs(&self) -> usize {
+        1
+    }
+    fn num_outputs(&self) -> usize {
+        1
+    }
 
     fn set_param(&mut self, name: &str, value: f32) -> Result<(), ParamError> {
         match name {
@@ -81,8 +85,14 @@ impl NodeFactory for GainFactory {
 pub fn gain_type_decl() -> NodeTypeDecl {
     NodeTypeDecl {
         type_id: "gain".into(),
-        audio_inputs: vec![PortDecl { name: "in".into(), channels: ChannelLayout::Mono }],
-        audio_outputs: vec![PortDecl { name: "out".into(), channels: ChannelLayout::Mono }],
+        audio_inputs: vec![PortDecl {
+            name: "in".into(),
+            channels: ChannelLayout::Mono,
+        }],
+        audio_outputs: vec![PortDecl {
+            name: "out".into(),
+            channels: ChannelLayout::Mono,
+        }],
         controls: vec![ControlDecl {
             name: "gain".into(),
             range: (0.0, 4.0),
@@ -137,13 +147,20 @@ mod tests {
         node.process(&[&input], &mut [&mut output]);
 
         // Last sample should be very close to 0
-        assert!(output[511].abs() < 0.001, "should converge to 0, got {}", output[511]);
+        assert!(
+            output[511].abs() < 0.001,
+            "should converge to 0, got {}",
+            output[511]
+        );
     }
 
     #[test]
     fn gain_rejects_unknown_param() {
         let mut node = GainNode::new();
-        assert!(matches!(node.set_param("freq", 440.0), Err(ParamError::NotFound(_))));
+        assert!(matches!(
+            node.set_param("freq", 440.0),
+            Err(ParamError::NotFound(_))
+        ));
     }
 
     #[test]
@@ -175,16 +192,27 @@ mod tests {
         node.process(&[&input], &mut [&mut output2]);
 
         // First sample should NOT be 0 — it should be close to 1 (smoothed)
-        assert!(output2[0] > 0.5, "first sample should still be near 1.0, got {}", output2[0]);
+        assert!(
+            output2[0] > 0.5,
+            "first sample should still be near 1.0, got {}",
+            output2[0]
+        );
         // Last sample should be near 0 (converged)
-        assert!(output2[255] < 0.01, "last sample should be near 0, got {}", output2[255]);
+        assert!(
+            output2[255] < 0.01,
+            "last sample should be near 0, got {}",
+            output2[255]
+        );
 
         // No large sample-to-sample jump
         let max_jump = output2
             .windows(2)
             .map(|w| (w[1] - w[0]).abs())
             .fold(0.0_f32, f32::max);
-        assert!(max_jump < 0.05, "max sample-to-sample jump {max_jump} should be small");
+        assert!(
+            max_jump < 0.05,
+            "max sample-to-sample jump {max_jump} should be small"
+        );
     }
 
     #[test]

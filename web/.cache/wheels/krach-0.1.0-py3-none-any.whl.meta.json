@@ -1,0 +1,24 @@
+{
+  "name": "krach",
+  "release": {
+    "comment_text": "",
+    "digests": {
+      "md5": "510406a3c3eb9325b53d06d255dba0fb",
+      "sha256": "5dda916031a44dfff8e477c9df36d062d9c2217d4c4dd87fbe8877d40c4216a3"
+    },
+    "downloads": -1,
+    "filename": "krach-0.1.0-py3-none-any.whl",
+    "has_sig": false,
+    "md5_digest": "510406a3c3eb9325b53d06d255dba0fb",
+    "packagetype": "bdist_wheel",
+    "python_version": "py3",
+    "requires_python": ">=3.13",
+    "size": 43413,
+    "upload_time": "2026-03-23T13:06:58.966327Z",
+    "upload_time_iso_8601": "2026-03-23T13:06:58.966327Z",
+    "url": "./krach-0.1.0-py3-none-any.whl",
+    "yanked": false,
+    "yanked_reason": null
+  },
+  "version": "0.1.0"
+}

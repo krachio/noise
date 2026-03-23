@@ -58,6 +58,41 @@ Load from a subdirectory:
 kr.load("songs/verse.py")
 ```
 
+## Smooth transitions
+
+Use `kr.transition(bars=N)` to make all gain and control changes inside the
+block fade smoothly over N bars instead of snapping instantly:
+
+```python
+with kr.transition(bars=8):
+    bass["gain"] = 0.8
+    verb["room"] = 0.9
+    kr.tempo = 140
+```
+
+Every `set()`, `gain()`, and `handle[param] = value` inside the block becomes
+a `fade()` over the specified number of bars. This is useful for smooth scene
+changes:
+
+```python
+# Build two scenes, transition between them
+kr.save("verse")
+
+# Modify into chorus
+bass["gain"] = 0.5
+kr.play("kick", kr.hit() * 8)
+kr.save("chorus")
+
+# Smooth recall
+kr.recall("verse")
+with kr.transition(bars=4):
+    kr.recall("chorus")   # all changes fade over 4 bars
+```
+
+!!! warning "No nesting"
+    `kr.transition()` blocks cannot be nested. A `RuntimeError` is raised if
+    you attempt to open a transition inside another transition.
+
 ## What gets captured
 
 A scene snapshot (both in-memory and file export) captures:

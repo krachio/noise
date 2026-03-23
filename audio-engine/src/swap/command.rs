@@ -7,7 +7,11 @@ pub enum Command {
     /// Replace the active graph (triggers crossfade).
     SwapGraph(Box<DspGraph>),
     /// Set a parameter on a node in the active graph.
-    SetParam { node_id: String, name: String, value: f32 },
+    SetParam {
+        node_id: String,
+        name: String,
+        value: f32,
+    },
     /// Set the master output gain.
     SetMasterGain(f32),
     /// Update the crossfade duration (in samples) for subsequent graph swaps.
@@ -24,7 +28,11 @@ impl std::fmt::Debug for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::SwapGraph(_) => write!(f, "Command::SwapGraph(...)"),
-            Self::SetParam { node_id, name, value } => {
+            Self::SetParam {
+                node_id,
+                name,
+                value,
+            } => {
                 write!(f, "Command::SetParam({node_id}/{name} = {value})")
             }
             Self::SetMasterGain(gain) => write!(f, "Command::SetMasterGain({gain})"),

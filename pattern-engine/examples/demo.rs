@@ -14,10 +14,20 @@ fn main() {
     let cat = IrNode::Cat {
         children: vec![
             IrNode::Atom {
-                value: Value::Note { channel: 0, note: 60, velocity: 100, dur: 0.5 },
+                value: Value::Note {
+                    channel: 0,
+                    note: 60,
+                    velocity: 100,
+                    dur: 0.5,
+                },
             },
             IrNode::Atom {
-                value: Value::Note { channel: 0, note: 64, velocity: 100, dur: 0.5 },
+                value: Value::Note {
+                    channel: 0,
+                    note: 64,
+                    velocity: 100,
+                    dur: 0.5,
+                },
             },
         ],
     };
@@ -34,10 +44,19 @@ fn main() {
     let stack = IrNode::Stack {
         children: vec![
             IrNode::Atom {
-                value: Value::Note { channel: 0, note: 60, velocity: 100, dur: 0.5 },
+                value: Value::Note {
+                    channel: 0,
+                    note: 60,
+                    velocity: 100,
+                    dur: 0.5,
+                },
             },
             IrNode::Atom {
-                value: Value::Cc { channel: 0, controller: 1, value: 64 },
+                value: Value::Cc {
+                    channel: 0,
+                    controller: 1,
+                    value: 64,
+                },
             },
         ],
     };
@@ -49,7 +68,12 @@ fn main() {
         steps: 8,
         rotation: 0,
         child: Box::new(IrNode::Atom {
-            value: Value::Note { channel: 9, note: 36, velocity: 100, dur: 0.25 },
+            value: Value::Note {
+                channel: 9,
+                note: 36,
+                velocity: 100,
+                dur: 0.25,
+            },
         }),
     };
     print_pattern("euclid(3,8) kick", &euclid, 0);
@@ -61,7 +85,12 @@ fn main() {
         child: Box::new(IrNode::Fast {
             factor: [4, 1],
             child: Box::new(IrNode::Atom {
-                value: Value::Note { channel: 0, note: 60, velocity: 100, dur: 0.25 },
+                value: Value::Note {
+                    channel: 0,
+                    note: 60,
+                    velocity: 100,
+                    dur: 0.25,
+                },
             }),
         }),
     };

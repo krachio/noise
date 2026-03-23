@@ -18,15 +18,28 @@ pub enum ParamError {
     /// No parameter with this name exists on the node.
     NotFound(String),
     /// The value is outside the parameter's valid range.
-    OutOfRange { name: String, value: f32, min: f32, max: f32 },
+    OutOfRange {
+        name: String,
+        value: f32,
+        min: f32,
+        max: f32,
+    },
 }
 
 impl fmt::Display for ParamError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::NotFound(name) => write!(f, "parameter not found: {name}"),
-            Self::OutOfRange { name, value, min, max } => {
-                write!(f, "parameter '{name}' value {value} out of range [{min}, {max}]")
+            Self::OutOfRange {
+                name,
+                value,
+                min,
+                max,
+            } => {
+                write!(
+                    f,
+                    "parameter '{name}' value {value} out of range [{min}, {max}]"
+                )
             }
         }
     }
@@ -122,8 +135,12 @@ mod tests {
             }
         }
 
-        fn num_inputs(&self) -> usize { 1 }
-        fn num_outputs(&self) -> usize { 1 }
+        fn num_inputs(&self) -> usize {
+            1
+        }
+        fn num_outputs(&self) -> usize {
+            1
+        }
 
         fn set_param(&mut self, name: &str, _value: f32) -> Result<(), ParamError> {
             Err(ParamError::NotFound(name.into()))

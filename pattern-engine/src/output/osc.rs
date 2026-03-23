@@ -12,8 +12,8 @@ use std::time::{Instant, SystemTime};
 
 use rosc::{OscBundle, OscMessage, OscPacket, OscTime, OscType, encoder};
 
-use crate::event::{OscArg, Value};
 use crate::engine::TimedEvent;
+use crate::event::{OscArg, Value};
 
 use super::{OutputError, OutputSink};
 
@@ -24,9 +24,14 @@ fn instant_to_osc_time(t: Instant) -> OscTime {
     let target_sys = if t >= now_inst {
         now_sys + t.duration_since(now_inst)
     } else {
-        now_sys.checked_sub(now_inst.duration_since(t)).unwrap_or(now_sys)
+        now_sys
+            .checked_sub(now_inst.duration_since(t))
+            .unwrap_or(now_sys)
     };
-    OscTime::try_from(target_sys).unwrap_or(OscTime { seconds: 0, fractional: 0 })
+    OscTime::try_from(target_sys).unwrap_or(OscTime {
+        seconds: 0,
+        fractional: 0,
+    })
 }
 
 /// OSC output sink using rosc + UdpSocket.
@@ -38,8 +43,8 @@ pub struct OscSink {
 impl OscSink {
     /// Create a new OSC sink that sends packets to `target_addr` (e.g. `"127.0.0.1:57120"`).
     pub fn new(target_addr: &str) -> Result<Self, OutputError> {
-        let socket = UdpSocket::bind("0.0.0.0:0")
-            .map_err(|e| OutputError::Osc(format!("bind: {e}")))?;
+        let socket =
+            UdpSocket::bind("0.0.0.0:0").map_err(|e| OutputError::Osc(format!("bind: {e}")))?;
         Ok(Self {
             socket,
             target: target_addr.to_owned(),
@@ -74,8 +79,8 @@ impl OscSink {
             })],
         });
 
-        let bytes = encoder::encode(&packet)
-            .map_err(|e| OutputError::Osc(format!("encode: {e}")))?;
+        let bytes =
+            encoder::encode(&packet).map_err(|e| OutputError::Osc(format!("encode: {e}")))?;
 
         self.socket
             .send_to(&bytes, &self.target)
@@ -88,9 +93,7 @@ impl OscSink {
 impl OutputSink for OscSink {
     fn send(&mut self, event: &TimedEvent) -> Result<(), OutputError> {
         match &event.event.value {
-            Value::Osc { address, args } => {
-                self.send_osc_timed(event.fire_at, address, args)
-            }
+            Value::Osc { address, args } => self.send_osc_timed(event.fire_at, address, args),
             _ => Ok(()), // Not handled by OSC sink
         }
     }
@@ -112,7 +115,9 @@ mod tests {
         // Bind a listener
         let listener = UdpSocket::bind("127.0.0.1:0").unwrap();
         let listener_addr = listener.local_addr().unwrap();
-        listener.set_read_timeout(Some(std::time::Duration::from_millis(500))).unwrap();
+        listener
+            .set_read_timeout(Some(std::time::Duration::from_millis(500)))
+            .unwrap();
 
         // Create sink pointing at listener
         let mut sink = OscSink::new(&listener_addr.to_string()).unwrap();
@@ -180,7 +185,9 @@ mod tests {
         sink.send(&event).unwrap();
 
         // Verify nothing was sent
-        listener.set_read_timeout(Some(std::time::Duration::from_millis(50))).unwrap();
+        listener
+            .set_read_timeout(Some(std::time::Duration::from_millis(50)))
+            .unwrap();
         let mut buf = [0u8; 1024];
         assert!(listener.recv_from(&mut buf).is_err());
     }

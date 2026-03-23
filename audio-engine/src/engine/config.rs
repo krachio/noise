@@ -20,7 +20,11 @@ pub struct EngineConfig {
 impl EngineConfig {
     /// Crossfade duration converted to samples.
     #[must_use]
-    #[allow(clippy::cast_precision_loss, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     pub const fn crossfade_samples(&self) -> usize {
         (self.sample_rate as u64 * self.crossfade_ms as u64 / 1000) as usize
     }

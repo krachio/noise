@@ -129,12 +129,10 @@ impl FaustDsp {
             );
         }
 
-        let input_bufs: Vec<Vec<FaustFloat>> = (0..num_inputs)
-            .map(|_| vec![0.0; block_size])
-            .collect();
-        let output_bufs: Vec<Vec<FaustFloat>> = (0..num_outputs)
-            .map(|_| vec![0.0; block_size])
-            .collect();
+        let input_bufs: Vec<Vec<FaustFloat>> =
+            (0..num_inputs).map(|_| vec![0.0; block_size]).collect();
+        let output_bufs: Vec<Vec<FaustFloat>> =
+            (0..num_outputs).map(|_| vec![0.0; block_size]).collect();
         let input_ptrs = Vec::with_capacity(num_inputs);
         let output_ptrs = Vec::with_capacity(num_outputs);
 
@@ -307,11 +305,7 @@ fn discover_params(dsp: *mut ffi::llvm_dsp) -> HashMap<String, ParamMeta> {
 const unsafe extern "C" fn ui_noop_open(_ui: *mut c_void, _label: *const c_char) {}
 const unsafe extern "C" fn ui_noop_close(_ui: *mut c_void) {}
 
-unsafe extern "C" fn ui_add_button(
-    ui: *mut c_void,
-    label: *const c_char,
-    zone: *mut FaustFloat,
-) {
+unsafe extern "C" fn ui_add_button(ui: *mut c_void, label: *const c_char, zone: *mut FaustFloat) {
     // SAFETY: ui points to our ParamCollector, label is a valid C string from FAUST
     let collector = unsafe { &mut *ui.cast::<ParamCollector>() };
     let label_str = unsafe { CStr::from_ptr(label) }

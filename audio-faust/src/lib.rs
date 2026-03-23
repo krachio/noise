@@ -65,8 +65,8 @@ pub mod loader;
 pub mod node;
 pub mod watcher;
 
-use log::info;
 use audio_engine::registry::NodeRegistry;
+use log::info;
 
 use crate::factory::FaustFactory;
 

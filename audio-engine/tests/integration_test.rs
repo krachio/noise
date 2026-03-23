@@ -1,8 +1,8 @@
 use std::collections::HashMap;
 
 use audio_engine::control::MockControlInput;
-use audio_engine::engine::{self, EngineController, AudioProcessor};
 use audio_engine::engine::config::EngineConfig;
+use audio_engine::engine::{self, AudioProcessor, EngineController};
 use audio_engine::ir::{ConnectionIr, GraphIr, NodeInstance};
 use audio_engine::protocol::ClientMessage;
 
@@ -79,11 +79,8 @@ fn end_to_end_set_control_changes_frequency() {
     let mut buf_880 = vec![0.0_f32; 256];
     proc.process(&mut buf_880);
 
-    let count_crossings = |buf: &[f32]| -> usize {
-        buf.windows(2)
-            .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
-            .count()
-    };
+    let count_crossings =
+        |buf: &[f32]| -> usize { buf.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count() };
     assert!(
         count_crossings(&buf_880) > count_crossings(&buf_440),
         "880 Hz should have more zero crossings"

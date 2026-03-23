@@ -6,7 +6,7 @@ use crate::ir::{ConnectionIr, GraphIr};
 use crate::registry::{NodeRegistry, RegistryError};
 
 use super::node::NodeId;
-use super::{topological_sort, BufferPool, Connection, DspGraph};
+use super::{BufferPool, Connection, DspGraph, topological_sort};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CompileError {
@@ -67,7 +67,14 @@ pub fn compile_with_reuse(
     sample_rate: u32,
     block_size: usize,
 ) -> Result<DspGraph, CompileError> {
-    compile_with_reuse_and_injected(ir, registry, previous, &mut HashMap::new(), sample_rate, block_size)
+    compile_with_reuse_and_injected(
+        ir,
+        registry,
+        previous,
+        &mut HashMap::new(),
+        sample_rate,
+        block_size,
+    )
 }
 
 /// Like [`compile_with_reuse`] but accepts pre-built nodes that bypass the
@@ -261,8 +268,8 @@ fn resolve_connections(
 mod tests {
     use super::*;
     use crate::ir::NodeInstance;
-    use crate::nodes::dac::{dac_type_decl, DacFactory};
-    use crate::nodes::oscillator::{oscillator_type_decl, OscillatorFactory};
+    use crate::nodes::dac::{DacFactory, dac_type_decl};
+    use crate::nodes::oscillator::{OscillatorFactory, oscillator_type_decl};
 
     fn test_registry() -> NodeRegistry {
         let mut registry = NodeRegistry::new();
@@ -332,7 +339,10 @@ mod tests {
             exposed_controls: HashMap::new(),
         };
         let result = compile(&ir, &registry, 48000, 512);
-        assert!(matches!(result, Err(CompileError::Registry(RegistryError::TypeNotFound(_)))));
+        assert!(matches!(
+            result,
+            Err(CompileError::Registry(RegistryError::TypeNotFound(_)))
+        ));
     }
 
     #[test]
@@ -441,7 +451,10 @@ mod tests {
             .windows(2)
             .filter(|w| w[0] <= 0.0 && w[1] > 0.0)
             .count();
-        assert!((2..=4).contains(&crossings), "expected ~3 crossings at 1000Hz, got {crossings}");
+        assert!(
+            (2..=4).contains(&crossings),
+            "expected ~3 crossings at 1000Hz, got {crossings}"
+        );
     }
 
     #[test]
@@ -486,7 +499,7 @@ mod tests {
         let ir2 = GraphIr {
             nodes: vec![
                 NodeInstance {
-                    id: "osc_new".into(),  // different ID
+                    id: "osc_new".into(), // different ID
                     type_id: "oscillator".into(),
                     controls: HashMap::from([("freq".into(), 880.0)]),
                 },
@@ -522,7 +535,9 @@ mod tests {
         let graph1 = compile(&ir, &registry, 48000, 64).unwrap();
 
         // Reregister oscillator with a different factory (simulates hot-reload)
-        registry.reregister(oscillator_type_decl(), OscillatorFactory).unwrap();
+        registry
+            .reregister(oscillator_type_decl(), OscillatorFactory)
+            .unwrap();
 
         // Recompile with reuse — version mismatch, should NOT reuse
         let mut graph2 = compile_with_reuse(&ir, &registry, Some(graph1), 48000, 64).unwrap();
@@ -531,7 +546,10 @@ mod tests {
 
         // Should still produce audio (fresh instance)
         let energy: f32 = buf.iter().map(|s| s * s).sum();
-        assert!(energy > 0.0, "fresh node after reregister should produce audio");
+        assert!(
+            energy > 0.0,
+            "fresh node after reregister should produce audio"
+        );
     }
 
     #[test]
@@ -575,9 +593,8 @@ mod tests {
         graph2.process(&mut buf_1000);
 
         // Count zero crossings — 1000 Hz should have more than 440 Hz
-        let count_crossings = |buf: &[f32]| -> usize {
-            buf.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count()
-        };
+        let count_crossings =
+            |buf: &[f32]| -> usize { buf.windows(2).filter(|w| w[0] <= 0.0 && w[1] > 0.0).count() };
         let c440 = count_crossings(&buf_440);
         let c1000 = count_crossings(&buf_1000);
         assert!(
@@ -588,7 +605,7 @@ mod tests {
 
     #[test]
     fn compile_with_injected_node_bypasses_factory() {
-        use crate::nodes::adc::{adc_type_decl, AdcNode};
+        use crate::nodes::adc::{AdcNode, adc_type_decl};
         use rtrb::RingBuffer;
 
         let mut registry = test_registry();
@@ -627,9 +644,9 @@ mod tests {
             exposed_controls: HashMap::new(),
         };
 
-        let mut graph = compile_with_reuse_and_injected(
-            &ir, &registry, None, &mut injected, 48000, 64,
-        ).unwrap();
+        let mut graph =
+            compile_with_reuse_and_injected(&ir, &registry, None, &mut injected, 48000, 64)
+                .unwrap();
 
         assert!(injected.is_empty(), "injected node should be consumed");
 

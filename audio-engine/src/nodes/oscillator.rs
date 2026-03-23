@@ -55,7 +55,11 @@ impl Oscillator {
             Waveform::Sine => (self.phase * TAU).sin(),
             Waveform::Saw => 2.0_f32.mul_add(self.phase, -1.0),
             Waveform::Square => {
-                if self.phase < 0.5 { 1.0 } else { -1.0 }
+                if self.phase < 0.5 {
+                    1.0
+                } else {
+                    -1.0
+                }
             }
         }
     }
@@ -76,8 +80,12 @@ impl DspNode for Oscillator {
         }
     }
 
-    fn num_inputs(&self) -> usize { 0 }
-    fn num_outputs(&self) -> usize { 1 }
+    fn num_inputs(&self) -> usize {
+        0
+    }
+    fn num_outputs(&self) -> usize {
+        1
+    }
 
     fn set_param(&mut self, name: &str, value: f32) -> Result<(), ParamError> {
         match name {
@@ -157,7 +165,11 @@ mod tests {
         let mut osc = Oscillator::new(SAMPLE_RATE);
         let mut output = [0.0_f32; 1];
         osc.process(&[], &mut [&mut output]);
-        assert!(output[0].abs() < 1e-6, "sine should start near zero, got {}", output[0]);
+        assert!(
+            output[0].abs() < 1e-6,
+            "sine should start near zero, got {}",
+            output[0]
+        );
     }
 
     #[test]
@@ -187,7 +199,10 @@ mod tests {
             }
         }
         // 4 periods should give approximately 4 positive zero crossings
-        assert!((3..=5).contains(&crossings), "expected ~4 zero crossings, got {crossings}");
+        assert!(
+            (3..=5).contains(&crossings),
+            "expected ~4 zero crossings, got {crossings}"
+        );
     }
 
     #[test]
@@ -242,7 +257,10 @@ mod tests {
         osc.reset(SAMPLE_RATE);
         let mut output = [0.0_f32; 1];
         osc.process(&[], &mut [&mut output]);
-        assert!(output[0].abs() < 1e-6, "after reset, sine should start near zero");
+        assert!(
+            output[0].abs() < 1e-6,
+            "after reset, sine should start near zero"
+        );
     }
 
     #[test]

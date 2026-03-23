@@ -80,7 +80,11 @@ fn compile_node(ir: &IrNode, pattern: &mut CompiledPattern) -> usize {
             let child_idx = compile_node(child, pattern);
             pattern.push(PatternNode::Rev { child: child_idx })
         }
-        IrNode::Every { n, transform, child } => {
+        IrNode::Every {
+            n,
+            transform,
+            child,
+        } => {
             let transform_idx = compile_node(transform, pattern);
             let child_idx = compile_node(child, pattern);
             pattern.push(PatternNode::Every {
@@ -111,7 +115,12 @@ fn compile_node(ir: &IrNode, pattern: &mut CompiledPattern) -> usize {
                 child: child_idx,
             })
         }
-        IrNode::Warp { kind, amount, grid, child } => {
+        IrNode::Warp {
+            kind,
+            amount,
+            grid,
+            child,
+        } => {
             let child_idx = compile_node(child, pattern);
             let kind_id = match kind.as_str() {
                 "swing" => crate::pattern::WARP_SWING,
@@ -311,7 +320,12 @@ mod tests {
 
         // Query 2 cycles — each cycle: trig + reset = 2. Over 2 cycles = 4.
         let events = query(&pat, pat.root, Arc::new(Time::zero(), Time::whole(2)));
-        assert_eq!(events.len(), 4, "expected 4 events over 2 cycles, got {}", events.len());
+        assert_eq!(
+            events.len(),
+            4,
+            "expected 4 events over 2 cycles, got {}",
+            events.len()
+        );
 
         // All events must be schedulable
         for (i, e) in events.iter().enumerate() {
@@ -345,10 +359,16 @@ mod tests {
         let ir = IrNode::Cat {
             children: vec![
                 IrNode::Atom {
-                    value: Value::Control { label: "gate".into(), value: 1.0 },
+                    value: Value::Control {
+                        label: "gate".into(),
+                        value: 1.0,
+                    },
                 },
                 IrNode::Atom {
-                    value: Value::Control { label: "gate".into(), value: 0.0 },
+                    value: Value::Control {
+                        label: "gate".into(),
+                        value: 0.0,
+                    },
                 },
             ],
         };
@@ -373,7 +393,10 @@ mod tests {
         let ir = IrNode::Cat {
             children: vec![
                 IrNode::Atom {
-                    value: Value::Control { label: "freq".into(), value: 440.0 },
+                    value: Value::Control {
+                        label: "freq".into(),
+                        value: 440.0,
+                    },
                 },
                 IrNode::Atom { value: note(60) },
             ],

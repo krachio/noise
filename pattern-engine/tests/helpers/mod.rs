@@ -28,7 +28,12 @@ impl TestKernel {
         let (cmd_tx, cmd_rx) = crossbeam_channel::unbounded::<EngineCommand>();
         let engine = Engine::new(6000.0, 4.0, Duration::from_millis(200));
         let ipc_handle = ipc::start(socket_path.clone(), cmd_tx).unwrap();
-        Self { socket_path, cmd_rx, engine, ipc_handle: Some(ipc_handle) }
+        Self {
+            socket_path,
+            cmd_rx,
+            engine,
+            ipc_handle: Some(ipc_handle),
+        }
     }
 
     /// Drain pending IPC commands into the engine, fill the heap, drain due events.

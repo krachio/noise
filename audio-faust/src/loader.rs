@@ -47,15 +47,17 @@ pub fn register_dsp_dir(
 
     let mut registered = Vec::new();
     for path in dsp_files {
-        let (type_id, code) =
-            load_dsp_file(&path, dir).map_err(|e| format!("failed to read {}: {e}", path.display()))?;
+        let (type_id, code) = load_dsp_file(&path, dir)
+            .map_err(|e| format!("failed to read {}: {e}", path.display()))?;
         let name = path
             .file_stem()
             .and_then(|s| s.to_str())
             .unwrap_or("unknown");
         let factory = FaustFactory::new(name, &code);
         let decl = factory.probe_type_decl(&type_id)?;
-        registry.register(decl, factory).map_err(|e| e.to_string())?;
+        registry
+            .register(decl, factory)
+            .map_err(|e| e.to_string())?;
         registered.push(type_id);
     }
 

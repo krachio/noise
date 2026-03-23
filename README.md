@@ -13,9 +13,11 @@ def acid_bass() -> krs.Signal:
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
-kr.voice("bass", acid_bass, gain=0.3)
-kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
-kr.play("bass/cutoff", kr.mod_sine(200, 2000).over(4))
+bass = kr.node("bass", acid_bass, gain=0.3)
+verb = kr.node("verb", reverb_fn, gain=0.3)
+bass >> (verb, 0.4)                                # route with send level
+bass @ kr.seq("A2", "D3", None, "E2").over(2)     # play pattern
+bass @ ("cutoff", kr.sine(200, 2000).over(4))      # modulate control
 ```
 
 ## What it does
@@ -23,7 +25,8 @@ kr.play("bass/cutoff", kr.mod_sine(200, 2000).over(4))
 - **Design synths in Python** — write DSP functions, they compile to FAUST and JIT to native audio
 - **Sequence with patterns** — TidalCycles-inspired composable patterns with rational time
 - **Hear changes instantly** — hot reload, crossfade on graph swaps, no restart needed
-- **Two symbols**: `kr` (the mixer) and `krs` (DSP primitives)
+- **Graph-first API** — everything is a node, `>>` routes signal, `@` plays patterns, `[]` sets controls
+- **Two symbols**: `kr` (the audio graph) and `krs` (DSP primitives)
 
 ## Install
 
@@ -45,7 +48,7 @@ cd krach && uv sync && cd ..
 
 ## Quick start
 
-The REPL gives you two objects: `kr` (VoiceMixer) and `krs` (DSP module).
+The REPL gives you two objects: `kr` (the audio graph) and `krs` (DSP module).
 
 ### Define a synth
 
@@ -57,33 +60,42 @@ def kick() -> krs.Signal:
     return krs.sine_osc(55.0 + env * 200.0) * env * 0.9
 ```
 
-### Add voices and play patterns
+### Create nodes and play patterns
 
 ```python
-kr.voice("kick", kick, gain=0.8)
-kr.play("kick", kr.hit() * 4)           # 4-on-the-floor
-kr.play("kick", (kr.hit() * 8).swing(0.67))  # swung 8ths
+k = kr.node("kick", kick, gain=0.8)
+k @ kr.hit() * 4                          # 4-on-the-floor
+k @ (kr.hit() * 8).swing(0.67)            # swung 8ths
 ```
 
 ### Sequences, chords, modulation
 
 ```python
-kr.voice("bass", acid_bass, gain=0.3)
-kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
+bass = kr.node("bass", acid_bass, gain=0.3)
+bass @ kr.seq("A2", "D3", None, "E2").over(2)
 
 # Modulate cutoff with a sine LFO
-kr.play("bass/cutoff", kr.mod_sine(200, 2000).over(4))
+bass @ ("cutoff", kr.sine(200, 2000).over(4))
 
-# Chords need poly voices (count > 1)
-kr.voice("pad", pad_fn, gain=0.2, count=4)
-kr.play("pad", kr.note("A4", "C5", "E5") + kr.rest())
+# Chords need poly nodes (count > 1)
+pad = kr.node("pad", pad_fn, gain=0.2, count=4)
+pad @ kr.note("A4", "C5", "E5") + kr.rest()
 ```
 
-### Effect routing
+### Effect routing with `>>`
 
 ```python
-kr.bus("verb", reverb_fn, gain=0.3)
-kr.send("bass", "verb", level=0.4)
+verb = kr.node("verb", reverb_fn, gain=0.3)  # auto-detected as effect
+bass >> (verb, 0.4)                            # send at 40%
+pad >> verb                                    # send at unity
+```
+
+### Control access with `[]`
+
+```python
+bass["cutoff"] = 1200                  # set control
+bass["cutoff"]                          # read control value
+kr["bass"]                              # get node handle by name
 ```
 
 ### Transport and control
@@ -97,6 +109,11 @@ kr.save("verse")
 kr.recall("verse")
 kr.export("my_session.py")  # save to file
 kr.load("my_session.py")    # reload later
+
+# Transition: all changes inside fade over N bars
+with kr.transition(bars=8):
+    bass["gain"] = 0.8
+    kr.tempo = 140
 ```
 
 ## Pattern algebra
@@ -112,19 +129,31 @@ p.every(4, lambda p: p.reverse())  # transform every 4th cycle
 p.spread(3, 8)  # euclidean rhythm
 p.thin(0.3)     # randomly drop 30%
 p.swing(0.67)   # swing feel
+p.mask("1 1 0 1")  # suppress events by mask
+p.sometimes(0.3, lambda p: p.reverse())  # probabilistic transform
 kr.p("x . x . x . . x")  # mini-notation
+
+# Multi-pattern combinators
+kr.cat(a, b, c)             # play a, b, c one cycle each, loop
+kr.stack(a, b)              # layer (same as a | b)
+kr.struct(rhythm, melody)   # impose rhythm onto melody values
+
+# Continuous patterns
+kr.sine(200, 2000)          # sine sweep lo..hi
+kr.saw(200, 2000)           # sawtooth ramp lo..hi
+kr.rand(200, 2000)          # random values lo..hi
 ```
 
 ## Architecture
 
 ```
 noise/
-├── audio-engine/      Rust — graph runtime, node reuse, crossfade, automation
+├── audio-engine/      Rust — graph runtime, node reuse, crossfade, FAUST auto-smoothing
 ├── audio-faust/       Rust — FAUST LLVM JIT, hot reload
 ├── pattern-engine/    Rust — pattern sequencer, rational time, curve compiler
 ├── krach-engine/      Rust — unified binary (one process, one socket)
 ├── faust-dsl/         Python — Python → FAUST transpiler
-└── krach/             Python — live coding REPL, VoiceMixer, patterns
+└── krach/             Python — live coding REPL, graph API, patterns
 ```
 
 Single process architecture. Python sends pattern IR over a Unix socket. The Rust engine compiles patterns to block-rate automation curves — no per-event IPC during playback. FAUST DSPs hot-reload from `~/.krach/dsp/`.

@@ -47,15 +47,9 @@ pub enum Value {
         value: u8,
     },
     /// OSC message with address pattern and typed arguments.
-    Osc {
-        address: String,
-        args: Vec<OscArg>,
-    },
+    Osc { address: String, args: Vec<OscArg> },
     /// Typed control change — label + float value, no OSC parsing needed.
-    Control {
-        label: String,
-        value: f32,
-    },
+    Control { label: String, value: f32 },
 }
 
 /// An argument in an OSC message.

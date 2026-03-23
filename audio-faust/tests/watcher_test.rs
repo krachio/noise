@@ -113,9 +113,7 @@ fn watcher_reload_reregisters_in_registry() {
     let code = "gain = hslider(\"gain\", 0.8, 0.0, 1.0, 0.01);\nprocess = *(gain);\n".to_string();
     let factory = audio_faust::factory::FaustFactory::new("gain", &code);
     let new_decl = factory.probe_type_decl("faust:gain").unwrap();
-    ctrl.registry_mut()
-        .reregister(new_decl, factory)
-        .unwrap();
+    ctrl.registry_mut().reregister(new_decl, factory).unwrap();
 
     let updated_decl = ctrl.registry_mut().get_type("faust:gain").unwrap();
     assert!((updated_decl.controls[0].default - 0.8).abs() < f32::EPSILON);

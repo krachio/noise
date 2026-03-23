@@ -14,15 +14,15 @@ use std::time::{Duration, Instant};
 
 use log::{error, info, warn};
 
+use audio_engine::automation::{AutoShape, Automation};
+use audio_engine::engine::config::EngineConfig;
+use audio_engine::output::AudioOutput;
+use audio_engine::output::cpal_backend::{CpalBackend, DeviceConfig};
+use audio_engine::protocol::ClientMessage;
+use audio_faust::hot_reload::HotReloadEngine;
 use pattern_engine::engine::{Engine, EngineCommand};
 use pattern_engine::event::{OscArg, Value};
 use pattern_engine::output::{self, OutputSink};
-use audio_engine::automation::{AutoShape, Automation};
-use audio_engine::engine::config::EngineConfig;
-use audio_engine::output::cpal_backend::{CpalBackend, DeviceConfig};
-use audio_engine::output::AudioOutput;
-use audio_engine::protocol::ClientMessage;
-use audio_faust::hot_reload::HotReloadEngine;
 
 const DEFAULT_BPM: f64 = 120.0;
 const BEATS_PER_CYCLE: f64 = 4.0;
@@ -47,10 +47,16 @@ fn crossfade_samples(bpm: f64, sample_rate: u32) -> usize {
 }
 
 /// Number of audio blocks per pattern cycle.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss
+)]
 fn compute_blocks_per_cycle(bpm: f64, bpc: f64, sample_rate: u32, block_size: usize) -> usize {
     let cycle_secs = bpc * 60.0 / bpm.max(1.0);
-    (cycle_secs * f64::from(sample_rate) / block_size as f64).round().max(1.0) as usize
+    (cycle_secs * f64::from(sample_rate) / block_size as f64)
+        .round()
+        .max(1.0) as usize
 }
 
 /// Commands routed from the IPC thread to the main loop.
@@ -66,7 +72,6 @@ struct MidiMapping {
     lo: f32,
     hi: f32,
 }
-
 
 /// A pending MIDI note-off to fire at a specific wall-clock time.
 #[derive(Debug, Eq, PartialEq)]
@@ -90,8 +95,15 @@ impl PartialOrd for PendingNoteOff {
 
 /// A timed audio-engine command waiting for its scheduled dispatch time.
 enum PendingEvent {
-    Control { fire_at: Instant, label: String, value: f32 },
-    Gain { fire_at: Instant, value: f32 },
+    Control {
+        fire_at: Instant,
+        label: String,
+        value: f32,
+    },
+    Gain {
+        fire_at: Instant,
+        value: f32,
+    },
 }
 
 impl PendingEvent {
@@ -169,7 +181,8 @@ fn parse_set_control(event: &pattern_engine::engine::TimedEvent) -> Option<(&str
 /// Parse a pattern-engine OSC event into a SetMasterGain value.
 fn parse_set_gain(event: &pattern_engine::engine::TimedEvent) -> Option<f32> {
     match &event.event.value {
-        Value::Osc { address, args } if address == "/audio/gain" => {
+        Value::Osc { address, args } if address == "/audio/gain" =>
+        {
             #[allow(clippy::cast_possible_truncation)]
             match args.first()? {
                 OscArg::Float(f) => Some(*f as f32),
@@ -194,7 +207,10 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
     let mut backend = CpalBackend::new();
     backend.start(&config, Box::new(callback))?;
 
-    info!("audio started ({}Hz, {} ch)", config.sample_rate, config.channels);
+    info!(
+        "audio started ({}Hz, {} ch)",
+        config.sample_rate, config.channels
+    );
 
     // Pattern engine.
     let mut pattern_engine = Engine::new(DEFAULT_BPM, BEATS_PER_CYCLE, LOOKAHEAD);
@@ -243,7 +259,10 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
 
     // ── Control-voice curve compilation state ──
     let mut blocks_per_cycle = compute_blocks_per_cycle(
-        DEFAULT_BPM, BEATS_PER_CYCLE, config.sample_rate, config.block_size,
+        DEFAULT_BPM,
+        BEATS_PER_CYCLE,
+        config.sample_rate,
+        config.block_size,
     );
     // Active automation IDs per slot index — for cleanup on hush/replace.
     let mut active_curve_ids: HashMap<usize, Vec<String>> = HashMap::new();
@@ -281,8 +300,10 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                     pattern_engine.apply(c);
                     // Recompute blocks_per_cycle on tempo/meter change.
                     blocks_per_cycle = compute_blocks_per_cycle(
-                        pattern_engine.bpm(), BEATS_PER_CYCLE,
-                        config.sample_rate, config.block_size,
+                        pattern_engine.bpm(),
+                        BEATS_PER_CYCLE,
+                        config.sample_rate,
+                        config.block_size,
                     );
                 }
                 LoopCommand::Graph(msg) => {
@@ -292,10 +313,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                             return Ok(());
                         }
                         ClientMessage::LoadGraph(ir) => {
-                            let cf = crossfade_samples(
-                                pattern_engine.bpm(),
-                                config.sample_rate,
-                            );
+                            let cf = crossfade_samples(pattern_engine.bpm(), config.sample_rate);
                             audio_engine.controller_mut().set_crossfade_samples(cf);
                             if let Err(e) = audio_engine.load_graph(ir) {
                                 warn!("load_graph: {e}");
@@ -309,16 +327,21 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                             match backend.start_input(config.sample_rate, channel as usize) {
                                 Ok(consumer) => {
                                     let adc = audio_engine::nodes::adc::AdcNode::new(consumer);
-                                    audio_engine.controller_mut().inject_node(
-                                        "adc_in".into(),
-                                        Box::new(adc),
-                                    );
+                                    audio_engine
+                                        .controller_mut()
+                                        .inject_node("adc_in".into(), Box::new(adc));
                                     info!("audio input started (ch {channel})");
                                 }
                                 Err(e) => warn!("start_input: {e}"),
                             }
                         }
-                        ClientMessage::MidiMap { channel, cc, label, lo, hi } => {
+                        ClientMessage::MidiMap {
+                            channel,
+                            cc,
+                            label,
+                            lo,
+                            hi,
+                        } => {
                             midi_mappings.insert((channel, cc), MidiMapping { label, lo, hi });
                             info!("midi_map: ch{channel} cc{cc} → [{lo}, {hi}]");
                         }
@@ -336,13 +359,19 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
         pattern_engine.fill(now);
 
         // ②b Compile control-voice patterns to block-rate wavetables.
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+        #[allow(
+            clippy::cast_possible_truncation,
+            clippy::cast_sign_loss,
+            clippy::cast_precision_loss
+        )]
         {
             let curves = pattern_engine.fill_control_curves(now, blocks_per_cycle);
             for curve in curves {
                 let slot_name = pattern_engine.slot_name(curve.slot_idx);
                 let id = format!("{slot_name}/{}", curve.label);
-                if let Some((node_id, param)) = audio_engine.controller_mut().resolve_label(&curve.label) {
+                if let Some((node_id, param)) =
+                    audio_engine.controller_mut().resolve_label(&curve.label)
+                {
                     let cycle_secs = BEATS_PER_CYCLE * 60.0 / pattern_engine.bpm();
                     let period_samples =
                         (cycle_secs * f64::from(config.sample_rate)).round() as usize;
@@ -357,11 +386,10 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                         active: true,
                         one_shot: true,
                     };
-                    audio_engine.controller_mut().send_automation(id.clone(), automation);
-                    active_curve_ids
-                        .entry(curve.slot_idx)
-                        .or_default()
-                        .push(id);
+                    audio_engine
+                        .controller_mut()
+                        .send_automation(id.clone(), automation);
+                    active_curve_ids.entry(curve.slot_idx).or_default().push(id);
                 }
             }
         }
@@ -421,7 +449,9 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
             if pending_midi[m].fire_at <= now {
                 let ev = pending_midi.swap_remove(m);
                 match &ev.event.value {
-                    Value::Note { channel, note, dur, .. } => {
+                    Value::Note {
+                        channel, note, dur, ..
+                    } => {
                         let cycle_dur = BEATS_PER_CYCLE * 60.0 / pattern_engine.bpm();
                         let dur_secs = (dur * cycle_dur).max(0.0);
                         if dur_secs.is_finite() {
@@ -464,8 +494,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                 if let Some(sink) = midi_sink.as_mut() {
                     let _ = sink.send_clock_tick();
                 }
-                let tick_interval =
-                    Duration::from_secs_f64(60.0 / (pattern_engine.bpm() * 24.0));
+                let tick_interval = Duration::from_secs_f64(60.0 / (pattern_engine.bpm() * 24.0));
                 *next_tick += tick_interval;
             }
         }
@@ -494,7 +523,9 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
             next_clock_tick,
             [midi_deadline, ctrl_deadline].into_iter().flatten().min(),
         );
-        let sleep = deadline.saturating_duration_since(Instant::now()).min(MAX_SLEEP);
+        let sleep = deadline
+            .saturating_duration_since(Instant::now())
+            .min(MAX_SLEEP);
         if sleep > Duration::ZERO {
             spin_sleep::sleep(sleep);
         }
@@ -595,7 +626,10 @@ mod tests {
             event: Event::new(
                 Some(Arc::new(Time::zero(), Time::one())),
                 Arc::new(Time::zero(), Time::one()),
-                Value::Osc { address: address.into(), args },
+                Value::Osc {
+                    address: address.into(),
+                    args,
+                },
             ),
             slot_idx: 0,
         }
@@ -647,7 +681,12 @@ mod tests {
             event: Event::new(
                 Some(Arc::new(Time::zero(), Time::one())),
                 Arc::new(Time::zero(), Time::one()),
-                Value::Note { channel: 0, note: 60, velocity: 100, dur: 0.5 },
+                Value::Note {
+                    channel: 0,
+                    note: 60,
+                    velocity: 100,
+                    dur: 0.5,
+                },
             ),
             slot_idx: 0,
         };
@@ -685,7 +724,10 @@ mod tests {
             event: Event::new(
                 Some(Arc::new(Time::zero(), Time::one())),
                 Arc::new(Time::zero(), Time::one()),
-                Value::Control { label: "bass/cutoff".into(), value: 1200.0 },
+                Value::Control {
+                    label: "bass/cutoff".into(),
+                    value: 1200.0,
+                },
             ),
             slot_idx: 0,
         };
@@ -755,11 +797,13 @@ mod tests {
         let cycle_dur = 2.0;
         let dur_secs = (dur * cycle_dur).max(0.0);
         assert!(dur_secs.is_finite());
-        assert!((dur_secs - 0.0).abs() < f64::EPSILON, "NaN dur should become 0.0");
+        assert!(
+            (dur_secs - 0.0).abs() < f64::EPSILON,
+            "NaN dur should become 0.0"
+        );
         // Must not panic:
         let _ = std::time::Duration::from_secs_f64(dur_secs);
     }
-
 }
 
 // ── Entry point ─────────────────────────────────────────────────────────────
@@ -776,7 +820,10 @@ fn main() {
     }
 
     let device = CpalBackend::query_device().expect("no audio device");
-    info!("audio device: {}Hz, {} ch", device.sample_rate, device.channels);
+    info!(
+        "audio device: {}Hz, {} ch",
+        device.sample_rate, device.channels
+    );
 
     if let Err(e) = run(&device, &dsp_dir) {
         error!("{e}");

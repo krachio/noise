@@ -12,8 +12,8 @@ pub mod protocol;
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::{UnixListener, UnixStream};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
 
@@ -81,7 +81,11 @@ pub fn start(socket_path: PathBuf, cmd_tx: Sender<EngineCommand>) -> std::io::Re
         .spawn(move || run_server(listener, cmd_tx, stop_clone))
         .expect("failed to spawn IPC thread");
 
-    Ok(IpcHandle { socket_path: path, stop, thread: Some(thread) })
+    Ok(IpcHandle {
+        socket_path: path,
+        stop,
+        thread: Some(thread),
+    })
 }
 
 #[allow(clippy::needless_pass_by_value)] // all three are owned by the spawned thread
@@ -92,7 +96,9 @@ fn run_server(listener: UnixListener, cmd_tx: Sender<EngineCommand>, stop: Arc<A
         }
         match stream {
             Ok(stream) => {
-                stream.set_read_timeout(Some(Duration::from_millis(100))).ok();
+                stream
+                    .set_read_timeout(Some(Duration::from_millis(100)))
+                    .ok();
                 handle_connection(stream, &cmd_tx, &stop);
             }
             Err(_) => break,
@@ -118,7 +124,9 @@ fn handle_connection(stream: UnixStream, cmd_tx: &Sender<EngineCommand>, stop: &
         }
         let response = match serde_json::from_str::<ClientMessage>(&line) {
             Ok(msg) => process_message(msg, cmd_tx),
-            Err(e) => ServerMessage::Error { msg: format!("parse error: {e}") },
+            Err(e) => ServerMessage::Error {
+                msg: format!("parse error: {e}"),
+            },
         };
         let mut json = serde_json::to_string(&response).expect("serialize response");
         json.push('\n');
@@ -148,7 +156,9 @@ fn process_message(msg: ClientMessage, cmd_tx: &Sender<EngineCommand>) -> Server
             for engine_cmd in compiled {
                 let _ = cmd_tx.send(engine_cmd);
             }
-            ServerMessage::Ok { msg: format!("batch applied ({n} commands)") }
+            ServerMessage::Ok {
+                msg: format!("batch applied ({n} commands)"),
+            }
         }
 
         other => match compile_command(&other) {
@@ -170,16 +180,24 @@ pub fn compile_command(msg: &ClientMessage) -> Result<Option<EngineCommand>, Str
     match msg {
         ClientMessage::SetPattern { slot, pattern } => {
             let compiled = ir::compile(pattern).map_err(|e| format!("compile error: {e}"))?;
-            Ok(Some(EngineCommand::SetPattern { name: slot.clone(), pattern: compiled }))
+            Ok(Some(EngineCommand::SetPattern {
+                name: slot.clone(),
+                pattern: compiled,
+            }))
         }
         ClientMessage::SetPatternFromZero { slot, pattern } => {
             let compiled = ir::compile(pattern).map_err(|e| format!("compile error: {e}"))?;
-            Ok(Some(EngineCommand::SetPatternFromZero { name: slot.clone(), pattern: compiled }))
+            Ok(Some(EngineCommand::SetPatternFromZero {
+                name: slot.clone(),
+                pattern: compiled,
+            }))
         }
         ClientMessage::Hush { slot } => Ok(Some(EngineCommand::Hush { name: slot.clone() })),
         ClientMessage::HushAll => Ok(Some(EngineCommand::HushAll)),
         ClientMessage::SetBpm { bpm } => Ok(Some(EngineCommand::SetBpm { bpm: *bpm })),
-        ClientMessage::SetBeatsPerCycle { beats } => Ok(Some(EngineCommand::SetBeatsPerCycle { beats: *beats })),
+        ClientMessage::SetBeatsPerCycle { beats } => {
+            Ok(Some(EngineCommand::SetBeatsPerCycle { beats: *beats }))
+        }
         ClientMessage::Ping => Ok(None),
         ClientMessage::Batch { .. } => Err("nested Batch is not allowed".into()),
     }
@@ -189,7 +207,9 @@ pub fn compile_command(msg: &ClientMessage) -> Result<Option<EngineCommand>, Str
 pub fn describe(cmd: &EngineCommand) -> String {
     match cmd {
         EngineCommand::SetPattern { name, .. } => format!("pattern set on {name}"),
-        EngineCommand::SetPatternFromZero { name, .. } => format!("pattern set on {name} (from zero)"),
+        EngineCommand::SetPatternFromZero { name, .. } => {
+            format!("pattern set on {name} (from zero)")
+        }
         EngineCommand::Hush { name } => format!("{name} hushed"),
         EngineCommand::HushAll => "all slots hushed".into(),
         EngineCommand::SetBpm { bpm } => format!("bpm set to {bpm}"),
@@ -221,7 +241,14 @@ mod tests {
         serde_json::from_str(&resp).unwrap()
     }
 
-    fn make_server(suffix: &str) -> (PathBuf, Sender<EngineCommand>, crossbeam_channel::Receiver<EngineCommand>, IpcHandle) {
+    fn make_server(
+        suffix: &str,
+    ) -> (
+        PathBuf,
+        Sender<EngineCommand>,
+        crossbeam_channel::Receiver<EngineCommand>,
+        IpcHandle,
+    ) {
         let path = temp_socket_path(suffix);
         let (tx, rx) = crossbeam_channel::unbounded();
         let handle = start(path.clone(), tx.clone()).unwrap();
@@ -251,7 +278,9 @@ mod tests {
         let resp = send_recv(&mut writer, &mut reader, msg);
         assert!(matches!(resp, ServerMessage::Ok { .. }));
 
-        let cmd = rx.recv_timeout(Duration::from_millis(100)).expect("engine command sent");
+        let cmd = rx
+            .recv_timeout(Duration::from_millis(100))
+            .expect("engine command sent");
         assert!(matches!(cmd, EngineCommand::SetPattern { name, .. } if name == "d1"));
 
         drop(writer);
@@ -268,7 +297,9 @@ mod tests {
         let resp = send_recv(&mut writer, &mut reader, r#"{"cmd":"Hush","slot":"d1"}"#);
         assert!(matches!(resp, ServerMessage::Ok { .. }));
 
-        let cmd = rx.recv_timeout(Duration::from_millis(100)).expect("engine command sent");
+        let cmd = rx
+            .recv_timeout(Duration::from_millis(100))
+            .expect("engine command sent");
         assert!(matches!(cmd, EngineCommand::Hush { name } if name == "d1"));
 
         drop(writer);
@@ -292,7 +323,9 @@ mod tests {
 
         assert!(matches!(cmd1, EngineCommand::SetPattern { name, .. } if name == "d1"));
         assert!(matches!(cmd2, EngineCommand::SetPattern { name, .. } if name == "d2"));
-        assert!(matches!(cmd3, EngineCommand::SetBpm { bpm } if (bpm - 140.0).abs() < f64::EPSILON));
+        assert!(
+            matches!(cmd3, EngineCommand::SetBpm { bpm } if (bpm - 140.0).abs() < f64::EPSILON)
+        );
 
         drop(writer);
         handle.stop();
@@ -311,7 +344,10 @@ mod tests {
         assert!(matches!(resp, ServerMessage::Error { .. }));
 
         // No commands should have been sent.
-        assert!(rx.try_recv().is_err(), "no commands should be sent on batch failure");
+        assert!(
+            rx.try_recv().is_err(),
+            "no commands should be sent on batch failure"
+        );
 
         drop(writer);
         handle.stop();

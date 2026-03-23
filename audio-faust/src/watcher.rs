@@ -63,11 +63,11 @@ impl DspWatcher {
             // Derive type_id from path relative to base_dir.
             // e.g. base/drums/kick.dsp → "faust:drums/kick"
             let canon = path.canonicalize().unwrap_or_else(|_| path.clone());
-            let Some(type_id) = canon
-                .strip_prefix(base_dir)
-                .ok()
-                .and_then(|rel| rel.with_extension("").to_str().map(|s| format!("faust:{s}")))
-            else {
+            let Some(type_id) = canon.strip_prefix(base_dir).ok().and_then(|rel| {
+                rel.with_extension("")
+                    .to_str()
+                    .map(|s| format!("faust:{s}"))
+            }) else {
                 continue;
             };
 
@@ -117,7 +117,9 @@ pub fn apply_reload(
             let decl = factory.probe_type_decl(type_id)?;
 
             if registry.get_type(type_id).is_some() {
-                registry.reregister(decl, factory).map_err(|e| e.to_string())
+                registry
+                    .reregister(decl, factory)
+                    .map_err(|e| e.to_string())
             } else {
                 registry.register(decl, factory).map_err(|e| e.to_string())
             }

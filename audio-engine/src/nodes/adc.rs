@@ -25,8 +25,12 @@ impl DspNode for AdcNode {
         }
     }
 
-    fn num_inputs(&self) -> usize { 0 }
-    fn num_outputs(&self) -> usize { 1 }
+    fn num_inputs(&self) -> usize {
+        0
+    }
+    fn num_outputs(&self) -> usize {
+        1
+    }
 
     fn set_param(&mut self, name: &str, _value: f32) -> Result<(), ParamError> {
         Err(ParamError::NotFound(name.into()))
@@ -119,7 +123,10 @@ mod tests {
         assert!((output[3] - 0.75).abs() < f32::EPSILON);
         // Last 4 should be silence
         for &s in &output[4..] {
-            assert!(s.abs() < f32::EPSILON, "underrun should output silence, got {s}");
+            assert!(
+                s.abs() < f32::EPSILON,
+                "underrun should output silence, got {s}"
+            );
         }
     }
 
@@ -135,7 +142,10 @@ mod tests {
     fn adc_rejects_all_params() {
         let (_producer, consumer) = RingBuffer::new(4);
         let mut adc = AdcNode::new(consumer);
-        assert!(matches!(adc.set_param("gain", 0.5), Err(ParamError::NotFound(_))));
+        assert!(matches!(
+            adc.set_param("gain", 0.5),
+            Err(ParamError::NotFound(_))
+        ));
     }
 
     #[test]

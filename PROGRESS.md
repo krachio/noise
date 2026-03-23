@@ -11,7 +11,7 @@ noise/
 ├── pattern-engine/    Rust — pattern sequencer (min-heap, rational time, phase-reset, meter)
 ├── krach-engine/      Rust — unified binary (pattern-engine + audio-engine + audio-faust, one socket)
 ├── faust-dsl/         Python — Python → Faust .dsp transpiler
-└── krach/             Python — live coding REPL (VoiceMixer, patterns, copilot, DSP design)
+└── krach/             Python — live coding REPL (graph API, patterns, copilot, DSP design)
 ```
 
 ### Test counts
@@ -40,15 +40,16 @@ def acid_bass() -> krs.Signal:
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
-# Two symbols: kr (mixer) and krs (dsp)
-bass = kr.voice("bass", acid_bass, gain=0.3)
-kick = kr.voice("drums/kick", kick_fn, gain=0.8)
-verb = kr.bus("verb", reverb_fn, gain=0.3)
+# Two symbols: kr (audio graph) and krs (dsp)
+bass = kr.node("bass", acid_bass, gain=0.3)
+kick = kr.node("drums/kick", kick_fn, gain=0.8)
+verb = kr.node("verb", reverb_fn, gain=0.3)
 
-bass.play(kr.seq("A2", "D3", None, "E2").over(2))
-kick.play(kr.hit() * 4)
-bass.send(verb, 0.4)
-bass.play("cutoff", kr.mod_sine(400, 2000).over(4))
+bass >> (verb, 0.4)
+bass @ kr.seq("A2", "D3", None, "E2").over(2)
+kick @ kr.hit() * 4
+bass @ ("cutoff", kr.sine(400, 2000).over(4))
+bass["cutoff"] = 1200
 
 kr.tempo = 128
 kr.meter = 4
@@ -58,18 +59,26 @@ kr.mute("drums")
 
 ## Key features
 
-- **Two-symbol API**: `kr` (VoiceMixer) + `krs` (krach.dsp) — clean namespace for live coding
+- **Graph-first API**: `kr.node()` auto-detects source vs effect — one constructor for everything
+- **Operator DSL**: `>>` routes signal, `@` plays patterns, `[]` gets/sets controls — fast REPL workflow
+- **Two-symbol API**: `kr` (audio graph) + `krs` (krach.dsp) — clean namespace for live coding
 - **Voice-free patterns**: `kr.note("C4")`, `kr.hit()`, `kr.seq("A2", "D3")` — bind at play time
 - **`/` path addressing**: `kr.set("bass/cutoff", 1200)`, `kr.fade("verb/room", 0.8, bars=8)`
-- **Voice handles**: `bass = kr.voice(...)` returns proxy — `bass.play()`, `bass.set()`, `bass.mute()`
-- **Effect routing**: `kr.bus()`, `kr.send()`, `kr.wire()` — shared reverb, sidechain, multi-input
+- **Node handles**: `bass = kr.node(...)` returns proxy — `bass @ pattern`, `bass["cutoff"] = 1200`, `bass >> verb`
+- **Unified routing**: `kr.connect()` / `>>` replaces send/wire split — level and port as params
+- **FAUST auto-smoothing**: DSP controls with si.smoo applied automatically, no zipper noise
+- **Protocol hardening**: IPC message validation, length-prefixed framing, reconnect on stale socket
 - **Native automation lanes**: block-rate modulation on audio thread (AutoShape + GraphSwapper)
 - **Typed Control IR**: `Control(label, value)` replaces OSC string convention
+- **Continuous patterns**: `kr.sine()`, `kr.saw()`, `kr.rand()` — smooth control sweeps
+- **Multi-pattern combinators**: `kr.cat()`, `kr.stack()`, `kr.struct()` — cycle-level composition
+- **Pattern transforms**: `.mask()`, `.sometimes()` — selective silence and probabilistic variation
+- **Transition blocks**: `with kr.transition(bars=N)` — all changes fade smoothly
 - **Mini-notation**: `kr.p("x . x . x . . x")` for fast pattern entry
 - **Scenes**: `kr.save("verse")` / `kr.recall("chorus")` — snapshot + restore
 - **Music as code**: `kr.load("songs/verse.py")` — exec Python files as scenes
 - **Master gain**: `kr.master = 0.7` — prevents CoreAudio clipping
-- **Group operations**: `kr.mute("drums")` — prefix matching for `/`-grouped voices
+- **Group operations**: `kr.mute("drums")` — prefix matching for `/`-grouped nodes
 - **ADC input**: `kr.input("mic")` — live audio from CoreAudio input into the graph
 - **MIDI CC mapping**: `kr.midi_map(cc=74, path="bass/cutoff", lo=200, hi=4000)`
 - **Pattern compiler**: Control-voice patterns compile to block-rate wavetables (172 updates/sec)
@@ -79,31 +88,6 @@ kr.mute("drums")
 - **Unified Voice model**: `Voice(count=N)` — no separate poly concept
 
 ## Next
-
-### Stage 9: Graph-first API — `kr.node()` + `>>` operator (priority: high)
-
-Replace voice/bus/send/wire with a unified graph API. Everything is a node.
-Routing uses the `>>` operator. The system auto-detects source vs effect
-from `num_inputs` in the DSP definition.
-
-```python
-bass = kr.node("bass", bass_fn, gain=0.3)     # source (0 inputs)
-verb = kr.node("verb", reverb_fn, gain=0.3)    # effect (1+ inputs, auto-detected)
-bass >> verb                                     # route
-bass >> (0.4, verb)                              # route with send level
-mic >> filter >> verb                            # chain
-```
-
-**Why now:** The voice/bus distinction causes consistent copilot confusion and
-user friction. The graph IS the mental model for a live coding system. This
-simplification removes 4 concepts (voice, bus, send, wire) and replaces them
-with 2 (node, >>).
-
-**Implementation:**
-- `kr.node()` — single constructor, detects num_inputs from DSP
-- `NodeHandle.__rshift__` — `>>` operator for routing
-- Keep `voice()`/`bus()` as thin aliases for backward compat
-- Update context.md, copilot, docs, tests
 
 ### Stage 10: Template caching (priority: medium)
 

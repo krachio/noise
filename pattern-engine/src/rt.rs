@@ -7,7 +7,7 @@
 /// Returns `true` if priority was raised, `false` if it failed (non-fatal).
 /// Logs a warning on failure.
 pub fn set_realtime_priority() -> bool {
-    use thread_priority::{set_current_thread_priority, ThreadPriority};
+    use thread_priority::{ThreadPriority, set_current_thread_priority};
 
     match set_current_thread_priority(ThreadPriority::Max) {
         Ok(()) => true,
@@ -26,7 +26,10 @@ mod tests {
     fn set_realtime_priority_is_deterministic() {
         let first = set_realtime_priority();
         let second = set_realtime_priority();
-        assert_eq!(first, second, "repeated calls should return the same result");
+        assert_eq!(
+            first, second,
+            "repeated calls should return the same result"
+        );
     }
 
     #[test]
@@ -38,9 +41,15 @@ mod tests {
         let after = get_current_thread_priority().expect("should read priority");
 
         if succeeded {
-            assert!(after >= before, "priority should not decrease after successful set");
+            assert!(
+                after >= before,
+                "priority should not decrease after successful set"
+            );
         } else {
-            assert_eq!(before, after, "priority should be unchanged after failed set");
+            assert_eq!(
+                before, after,
+                "priority should be unchanged after failed set"
+            );
         }
     }
 }

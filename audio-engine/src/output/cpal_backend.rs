@@ -24,7 +24,10 @@ pub struct CpalBackend {
 impl CpalBackend {
     #[must_use]
     pub const fn new() -> Self {
-        Self { stream: None, input_stream: None }
+        Self {
+            stream: None,
+            input_stream: None,
+        }
     }
 
     /// Query the default output device for its native sample rate and channel count.
@@ -36,9 +39,7 @@ impl CpalBackend {
         let device = host
             .default_output_device()
             .ok_or("no output device available")?;
-        let config = device
-            .default_output_config()
-            .map_err(|e| e.to_string())?;
+        let config = device.default_output_config().map_err(|e| e.to_string())?;
         Ok(DeviceConfig {
             sample_rate: config.sample_rate().0,
             channels: config.channels() as usize,
@@ -63,13 +64,13 @@ impl CpalBackend {
         let device = host
             .default_input_device()
             .ok_or("no input device available")?;
-        let default_config = device
-            .default_input_config()
-            .map_err(|e| e.to_string())?;
+        let default_config = device.default_input_config().map_err(|e| e.to_string())?;
 
         let channels = default_config.channels() as usize;
         if channel >= channels {
-            return Err(format!("channel {channel} out of range (device has {channels} channels)"));
+            return Err(format!(
+                "channel {channel} out of range (device has {channels} channels)"
+            ));
         }
 
         // ~200ms buffer at the given sample rate
@@ -82,8 +83,10 @@ impl CpalBackend {
             buffer_size: cpal::BufferSize::Default,
         };
 
-        info!("input device: {} ch, {}Hz, capturing ch {channel}",
-            channels, sample_rate);
+        info!(
+            "input device: {} ch, {}Hz, capturing ch {channel}",
+            channels, sample_rate
+        );
 
         let stream = device
             .build_input_stream(
@@ -107,11 +110,7 @@ impl CpalBackend {
 }
 
 impl AudioOutput for CpalBackend {
-    fn start(
-        &mut self,
-        config: &EngineConfig,
-        mut callback: AudioCallback,
-    ) -> Result<(), String> {
+    fn start(&mut self, config: &EngineConfig, mut callback: AudioCallback) -> Result<(), String> {
         let host = cpal::default_host();
         let device = host
             .default_output_device()

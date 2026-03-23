@@ -11,8 +11,8 @@
 
 use midir::{MidiOutput, MidiOutputConnection};
 
-use crate::event::Value;
 use crate::engine::TimedEvent;
+use crate::event::Value;
 
 use super::{OutputError, OutputSink};
 
@@ -25,15 +25,13 @@ pub struct MidiSink {
 impl MidiSink {
     /// Connect to the first available MIDI output port.
     pub fn connect_first(client_name: &str) -> Result<Self, OutputError> {
-        let output = MidiOutput::new(client_name)
-            .map_err(|e| OutputError::Midi(format!("init: {e}")))?;
+        let output =
+            MidiOutput::new(client_name).map_err(|e| OutputError::Midi(format!("init: {e}")))?;
         let ports = output.ports();
         let port = ports
             .first()
             .ok_or_else(|| OutputError::Midi("no MIDI output ports available".into()))?;
-        let port_name = output
-            .port_name(port)
-            .unwrap_or_else(|_| "unknown".into());
+        let port_name = output.port_name(port).unwrap_or_else(|_| "unknown".into());
         let conn = output
             .connect(port, "pattern-engine")
             .map_err(|e| OutputError::Midi(format!("connect: {e}")))?;
@@ -42,8 +40,8 @@ impl MidiSink {
 
     /// Connect to a specific MIDI output port by name.
     pub fn connect_by_name(client_name: &str, target: &str) -> Result<Self, OutputError> {
-        let output = MidiOutput::new(client_name)
-            .map_err(|e| OutputError::Midi(format!("init: {e}")))?;
+        let output =
+            MidiOutput::new(client_name).map_err(|e| OutputError::Midi(format!("init: {e}")))?;
         let ports = output.ports();
         let port = ports
             .iter()
@@ -53,13 +51,9 @@ impl MidiSink {
                     .map(|n| n.contains(target))
                     .unwrap_or(false)
             })
-            .ok_or_else(|| {
-                OutputError::Midi(format!("no port matching '{target}'"))
-            })?
+            .ok_or_else(|| OutputError::Midi(format!("no port matching '{target}'")))?
             .clone();
-        let port_name = output
-            .port_name(&port)
-            .unwrap_or_else(|_| "unknown".into());
+        let port_name = output.port_name(&port).unwrap_or_else(|_| "unknown".into());
         let conn = output
             .connect(&port, "pattern-engine")
             .map_err(|e| OutputError::Midi(format!("connect: {e}")))?;

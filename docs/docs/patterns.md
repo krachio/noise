@@ -221,6 +221,108 @@ kr.hit() * 8
 (kr.hit() * 8).thin(0.3)   # randomly drop 30% of hits
 ```
 
+### `.mask(mask_str)` -- selective silence
+
+Suppress events at specific positions using a mask string. `1`/`x` = keep,
+`0`/`.`/`~` = silence:
+
+```python
+kr.seq("A2", "D3", "E2").mask("1 1 0")   # silences the third event
+kr.seq("C4", "E4", "G4", "B4").mask("x . x .")  # play 1st and 3rd only
+```
+
+### `.sometimes(prob, fn)` -- probabilistic transform
+
+Apply a transform with probability `prob` each cycle. On cycles where it
+does not fire, the original pattern plays:
+
+```python
+p = kr.hit() * 4
+p.sometimes(0.3, lambda p: p.reverse())   # reverse 30% of cycles
+p.sometimes(0.5, lambda p: p.fast(2))     # double time 50% of the time
+```
+
+## Multi-pattern combinators
+
+### `kr.cat()` -- cycle-level concatenation
+
+Plays each pattern for one full cycle, then loops:
+
+```python
+a = kr.seq("A2", "D3", None, "E2")
+b = kr.seq("C3", "E3", "G3", "B3")
+kr.play("bass", kr.cat(a, b))  # a for 1 cycle, b for 1 cycle, repeat
+```
+
+This is equivalent to `(a + b).over(2)` but reads more clearly for
+multi-cycle structures.
+
+### `kr.stack()` -- layer patterns
+
+Plays all patterns simultaneously. Same as the `|` operator, but
+accepts any number of arguments:
+
+```python
+kr.stack(
+    kr.note("A4"),
+    kr.note("C5"),
+    kr.note("E5"),
+)
+# equivalent to: kr.note("A4") | kr.note("C5") | kr.note("E5")
+```
+
+### `kr.struct()` -- impose rhythm onto melody
+
+Takes the onset positions from a rhythm pattern and fills them with
+values from a melody pattern (cycling if melody is shorter):
+
+```python
+rhythm = kr.p("x . x x . x . .")
+melody = kr.seq("A2", "D3", "E2")
+kr.play("bass", kr.struct(rhythm, melody))
+# plays A2, D3, E2, A2 at the rhythm's hit positions
+```
+
+## Continuous patterns
+
+Continuous patterns generate smooth control sweeps. Use them for
+modulation, filter control, and automation. All return `Pattern` objects
+and compose with `.over()`, `+`, etc.
+
+### `kr.sine(lo, hi)` -- sine sweep
+
+```python
+kr.sine(200, 2000)             # one-cycle sine from 200..2000
+kr.sine(200, 2000).over(4)     # 4-cycle sine sweep
+```
+
+### `kr.saw(lo, hi)` -- sawtooth ramp
+
+```python
+kr.saw(200, 2000)              # ramp up from 200 to 2000
+kr.saw(200, 2000).over(8)      # 8-cycle ramp
+```
+
+### `kr.rand(lo, hi)` -- random values
+
+```python
+kr.rand(200, 2000)             # random values between 200..2000
+```
+
+Different values each cycle. Use `.over(N)` to slow the change rate.
+
+### Using continuous patterns
+
+Play them on a control path or use the `@` operator:
+
+```python
+# With @ operator
+bass @ ("cutoff", kr.sine(200, 2000).over(4))
+
+# With kr.play()
+kr.play("bass/cutoff", kr.sine(200, 2000).over(4))
+```
+
 ## Modulation patterns
 
 Modulation patterns generate continuous control values instead of note
@@ -268,9 +370,20 @@ kr.hush("bass/cutoff")
 
 ## Playing patterns
 
-### `kr.play(target, pattern)`
+### `@` operator (REPL-friendly)
 
-Binds a pattern to a voice or control path. The pattern starts on the next
+The `@` operator on a node handle plays a pattern immediately:
+
+```python
+bass @ kr.seq("A2", "D3", None, "E2").over(2)    # play pattern
+bass @ "A2 D3 ~ E2"                               # play mini-notation string
+bass @ ("cutoff", kr.sine(200, 2000).over(4))      # modulate a control
+bass @ None                                         # hush
+```
+
+### `kr.play(target, pattern)` (explicit)
+
+Binds a pattern to a node or control path. The pattern starts on the next
 cycle boundary:
 
 ```python
@@ -279,17 +392,17 @@ kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
 kr.play("bass/cutoff", kr.ramp(200.0, 2000.0).over(4))
 ```
 
-### Voice handles
+### Node handles
 
-`kr.voice()` returns a handle that eliminates name repetition:
+`kr.node()`, `kr.voice()`, and `kr.bus()` all return a handle:
 
 ```python
-bass = kr.voice("bass", acid_bass, gain=0.3)
+bass = kr.node("bass", acid_bass, gain=0.3)
 
-bass.play(kr.seq("A2", "D3", None, "E2").over(2))
-bass.set("cutoff", 1200)
+bass @ kr.seq("A2", "D3", None, "E2").over(2)
+bass["cutoff"] = 1200
 bass.fade("cutoff", 200, bars=4)
-bass.play("cutoff", kr.mod_sine(400, 2000).over(4))
+bass @ ("cutoff", kr.sine(400, 2000).over(4))
 bass.mute()
 ```
 

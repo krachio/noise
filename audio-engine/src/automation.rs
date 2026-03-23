@@ -5,7 +5,6 @@
 //! waveform — sine, triangle, ramp, etc. — evaluated at normalised time.
 
 #[allow(clippy::cast_precision_loss)]
-
 use std::f32::consts::PI;
 
 /// Waveform shape for parameter automation, evaluated at normalised time t in [0, 1).
@@ -113,7 +112,10 @@ mod tests {
     fn test_sine_peak() {
         let shape = AutoShape::Sine;
         let val = shape.eval(0.25);
-        assert!((val - 1.0).abs() < 1e-5, "Sine(0.25) = {val}, expected ~1.0");
+        assert!(
+            (val - 1.0).abs() < 1e-5,
+            "Sine(0.25) = {val}, expected ~1.0"
+        );
     }
 
     #[test]
@@ -121,10 +123,7 @@ mod tests {
         let shape = AutoShape::Tri;
         let at_zero = shape.eval(0.0);
         let at_half = shape.eval(0.5);
-        assert!(
-            at_zero.abs() < 1e-5,
-            "Tri(0.0) = {at_zero}, expected ~0.0"
-        );
+        assert!(at_zero.abs() < 1e-5, "Tri(0.0) = {at_zero}, expected ~0.0");
         assert!(
             (at_half - 1.0).abs() < 1e-5,
             "Tri(0.5) = {at_half}, expected ~1.0"
@@ -174,10 +173,7 @@ mod tests {
             one_shot: false,
         };
         let val = auto.eval();
-        assert!(
-            (val - 200.0).abs() < 0.1,
-            "expected ~200.0, got {val}"
-        );
+        assert!((val - 200.0).abs() < 0.1, "expected ~200.0, got {val}");
     }
 
     #[test]

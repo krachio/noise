@@ -1,55 +1,101 @@
 # Effect Routing
 
-krach has two kinds of audio nodes: **voices** and **buses**. Understanding the
-difference is essential for routing effects correctly.
+krach routes audio between nodes using the `>>` operator. Every audio node --
+sources and effects alike -- is created with `kr.node()`. The system auto-detects
+whether a DSP is a source (0 audio inputs) or an effect (1+ audio inputs) from
+the DSP definition.
 
-## Voice vs Bus
+## The `>>` operator
 
-| | `kr.voice()` | `kr.bus()` |
-|---|---|---|
-| **Purpose** | Sound source (synth, sampler) | Effect processor (reverb, delay, compressor) |
-| **Audio input** | None -- generates audio | Yes -- receives audio from sends/wires |
-| **Created with** | `kr.voice("name", dsp_fn)` | `kr.bus("name", dsp_fn)` |
-| **Receives sends** | No | Yes |
-
-!!! warning "Use `kr.bus()` for effects"
-    Effects that receive audio from other voices **must** use `kr.bus()`.
-    `kr.voice()` creates a sound source with no audio input -- sends will not
-    work.
-
-    ```python
-    # CORRECT
-    kr.bus("verb", reverb_fn, gain=0.3)
-
-    # WRONG -- sends won't reach this node
-    kr.voice("verb", reverb_fn, gain=0.3)
-    ```
-
-## `kr.send()` -- gain-controlled send
-
-Route audio from a voice (or bus) to a bus with an adjustable level:
+`>>` is the primary routing method. It connects one node's output to another
+node's input:
 
 ```python
-kr.send("bass", "verb", level=0.4)
+bass = kr.node("bass", acid_bass, gain=0.3)
+verb = kr.node("verb", reverb_fn, gain=0.3)
+
+bass >> verb                  # route at unity gain
+bass >> (verb, 0.4)           # route with send level (40%)
+```
+
+Chains work naturally:
+
+```python
+mic = kr.input("mic")
+filt = kr.node("filt", filter_fn, gain=1.0)
+verb = kr.node("verb", reverb_fn, gain=0.3)
+
+mic >> filt >> verb           # mic -> filter -> reverb
+```
+
+`>>` returns the target node, so chaining always reads left-to-right.
+
+## `kr.node()` -- unified constructor
+
+`kr.node()` replaces the old `kr.voice()` / `kr.bus()` split. It detects the
+node type from the DSP's `num_inputs`:
+
+```python
+# Source (0 audio inputs) -- generates audio
+bass = kr.node("bass", acid_bass, gain=0.3)
+
+# Effect (1+ audio inputs) -- receives audio from sends/routes
+verb = kr.node("verb", reverb_fn, gain=0.3)
+```
+
+No need to decide upfront. If the DSP has audio input controls, it becomes an
+effect node automatically.
+
+!!! note "Backward compatibility"
+    `kr.voice()` and `kr.bus()` still work as aliases for `kr.node()`. Existing
+    code does not need to change.
+
+## `kr.connect()` -- explicit routing
+
+The explicit API equivalent of `>>`:
+
+```python
+kr.connect("bass", "verb", level=0.4)      # gain-controlled send
+kr.connect("kick", "comp", port="in0")     # direct wire to port
+```
+
+Use `kr.connect()` when building routing from strings (e.g., in loops or
+abstractions). Use `>>` for interactive REPL work.
+
+## Voice vs effect auto-detection
+
+| | Source (0 inputs) | Effect (1+ inputs) |
+|---|---|---|
+| **Purpose** | Sound source (synth, sampler) | Processor (reverb, delay, compressor) |
+| **Created with** | `kr.node()` (auto) | `kr.node()` (auto) |
+| **Receives routes** | No | Yes |
+| **Old API** | `kr.voice()` | `kr.bus()` |
+
+## Send levels
+
+The dry signal from a source always goes to master. A send is a parallel copy
+scaled by the level:
+
+```python
+bass >> (verb, 0.4)           # 40% to reverb, dry still goes to master
 ```
 
 Update the send level at any time (no graph rebuild):
 
 ```python
-kr.send("bass", "verb", level=0.7)
+bass >> (verb, 0.7)           # change to 70%
+# or explicitly:
+kr.connect("bass", "verb", level=0.7)
 ```
 
-The voice's dry signal still goes to the master output. The send is a
-parallel copy scaled by `level`.
+## Direct wires (port assignment)
 
-## `kr.wire()` -- direct connection
-
-Wire a voice directly to a specific bus input port. No gain stage -- the
-signal passes through as-is:
+Wire a node directly to a specific input port. No gain stage -- the signal
+passes through as-is:
 
 ```python
-kr.wire("kick", "comp", port="in0")
-kr.wire("snare", "comp", port="in1")
+kr.connect("kick", "comp", port="in0")
+kr.connect("snare", "comp", port="in1")
 ```
 
 Use wires for multi-input effects like sidechain compressors or mixers where
@@ -59,7 +105,7 @@ you need explicit port assignment.
 
 ### Reverb send
 
-The most common effect setup. Multiple voices share one reverb bus:
+Multiple sources share one reverb:
 
 ```python
 @kr.dsp
@@ -68,54 +114,70 @@ def reverb_fx() -> krs.Signal:
     sig = krs.control("in0", 0.0, -1.0, 1.0)
     return krs.reverb(sig, room)
 
-kr.bus("verb", reverb_fx, gain=0.3)
+verb = kr.node("verb", reverb_fx, gain=0.3)
 
-kr.send("bass", "verb", level=0.4)
-kr.send("lead", "verb", level=0.6)
-kr.send("pad", "verb", level=0.5)
+bass >> (verb, 0.4)
+lead >> (verb, 0.6)
+pad >> (verb, 0.5)
 ```
 
 ### Parallel compression
 
-Wire drums to a compressor bus:
+Wire drums to a compressor:
 
 ```python
-kr.bus("comp", compressor_fn, gain=0.5)
-kr.wire("kick", "comp", port="in0")
-kr.wire("snare", "comp", port="in1")
+comp = kr.node("comp", compressor_fn, gain=0.5)
+kr.connect("kick", "comp", port="in0")
+kr.connect("snare", "comp", port="in1")
+```
+
+### Effect chain
+
+Route through multiple effects in series:
+
+```python
+filt = kr.node("filt", filter_fn, gain=1.0)
+verb = kr.node("verb", reverb_fn, gain=0.3)
+
+bass >> filt >> verb
 ```
 
 ### Multi-input mixer bus
 
-Route several voices to a submix:
+Route several sources to a submix:
 
 ```python
-kr.bus("drums_bus", mixer_fn, gain=0.8)
-kr.wire("kick", "drums_bus", port="in0")
-kr.wire("snare", "drums_bus", port="in1")
-kr.wire("hat", "drums_bus", port="in2")
+drums = kr.node("drums_bus", mixer_fn, gain=0.8)
+kr.connect("kick", "drums_bus", port="in0")
+kr.connect("snare", "drums_bus", port="in1")
+kr.connect("hat", "drums_bus", port="in2")
 ```
 
-## Voice handles for sends
+## Control access with `[]`
 
-Voice handles returned by `kr.voice()` and `kr.bus()` support sends directly:
+Set and read controls directly on node handles:
 
 ```python
-bass = kr.voice("bass", acid_bass, gain=0.3)
-verb = kr.bus("verb", reverb_fx, gain=0.3)
+verb["room"] = 0.8
+verb["room"]              # returns 0.8
+bass["cutoff"] = 1200
+```
 
-bass.send(verb, 0.4)
+Or use the explicit API:
+
+```python
+kr.set("verb/room", 0.8)
 ```
 
 ## Group operations with `/` prefix
 
-Voice names with `/` act as groups. Operations on the prefix affect all
-matching voices:
+Node names with `/` act as groups. Operations on the prefix affect all
+matching nodes:
 
 ```python
-kr.voice("drums/kick", kick_fn, gain=0.8)
-kr.voice("drums/hat", hat_fn, gain=0.6)
-kr.voice("drums/snare", snare_fn, gain=0.7)
+kr.node("drums/kick", kick_fn, gain=0.8)
+kr.node("drums/hat", hat_fn, gain=0.6)
+kr.node("drums/snare", snare_fn, gain=0.7)
 
 # Adjust gain for all drums at once
 kr.gain("drums", 0.4)
@@ -128,13 +190,13 @@ kr.solo("drums")
 kr.hush("drums")
 ```
 
-## `kr.gain()` -- works on both voices and buses
+## `kr.gain()` -- works on all nodes
 
 Set gain without rebuilding the audio graph:
 
 ```python
-kr.gain("bass", 0.15)     # voice gain
-kr.gain("verb", 0.5)      # bus gain
+kr.gain("bass", 0.15)     # source gain
+kr.gain("verb", 0.5)      # effect gain
 kr.gain("drums", 0.4)     # group gain
 ```
 
@@ -148,18 +210,13 @@ kr.fade("verb/gain", target=0.8, bars=8)     # fade in reverb
 kr.fade("bass/cutoff", target=200.0, bars=4) # fade a control
 ```
 
-## Removing buses
+## Removing nodes
 
-Remove a bus and clean up all its sends and wires:
-
-```python
-kr.remove_bus("verb")
-```
-
-Remove a voice:
+Remove a node and clean up all its routes:
 
 ```python
 kr.remove("bass")
+kr.remove_bus("verb")
 ```
 
 ## Full routing example
@@ -186,16 +243,17 @@ def reverb_fx() -> krs.Signal:
     sig = krs.control("in0", 0.0, -1.0, 1.0)
     return krs.reverb(sig, room)
 
-# Set up voices and bus
+# Set up nodes
 with kr.batch():
-    kr.voice("kick", kick, gain=0.8)
-    kr.voice("bass", acid_bass, gain=0.3)
+    k = kr.node("kick", kick, gain=0.8)
+    bass = kr.node("bass", acid_bass, gain=0.3)
 
-kr.bus("verb", reverb_fx, gain=0.3)
-kr.send("bass", "verb", level=0.4)
+verb = kr.node("verb", reverb_fx, gain=0.3)
+bass >> (verb, 0.4)
 
 # Play
 kr.tempo = 128
-kr.play("kick", kr.hit() * 4)
-kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
+k @ kr.hit() * 4
+bass @ kr.seq("A2", "D3", None, "E2").over(2)
+bass["cutoff"] = 1200
 ```

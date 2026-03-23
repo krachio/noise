@@ -17,8 +17,12 @@ impl DspNode for DacNode {
         }
     }
 
-    fn num_inputs(&self) -> usize { 1 }
-    fn num_outputs(&self) -> usize { 1 }
+    fn num_inputs(&self) -> usize {
+        1
+    }
+    fn num_outputs(&self) -> usize {
+        1
+    }
 
     fn set_param(&mut self, name: &str, _value: f32) -> Result<(), ParamError> {
         Err(ParamError::NotFound(name.into()))
@@ -93,7 +97,10 @@ mod tests {
     #[test]
     fn dac_rejects_all_params() {
         let mut dac = DacNode;
-        assert!(matches!(dac.set_param("gain", 0.5), Err(ParamError::NotFound(_))));
+        assert!(matches!(
+            dac.set_param("gain", 0.5),
+            Err(ParamError::NotFound(_))
+        ));
     }
 
     #[test]
