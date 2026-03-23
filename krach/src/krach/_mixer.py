@@ -696,6 +696,8 @@ class VoiceMixer:
         self._batching: bool = False
         self._graph_loaded: bool = False
         self._master_gain: float = 0.7
+        self._transition_bars: int = 0
+        self._flush_scheduled: bool = False
         self._session.master_gain(self._master_gain)
 
     def _resolve_source(
@@ -941,7 +943,14 @@ class VoiceMixer:
             self._gain_single(t, value)
 
     def _gain_single(self, name: str, value: float) -> None:
-        """Set gain for a single voice or bus."""
+        """Set gain for a single voice or bus. Uses fade inside transition()."""
+        if self._transition_bars > 0:
+            self.fade(f"{name}/gain", value, bars=self._transition_bars)
+            # Update bookkeeping immediately even though audio fades
+            if name in self._voices:
+                self._voices[name].gain = value
+            return
+
         if name in self._buses:
             old_bus = self._buses[name]
             self._buses[name] = Bus(
@@ -1208,10 +1217,13 @@ class VoiceMixer:
         return self._patterns[name]
 
     def set(self, path: str, value: float) -> None:
-        """Set a control value by path. Instant — no pattern scheduling."""
+        """Set a control value by path. Instant unless inside ``transition()``."""
         _check_finite(value, path)
+        if self._transition_bars > 0:
+            self.fade(path, value, bars=self._transition_bars)
+        else:
+            self._session.set_ctrl(path, float(value))
         self._ctrl_values[path] = value
-        self._session.set_ctrl(path, float(value))
 
     def _resolve_path(self, path: str) -> str:
         """Convert a user-facing ``/``-separated path to the exposed control label.
@@ -1461,6 +1473,22 @@ class VoiceMixer:
                 self._flush()
             else:
                 self._voices = snap_voices
+
+    @contextmanager
+    def transition(self, bars: int = 4) -> Generator[None]:
+        """Scoped interpolation: all gain/control changes inside become fades.
+
+        Every ``set()``, ``gain()``, and ``NodeHandle[param] = value``
+        inside this block will emit a ``fade()`` over ``bars`` bars
+        instead of an instant change.
+        """
+        if self._transition_bars > 0:
+            raise RuntimeError("nested transitions not supported")
+        self._transition_bars = bars
+        try:
+            yield
+        finally:
+            self._transition_bars = 0
 
     def __repr__(self) -> str:
         top = list(self._voices.keys())
