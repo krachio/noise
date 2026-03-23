@@ -1,17 +1,28 @@
 use super::{IrError, IrNode};
 
+const MAX_DEPTH: usize = 256;
+
 /// Validate an IR tree before compilation.
-/// Checks: no zero denominators, positive factors, non-empty children.
+/// Checks: no zero denominators, positive factors, non-empty children, max depth.
 pub fn validate(node: &IrNode) -> Result<(), IrError> {
+    validate_depth(node, 0)
+}
+
+fn validate_depth(node: &IrNode, depth: usize) -> Result<(), IrError> {
+    if depth > MAX_DEPTH {
+        return Err(IrError::InvalidWarp {
+            msg: format!("IR tree exceeds maximum depth of {MAX_DEPTH}"),
+        });
+    }
     match node {
         IrNode::Atom { .. } | IrNode::Silence => Ok(()),
-        IrNode::Freeze { child } => validate(child),
+        IrNode::Freeze { child } => validate_depth(child, depth + 1),
         IrNode::Cat { children } => {
             if children.is_empty() {
                 return Err(IrError::EmptyChildren { op: "Cat" });
             }
             for child in children {
-                validate(child)?;
+                validate_depth(child, depth + 1)?;
             }
             Ok(())
         }
@@ -20,37 +31,37 @@ pub fn validate(node: &IrNode) -> Result<(), IrError> {
                 return Err(IrError::EmptyChildren { op: "Stack" });
             }
             for child in children {
-                validate(child)?;
+                validate_depth(child, depth + 1)?;
             }
             Ok(())
         }
         IrNode::Fast { factor, child } => {
             validate_time_pair(*factor)?;
             validate_positive_factor(*factor)?;
-            validate(child)
+            validate_depth(child, depth + 1)
         }
         IrNode::Slow { factor, child } => {
             validate_time_pair(*factor)?;
             validate_positive_factor(*factor)?;
-            validate(child)
+            validate_depth(child, depth + 1)
         }
         IrNode::Early { offset, child } => {
             validate_time_pair(*offset)?;
-            validate(child)
+            validate_depth(child, depth + 1)
         }
         IrNode::Late { offset, child } => {
             validate_time_pair(*offset)?;
-            validate(child)
+            validate_depth(child, depth + 1)
         }
-        IrNode::Rev { child } => validate(child),
+        IrNode::Rev { child } => validate_depth(child, depth + 1),
         IrNode::Every { n, transform, child } => {
             if *n == 0 {
                 return Err(IrError::InvalidEvery {
                     msg: "n must be > 0".into(),
                 });
             }
-            validate(transform)?;
-            validate(child)
+            validate_depth(transform, depth + 1)?;
+            validate_depth(child, depth + 1)
         }
         IrNode::Euclid {
             pulses,
@@ -68,7 +79,7 @@ pub fn validate(node: &IrNode) -> Result<(), IrError> {
                     msg: "pulses must be <= steps".into(),
                 });
             }
-            validate(child)
+            validate_depth(child, depth + 1)
         }
         IrNode::Degrade { prob, child, .. } => {
             if !(*prob >= 0.0 && *prob <= 1.0) {
@@ -76,7 +87,7 @@ pub fn validate(node: &IrNode) -> Result<(), IrError> {
                     msg: "prob must be in [0, 1]".into(),
                 });
             }
-            validate(child)
+            validate_depth(child, depth + 1)
         }
         IrNode::Warp { kind, amount, grid, child } => {
             if kind != "swing" {
@@ -94,7 +105,7 @@ pub fn validate(node: &IrNode) -> Result<(), IrError> {
                     msg: "amount must be in (0, 1)".into(),
                 });
             }
-            validate(child)
+            validate_depth(child, depth + 1)
         }
     }
 }

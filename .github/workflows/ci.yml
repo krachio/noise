@@ -18,6 +18,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       # Exclude audio-faust and krach-engine (require libfaust + LLVM, not available in CI)
+      - run: cargo fmt --check
+      - run: cargo clippy -p audio-engine -p pattern-engine -- -D warnings
       - run: cargo check -p audio-engine -p pattern-engine
       - run: cargo test -p audio-engine -p pattern-engine
 
