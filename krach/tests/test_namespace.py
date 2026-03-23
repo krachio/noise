@@ -178,3 +178,25 @@ def test_dsp_module_exports_white_noise() -> None:
     import krach.dsp as krs
     from faust_dsl.lib.noise import white_noise
     assert krs.white_noise is white_noise
+
+
+# ── __setattr__ guard ────────────────────────────────────────────────────────
+
+
+def test_setattr_rejects_unknown_property() -> None:
+    from pathlib import Path
+    from unittest.mock import MagicMock
+    import pytest
+    mixer = VoiceMixer(session=MagicMock(), dsp_dir=Path("/tmp"))
+    with pytest.raises(AttributeError, match="kr has no property 'swing'"):
+        mixer.swing = 0.67  # type: ignore[attr-defined]
+
+
+def test_setattr_allows_known_properties() -> None:
+    from pathlib import Path
+    from unittest.mock import MagicMock
+    mixer = VoiceMixer(session=MagicMock(), dsp_dir=Path("/tmp"))
+    mixer.master = 0.5  # should not raise
+    mixer.tempo = 140.0
+    mixer.bpm = 128.0
+    mixer.meter = 3.0

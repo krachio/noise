@@ -93,16 +93,24 @@ kr.note("C4")                               # string pitch name
 kr.note(60)                                  # int MIDI note -> mtof
 kr.note(440.0, vel=0.7, cutoff=1200.0)      # extra params
 
-# Chord (multiple pitches -> frozen stack):
+# Chord (multiple pitches -> simultaneous notes):
+kr.note("A4", "C5", "E5")
 kr.note(220.0, 330.0, 440.0)
+
+# IMPORTANT: seq() plays notes ONE AT A TIME (sequential, not chords!).
+# For CHORDS (simultaneous notes), use EITHER:
+#   kr.note("A4", "C5", "E5")           ← multiple pitches in one call
+#   kr.note("A4") | kr.note("C5")       ← pipe operator (stack)
+# AND the voice MUST have count >= number of simultaneous notes:
+#   kr.voice("rhodes", rhodes_fn, count=4)  ← poly voice for chords
 
 # Percussive trigger (trig + reset on a control):
 kr.hit()                # default: gate
 kr.hit("kick")          # custom param
 
-# Sequence of notes/rests:
+# Sequence of notes/rests (plays notes ONE AT A TIME):
 kr.seq(55.0, 73.0, None, 65.0)   # None = rest
-kr.seq("C4", "E4", "G4")         # string pitches
+kr.seq("C4", "E4", "G4")         # string pitches — NOT a chord!
 
 # kr.seq() accepts both pitches AND kr.note() objects:
 kr.seq(kr.note(220.0, cutoff=800.0), kr.note(330.0, cutoff=1200.0), None, kr.note(440.0))
@@ -119,6 +127,11 @@ kr.play("hat", (kr.rest() + kr.hit()) * 4)
 
 # Simple bass line (A minor)
 kr.play("bass", kr.seq("A2", "C3", "D3", "E3").over(2))
+
+# Chord stabs (MUST use count= for poly, and kr.note with multiple pitches):
+kr.voice("rhodes", rhodes_fn, gain=0.3, count=4)  # count >= chord size
+kr.play("rhodes", kr.note("A4", "C5", "E5") + kr.rest())
+# NOT kr.seq("A4", "C5", "E5") — that's a melody, not a chord!
 ```
 
 ### Playing patterns
@@ -359,6 +372,7 @@ kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
 
 ## Tips
 
+- ONLY use properties and methods documented above. Do NOT invent features.
 - `kr.voice()` accepts Python functions -- no separate dsp() step needed
 - `kr.gain("bass", 0.15)` is instant (no graph rebuild)
 - Adding a voice with `kr.voice("lead", ...)` never breaks kick/bass patterns

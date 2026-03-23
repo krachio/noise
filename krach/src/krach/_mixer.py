@@ -650,6 +650,20 @@ class VoiceMixer:
     ftom = staticmethod(_ftom)
     parse_note = staticmethod(_parse_note)
 
+    # Settable public properties — __setattr__ rejects unknown public names.
+    _PUBLIC_SETTERS = frozenset({"master", "tempo", "bpm", "meter"})
+
+    def __setattr__(self, name: str, value: object) -> None:
+        # Allow private attributes, known property setters, and class-defined attributes
+        # (the latter enables unittest.mock.patch to work).
+        if name.startswith("_") or name in self._PUBLIC_SETTERS or hasattr(type(self), name):
+            super().__setattr__(name, value)
+        else:
+            raise AttributeError(
+                f"kr has no property {name!r}. "
+                f"Settable properties: {', '.join(sorted(self._PUBLIC_SETTERS))}"
+            )
+
     def __init__(
         self,
         session: Session,
