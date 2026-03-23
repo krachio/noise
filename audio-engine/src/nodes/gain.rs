@@ -10,7 +10,7 @@ pub struct GainNode {
     target: f32,
     /// Smoothing coefficient per sample. ~0.02 gives ~5ms ramp at 44100Hz.
     coeff: f32,
-    /// True until the first process() call. set_param snaps current=target
+    /// True until the first `process()` call. `set_param` snaps current=target
     /// before audio starts, so initial controls don't cause a ramp from 1.0.
     virgin: bool,
 }
@@ -21,7 +21,7 @@ const SMOOTH_COEFF: f32 = 0.02;
 
 impl GainNode {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             current: 1.0,
             target: 1.0,

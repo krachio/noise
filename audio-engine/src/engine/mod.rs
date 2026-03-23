@@ -45,7 +45,7 @@ pub struct EngineController {
     /// off the audio thread (RT safety).
     return_consumer: Consumer<Box<DspGraph>>,
     /// Last retired graph, used for node reuse on incremental mutations.
-    /// NOT used for LoadGraph (full replacement) — the cache is one generation
+    /// NOT used for `LoadGraph` (full replacement) — the cache is one generation
     /// stale, causing phase artifacts.
     cached_graph: Option<DspGraph>,
     /// Pre-built nodes that bypass the factory system. Consumed on next compile.
@@ -225,7 +225,7 @@ impl EngineController {
             } => {
                 if let Some((node_id, param)) = self.exposed_controls.get(&label) {
                     let period_samples = if period_secs.is_finite() && period_secs > 0.0 {
-                        (period_secs * self.config.sample_rate as f64) as usize
+                        (period_secs * f64::from(self.config.sample_rate)) as usize
                     } else {
                         0
                     };
@@ -242,8 +242,7 @@ impl EngineController {
                         one_shot,
                     };
                     debug!(
-                        "set_automation: {id} -> {}/{} shape={shape} lo={lo} hi={hi} period={period_samples}samp",
-                        node_id, param
+                        "set_automation: {id} -> {node_id}/{param} shape={shape} lo={lo} hi={hi} period={period_samples}samp"
                     );
                     self.send_command(Command::SetAutomation { id, automation });
                 } else {
@@ -381,7 +380,7 @@ impl EngineController {
         self.send_command(Command::SetCrossfade(samples));
     }
 
-    /// Compile the shadow graph and send SwapGraph to the audio thread.
+    /// Compile the shadow graph and send `SwapGraph` to the audio thread.
     ///
     /// `reuse`: if true, reuse nodes from the cached retired graph when
     /// node ID, type, and registry version match. Preserves DSP state
@@ -411,11 +410,10 @@ impl EngineController {
         // Restore continuous controls so fresh nodes start at the right
         // pitch/timbre. Skip gate — must transition 0→1 to fire ADSR.
         for (label, &value) in &self.control_values {
-            if let Some((node_id, param)) = self.exposed_controls.get(label) {
-                if param != "gate" {
+            if let Some((node_id, param)) = self.exposed_controls.get(label)
+                && param != "gate" {
                     let _ = graph.set_param(node_id, param, value);
                 }
-            }
         }
 
         self.send_command(Command::SwapGraph(Box::new(graph)));

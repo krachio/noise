@@ -31,7 +31,7 @@ pub struct GraphSwapper {
     master_gain: f32,
     fade_buf_old: Vec<f32>,
     fade_buf_new: Vec<f32>,
-    /// Active automations. Vec for RT-safety (no HashMap alloc on audio thread).
+    /// Active automations. Vec for RT-safety (no `HashMap` alloc on audio thread).
     /// Linear scan for lookup — n < 100 per style guide.
     automations: Vec<(String, Automation)>,
 }
@@ -191,8 +191,8 @@ impl GraphSwapper {
     }
 
     /// Take the retired graph (if ready) for return to the control thread.
-    /// Called by AudioProcessor after process() to avoid deallocation on the audio path.
-    pub fn take_retired(&mut self) -> Option<Box<DspGraph>> {
+    /// Called by `AudioProcessor` after `process()` to avoid deallocation on the audio path.
+    pub const fn take_retired(&mut self) -> Option<Box<DspGraph>> {
         self.retired_ready.take()
     }
 

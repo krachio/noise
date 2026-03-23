@@ -61,7 +61,7 @@ impl std::fmt::Debug for BufferPool {
 /// `output_buffers[node_index][port_index]` = buffer index.
 type OutputBufferMap = Vec<Vec<usize>>;
 
-/// Pre-computed input wiring for a single node: (source_buffer_index, target_port).
+/// Pre-computed input wiring for a single node: (`source_buffer_index`, `target_port`).
 /// Built once at graph construction, avoids O(nodes × connections) scan per block.
 type InputMap = Vec<Vec<(usize, usize)>>;
 
@@ -149,9 +149,9 @@ impl DspGraph {
             .zip(
                 self.node_type_ids
                     .into_iter()
-                    .zip(self.node_versions.into_iter()),
+                    .zip(self.node_versions),
             )
-            .zip(self.nodes.into_iter())
+            .zip(self.nodes)
             .map(|((id, (type_id, version)), node)| {
                 (
                     id,

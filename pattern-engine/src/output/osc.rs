@@ -34,7 +34,7 @@ fn instant_to_osc_time(t: Instant) -> OscTime {
     })
 }
 
-/// OSC output sink using rosc + UdpSocket.
+/// OSC output sink using rosc + `UdpSocket`.
 pub struct OscSink {
     socket: UdpSocket,
     target: String,

@@ -84,8 +84,7 @@ impl CpalBackend {
         };
 
         info!(
-            "input device: {} ch, {}Hz, capturing ch {channel}",
-            channels, sample_rate
+            "input device: {channels} ch, {sample_rate}Hz, capturing ch {channel}"
         );
 
         let stream = device

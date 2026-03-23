@@ -11,7 +11,7 @@ pub struct AdcNode {
 
 impl AdcNode {
     #[must_use]
-    pub fn new(consumer: Consumer<f32>) -> Self {
+    pub const fn new(consumer: Consumer<f32>) -> Self {
         Self { consumer }
     }
 }

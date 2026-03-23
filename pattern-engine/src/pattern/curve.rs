@@ -21,7 +21,7 @@ use crate::event::{Event, Value};
     clippy::cast_sign_loss,
     clippy::cast_precision_loss
 )]
-pub fn compile_wavetable(events: &[Event<Value>], table_len: usize) -> HashMap<String, Vec<f32>> {
+#[must_use] pub fn compile_wavetable(events: &[Event<Value>], table_len: usize) -> HashMap<String, Vec<f32>> {
     if table_len == 0 {
         return HashMap::new();
     }
@@ -30,8 +30,8 @@ pub fn compile_wavetable(events: &[Event<Value>], table_len: usize) -> HashMap<S
     let mut by_label: HashMap<String, Vec<(f64, f32)>> = HashMap::new();
 
     for event in events {
-        if let Value::Control { label, value } = &event.value {
-            if let Some(whole) = event.whole {
+        if let Value::Control { label, value } = &event.value
+            && let Some(whole) = event.whole {
                 // Fractional position within the cycle [0, 1).
                 let frac = whole.start.fract();
                 let onset = frac.num as f64 / frac.den as f64;
@@ -40,7 +40,6 @@ pub fn compile_wavetable(events: &[Event<Value>], table_len: usize) -> HashMap<S
                     .or_default()
                     .push((onset, *value));
             }
-        }
     }
 
     // Build wavetable per label.

@@ -11,6 +11,11 @@ missing_debug_implementations = "warn"
 all = { level = "deny", priority = -1 }
 pedantic = { level = "deny", priority = -1 }
 nursery = { level = "deny", priority = -1 }
+# Audio code intentionally casts between float/int for sample math.
+"cast_precision_loss" = "allow"
+"cast_possible_truncation" = "allow"
+"cast_sign_loss" = "allow"
+"cast_possible_wrap" = "allow"
 
 [dependencies]
 cpal = "0.15"

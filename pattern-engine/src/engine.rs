@@ -231,7 +231,7 @@ impl Engine {
     /// `whole` arc (which the evaluator contract guarantees never happens).
     pub fn fill(&mut self, now: Instant) {
         let horizon = now + self.lookahead;
-        for (_name, &idx) in &self.names {
+        for &idx in self.names.values() {
             if self.slots[idx].is_control {
                 continue; // Control slots use fill_control_curves() instead.
             }
@@ -313,7 +313,7 @@ impl Engine {
         let horizon = now + self.lookahead;
         let mut outputs = Vec::new();
 
-        for (_, &idx) in &self.names {
+        for &idx in self.names.values() {
             if !self.slots[idx].is_control {
                 continue;
             }

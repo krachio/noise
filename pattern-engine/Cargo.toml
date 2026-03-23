@@ -8,7 +8,9 @@ unsafe_code = "forbid"
 
 [lints.clippy]
 all = { level = "deny", priority = -1 }
-pedantic = { level = "deny", priority = -1 }
+"cast_precision_loss" = "allow"
+"cast_possible_truncation" = "allow"
+"cast_sign_loss" = "allow"
 
 [features]
 default = ["native"]

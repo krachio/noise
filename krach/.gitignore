@@ -5,3 +5,6 @@ __pycache__/
 .pyright/
 dist/
 *.egg-info/
+docs/site/
+docs/hello.py
+docs/.python-version

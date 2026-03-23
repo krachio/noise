@@ -50,8 +50,8 @@ fn gcd128(mut a: u128, mut b: u128) -> u128 {
 /// Compute `a * b_den + b * a_den` and `a_den * b_den` using i128,
 /// reduce, and return (num: i64, den: u64). Panics on final overflow.
 fn cross_add(a_num: i64, a_den: u64, b_num: i64, b_den: u64) -> (i64, u64) {
-    let num = a_num as i128 * b_den as i128 + b_num as i128 * a_den as i128;
-    let den = a_den as u128 * b_den as u128;
+    let num = i128::from(a_num) * i128::from(b_den) + i128::from(b_num) * i128::from(a_den);
+    let den = u128::from(a_den) * u128::from(b_den);
     reduce128(num, den)
 }
 
@@ -113,7 +113,7 @@ impl Time {
         } else {
             // For negative: -((-num + den - 1) / den)
             let abs_num = self.num.unsigned_abs();
-            -(((abs_num + self.den - 1) / self.den) as i64)
+            -(abs_num.div_ceil(self.den) as i64)
         }
     }
 
@@ -166,8 +166,8 @@ impl Sub for Time {
 impl Mul for Time {
     type Output = Self;
     fn mul(self, rhs: Self) -> Self {
-        let num = self.num as i128 * rhs.num as i128;
-        let den = self.den as u128 * rhs.den as u128;
+        let num = i128::from(self.num) * i128::from(rhs.num);
+        let den = u128::from(self.den) * u128::from(rhs.den);
         let (n, d) = reduce128(num, den);
         Self { num: n, den: d }
     }
@@ -177,8 +177,8 @@ impl Div for Time {
     type Output = Self;
     fn div(self, rhs: Self) -> Self {
         assert!(!rhs.is_zero(), "division by zero");
-        let num = self.num as i128 * rhs.den as i128;
-        let den = self.den as u128 * rhs.num.unsigned_abs() as u128;
+        let num = i128::from(self.num) * i128::from(rhs.den);
+        let den = u128::from(self.den) * u128::from(rhs.num.unsigned_abs());
         let sign = if rhs.num < 0 { -1i128 } else { 1i128 };
         let (n, d) = reduce128(sign * num, den);
         Self { num: n, den: d }
@@ -197,8 +197,8 @@ impl Neg for Time {
 
 impl PartialEq for Time {
     fn eq(&self, other: &Self) -> bool {
-        let lhs = self.num as i128 * other.den as i128;
-        let rhs = other.num as i128 * self.den as i128;
+        let lhs = i128::from(self.num) * i128::from(other.den);
+        let rhs = i128::from(other.num) * i128::from(self.den);
         lhs == rhs
     }
 }
@@ -213,8 +213,8 @@ impl PartialOrd for Time {
 
 impl Ord for Time {
     fn cmp(&self, other: &Self) -> Ordering {
-        let lhs = self.num as i128 * other.den as i128;
-        let rhs = other.num as i128 * self.den as i128;
+        let lhs = i128::from(self.num) * i128::from(other.den);
+        let rhs = i128::from(other.num) * i128::from(self.den);
         lhs.cmp(&rhs)
     }
 }

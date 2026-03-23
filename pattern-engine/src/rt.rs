@@ -6,7 +6,7 @@
 /// Attempt to raise the current thread to the highest available priority.
 /// Returns `true` if priority was raised, `false` if it failed (non-fatal).
 /// Logs a warning on failure.
-pub fn set_realtime_priority() -> bool {
+#[must_use] pub fn set_realtime_priority() -> bool {
     use thread_priority::{ThreadPriority, set_current_thread_priority};
 
     match set_current_thread_priority(ThreadPriority::Max) {

@@ -93,7 +93,7 @@ fn warp_time(t: Time, _kind: u8, amount: f64, grid: u32) -> Time {
     let pos = frac.num as f64 / frac.den as f64;
 
     // Each pair of grid cells is one "swing unit".
-    let pair_width = 2.0 / grid as f64;
+    let pair_width = 2.0 / f64::from(grid);
     let pair_idx = (pos / pair_width).floor();
     let pair_start = pair_idx * pair_width;
     let pos_in_pair = (pos - pair_start) / pair_width; // [0, 1)

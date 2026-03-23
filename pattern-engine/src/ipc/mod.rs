@@ -204,7 +204,7 @@ pub fn compile_command(msg: &ClientMessage) -> Result<Option<EngineCommand>, Str
 }
 
 /// Human-readable description of an engine command (for IPC responses).
-pub fn describe(cmd: &EngineCommand) -> String {
+#[must_use] pub fn describe(cmd: &EngineCommand) -> String {
     match cmd {
         EngineCommand::SetPattern { name, .. } => format!("pattern set on {name}"),
         EngineCommand::SetPatternFromZero { name, .. } => {

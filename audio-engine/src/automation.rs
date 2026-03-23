@@ -4,7 +4,6 @@
 //! (or one-shot) waveform at block rate. [`AutoShape`] defines the
 //! waveform — sine, triangle, ramp, etc. — evaluated at normalised time.
 
-#[allow(clippy::cast_precision_loss)]
 use std::f32::consts::PI;
 
 /// Waveform shape for parameter automation, evaluated at normalised time t in [0, 1).
@@ -22,10 +21,10 @@ pub enum AutoShape {
 
 impl AutoShape {
     /// Evaluate shape at normalized time `t` in [0, 1) producing a value in [0, 1].
-    pub fn eval(&self, t: f32) -> f32 {
+    #[must_use] pub fn eval(&self, t: f32) -> f32 {
         match self {
-            Self::Sine => 0.5 + 0.5 * (t * 2.0 * PI).sin(),
-            Self::Tri => 1.0 - (2.0 * t - 1.0).abs(),
+            Self::Sine => 0.5f32.mul_add((t * 2.0 * PI).sin(), 0.5),
+            Self::Tri => 1.0 - 2.0f32.mul_add(t, -1.0).abs(),
             Self::Ramp => t,
             Self::RampDown => 1.0 - t,
             Self::Square => {
@@ -70,7 +69,7 @@ pub struct Automation {
 
 impl Automation {
     /// Current output value mapped to [lo, hi].
-    pub fn eval(&self) -> f32 {
+    #[must_use] pub fn eval(&self) -> f32 {
         if self.period_samples == 0 {
             return self.lo;
         }
@@ -80,7 +79,7 @@ impl Automation {
     }
 
     /// Advance phase by `samples`. Wraps for looping, clamps for one-shot.
-    pub fn advance(&mut self, samples: usize) {
+    pub const fn advance(&mut self, samples: usize) {
         if self.period_samples == 0 {
             self.active = false;
             return;

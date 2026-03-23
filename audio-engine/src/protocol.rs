@@ -59,7 +59,7 @@ pub enum ClientMessage {
     /// audio-engine sends a `/audio/node_types` OSC reply to `127.0.0.1:<reply_port>`.
     ListNodes { reply_port: u16 },
     /// Atomic batch of graph mutations. All mutations are applied to the
-    /// shadow graph before a single recompile + SwapGraph.
+    /// shadow graph before a single recompile + `SwapGraph`.
     GraphBatch { commands: Vec<ClientMessage> },
     /// Health check — engine responds with `ServerMessage::Pong`.
     Ping,
