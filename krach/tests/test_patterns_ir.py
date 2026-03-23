@@ -16,8 +16,10 @@ from krach.patterns.ir import (
     Euclid,
     Every,
     Fast,
+    Freeze,
     Hush,
     HushAll,
+    IrNode,
     Late,
     Note,
     Osc,
@@ -31,7 +33,9 @@ from krach.patterns.ir import (
     Silence,
     Slow,
     Stack,
+    Warp,
     command_to_json,
+    dict_to_ir,
     ir_to_dict,
 )
 
@@ -257,7 +261,6 @@ class TestImmutability:
 
 class TestWarpSerialization:
     def test_warp_serializes_to_json(self) -> None:
-        from krach.patterns.ir import Warp, ir_to_dict
         node = Warp(
             kind="swing", amount=0.67, grid=8,
             child=Atom(Note(channel=0, note=60, velocity=100, dur=0.5)),
@@ -267,4 +270,72 @@ class TestWarpSerialization:
         assert d["kind"] == "swing"
         assert d["amount"] == 0.67
         assert d["grid"] == 8
-        assert d["child"]["op"] == "Atom"
+
+
+class TestDictToIr:
+    """Round-trip tests: dict_to_ir(ir_to_dict(node)) == node."""
+
+    def _roundtrip(self, node: IrNode) -> None:
+        d = ir_to_dict(node)
+        reconstructed = dict_to_ir(d)
+        assert reconstructed == node, f"{reconstructed!r} != {node!r}"
+
+    def test_atom_note(self) -> None:
+        self._roundtrip(Atom(Note(channel=0, note=60, velocity=100, dur=0.5)))
+
+    def test_atom_control(self) -> None:
+        self._roundtrip(Atom(Control(label="freq", value=440.0)))
+
+    def test_atom_osc(self) -> None:
+        self._roundtrip(Atom(Osc(address="/set", args=(OscStr("pitch"), OscFloat(440.0)))))
+
+    def test_atom_cc(self) -> None:
+        self._roundtrip(Atom(Cc(channel=0, controller=1, value=64)))
+
+    def test_silence(self) -> None:
+        self._roundtrip(Silence())
+
+    def test_freeze(self) -> None:
+        self._roundtrip(Freeze(child=Atom(Note(0, 60, 100, 0.5))))
+
+    def test_cat(self) -> None:
+        self._roundtrip(Cat((Atom(Note(0, 60, 100, 0.5)), Silence())))
+
+    def test_stack(self) -> None:
+        self._roundtrip(Stack((Atom(Note(0, 60, 100, 0.5)), Atom(Note(0, 64, 100, 0.5)))))
+
+    def test_fast(self) -> None:
+        self._roundtrip(Fast(factor=(2, 1), child=Atom(Note(0, 60, 100, 0.5))))
+
+    def test_slow(self) -> None:
+        self._roundtrip(Slow(factor=(2, 1), child=Atom(Note(0, 60, 100, 0.5))))
+
+    def test_early(self) -> None:
+        self._roundtrip(Early(offset=(1, 4), child=Atom(Note(0, 60, 100, 0.5))))
+
+    def test_late(self) -> None:
+        self._roundtrip(Late(offset=(1, 4), child=Atom(Note(0, 60, 100, 0.5))))
+
+    def test_rev(self) -> None:
+        self._roundtrip(Rev(child=Atom(Note(0, 60, 100, 0.5))))
+
+    def test_every(self) -> None:
+        self._roundtrip(Every(n=4, transform=Rev(child=Atom(Note(0, 60, 100, 0.5))),
+                              child=Atom(Note(0, 60, 100, 0.5))))
+
+    def test_euclid(self) -> None:
+        self._roundtrip(Euclid(pulses=3, steps=8, rotation=0, child=Atom(Note(0, 60, 100, 0.5))))
+
+    def test_degrade(self) -> None:
+        self._roundtrip(Degrade(prob=0.3, seed=42, child=Atom(Note(0, 60, 100, 0.5))))
+
+    def test_warp(self) -> None:
+        self._roundtrip(Warp(kind="swing", amount=0.67, grid=8,
+                             child=Atom(Note(0, 60, 100, 0.5))))
+
+    def test_nested(self) -> None:
+        self._roundtrip(Fast(factor=(2, 1), child=Cat((Atom(Note(0, 60, 100, 0.5)), Silence()))))
+
+    def test_unknown_op_raises(self) -> None:
+        with pytest.raises(ValueError, match="unknown IR op"):
+            dict_to_ir({"op": "DoesNotExist"})

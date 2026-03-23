@@ -387,3 +387,73 @@ def _command_to_dict(msg: ClientMessage) -> dict[str, Any]:
 
 def command_to_json(msg: ClientMessage) -> str:
     return json.dumps(_command_to_dict(msg), separators=(",", ":"))
+
+
+# ── Deserialization ─────────────────────────────────────────────────────────
+
+
+def _dict_to_osc_arg(d: dict[str, Any]) -> OscArg:
+    if "Float" in d:
+        return OscFloat(d["Float"])
+    if "Int" in d:
+        return OscInt(d["Int"])
+    if "Str" in d:
+        return OscStr(d["Str"])
+    raise ValueError(f"unknown OscArg: {d}")
+
+
+def _dict_to_value(d: dict[str, Any]) -> Value:
+    match d["type"]:
+        case "Note":
+            return Note(channel=d["channel"], note=d["note"],
+                        velocity=d["velocity"], dur=d["dur"])
+        case "Control":
+            return Control(label=d["label"], value=d["value"])
+        case "Osc":
+            return Osc(address=d["address"],
+                       args=tuple(_dict_to_osc_arg(a) for a in d["args"]))
+        case "Cc":
+            return Cc(channel=d["channel"], controller=d["controller"],
+                      value=d["value"])
+        case _:
+            raise ValueError(f"unknown value type: {d['type']}")
+
+
+def dict_to_ir(d: dict[str, Any]) -> IrNode:
+    """Reconstruct an IR node from a dict (inverse of ``ir_to_dict``)."""
+    op = d["op"]
+    match op:
+        case "Atom":
+            return Atom(_dict_to_value(d["value"]))
+        case "Silence":
+            return Silence()
+        case "Freeze":
+            return Freeze(child=dict_to_ir(d["child"]))
+        case "Cat":
+            return Cat(tuple(dict_to_ir(c) for c in d["children"]))
+        case "Stack":
+            return Stack(tuple(dict_to_ir(c) for c in d["children"]))
+        case "Fast":
+            return Fast(factor=tuple(d["factor"]), child=dict_to_ir(d["child"]))  # type: ignore[arg-type]
+        case "Slow":
+            return Slow(factor=tuple(d["factor"]), child=dict_to_ir(d["child"]))  # type: ignore[arg-type]
+        case "Early":
+            return Early(offset=tuple(d["offset"]), child=dict_to_ir(d["child"]))  # type: ignore[arg-type]
+        case "Late":
+            return Late(offset=tuple(d["offset"]), child=dict_to_ir(d["child"]))  # type: ignore[arg-type]
+        case "Rev":
+            return Rev(child=dict_to_ir(d["child"]))
+        case "Every":
+            return Every(n=d["n"], transform=dict_to_ir(d["transform"]),
+                         child=dict_to_ir(d["child"]))
+        case "Euclid":
+            return Euclid(pulses=d["pulses"], steps=d["steps"],
+                          rotation=d["rotation"], child=dict_to_ir(d["child"]))
+        case "Degrade":
+            return Degrade(prob=d["prob"], seed=d["seed"],
+                           child=dict_to_ir(d["child"]))
+        case "Warp":
+            return Warp(kind=d["kind"], amount=d["amount"],
+                        grid=d["grid"], child=dict_to_ir(d["child"]))
+        case _:
+            raise ValueError(f"unknown IR op: {op}")
