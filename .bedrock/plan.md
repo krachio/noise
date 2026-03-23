@@ -102,6 +102,13 @@ Each iteration of the ralph loop follows this exact sequence:
 | Yara | 7 | Scene frozen but mutable; Callable[..., Any]; Scene uses positional tuples |
 | Nils | 6 | Shadowed _check_finite; stale terminology in __repr__ |
 
+### Resolved in iteration 3
+- Fixed save/recall data corruption (Scene now uses single nodes dict with NodeSnapshot)
+- Deleted shadowed _check_finite (local duplicate)
+- Fixed __repr__ duplication (single list with [src]/[fx] tags)
+- Actionable error messages in __init__.py (log path, binary, socket)
+- Robust _repo_root() (walks up to Cargo.toml instead of counting parents)
+
 ### Resolved in iteration 2
 - Extracted _bind.py (generic map_atoms walker)
 - Extracted _graph.py (build_graph_ir)
