@@ -134,6 +134,11 @@ Each iteration of the ralph loop follows this exact sequence:
 | Yara | 7 | Scene frozen but mutable; Callable[..., Any]; Scene uses positional tuples |
 | Nils | 6 | Shadowed _check_finite; stale terminology in __repr__ |
 
+### Resolved in iteration 5
+- Extracted export() into _export.py (100 lines)
+- Removed backward compat aliases (Voice, Bus, VoiceHandle, BusHandle)
+- _mixer.py: 1075 → 1001 lines (7 extracted modules total, 46% reduction from 1867)
+
 ### Resolved in iteration 4
 - Removed Voice/Bus/VoiceHandle/BusHandle backward compat aliases (clean break)
 - Extracted NodeHandle into _handle.py (113 lines)
