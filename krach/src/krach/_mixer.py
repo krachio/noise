@@ -1456,6 +1456,19 @@ class VoiceMixer:
         gain: float = 0.5,
     ) -> BusHandle:
         """Add or replace an effect bus. Rebuilds the graph."""
+        # Validate early: effects must have audio inputs
+        num_inputs: int
+        if isinstance(source, DspDef):
+            num_inputs = source.num_inputs
+        elif callable(source) and not isinstance(source, str):
+            num_inputs = len(inspect.signature(source).parameters)
+        else:
+            num_inputs = 1
+        if num_inputs == 0 and not isinstance(source, str):
+            raise ValueError(
+                f"bus '{name}': DSP has no audio inputs — effects need function "
+                f"parameters for audio input, e.g. def verb(inp: Signal) -> Signal"
+            )
         # Clean up old node if replacing
         if name in self._nodes:
             old = self._nodes[name]
@@ -1468,14 +1481,6 @@ class VoiceMixer:
             for key in [k for k in self._wires if k[0] == name or k[1] == name]:
                 del self._wires[key]
         type_id, controls, _source_text = self._resolve_source(name, source)
-        num_inputs: int
-        if isinstance(source, DspDef):
-            num_inputs = source.num_inputs
-        elif callable(source) and not isinstance(source, str):
-            result = _transpile(source)  # type: ignore[arg-type]
-            num_inputs = result.num_inputs
-        else:
-            num_inputs = 1
         self._nodes[name] = Bus(type_id=type_id, gain=gain, controls=controls, num_inputs=num_inputs)
         if not self._batching:
             self._rebuild()
@@ -1490,6 +1495,9 @@ class VoiceMixer:
         """
         _check_finite(level, f"send level for '{voice}' → '{bus}'")
         if voice not in self._nodes or bus not in self._nodes:
+            missing = [n for n in (voice, bus) if n not in self._nodes]
+            import warnings
+            warnings.warn(f"send: skipped — node(s) not found: {missing}", stacklevel=2)
             return
 
         key = (voice, bus)
@@ -1513,6 +1521,9 @@ class VoiceMixer:
         Raises ValueError if a send exists for the same (voice, bus) pair.
         """
         if voice not in self._nodes or bus not in self._nodes:
+            missing = [n for n in (voice, bus) if n not in self._nodes]
+            import warnings
+            warnings.warn(f"wire: skipped — node(s) not found: {missing}", stacklevel=2)
             return
 
         key = (voice, bus)

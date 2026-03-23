@@ -3746,3 +3746,91 @@ def test_pattern_missing_returns_none() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
     result = mixer.pattern("nonexistent")
     assert result is None
+
+
+# ── Bus validation: effects must have audio inputs ───────────────────────
+
+
+def test_bus_callable_with_no_audio_inputs_raises() -> None:
+    """bus() with a DspDef that has num_inputs=0 raises ValueError."""
+    from unittest.mock import MagicMock
+    import pytest
+    from krach._mixer import VoiceMixer, DspDef
+
+    # A generator (0 audio inputs) should not be used as a bus
+    source_dsp = DspDef(
+        fn=lambda: None,
+        source="def f(): pass",
+        faust="process = 0;",
+        controls=("in", "room"),
+        num_inputs=0,
+    )
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+
+    with pytest.raises(ValueError, match="no audio inputs"):
+        mixer.bus("verb", source_dsp, gain=0.3)
+
+
+def test_node_with_effect_dspdef_routes_to_bus() -> None:
+    """node() with a DspDef that has audio inputs creates an effect node."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer, DspDef
+    import tempfile
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:verb", "dac", "gain"]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mixer = VoiceMixer(session=session, dsp_dir=Path(tmpdir))
+
+        effect = DspDef(
+            fn=lambda x: x,
+            source="def f(x): return x",
+            faust='import("stdfaust.lib");\nprocess(input0) = input0;',
+            controls=("room",),
+            num_inputs=1,
+        )
+        mixer.node("verb", effect, gain=0.3)
+        node = mixer.get_node("verb")
+        assert node is not None
+        assert node.num_inputs == 1
+
+
+# ── No-op warnings: operations print warning, don't crash ────────────────
+
+
+def test_send_missing_node_warns() -> None:
+    """send() with missing node emits a warning."""
+    import warnings
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.3)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        mixer.send("bass", "nonexistent")
+        assert len(w) == 1
+        assert "nonexistent" in str(w[0].message)
+
+
+def test_wire_missing_node_warns() -> None:
+    """wire() with missing node emits a warning."""
+    import warnings
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.3)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        mixer.wire("bass", "nonexistent")
+        assert len(w) == 1
+        assert "nonexistent" in str(w[0].message)
