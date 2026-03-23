@@ -70,4 +70,30 @@ Each iteration of the ralph loop follows this exact sequence:
 
 ## Findings from last iteration
 
-_Empty — first run. Start with "Known Issues" above._
+### Resolved
+- Web folder mess (commit 7496071)
+- _web_audio.py moved out of krach core (commit 709378c)
+- Hardcoded /tmp path fixed (commit 0768544)
+- _flush() double iteration + stale docstrings (commit 2e429cb)
+
+### Reviewer scores (iteration 1)
+
+| Reviewer | Score | Key issues |
+|----------|-------|------------|
+| Kira | 6 | `voices`/`buses` properties return same dict; `__repr__` dumps everything |
+| Tomás | 5 | _mixer.py 1867 lines (3.7x limit); _mininotation monkey-patches VoiceMixer; WebSession fragile subclass |
+| Suki | 7 | _bind_voice_poly has no behavioral test; Session socket paths untested; ftom bug documented but unfixed |
+| Renzo | 4 | _repo_root() fragile; __init__.py errors don't suggest fix; no central config |
+| Maren | 5 | _mixer.py god module; 3 copy-pasted IR tree walkers (~220 lines duplication); struct() uses hasattr |
+| Diego | 8 | String alloc in Command::SetParam on RT thread; linear scan in set_param; Automation has heap Strings |
+| Yara | 7 | struct() bypasses type system; Node should be mostly frozen; Scene uses positional tuples |
+| Nils | 5 | PROGRESS.md test counts stale; module docstrings still say "voice"; error messages don't suggest fixes |
+
+### Priority action items for next iteration
+1. **Split _mixer.py** — extract types, graph builder, IR rewriters, pattern builders, handles (Tomás 5, Maren 5)
+2. **Generic IR walker** — replace 3 copy-pasted _bind_* functions with single map_ir (Maren 5, Suki 7)
+3. **Fix `voices`/`buses` properties** — filter by num_inputs or collapse into `nodes` (Kira 6)
+4. **Central config + actionable errors** — replace _repo_root(), add log path hints to errors (Renzo 4)
+5. **Freeze Node fields + typed Scene** — frozen dataclass split, NamedTuple for Scene (Yara 7)
+6. **Update PROGRESS.md + module docstrings** — accurate counts, "node" not "voice" (Nils 5)
+7. **String interning for RT commands** — inline strings or u32 IDs in Command variants (Diego 8)
