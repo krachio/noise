@@ -2,7 +2,21 @@
   "content": [
     {
       "content": null,
-      "created": "2026-03-23T13:07:29.148699Z",
+      "created": "2026-03-23T13:51:44.139410Z",
+      "format": null,
+      "hash": null,
+      "hash_algorithm": null,
+      "last_modified": "2026-03-23T13:51:26.685035Z",
+      "mimetype": "text/x-python",
+      "name": "startup.py",
+      "path": "startup.py",
+      "size": 453,
+      "type": "file",
+      "writable": true
+    },
+    {
+      "content": null,
+      "created": "2026-03-23T13:51:44.140655Z",
       "format": null,
       "hash": null,
       "hash_algorithm": null,
@@ -15,11 +29,11 @@
       "writable": true
     }
   ],
-  "created": "2026-03-23T13:07:29.148209Z",
+  "created": "2026-03-23T13:51:44.140274Z",
   "format": "json",
   "hash": null,
   "hash_algorithm": null,
-  "last_modified": "2026-03-23T13:07:29.148209Z",
+  "last_modified": "2026-03-23T13:51:44.140274Z",
   "mimetype": null,
   "name": "",
   "path": "",

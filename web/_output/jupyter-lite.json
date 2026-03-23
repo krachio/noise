@@ -1,10 +1,14 @@
 {
+  "$schema": "https://jupyter-lite.readthedocs.io/en/latest/_static/schema/jupyter-lite.v0.schema.json",
   "jupyter-config-data": {
-    "appName": "JupyterLite",
+    "appName": "krach REPL",
     "appUrl": "./lab",
     "appVersion": "0.7.4",
     "baseUrl": "./",
     "defaultKernelName": "python",
+    "disabledExtensions": [
+      "@jupyterlite/server-extension"
+    ],
     "faviconUrl": "./lab/favicon.ico",
     "federated_extensions": [
       {
@@ -399,8 +403,15 @@
       "@jupyterlite/pyodide-kernel-extension:kernel": {
         "pipliteUrls": [
           "./pypi/all.json?sha256=32fb220689639810659972154d7f5eff551d6102b3ba441cc1d1969c1d9cd0dc",
+          "../pypi/all.json",
           "./extensions/@jupyterlite/pyodide-kernel-extension/static/pypi/all.json?sha256=6ba01855ede9932d7c34a81c163e01d7e3d0186e0f133876f83126bc734f4162"
-        ]
+        ],
+        "pipliteWheelUrl": "../pypi/all.json"
+      }
+    },
+    "settingsOverrides": {
+      "@jupyterlab/apputils-extension:themes": {
+        "theme": "JupyterLab Dark"
       }
     }
   },
