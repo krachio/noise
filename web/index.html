@@ -245,9 +245,15 @@ async function init() {
     progress.style.width = '80%';
     status.textContent = 'setting up krach...';
 
+    // Load krach_web bridge (lives outside the krach wheel — browser-only)
+    const webBridge = await fetch(base + 'krach_web.py');
+    const webBridgeCode = await webBridge.text();
+    pyodide.FS.writeFile('/home/pyodide/krach_web.py', webBridgeCode);
+
     // Setup kr and krs
     await pyodide.runPythonAsync(`
-from krach._web_audio import connect_web
+import sys; sys.path.insert(0, '/home/pyodide')
+from krach_web import connect_web
 import krach.dsp as krs
 kr = connect_web(bpm=120, master=0.7)
 `);

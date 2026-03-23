@@ -44,10 +44,12 @@ class WebSession(Session):
         """No-op in browser."""
 
     def send(self, msg: object) -> None:  # type: ignore[override]
-        """Pattern commands — dispatch to JS scheduling if it's a play."""
-        # Slot bookkeeping is done by the caller (Session.play/hush/etc.)
-        # The actual pattern scheduling happens via _dispatch_pattern
-        pass
+        """Pattern commands — route Hush/HushAll to JS bridge."""
+        from krach.patterns.ir import Hush, HushAll
+        if isinstance(msg, Hush) and self._js_bridge:
+            self._js_bridge.stop_slot(msg.slot)
+        elif isinstance(msg, HushAll) and self._js_bridge:
+            self._js_bridge.stop_all()
 
     def _send_json(self, obj: dict[str, Any]) -> dict[str, Any]:
         """Audio commands — route to Web Audio bridge."""
@@ -197,6 +199,29 @@ def _create_web_audio_bridge() -> object | None:
                     }
                     tick();
                     schedulers[slot] = setInterval(tick, cycleSecs * 800);
+                },
+                stop_slot(slot) {
+                    if (schedulers[slot]) {
+                        clearInterval(schedulers[slot]);
+                        delete schedulers[slot];
+                    }
+                    // Silence the voice's gain
+                    const parts = slot.split('/');
+                    const name = parts[0] || slot;
+                    if (voices[name]) {
+                        voices[name].gain.gain.cancelScheduledValues(ctx.currentTime);
+                        voices[name].gain.gain.setValueAtTime(0, ctx.currentTime);
+                    }
+                },
+                stop_all() {
+                    for (const slot of Object.keys(schedulers)) {
+                        clearInterval(schedulers[slot]);
+                    }
+                    for (const name of Object.keys(voices)) {
+                        voices[name].gain.gain.cancelScheduledValues(ctx.currentTime);
+                        voices[name].gain.gain.setValueAtTime(0, ctx.currentTime);
+                    }
+                    Object.keys(schedulers).forEach(k => delete schedulers[k]);
                 },
                 send_json(json) {}
             };
