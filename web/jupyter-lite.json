@@ -1,0 +1,16 @@
+{
+  "$schema": "https://jupyter-lite.readthedocs.io/en/latest/_static/schema/jupyter-lite.v0.schema.json",
+  "jupyter-lite-schema-version": 0,
+  "jupyter-config-data": {
+    "appName": "krach REPL",
+    "appUrl": "/try",
+    "disabledExtensions": [
+      "@jupyterlite/server-extension"
+    ],
+    "settingsOverrides": {
+      "@jupyterlab/apputils-extension:themes": {
+        "theme": "JupyterLab Dark"
+      }
+    }
+  }
+}
