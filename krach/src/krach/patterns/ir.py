@@ -172,6 +172,22 @@ class Degrade:
             raise ValueError("prob must be in [0.0, 1.0]")
 
 
+@dataclass(frozen=True)
+class Warp:
+    kind: str
+    amount: float
+    grid: int
+    child: IrNode
+
+    def __post_init__(self) -> None:
+        if self.kind != "swing":
+            raise ValueError(f"unknown warp kind: {self.kind}")
+        if self.grid <= 0 or self.grid % 2 != 0:
+            raise ValueError("grid must be even and > 0")
+        if not (0.0 < self.amount < 1.0):
+            raise ValueError("amount must be in (0, 1)")
+
+
 IrNode = (
     Atom
     | Silence
@@ -186,6 +202,7 @@ IrNode = (
     | Every
     | Euclid
     | Degrade
+    | Warp
 )
 
 # ── Client messages ──────────────────────────────────────────────────────────
@@ -332,6 +349,14 @@ def ir_to_dict(node: IrNode) -> dict[str, Any]:
                 "op": "Degrade",
                 "prob": prob,
                 "seed": seed,
+                "child": ir_to_dict(child),
+            }
+        case Warp(kind, amount, grid, child):
+            return {
+                "op": "Warp",
+                "kind": kind,
+                "amount": amount,
+                "grid": grid,
                 "child": ir_to_dict(child),
             }
 

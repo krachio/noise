@@ -426,6 +426,7 @@ def _bind_voice(node: IrNode, voice: str) -> IrNode:
         Silence,
         Slow,
         Stack,
+        Warp,
     )
 
     match node:
@@ -465,6 +466,8 @@ def _bind_voice(node: IrNode, voice: str) -> IrNode:
             return Euclid(pulses, steps, rotation, _bind_voice(child, voice))
         case Degrade(prob, seed, child):
             return Degrade(prob, seed, _bind_voice(child, voice))
+        case Warp(kind, amount, grid, child):
+            return Warp(kind, amount, grid, _bind_voice(child, voice))
         case _:
             return node
 
@@ -490,6 +493,7 @@ def _bind_voice_poly(
         Silence,
         Slow,
         Stack,
+        Warp,
     )
 
     match node:
@@ -546,6 +550,9 @@ def _bind_voice_poly(
         case Degrade(prob, seed, child):
             bound, alloc = _bind_voice_poly(child, parent, count, alloc)
             return Degrade(prob, seed, bound), alloc
+        case Warp(kind, amount, grid, child):
+            bound, alloc = _bind_voice_poly(child, parent, count, alloc)
+            return Warp(kind, amount, grid, bound), alloc
         case _:
             # Atom without Freeze — bind to current instance (non-compound event)
             inst = f"{parent}_v{alloc % count}"
@@ -574,6 +581,7 @@ def _bind_ctrl(node: IrNode, label: str) -> IrNode:
         Silence,
         Slow,
         Stack,
+        Warp,
     )
 
     match node:
@@ -613,6 +621,8 @@ def _bind_ctrl(node: IrNode, label: str) -> IrNode:
             return Euclid(pulses, steps, rotation, _bind_ctrl(child, label))
         case Degrade(prob, seed, child):
             return Degrade(prob, seed, _bind_ctrl(child, label))
+        case Warp(kind, amount, grid, child):
+            return Warp(kind, amount, grid, _bind_ctrl(child, label))
         case _:
             return node
 
@@ -1002,7 +1012,10 @@ class VoiceMixer:
         """Check if name is a known voice or bus."""
         return name in self._voices or name in self._buses
 
-    def play(self, target: str, pattern: Pattern, *, from_zero: bool = False) -> None:
+    def play(
+        self, target: str, pattern: Pattern, *,
+        from_zero: bool = False, swing: float | None = None,
+    ) -> None:
         """Play a pattern on a voice or control path.
 
         - Known voice name (exact match): binds bare params to ``voice/param``
@@ -1013,6 +1026,8 @@ class VoiceMixer:
         ``from_zero``: if True, uses ``play_from_zero`` so the pattern phase
         starts at 0 regardless of the current cycle position.
         """
+        if swing is not None:
+            pattern = pattern.swing(swing)
         self._patterns[target] = pattern
         send = self._session.play_from_zero if from_zero else self._session.play
         voice = self._voices.get(target)

@@ -24,6 +24,7 @@ from krach.patterns.ir import (
     Silence,
     Slow,
     Stack,
+    Warp,
 )
 
 
@@ -110,6 +111,10 @@ class Pattern:
     def thin(self, prob: float, seed: int = 0) -> Pattern:
         """Drop events with probability prob (0.0 = keep all, 1.0 = drop all)."""
         return Pattern(Degrade(prob=prob, seed=seed, child=self.node))
+
+    def swing(self, amount: float = 0.67, grid: int = 8) -> Pattern:
+        """Apply swing. amount=0.5 is straight, 0.67 is standard, 0.75 is heavy."""
+        return Pattern(Warp(kind="swing", amount=amount, grid=grid, child=self.node))
 
 
 # ── Atom constructors ────────────────────────────────────────────────────

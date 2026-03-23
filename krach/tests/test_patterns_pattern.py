@@ -251,3 +251,43 @@ class TestFastInfNan:
         import pytest
         with pytest.raises(ValueError, match="positive cycles"):
             note(60).over(float("nan"))
+
+
+# ── Swing ────────────────────────────────────────────────────────────────
+
+
+class TestSwing:
+    def test_swing_produces_warp_node(self) -> None:
+        from krach.patterns.ir import Warp
+        pat = note(60).swing(0.67)
+        assert isinstance(pat.node, Warp)
+        assert pat.node.kind == "swing"
+        assert pat.node.amount == 0.67
+        assert pat.node.grid == 8
+
+    def test_swing_default_args(self) -> None:
+        from krach.patterns.ir import Warp
+        pat = note(60).swing()
+        assert isinstance(pat.node, Warp)
+        assert pat.node.amount == 0.67
+        assert pat.node.grid == 8
+
+    def test_swing_custom_grid(self) -> None:
+        from krach.patterns.ir import Warp
+        pat = note(60).swing(0.6, grid=4)
+        assert isinstance(pat.node, Warp)
+        assert pat.node.grid == 4
+
+    def test_swing_invalid_amount_raises(self) -> None:
+        import pytest
+        with pytest.raises(ValueError, match="amount must be in"):
+            note(60).swing(0.0)
+        with pytest.raises(ValueError, match="amount must be in"):
+            note(60).swing(1.0)
+
+    def test_swing_invalid_grid_raises(self) -> None:
+        import pytest
+        with pytest.raises(ValueError, match="grid must be even"):
+            note(60).swing(0.67, grid=7)
+        with pytest.raises(ValueError, match="grid must be even"):
+            note(60).swing(0.67, grid=0)

@@ -141,6 +141,10 @@ kr.play("bass", kr.note(55.0) * 4)
 kr.play("kick", kr.hit() * 4)
 kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
 
+# Swing: delay every other 8th note
+kr.play("kick", (kr.hit() * 8).swing(0.67))
+kr.play("hat", kr.hit() * 8, swing=0.67)  # convenience kwarg
+
 # Play a control pattern on a path -- binds "ctrl" placeholder:
 kr.play("bass/cutoff", kr.ramp(200.0, 2000.0).over(4))
 kr.play("bass/cutoff", kr.mod_sine(200.0, 2000.0).over(8))
@@ -286,6 +290,7 @@ p.over(2)       # stretch to 2 cycles
 p.every(4, lambda p: p.reverse())
 p.spread(3, 8)  # euclidean: 3 hits in 8 steps
 p.thin(0.3)     # randomly drop 30% of events
+p.swing(0.67)   # swing: 0.5=straight, 0.67=standard, 0.75=heavy
 kr.rest()       # silence atom
 ```
 

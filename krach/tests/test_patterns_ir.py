@@ -253,3 +253,18 @@ class TestImmutability:
         n = Note(channel=0, note=60, velocity=100, dur=1.0)
         with pytest.raises(dataclasses.FrozenInstanceError):
             n.note = 64  # type: ignore[misc]
+
+
+class TestWarpSerialization:
+    def test_warp_serializes_to_json(self) -> None:
+        from krach.patterns.ir import Warp, ir_to_dict
+        node = Warp(
+            kind="swing", amount=0.67, grid=8,
+            child=Atom(Note(channel=0, note=60, velocity=100, dur=0.5)),
+        )
+        d = ir_to_dict(node)
+        assert d["op"] == "Warp"
+        assert d["kind"] == "swing"
+        assert d["amount"] == 0.67
+        assert d["grid"] == 8
+        assert d["child"]["op"] == "Atom"
