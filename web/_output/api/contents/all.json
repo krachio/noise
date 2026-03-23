@@ -2,7 +2,7 @@
   "content": [
     {
       "content": null,
-      "created": "2026-03-23T13:51:44.139410Z",
+      "created": "2026-03-23T15:00:48.874217Z",
       "format": null,
       "hash": null,
       "hash_algorithm": null,
@@ -16,7 +16,7 @@
     },
     {
       "content": null,
-      "created": "2026-03-23T13:51:44.140655Z",
+      "created": "2026-03-23T15:00:48.881333Z",
       "format": null,
       "hash": null,
       "hash_algorithm": null,
@@ -27,13 +27,27 @@
       "size": 1045,
       "type": "file",
       "writable": true
+    },
+    {
+      "content": null,
+      "created": "2026-03-23T15:00:48.878875Z",
+      "format": null,
+      "hash": null,
+      "hash_algorithm": null,
+      "last_modified": "2026-03-23T15:00:28.056494Z",
+      "mimetype": null,
+      "name": "welcome.ipynb",
+      "path": "welcome.ipynb",
+      "size": 1865,
+      "type": "notebook",
+      "writable": true
     }
   ],
-  "created": "2026-03-23T13:51:44.140274Z",
+  "created": "2026-03-23T15:00:48.880628Z",
   "format": "json",
   "hash": null,
   "hash_algorithm": null,
-  "last_modified": "2026-03-23T13:51:44.140274Z",
+  "last_modified": "2026-03-23T15:00:48.880628Z",
   "mimetype": null,
   "name": "",
   "path": "",

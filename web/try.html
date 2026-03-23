@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>krach — try it</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/theme/material-darker.min.css">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #1a1a1a; color: #d4d4d4; font-family: system-ui, sans-serif; }
+  header { padding: 16px 24px; border-bottom: 1px solid #333; display: flex; align-items: center; gap: 16px; }
+  header h1 { font-size: 18px; font-weight: 600; }
+  header .status { font-size: 13px; color: #888; }
+  header .status.ready { color: #6a9955; }
+  #cells { padding: 16px; max-width: 900px; margin: 0 auto; }
+  .cell { margin-bottom: 12px; border: 1px solid #333; border-radius: 6px; overflow: hidden; }
+  .cell.running { border-color: #569cd6; }
+  .cell-toolbar { display: flex; justify-content: space-between; align-items: center; padding: 4px 8px; background: #252525; border-bottom: 1px solid #333; }
+  .cell-toolbar button { background: #333; color: #d4d4d4; border: none; padding: 4px 12px; border-radius: 3px; cursor: pointer; font-size: 12px; }
+  .cell-toolbar button:hover { background: #444; }
+  .cell-toolbar .run-btn { background: #2d5a2d; }
+  .cell-toolbar .run-btn:hover { background: #3a6a3a; }
+  .cell-toolbar .cell-num { color: #888; font-size: 12px; font-family: monospace; }
+  .CodeMirror { height: auto; font-size: 14px; line-height: 1.5; }
+  .CodeMirror-scroll { min-height: 40px; }
+  .output { padding: 8px 12px; font-family: 'JetBrains Mono', monospace; font-size: 13px; white-space: pre-wrap; background: #1e1e1e; max-height: 300px; overflow-y: auto; }
+  .output:empty { display: none; }
+  .output .error { color: #f44747; }
+  .output .result { color: #569cd6; }
+  #add-cell { display: block; margin: 12px auto; background: #252525; color: #888; border: 1px dashed #444; padding: 8px 24px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  #add-cell:hover { border-color: #666; color: #aaa; }
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono&display=swap');
+</style>
+</head>
+<body>
+<header>
+  <h1>krach</h1>
+  <span id="status" class="status">loading...</span>
+</header>
+<div id="cells"></div>
+<button id="add-cell" onclick="addCell()">+ add cell</button>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/python/python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/matchbrackets.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/addon/edit/closebrackets.min.js"></script>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script>
+let pyodide = null;
+let cellCount = 0;
+const cells = [];
+
+function addCell(code = '') {
+  cellCount++;
+  const n = cellCount;
+  const container = document.getElementById('cells');
+  const div = document.createElement('div');
+  div.className = 'cell';
+  div.id = `cell-${n}`;
+  div.innerHTML = `
+    <div class="cell-toolbar">
+      <span class="cell-num">In [${n}]</span>
+      <div>
+        <button class="run-btn" onclick="runCell(${n})">▶ Run</button>
+        <button onclick="runCell(${n}); addCell()">▶ Run + New</button>
+      </div>
+    </div>
+    <div id="editor-${n}"></div>
+    <div id="output-${n}" class="output"></div>
+  `;
+  container.appendChild(div);
+  const editor = CodeMirror(document.getElementById(`editor-${n}`), {
+    value: code,
+    mode: 'python',
+    theme: 'material-darker',
+    lineNumbers: false,
+    matchBrackets: true,
+    autoCloseBrackets: true,
+    indentUnit: 4,
+    tabSize: 4,
+    indentWithTabs: false,
+    extraKeys: {
+      'Shift-Enter': () => { runCell(n); addCell(); cells[cells.length-1].editor.focus(); },
+      'Ctrl-Enter': () => runCell(n),
+    }
+  });
+  cells.push({ n, editor, div });
+  editor.focus();
+  return editor;
+}
+
+async function runCell(n) {
+  if (!pyodide) return;
+  const cell = cells.find(c => c.n === n);
+  if (!cell) return;
+  const code = cell.editor.getValue().trim();
+  if (!code) return;
+
+  const out = document.getElementById(`output-${n}`);
+  cell.div.classList.add('running');
+  out.innerHTML = '';
+
+  try {
+    pyodide.runPython(`
+import sys, io
+_cell_stdout = io.StringIO()
+sys.stdout = _cell_stdout
+sys.stderr = _cell_stdout
+`);
+    let result = await pyodide.runPythonAsync(code);
+    let stdout = pyodide.runPython('_cell_stdout.getvalue()');
+    pyodide.runPython('sys.stdout = sys.__stdout__; sys.stderr = sys.__stderr__');
+
+    if (stdout) out.innerHTML += stdout;
+    if (result !== undefined && result !== null && result.toString() !== 'None') {
+      out.innerHTML += `<span class="result">${result}</span>\n`;
+    }
+  } catch(e) {
+    out.innerHTML += `<span class="error">${e.message}</span>\n`;
+  }
+  cell.div.classList.remove('running');
+}
+
+async function init() {
+  const status = document.getElementById('status');
+  try {
+    status.textContent = 'loading Python...';
+    pyodide = await loadPyodide();
+
+    status.textContent = 'installing krach...';
+    await pyodide.loadPackage('micropip');
+    const micropip = pyodide.pyimport('micropip');
+    const base = window.location.origin + window.location.pathname.replace(/[^/]*$/, '');
+    await micropip.install(base + 'pypi/faust_dsl-0.1.0-py3-none-any.whl');
+    await micropip.install(base + 'pypi/krach-0.1.0-py3-none-any.whl');
+
+    status.textContent = 'setting up krach...';
+    await pyodide.runPythonAsync(`
+from krach._web_audio import connect_web
+import krach.dsp as krs
+kr = connect_web(bpm=120, master=0.7)
+`);
+
+    status.textContent = 'ready';
+    status.className = 'status ready';
+
+    // Pre-populate cells
+    addCell(`# krach is ready! kr and krs are in scope.
+# Shift+Enter to run a cell and create a new one.
+# Ctrl+Enter to run without creating a new cell.
+
+print("kr =", type(kr).__name__)
+print("krs =", krs.__name__)`);
+
+    addCell(`# Create a voice and play a pattern
+bass = kr.node("bass", "oscillator", gain=0.3)
+bass @ kr.seq("A2", "D3", None, "E2").over(2)
+print("bass playing!")`);
+
+    addCell(`# Route to an effect
+verb = kr.node("verb", "oscillator", gain=0.2)
+bass >> verb
+print("routed bass >> verb")`);
+
+  } catch(e) {
+    status.textContent = 'error: ' + e.message;
+    addCell('# Error loading krach. Try: print("hello")');
+  }
+}
+
+init();
+</script>
+</body>
+</html>

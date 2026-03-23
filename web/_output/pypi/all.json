@@ -5,19 +5,19 @@
         {
           "comment_text": "",
           "digests": {
-            "md5": "431cabe627d5c3a1a087b237e95ef187",
-            "sha256": "51cf45f5568432d1585d2e7b68ab95ae530b297579d3ee58ba769101ca442e34"
+            "md5": "532c50bfe4f11faef87ce67db85165a2",
+            "sha256": "0324e5fb32fa0714e2f32e74355d51a4c3a313bf6b662df5b632805df08be691"
           },
           "downloads": -1,
           "filename": "faust_dsl-0.1.0-py3-none-any.whl",
           "has_sig": false,
-          "md5_digest": "431cabe627d5c3a1a087b237e95ef187",
+          "md5_digest": "532c50bfe4f11faef87ce67db85165a2",
           "packagetype": "bdist_wheel",
           "python_version": "py3",
-          "requires_python": ">=3.13",
+          "requires_python": ">=3.12",
           "size": 27450,
-          "upload_time": "2026-03-23T13:07:12.103982Z",
-          "upload_time_iso_8601": "2026-03-23T13:07:12.103982Z",
+          "upload_time": "2026-03-23T14:05:51.834261Z",
+          "upload_time_iso_8601": "2026-03-23T14:05:51.834261Z",
           "url": "./faust_dsl-0.1.0-py3-none-any.whl",
           "yanked": false,
           "yanked_reason": null
@@ -31,19 +31,19 @@
         {
           "comment_text": "",
           "digests": {
-            "md5": "510406a3c3eb9325b53d06d255dba0fb",
-            "sha256": "5dda916031a44dfff8e477c9df36d062d9c2217d4c4dd87fbe8877d40c4216a3"
+            "md5": "5770e3b9606cf4e8c5bb341f7a164f9d",
+            "sha256": "0d4082a1671b11129d572a7197fb32497d9294ec532599ccd6256a224bae7d96"
           },
           "downloads": -1,
           "filename": "krach-0.1.0-py3-none-any.whl",
           "has_sig": false,
-          "md5_digest": "510406a3c3eb9325b53d06d255dba0fb",
+          "md5_digest": "5770e3b9606cf4e8c5bb341f7a164f9d",
           "packagetype": "bdist_wheel",
           "python_version": "py3",
-          "requires_python": ">=3.13",
-          "size": 43413,
-          "upload_time": "2026-03-23T13:06:58.966327Z",
-          "upload_time_iso_8601": "2026-03-23T13:06:58.966327Z",
+          "requires_python": ">=3.12",
+          "size": 43582,
+          "upload_time": "2026-03-23T14:05:51.826458Z",
+          "upload_time_iso_8601": "2026-03-23T14:05:51.826458Z",
           "url": "./krach-0.1.0-py3-none-any.whl",
           "yanked": false,
           "yanked_reason": null
