@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import inspect
 import json
-import math
 import textwrap
 from collections.abc import Generator
 from contextlib import contextmanager
@@ -39,18 +38,30 @@ from krach._pitch import parse_note as _parse_note
 
 
 @dataclass(frozen=True)
+class NodeSnapshot:
+    """Frozen snapshot of a Node's state for scene storage."""
+
+    type_id: str
+    gain: float
+    controls: tuple[str, ...]
+    num_inputs: int = 0
+    count: int = 1
+    init: tuple[tuple[str, float], ...] = ()
+    source_text: str = ""
+
+
+@dataclass(frozen=True)
 class Scene:
     """Snapshot of the mixer state — nodes, sends, patterns, controls."""
 
-    voices: dict[str, tuple[str, float, tuple[str, ...], int, tuple[tuple[str, float], ...], str]]
-    buses: dict[str, tuple[str, float, tuple[str, ...], int]]
+    nodes: dict[str, NodeSnapshot]
     sends: dict[tuple[str, str], float]
     wires: dict[tuple[str, str], str]
     patterns: dict[str, Pattern]
     ctrl_values: dict[str, float]
     tempo: float
     master: float
-    muted: dict[str, float]  # name → gain before mute
+    muted: dict[str, float]
 
 
 @dataclass
@@ -106,11 +117,6 @@ def dsp(fn: Callable[..., Any]) -> DspDef:
         num_inputs=result.num_inputs,
     )
 
-
-def _check_finite(value: float, label: str) -> None:
-    """Raise ValueError if value is NaN or Inf."""
-    if math.isnan(value) or math.isinf(value):
-        raise ValueError(f"{label} must be finite, got {value}")
 
 
 
@@ -509,8 +515,14 @@ class VoiceMixer:
     def save(self, name: str) -> None:
         """Save current state as a named scene."""
         self._scenes[name] = Scene(
-            voices={n: (v.type_id, v.gain, v.controls, v.count, v.init, v.source_text) for n, v in self._nodes.items()},
-            buses={n: (b.type_id, b.gain, b.controls, b.num_inputs) for n, b in self._nodes.items()},
+            nodes={
+                n: NodeSnapshot(
+                    type_id=v.type_id, gain=v.gain, controls=v.controls,
+                    num_inputs=v.num_inputs, count=v.count, init=v.init,
+                    source_text=v.source_text,
+                )
+                for n, v in self._nodes.items()
+            },
             sends=dict(self._sends),
             wires=dict(self._wires),
             patterns=dict(self._patterns),
@@ -529,19 +541,17 @@ class VoiceMixer:
         # Stop everything
         self.stop()
 
-        # Rebuild voices and buses
-        self._nodes.clear()
+        # Rebuild nodes
         self._nodes.clear()
         self._sends.clear()
         self._wires.clear()
 
-        for vname, (type_id, gain, controls, count, init, source_text) in scene.voices.items():
-            self._nodes[vname] = Voice(
-                type_id=type_id, gain=gain, controls=controls,
-                count=count, init=init, source_text=source_text,
+        for nname, snap in scene.nodes.items():
+            self._nodes[nname] = Node(
+                type_id=snap.type_id, gain=snap.gain, controls=snap.controls,
+                num_inputs=snap.num_inputs, count=snap.count, init=snap.init,
+                source_text=snap.source_text,
             )
-        for bname, (type_id, gain, controls, num_inputs) in scene.buses.items():
-            self._nodes[bname] = Bus(type_id=type_id, gain=gain, controls=controls, num_inputs=num_inputs)
         self._sends = dict(scene.sends)
         self._wires = dict(scene.wires)
         self._muted = dict(scene.muted)
@@ -985,27 +995,20 @@ class VoiceMixer:
             self._transition_bars = 0
 
     def __repr__(self) -> str:
-        top = list(self._nodes.keys())
-        count = len(top)
-        lines = [f"VoiceMixer({count} voices)"]
-        if not top:
+        count = len(self._nodes)
+        lines = [f"VoiceMixer({count} nodes)"]
+        if not self._nodes:
             return lines[0]
 
-        max_name = max(len(n) for n in top)
-        for name in top:
-            v = self._nodes[name]
-            parts = f"  {name + ':':.<{max_name + 2}} {v.type_id}  gain={v.gain:.2f}"
+        max_name = max(len(n) for n in self._nodes)
+        for name, node in self._nodes.items():
+            kind = "fx" if node.num_inputs > 0 else "src"
+            parts = f"  {name + ':':.<{max_name + 2}} {node.type_id}  gain={node.gain:.2f}  [{kind}]"
             if name in self._muted:
                 parts += "  [muted]"
-            if v.count > 1:
-                parts += f"  poly({v.count})"
+            if node.count > 1:
+                parts += f"  poly({node.count})"
             lines.append(parts)
-
-        # Buses
-        if self._nodes:
-            lines.append(f"  buses:")
-            for bname, b in self._nodes.items():
-                lines.append(f"    {bname}: {b.type_id}  gain={b.gain:.2f}")
 
         return "\n".join(lines)
 

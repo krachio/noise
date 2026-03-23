@@ -1208,7 +1208,7 @@ def test_repr_shows_voices_and_gains() -> None:
     mixer.voice("bass", "faust:bass", gain=0.3)
 
     r = repr(mixer)
-    assert "VoiceMixer(2 voices)" in r
+    assert "VoiceMixer(2 nodes)" in r
     assert "kick" in r
     assert "faust:kick" in r
     assert "0.80" in r
@@ -1259,7 +1259,7 @@ def test_repr_empty() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
 
     r = repr(mixer)
-    assert "VoiceMixer(0 voices)" in r
+    assert "VoiceMixer(0 nodes)" in r
 
 
 # ── Sprint 13 adversarial: _muted leak on poly instance removal ──────────
@@ -3836,3 +3836,73 @@ def test_wire_missing_node_warns() -> None:
         mixer.wire("bass", "nonexistent")
         assert len(w) == 1
         assert "nonexistent" in str(w[0].message)
+
+
+# ── save/recall round-trip preserves full Node state ─────────────────────
+
+
+def test_save_recall_preserves_poly_count() -> None:
+    """save/recall round-trip must preserve count for poly voices."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.voice("pad", "faust:pad", count=4, gain=0.5)
+    mixer.save("test")
+
+    # Destroy state
+    mixer.remove("pad")
+    assert mixer.get_node("pad") is None
+
+    # Recall
+    mixer.recall("test")
+    node = mixer.get_node("pad")
+    assert node is not None
+    assert node.count == 4  # must survive round-trip
+
+
+def test_save_recall_preserves_source_text() -> None:
+    """save/recall round-trip must preserve source_text."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:bass", "dac", "gain"]
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.3)
+    # Manually set source_text to simulate transpiled DSP
+    mixer._nodes["bass"].source_text = "def bass(): pass"
+    mixer.save("test")
+
+    mixer.remove("bass")
+    mixer.recall("test")
+    node = mixer.get_node("bass")
+    assert node is not None
+    assert node.source_text == "def bass(): pass"
+
+
+def test_save_recall_preserves_num_inputs() -> None:
+    """save/recall round-trip must preserve num_inputs for effects."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:verb": ("room",),
+    })
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    assert mixer.get_node("verb") is not None
+    assert mixer.get_node("verb").num_inputs > 0  # type: ignore[union-attr]
+    mixer.save("test")
+
+    mixer.remove("verb")
+    mixer.recall("test")
+    node = mixer.get_node("verb")
+    assert node is not None
+    assert node.num_inputs > 0  # must survive round-trip
