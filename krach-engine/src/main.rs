@@ -17,6 +17,7 @@ use log::{error, info, warn};
 use pattern_engine::engine::{Engine, EngineCommand};
 use pattern_engine::event::{OscArg, Value};
 use pattern_engine::output::{self, OutputSink};
+use audio_engine::automation::{AutoShape, Automation};
 use audio_engine::engine::config::EngineConfig;
 use audio_engine::output::cpal_backend::{CpalBackend, DeviceConfig};
 use audio_engine::output::AudioOutput;
@@ -43,6 +44,13 @@ fn crossfade_samples(bpm: f64, sample_rate: u32) -> usize {
     let bpm = bpm.max(1.0); // guard: zero/negative BPM → treat as 1
     let half_beat_secs = 60.0 / bpm / 2.0;
     (half_beat_secs * f64::from(sample_rate)) as usize
+}
+
+/// Number of audio blocks per pattern cycle.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+fn compute_blocks_per_cycle(bpm: f64, bpc: f64, sample_rate: u32, block_size: usize) -> usize {
+    let cycle_secs = bpc * 60.0 / bpm.max(1.0);
+    (cycle_secs * f64::from(sample_rate) / block_size as f64).round().max(1.0) as usize
 }
 
 /// Commands routed from the IPC thread to the main loop.
@@ -233,13 +241,50 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
     let mut pending: Vec<PendingEvent> = Vec::new();
     let mut pending_midi: Vec<pattern_engine::engine::TimedEvent> = Vec::new();
 
+    // ── Control-voice curve compilation state ──
+    let mut blocks_per_cycle = compute_blocks_per_cycle(
+        DEFAULT_BPM, BEATS_PER_CYCLE, config.sample_rate, config.block_size,
+    );
+    // Active automation IDs per slot index — for cleanup on hush/replace.
+    let mut active_curve_ids: HashMap<usize, Vec<String>> = HashMap::new();
+
     loop {
         let now = Instant::now();
 
         // ① Drain IPC commands (single channel, sum type).
         while let Ok(cmd) = cmd_rx.try_recv() {
             match cmd {
-                LoopCommand::Pattern(c) => pattern_engine.apply(c),
+                LoopCommand::Pattern(c) => {
+                    // Clear active automations for affected control-voice slots
+                    // BEFORE applying the command (slot may be overwritten).
+                    match &c {
+                        EngineCommand::SetPattern { name, .. }
+                        | EngineCommand::SetPatternFromZero { name, .. }
+                        | EngineCommand::Hush { name } => {
+                            if let Some(idx) = pattern_engine.slot_idx(name) {
+                                if let Some(ids) = active_curve_ids.remove(&idx) {
+                                    for id in ids {
+                                        audio_engine.controller_mut().clear_automation(id);
+                                    }
+                                }
+                            }
+                        }
+                        EngineCommand::HushAll => {
+                            for (_, ids) in active_curve_ids.drain() {
+                                for id in ids {
+                                    audio_engine.controller_mut().clear_automation(id);
+                                }
+                            }
+                        }
+                        EngineCommand::SetBpm { .. } | EngineCommand::SetBeatsPerCycle { .. } => {}
+                    }
+                    pattern_engine.apply(c);
+                    // Recompute blocks_per_cycle on tempo/meter change.
+                    blocks_per_cycle = compute_blocks_per_cycle(
+                        pattern_engine.bpm(), BEATS_PER_CYCLE,
+                        config.sample_rate, config.block_size,
+                    );
+                }
                 LoopCommand::Graph(msg) => {
                     match msg {
                         ClientMessage::Shutdown => {
@@ -287,8 +332,39 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
             }
         }
 
-        // ② Fill pattern heap.
+        // ② Fill pattern heap (skips control-voice slots).
         pattern_engine.fill(now);
+
+        // ②b Compile control-voice patterns to block-rate wavetables.
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss, clippy::cast_precision_loss)]
+        {
+            let curves = pattern_engine.fill_control_curves(now, blocks_per_cycle);
+            for curve in curves {
+                let slot_name = pattern_engine.slot_name(curve.slot_idx);
+                let id = format!("{slot_name}/{}", curve.label);
+                if let Some((node_id, param)) = audio_engine.controller_mut().resolve_label(&curve.label) {
+                    let cycle_secs = BEATS_PER_CYCLE * 60.0 / pattern_engine.bpm();
+                    let period_samples =
+                        (cycle_secs * f64::from(config.sample_rate)).round() as usize;
+                    let automation = Automation {
+                        node_id: node_id.to_owned(),
+                        param: param.to_owned(),
+                        shape: AutoShape::Custom { table: curve.table },
+                        lo: 0.0,
+                        hi: 1.0,
+                        period_samples,
+                        phase: 0,
+                        active: true,
+                        one_shot: true,
+                    };
+                    audio_engine.controller_mut().send_automation(id.clone(), automation);
+                    active_curve_ids
+                        .entry(curve.slot_idx)
+                        .or_default()
+                        .push(id);
+                }
+            }
+        }
 
         // ③ Drain events with lookahead.
         //    OSC → SetControl: schedule in pending vec for sample-accurate dispatch.
