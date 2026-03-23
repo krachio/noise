@@ -3618,7 +3618,7 @@ def test_resolve_targets_no_duplicates() -> None:
     mixer.voice("drums/kick", "faust:bass", gain=0.5)
     mixer.voice("drums/snare", "faust:bass", gain=0.5)
     # Group resolution: "drums" should find 2 nodes, not 4 (was doubled)
-    targets = mixer._resolve_targets("drums")  # type: ignore[attr-defined]
+    targets = mixer._resolve_targets_soft("drums")  # type: ignore[attr-defined]
     assert len(targets) == 2
 
 

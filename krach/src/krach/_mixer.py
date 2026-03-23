@@ -1103,8 +1103,10 @@ class VoiceMixer:
                 self._gain_single(t, self._muted.pop(t))
 
     def solo(self, name: str) -> None:
-        """Solo a voice or group — mutes all others, unmutes targets."""
-        targets = set(self._resolve_targets(name))
+        """Solo a node or group — mutes all others, unmutes targets. No-op if not found."""
+        targets = set(self._resolve_targets_soft(name))
+        if not targets:
+            return
         all_names: set[str] = set(self._nodes.keys())
         for n in all_names:
             if n not in targets:
@@ -1347,18 +1349,8 @@ class VoiceMixer:
             return f"{name}_send_{bus}/gain"
         return path
 
-    def _resolve_targets(self, name: str) -> list[str]:
-        """Resolve name to matching nodes. Exact match first, then prefix."""
-        if name in self._nodes:
-            return [name]
-        prefix = name + "/"
-        matches = [n for n in self._nodes if n.startswith(prefix)]
-        if not matches:
-            raise ValueError(f"node or group '{name}' not found")
-        return matches
-
     def _resolve_targets_soft(self, name: str) -> list[str]:
-        """Like _resolve_targets but returns empty list instead of raising."""
+        """Resolve name to matching nodes. Exact match first, then prefix. Empty if none."""
         if name in self._nodes:
             return [name]
         prefix = name + "/"
