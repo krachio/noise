@@ -13,16 +13,20 @@ def acid_bass() -> krs.Signal:
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
-kr.voice("bass", acid_bass, gain=0.3)
-kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
+bass = kr.node("bass", acid_bass, gain=0.3)
+verb = kr.node("verb", reverb_fn, gain=0.3)
+bass >> verb                                       # route
+bass @ kr.seq("A2", "D3", None, "E2").over(2)      # play
+bass["cutoff"] = 1200                               # control
 ```
 
 ## What makes krach different
 
+- **Graph-first API** — everything is a node. `>>` routes signal, `@` plays patterns, `[]` gets/sets controls.
 - **Synths are Python functions** — write DSP code, it compiles to FAUST and JIT-compiles to native audio via LLVM. Hot reload on save.
-- **Patterns are composable** — TidalCycles-inspired algebra. `+` sequences, `|` layers, `.over()` stretches, `.swing()` grooves. All operations return patterns — infinite composition.
+- **Patterns are composable** — TidalCycles-inspired algebra. `+` sequences, `|` layers, `.over()` stretches, `.swing()` grooves.
 - **One process, zero latency** — Rust engine runs pattern sequencer + audio graph + FAUST JIT in a single binary. Python only sends pattern IR once — all per-cycle work is Rust.
-- **Two symbols** — `kr` is the mixer (voices, patterns, transport). `krs` is DSP primitives (oscillators, filters, envelopes). That's the entire API.
+- **Two symbols** — `kr` (the audio graph) and `krs` (DSP primitives). That's the entire API.
 
 ## Quick links
 
