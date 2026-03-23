@@ -3,7 +3,7 @@ from pathlib import Path
 from krach.patterns.ir import Atom, Cat, Control, Freeze, IrNode, Osc, Silence, Stack
 from krach.patterns.pattern import Pattern
 
-from krach._mixer import Bus, Voice, build_graph_ir, build_hit, build_note
+from krach._mixer import Node, build_graph_ir, build_hit, build_note
 
 
 def _collect_values(node: IrNode) -> list[object]:
@@ -33,7 +33,7 @@ def _collect_control_labels(node: IrNode) -> set[str]:
 
 def test_build_graph_ir_single_voice() -> None:
     nodes = {
-        "bass": Voice("faust:acid_bass", 0.3, ("freq", "gate", "cutoff")),
+        "bass": Node("faust:acid_bass", 0.3, ("freq", "gate", "cutoff")),
     }
     ir = build_graph_ir(nodes)
 
@@ -50,8 +50,8 @@ def test_build_graph_ir_single_voice() -> None:
 
 def test_build_graph_ir_two_voices() -> None:
     nodes = {
-        "kit": Voice("faust:kit", 0.8, ("kick", "hat", "snare")),
-        "bass": Voice("faust:acid_bass", 0.3, ("freq", "gate")),
+        "kit": Node("faust:kit", 0.8, ("kick", "hat", "snare")),
+        "bass": Node("faust:acid_bass", 0.3, ("freq", "gate")),
     }
     ir = build_graph_ir(nodes)
 
@@ -73,7 +73,7 @@ def test_build_graph_ir_empty_produces_dac_only() -> None:
 
 
 def test_build_graph_ir_gain_node_has_initial_value() -> None:
-    nodes = {"bass": Voice("faust:acid_bass", 0.35, ("freq", "gate"))}
+    nodes = {"bass": Node("faust:acid_bass", 0.35, ("freq", "gate"))}
     ir = build_graph_ir(nodes)
 
     gain_node = next(n for n in ir.nodes if n.id == "bass_g")
@@ -83,7 +83,7 @@ def test_build_graph_ir_gain_node_has_initial_value() -> None:
 
 def test_build_graph_ir_with_init_values() -> None:
     nodes = {
-        "bass": Voice("faust:acid_bass", 0.3, ("freq", "gate"),
+        "bass": Node("faust:acid_bass", 0.3, ("freq", "gate"),
                        init=(("freq", 55.0), ("gate", 0.0))),
     }
     ir = build_graph_ir(nodes)
@@ -96,7 +96,7 @@ def test_build_graph_ir_with_init_values() -> None:
 def test_build_graph_ir_poly_voice_expands_instances() -> None:
     """A voice with count>1 expands to N instances in the IR."""
     nodes = {
-        "pad": Voice("faust:pad", 0.6, ("freq", "gate"), count=2),
+        "pad": Node("faust:pad", 0.6, ("freq", "gate"), count=2),
     }
     ir = build_graph_ir(nodes)
 
@@ -120,7 +120,7 @@ def test_build_graph_ir_poly_voice_expands_instances() -> None:
 def test_build_graph_ir_mono_voice_no_suffix() -> None:
     """A voice with count=1 uses name directly (no _v0 suffix)."""
     nodes = {
-        "bass": Voice("faust:bass", 0.5, ("freq", "gate"), count=1),
+        "bass": Node("faust:bass", 0.5, ("freq", "gate"), count=1),
     }
     ir = build_graph_ir(nodes)
 
@@ -132,8 +132,8 @@ def test_build_graph_ir_mono_voice_no_suffix() -> None:
 def test_build_graph_ir_poly_sum_node() -> None:
     """Poly voice with sends gets an implicit sum node."""
     nodes = {
-        "pad": Voice("faust:pad", 0.6, ("freq", "gate"), count=2),
-        "verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1),
+        "pad": Node("faust:pad", 0.6, ("freq", "gate"), count=2),
+        "verb": Node("faust:verb", 0.3, ("room",), num_inputs=1),
     }
     sends = {("pad", "verb"): 0.4}
 
@@ -153,8 +153,8 @@ def test_build_graph_ir_poly_sum_node() -> None:
 def test_build_graph_ir_mono_no_sum_node() -> None:
     """Mono voice with sends does NOT get a sum node."""
     nodes = {
-        "bass": Voice("faust:bass", 0.5, ("freq", "gate"), count=1),
-        "verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1),
+        "bass": Node("faust:bass", 0.5, ("freq", "gate"), count=1),
+        "verb": Node("faust:verb", 0.3, ("room",), num_inputs=1),
     }
     sends = {("bass", "verb"): 0.4}
 
@@ -1380,8 +1380,8 @@ def test_voice_over_poly_cleans_instance_muted_entries() -> None:
 
 def test_build_graph_ir_with_bus() -> None:
     nodes = {
-        "bass": Voice("faust:bass", 0.5, ("freq", "gate")),
-        "verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1),
+        "bass": Node("faust:bass", 0.5, ("freq", "gate")),
+        "verb": Node("faust:verb", 0.3, ("room",), num_inputs=1),
     }
     ir = build_graph_ir(nodes)
 
@@ -1394,8 +1394,8 @@ def test_build_graph_ir_with_bus() -> None:
 
 def test_build_graph_ir_with_send() -> None:
     nodes = {
-        "bass": Voice("faust:bass", 0.5, ("freq", "gate")),
-        "verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1),
+        "bass": Node("faust:bass", 0.5, ("freq", "gate")),
+        "verb": Node("faust:verb", 0.3, ("room",), num_inputs=1),
     }
     sends = {("bass", "verb"): 0.4}
     ir = build_graph_ir(nodes, sends=sends)
@@ -1412,9 +1412,9 @@ def test_build_graph_ir_with_send() -> None:
 
 def test_build_graph_ir_two_sends_same_bus() -> None:
     nodes = {
-        "bass": Voice("faust:bass", 0.5, ("freq", "gate")),
-        "pad": Voice("faust:pad", 0.3, ("freq", "gate")),
-        "verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1),
+        "bass": Node("faust:bass", 0.5, ("freq", "gate")),
+        "pad": Node("faust:pad", 0.3, ("freq", "gate")),
+        "verb": Node("faust:verb", 0.3, ("room",), num_inputs=1),
     }
     sends = {("bass", "verb"): 0.4, ("pad", "verb"): 0.6}
     ir = build_graph_ir(nodes, sends=sends)
@@ -1430,8 +1430,8 @@ def test_build_graph_ir_two_sends_same_bus() -> None:
 
 def test_build_graph_ir_send_gain_initial_value() -> None:
     nodes = {
-        "bass": Voice("faust:bass", 0.5, ("freq", "gate")),
-        "verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1),
+        "bass": Node("faust:bass", 0.5, ("freq", "gate")),
+        "verb": Node("faust:verb", 0.3, ("room",), num_inputs=1),
     }
     sends = {("bass", "verb"): 0.4}
     ir = build_graph_ir(nodes, sends=sends)
@@ -1442,9 +1442,9 @@ def test_build_graph_ir_send_gain_initial_value() -> None:
 
 def test_build_graph_ir_with_wire() -> None:
     nodes = {
-        "pad": Voice("faust:pad", 0.5, ("freq", "gate")),
-        "kick": Voice("faust:kick", 0.8, ("gate",)),
-        "comp": Bus("faust:comp", 1.0, ("threshold",), num_inputs=2),
+        "pad": Node("faust:pad", 0.5, ("freq", "gate")),
+        "kick": Node("faust:kick", 0.8, ("gate",)),
+        "comp": Node("faust:comp", 1.0, ("threshold",), num_inputs=2),
     }
     wires = {("pad", "comp"): "in0", ("kick", "comp"): "in1"}
     ir = build_graph_ir(nodes, wires=wires)
@@ -1458,7 +1458,7 @@ def test_build_graph_ir_with_wire() -> None:
 
 
 def test_build_graph_ir_no_buses_backward_compatible() -> None:
-    nodes = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
+    nodes = {"bass": Node("faust:bass", 0.5, ("freq", "gate"))}
     ir_old = build_graph_ir(nodes)
     ir_new = build_graph_ir(nodes, sends=None, wires=None)
     assert ir_old == ir_new
@@ -2471,14 +2471,14 @@ def test_voice_returns_handle() -> None:
     """voice() returns a VoiceHandle."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceHandle, VoiceMixer
+    from krach._mixer import NodeHandle, VoiceMixer
 
     session = MagicMock()
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     h = mixer.voice("bass", "faust:bass", gain=0.3)
-    assert isinstance(h, VoiceHandle)
+    assert isinstance(h, NodeHandle)
     assert h.name == "bass"
 
 
@@ -2632,14 +2632,14 @@ def test_bus_returns_handle() -> None:
     """bus() returns a BusHandle."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import BusHandle, VoiceMixer
+    from krach._mixer import NodeHandle, VoiceMixer
 
     session = MagicMock()
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("room",),
     })
     bh = mixer.bus("verb", "faust:verb", gain=0.5)
-    assert isinstance(bh, BusHandle)
+    assert isinstance(bh, NodeHandle)
     assert bh.name == "verb"
 
 
@@ -2911,7 +2911,7 @@ def test_voices_returns_handles() -> None:
     """voices property returns dict of VoiceHandles."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceHandle, VoiceMixer
+    from krach._mixer import NodeHandle, VoiceMixer
 
     session = MagicMock()
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -2922,14 +2922,14 @@ def test_voices_returns_handles() -> None:
     result = mixer.voices
     assert isinstance(result, dict)
     assert "bass" in result
-    assert isinstance(result["bass"], VoiceHandle)
+    assert isinstance(result["bass"], NodeHandle)
 
 
 def test_buses_returns_handles() -> None:
     """buses property returns dict of BusHandles."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import BusHandle, VoiceMixer
+    from krach._mixer import NodeHandle, VoiceMixer
 
     session = MagicMock()
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -2940,7 +2940,7 @@ def test_buses_returns_handles() -> None:
     result = mixer.buses
     assert isinstance(result, dict)
     assert "verb" in result
-    assert isinstance(result["verb"], BusHandle)
+    assert isinstance(result["verb"], NodeHandle)
 
 
 # ── mod() with native automation ─────────────────────────────────────────────
@@ -3281,7 +3281,7 @@ def test_input_appears_in_graph_ir() -> None:
     from krach._mixer import build_graph_ir
 
     nodes = {
-        "mic": Voice("adc_input", 0.5, ()),
+        "mic": Node("adc_input", 0.5, ()),
     }
     ir = build_graph_ir(nodes)
 
