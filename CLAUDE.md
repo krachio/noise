@@ -23,6 +23,22 @@ Each Python project has its own `uv` venv and `pyproject.toml`.
 Run `uv run pytest` from within each subproject directory.
 Do not use `pip install` — all deps managed through `uv`.
 
+## Design Philosophy
+
+krach is a **graph-based live coding system**, not a DAW. The Python API exposes the
+graph directly: nodes, connections, patterns. No voice/bus/track abstractions —
+everything is a node. Routing uses operators (`>>`), not named methods.
+
+```python
+bass = kr.node("bass", bass_fn, gain=0.3)    # source (0 inputs)
+verb = kr.node("verb", reverb_fn, gain=0.3)  # effect (auto-detected: 1+ inputs)
+bass >> verb                                   # route
+bass.play(kr.seq("A2", "D3").swing(0.67))    # pattern
+```
+
+If a musician-friendly UI is needed, build it in Python on top of the graph API.
+Don't bake DAW concepts (tracks, buses, aux sends) into the core.
+
 ## Code Style
 
 Flat data, obvious flow, no unnecessary abstraction. Every type must map to a domain noun. Every abstraction must prevent a nameable bug.
