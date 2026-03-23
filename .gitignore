@@ -21,3 +21,6 @@ krach/.claude/ralph-loop.local.md
 .claude/ralph-loop.local.md
 .ralph-review/
 *.swp
+docs/site/
+docs/hello.py
+docs/.python-version
