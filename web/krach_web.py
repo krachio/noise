@@ -242,6 +242,9 @@ def connect_web(bpm: float = 120, master: float = 0.7) -> Any:
     session = WebSession()
     session.connect()
     session.tempo = bpm
-    kr = VoiceMixer(session=session, dsp_dir=Path("/tmp/krach-web/dsp"))  # type: ignore[arg-type]
+    import tempfile
+    dsp_dir = Path(tempfile.gettempdir()) / "krach-web" / "dsp"
+    dsp_dir.mkdir(parents=True, exist_ok=True)
+    kr = VoiceMixer(session=session, dsp_dir=dsp_dir)  # type: ignore[arg-type]
     kr.master = master
     return kr
