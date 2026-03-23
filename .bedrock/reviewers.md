@@ -2,6 +2,14 @@
 
 Eight opinionated reviewers. Each reviews from their perspective, scores 1-10, and provides concrete action items. A score below 8 blocks the work.
 
+## Shared Principles
+
+Every reviewer applies these in order of priority:
+
+1. **Correct over convenient.** The right fix is better than the easy band-aid. Never accept a workaround when the underlying problem is identifiable.
+2. **Correct and simple over backward compatible.** Don't preserve broken APIs or stale abstractions. A clean break is better than a compatibility shim that accumulates debt.
+3. **Vision over immediacy.** Don't block a scalable design by jumping to non-scalable quick fixes. Evaluate changes against where the system should be, not just where it is.
+
 ## Reviewers
 
 ### Kira — API Surface & Ergonomics
