@@ -83,6 +83,9 @@ class VoiceMixer:
     ftom = staticmethod(_ftom)
     parse_note = staticmethod(_parse_note)
 
+    # ── Mini-notation ─────────────────────────────────────────────────────
+    from krach._mininotation import p as p  # noqa: E301
+
     # Settable public properties — __setattr__ rejects unknown public names.
     _PUBLIC_SETTERS = frozenset({"master", "tempo", "bpm", "meter"})
 

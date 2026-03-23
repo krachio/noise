@@ -104,9 +104,6 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> VoiceM
     kr.tempo = bpm
     kr.master = master
 
-    # Ensure _mininotation is imported (attaches VoiceMixer.p at import time).
-    import krach._mininotation  # type: ignore[reportUnusedImport]  # attaches VoiceMixer.p
-
     # Wait for engine to finish loading DSP files (hot-reload at startup).
     deadline = time.monotonic() + 10.0
     while time.monotonic() < deadline:
