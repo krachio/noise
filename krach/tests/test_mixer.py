@@ -3363,3 +3363,79 @@ def test_midi_map_resolves_send_path() -> None:
     mixer.midi_map(cc=20, path="bass/verb_send", lo=0.0, hi=1.0)
 
     session.midi_map.assert_called_once_with(0, 20, "bass_send_verb/gain", 0.0, 1.0)
+
+
+# ── Export ──────────────────────────────────────────────────────────────────
+
+
+def test_export_generates_valid_python() -> None:
+    """export() produces a file that passes ast.parse."""
+    import ast
+    import tempfile
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer, hit
+
+    session = MagicMock()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mixer = VoiceMixer(session=session, dsp_dir=Path(tmpdir), node_controls={
+            "faust:kick": ("gate",),
+        })
+        mixer.voice("kick", "faust:kick", gain=0.8)
+        mixer.play("kick", hit() * 4)
+
+        out = Path(tmpdir) / "session.py"
+        mixer.export(str(out))
+
+        code = out.read_text()
+        ast.parse(code)  # must not raise
+
+
+def test_export_contains_voice_and_tempo() -> None:
+    """export() includes voice definitions and transport."""
+    import tempfile
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer, hit
+
+    session = MagicMock()
+    session.tempo = 140.0
+    session.meter = 4.0
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mixer = VoiceMixer(session=session, dsp_dir=Path(tmpdir), node_controls={
+            "faust:kick": ("gate",),
+        })
+        mixer.voice("kick", "faust:kick", gain=0.8)
+        mixer.play("kick", hit() * 4)
+        mixer.master = 0.6
+
+        out = Path(tmpdir) / "session.py"
+        mixer.export(str(out))
+
+        code = out.read_text()
+        assert 'kr.voice("kick"' in code
+        assert "kr.tempo = 140.0" in code
+        assert "kr.master = 0.6" in code
+
+
+def test_export_contains_pattern_json() -> None:
+    """export() serializes patterns as JSON for dict_to_ir round-trip."""
+    import tempfile
+    from unittest.mock import MagicMock
+
+    from krach._mixer import VoiceMixer, hit
+
+    session = MagicMock()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mixer = VoiceMixer(session=session, dsp_dir=Path(tmpdir), node_controls={
+            "faust:kick": ("gate",),
+        })
+        mixer.voice("kick", "faust:kick", gain=0.8)
+        mixer.play("kick", hit() * 4)
+
+        out = Path(tmpdir) / "session.py"
+        mixer.export(str(out))
+
+        code = out.read_text()
+        assert "_patterns = json.loads(" in code
+        assert "dict_to_ir" in code

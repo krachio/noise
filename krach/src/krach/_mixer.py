@@ -8,6 +8,7 @@ Adding or removing a voice rebuilds the graph; gain updates are instant.
 from __future__ import annotations
 
 import inspect
+import json
 import math
 import textwrap
 from collections.abc import Generator
@@ -1018,6 +1019,95 @@ class VoiceMixer:
         code = p.read_text()
         ns: dict[str, object] = {"kr": self, "mix": self}
         exec(compile(code, path, "exec"), ns)  # noqa: S102
+
+    def export(self, path: str) -> None:
+        """Export current session state to a reloadable Python script.
+
+        The generated file can be loaded back with ``kr.load(path)``.
+        DSP definitions, voices, buses, sends, patterns, and transport
+        settings are all captured.
+        """
+        from krach.patterns.ir import ir_to_dict
+
+        lines: list[str] = [
+            '"""Exported krach session."""',
+            "import json",
+            "from krach.patterns.ir import dict_to_ir",
+            "from krach.patterns.pattern import Pattern",
+            "import krach.dsp as krs",
+            "",
+        ]
+
+        # ── DSP function definitions ──
+        emitted_fns: dict[str, str] = {}  # type_id → function name
+        for name, voice in self._voices.items():
+            if voice.source_text and voice.type_id.startswith("faust:"):
+                fn_name = name.replace("/", "_")
+                lines.append("")
+                # Emit source with @kr.dsp decorator
+                source = voice.source_text.rstrip()
+                if "@kr.dsp" not in source and "@dsp" not in source:
+                    lines.append("@kr.dsp")
+                lines.append(source)
+                emitted_fns[voice.type_id] = fn_name
+        for bname, bus in self._buses.items():
+            py_path = self._dsp_dir.joinpath(f"{bname}.py")
+            if py_path.exists():
+                fn_name = bname.replace("/", "_")
+                source = py_path.read_text().rstrip()
+                if fn_name not in emitted_fns.values():
+                    lines.append("")
+                    if "@kr.dsp" not in source and "@dsp" not in source:
+                        lines.append("@kr.dsp")
+                    lines.append(source)
+                    emitted_fns[bus.type_id] = fn_name
+
+        # ── Voices and buses ──
+        lines.append("")
+        lines.append("with kr.batch():")
+        for name, voice in self._voices.items():
+            src = emitted_fns.get(voice.type_id, f'"{voice.type_id}"')
+            init_kw = "".join(f", {k}={v}" for k, v in voice.init)
+            count_kw = f", count={voice.count}" if voice.count > 1 else ""
+            lines.append(f'    kr.voice("{name}", {src}, gain={voice.gain}{count_kw}{init_kw})')
+        for bname, bus in self._buses.items():
+            src = emitted_fns.get(bus.type_id, f'"{bus.type_id}"')
+            lines.append(f'    kr.bus("{bname}", {src}, gain={bus.gain})')
+
+        # ── Sends and wires ──
+        for (voice, bus), level in self._sends.items():
+            lines.append(f'kr.send("{voice}", "{bus}", level={level})')
+        for (voice, bus), port in self._wires.items():
+            lines.append(f'kr.wire("{voice}", "{bus}", port="{port}")')
+
+        # ── Transport ──
+        try:
+            lines.append(f"kr.tempo = {float(self.tempo)}")
+        except (TypeError, ValueError):
+            pass
+        lines.append(f"kr.master = {self._master_gain}")
+        try:
+            meter = float(self.meter)
+            if meter != 4.0:
+                lines.append(f"kr.meter = {meter}")
+        except (TypeError, ValueError):
+            pass
+
+        # ── Patterns as JSON ──
+        if self._patterns:
+            pat_dict = {slot: ir_to_dict(pat.node) for slot, pat in self._patterns.items()}
+            pat_json = json.dumps(pat_dict, separators=(",", ":"))
+            lines.append("")
+            lines.append(f"_patterns = json.loads('{pat_json}')")
+            lines.append("for _slot, _ir in _patterns.items():")
+            lines.append("    kr.play(_slot, Pattern(dict_to_ir(_ir)))")
+
+        # ── Control values ──
+        for ctrl_path, value in self._ctrl_values.items():
+            lines.append(f'kr.set("{ctrl_path}", {value})')
+
+        lines.append("")
+        Path(path).write_text("\n".join(lines))
 
     def _is_voice_or_bus(self, name: str) -> bool:
         """Check if name is a known voice or bus."""
