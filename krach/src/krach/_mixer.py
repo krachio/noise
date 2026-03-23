@@ -32,7 +32,7 @@ from krach._pitch import parse_note as _parse_note
 
 @dataclass(frozen=True)
 class Scene:
-    """Snapshot of the mixer state — voices, buses, sends, patterns, controls."""
+    """Snapshot of the mixer state — nodes, sends, patterns, controls."""
 
     voices: dict[str, tuple[str, float, tuple[str, ...], int, tuple[tuple[str, float], ...], str]]
     buses: dict[str, tuple[str, float, tuple[str, ...], int]]
@@ -1046,7 +1046,7 @@ class VoiceMixer:
             self.hush(name)
 
     def gain(self, name: str, value: float) -> None:
-        """Update a voice, bus, or group gain. Instant — no graph rebuild.
+        """Update a node or group gain. Instant — no graph rebuild.
 
         For poly voices, distributes gain equally across instances.
         Prefix matching: ``gain("drums", 0.5)`` applies to all ``drums/*`` voices.
@@ -1057,7 +1057,7 @@ class VoiceMixer:
             self._gain_single(t, value)
 
     def _gain_single(self, name: str, value: float) -> None:
-        """Set gain for a single voice or bus. Uses fade inside transition()."""
+        """Set gain for a single node. Uses fade inside transition()."""
         if self._transition_bars > 0:
             self.fade(f"{name}/gain", value, bars=self._transition_bars)
             # Update bookkeeping immediately even though audio fades
@@ -1487,7 +1487,7 @@ class VoiceMixer:
         return BusHandle(self, name)
 
     def send(self, voice: str, bus: str, level: float = 0.5) -> None:
-        """Route a voice to a bus via a gain-controlled send.
+        """Route a source node to a target node via a gain-controlled send.
 
         If the (voice, bus) pair already exists, does an instant level update
         (no rebuild). Otherwise stores the send and rebuilds.
@@ -1516,7 +1516,7 @@ class VoiceMixer:
             self._rebuild()
 
     def wire(self, voice: str, bus: str, port: str = "in0") -> None:
-        """Wire a voice directly to a bus port (no gain stage).
+        """Wire a source node directly to a target node port (no gain stage).
 
         Raises ValueError if a send exists for the same (voice, bus) pair.
         """
@@ -1713,16 +1713,12 @@ class VoiceMixer:
         return dict(self._node_controls)
 
     def _flush(self) -> None:
-        """Wait for all pending FAUST types (voices + buses) and rebuild the graph once."""
+        """Wait for all pending FAUST types and rebuild the graph once."""
         seen: set[str] = set()
-        for voice in self._nodes.values():
-            if voice.type_id.startswith("faust:") and voice.type_id not in seen:
-                seen.add(voice.type_id)
-                self._wait_for_type(voice.type_id)
-        for bus in self._nodes.values():
-            if bus.type_id.startswith("faust:") and bus.type_id not in seen:
-                seen.add(bus.type_id)
-                self._wait_for_type(bus.type_id)
+        for node in self._nodes.values():
+            if node.type_id.startswith("faust:") and node.type_id not in seen:
+                seen.add(node.type_id)
+                self._wait_for_type(node.type_id)
         self._rebuild()
 
     def _rebuild(self) -> None:
