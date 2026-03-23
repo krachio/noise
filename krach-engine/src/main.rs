@@ -231,7 +231,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
     info!("  bpm: {DEFAULT_BPM}");
     info!("  lookahead: {}ms", LOOKAHEAD.as_millis());
 
-    pattern_engine::rt::set_realtime_priority();
+    let _ = pattern_engine::rt::set_realtime_priority();
 
     let mut midi_sink = try_connect_midi();
     let midi_clock_enabled = std::env::var("NOISE_MIDI_CLOCK").is_ok_and(|v| v == "1");

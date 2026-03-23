@@ -780,9 +780,12 @@ class VoiceMixer:
     _PUBLIC_SETTERS = frozenset({"master", "tempo", "bpm", "meter"})
 
     def __setattr__(self, name: str, value: object) -> None:
-        # Allow private attributes, known property setters, and class-defined attributes
-        # (the latter enables unittest.mock.patch to work).
-        if name.startswith("_") or name in self._PUBLIC_SETTERS or hasattr(type(self), name):
+        # Allow: private attrs, known property setters, class-defined attrs,
+        # and callable assignments (e.g., kr.status = status_fn from __init__.py).
+        if (name.startswith("_")
+            or name in self._PUBLIC_SETTERS
+            or hasattr(type(self), name)
+            or callable(value)):
             super().__setattr__(name, value)
         else:
             raise AttributeError(
