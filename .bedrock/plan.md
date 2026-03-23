@@ -115,11 +115,23 @@ Each iteration of the ralph loop follows this exact sequence:
 | Yara | 7 | ↑ | Types extraction helped |
 | Nils | ~7 | ↑ | Commit quality improved |
 
+### Iteration 5 scores
+
+| Reviewer | Score | Blocker |
+|----------|-------|---------|
+| Kira | 7 | Minor API nits |
+| Tomás | 6 | _mixer.py 1001 lines, mininotation monkey-patch |
+| Suki | 7 | Fade untested, poly round-robin weak coverage |
+| Renzo | 7 | Improved, minor config issues |
+| Maren | 5 | VoiceMixer 1001 lines exceeds 500-line guideline |
+| Diego | 8 | RT string alloc (Rust-side, unchanged) |
+| Yara | 8 | Improved, Callable[..., Any] remains |
+| Nils | 7 | Minor doc issues |
+
 ### Priority for next iteration
-1. **Extract scene management** from VoiceMixer into free functions or mixin (~160 lines)
-2. **Extract fade/automation** from VoiceMixer (~100 lines)
-3. **Extract export** from VoiceMixer (~80 lines)
-4. Target: VoiceMixer under 500 lines
+1. **Further VoiceMixer decomposition** — extract scene mgmt (~70 lines) + fade logic (~90 lines) to get closer to 500
+2. **Fix mininotation monkey-patch** — VoiceMixer should import p explicitly
+3. **Narrow Callable[..., Any]** for DSP source type
 
 ### Iteration 2 scores
 
