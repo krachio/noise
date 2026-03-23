@@ -1481,6 +1481,12 @@ class VoiceMixer:
         """
         if name in self._voices:
             raise ValueError(f"name '{name}' already used as a voice")
+        # Clean up old bus if replacing
+        if name in self._buses:
+            for key in [k for k in self._sends if k[1] == name]:
+                del self._sends[key]
+            for key in [k for k in self._wires if k[1] == name]:
+                del self._wires[key]
         type_id, controls, _source_text = self._resolve_source(name, source)
         num_inputs: int
         if isinstance(source, DspDef):
