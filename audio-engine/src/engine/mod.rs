@@ -351,6 +351,26 @@ impl EngineController {
         Ok(())
     }
 
+    /// Send a pre-built [`Automation`] to the audio thread.
+    /// Bypasses the `ClientMessage` protocol — used by the pattern compiler
+    /// for `Custom` wavetables that can't be expressed as named shapes.
+    pub fn send_automation(&mut self, id: String, automation: Automation) {
+        self.send_command(Command::SetAutomation { id, automation });
+    }
+
+    /// Clear an automation on the audio thread by ID.
+    pub fn clear_automation(&mut self, id: String) {
+        self.send_command(Command::ClearAutomation { id });
+    }
+
+    /// Resolve an exposed control label to `(node_id, param_name)`.
+    #[must_use]
+    pub fn resolve_label(&self, label: &str) -> Option<(&str, &str)> {
+        self.exposed_controls
+            .get(label)
+            .map(|(n, p)| (n.as_str(), p.as_str()))
+    }
+
     fn send_command(&mut self, cmd: Command) {
         if self.producer.push(cmd).is_err() {
             warn!("command queue full, dropping command");
