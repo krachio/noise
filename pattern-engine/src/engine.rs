@@ -232,6 +232,9 @@ impl Engine {
     pub fn fill(&mut self, now: Instant) {
         let horizon = now + self.lookahead;
         for (_name, &idx) in &self.names {
+            if self.slots[idx].is_control {
+                continue; // Control slots use fill_control_curves() instead.
+            }
             while self.clock.cycle_start_instant(self.next_cycle[idx]) <= horizon {
                 let query_arc = time::Arc::cycle(self.next_cycle[idx] + self.phase_offset[idx]);
                 let pattern = &self.slots[idx];
@@ -292,11 +295,66 @@ impl Engine {
             .unwrap_or("?")
     }
 
+    /// Return the slot index for a name, if it exists.
+    #[must_use]
+    pub fn slot_idx(&self, name: &str) -> Option<usize> {
+        self.names.get(name).copied()
+    }
+
+    /// Evaluate control-voice slots for upcoming cycles, compile to wavetables.
+    ///
+    /// Control slots (where `is_control == true`) are excluded from the discrete
+    /// event heap in [`fill()`](Self::fill). Instead, this method queries them
+    /// for each cycle in the lookahead window and compiles the events into
+    /// per-parameter block-rate wavetables.
+    pub fn fill_control_curves(&mut self, now: Instant, table_len: usize) -> Vec<CurveOutput> {
+        use crate::pattern::curve::compile_wavetable;
+
+        let horizon = now + self.lookahead;
+        let mut outputs = Vec::new();
+
+        for (_, &idx) in &self.names {
+            if !self.slots[idx].is_control {
+                continue;
+            }
+            while self.clock.cycle_start_instant(self.next_cycle[idx]) <= horizon {
+                let query_arc = time::Arc::cycle(self.next_cycle[idx] + self.phase_offset[idx]);
+                let pattern = &self.slots[idx];
+                let events = query(pattern, pattern.root, query_arc);
+                let tables = compile_wavetable(&events, table_len);
+                let cycle_start = self.clock.cycle_start_instant(self.next_cycle[idx]);
+                for (label, table) in tables {
+                    outputs.push(CurveOutput {
+                        slot_idx: idx,
+                        label,
+                        table,
+                        cycle_start,
+                    });
+                }
+                self.next_cycle[idx] += 1;
+            }
+        }
+
+        outputs
+    }
+
     /// Number of named slots (including silenced ones).
     #[cfg(test)]
     pub fn slot_count(&self) -> usize {
         self.names.len()
     }
+}
+
+/// Wavetable output for one parameter of one slot for one cycle.
+pub struct CurveOutput {
+    /// Which slot produced this curve.
+    pub slot_idx: usize,
+    /// The exposed control label (e.g., "bass/freq").
+    pub label: String,
+    /// Block-rate wavetable — one f32 per audio block in the cycle.
+    pub table: Vec<f32>,
+    /// Wall-clock instant when this cycle starts.
+    pub cycle_start: Instant,
 }
 
 #[cfg(test)]
@@ -696,5 +754,73 @@ mod tests {
         assert!(e.next_deadline().is_some(), "filled heap has a deadline");
         let dl = e.next_deadline().unwrap();
         assert!(dl > Instant::now(), "next deadline should be in the future");
+    }
+
+    // ── fill_control_curves ────────────────────────────────────────────
+
+    fn control(label: &str, value: f32) -> Value {
+        Value::Control { label: label.into(), value }
+    }
+
+    #[test]
+    fn fill_skips_control_slots() {
+        let mut e = fast_engine();
+        let ir = crate::ir::IrNode::Cat {
+            children: vec![
+                crate::ir::IrNode::Atom { value: control("gate", 1.0) },
+                crate::ir::IrNode::Atom { value: control("gate", 0.0) },
+            ],
+        };
+        let pat = crate::ir::compile(&ir).unwrap();
+        assert!(pat.is_control, "pattern should be detected as control");
+
+        e.apply(EngineCommand::SetPattern { name: "bass".into(), pattern: pat });
+        e.fill(Instant::now());
+        let events = e.drain(Instant::now() + Duration::from_secs(1));
+        assert!(events.is_empty(), "control slots should not produce discrete events");
+    }
+
+    #[test]
+    fn fill_control_curves_returns_wavetables() {
+        let mut e = fast_engine();
+        let ir = crate::ir::IrNode::Cat {
+            children: vec![
+                crate::ir::IrNode::Atom { value: control("gate", 1.0) },
+                crate::ir::IrNode::Atom { value: control("gate", 0.0) },
+            ],
+        };
+        let pat = crate::ir::compile(&ir).unwrap();
+        e.apply(EngineCommand::SetPattern { name: "bass".into(), pattern: pat });
+
+        let curves = e.fill_control_curves(Instant::now(), 8);
+        assert!(!curves.is_empty(), "control slot should produce curve outputs");
+        assert!(curves.iter().any(|c| c.label == "gate"), "should have gate wavetable");
+    }
+
+    #[test]
+    fn non_control_slot_not_in_curves() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetPattern {
+            name: "kick".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+
+        let curves = e.fill_control_curves(Instant::now(), 8);
+        assert!(curves.is_empty(), "MIDI slot should not produce curves");
+
+        e.fill(Instant::now());
+        let events = e.drain(Instant::now() + Duration::from_secs(1));
+        assert!(!events.is_empty(), "MIDI slot should produce discrete events");
+    }
+
+    #[test]
+    fn slot_idx_returns_correct_index() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetPattern {
+            name: "bass".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+        assert_eq!(e.slot_idx("bass"), Some(0));
+        assert_eq!(e.slot_idx("unknown"), None);
     }
 }
