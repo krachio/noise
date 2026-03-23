@@ -3453,7 +3453,7 @@ def test_node_with_zero_inputs_creates_voice() -> None:
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
-    handle = mixer.node("bass", "faust:bass", gain=0.3)
+    mixer.node("bass", "faust:bass", gain=0.3)
     assert mixer.get_voice("bass") is not None
     assert mixer.get_bus("bass") is None
 
@@ -3473,4 +3473,101 @@ def test_connect_voice_to_voice_as_send() -> None:
 
     # This should not raise — connect should work even when target is a voice
     # (the DSP might have control-based inputs, which is a valid pattern)
-    bass >> verb
+    _ = bass >> verb
+
+
+# ── Unified Node model (replaces Voice/Bus split) ───────────────────────
+
+
+def test_unified_node_source_and_effect_in_same_dict() -> None:
+    """All nodes live in one dict, regardless of num_inputs."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("in", "room"),
+    })
+    mixer.node("bass", "faust:bass", gain=0.3)
+    mixer.node("verb", "faust:verb", gain=0.3)
+
+    # Both should be findable as nodes
+    assert mixer.get_voice("bass") is not None or mixer.get_bus("bass") is not None
+    assert mixer.get_voice("verb") is not None or mixer.get_bus("verb") is not None
+
+
+def test_connect_any_node_to_any_node() -> None:
+    """>> works between any two nodes, regardless of type."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("in", "room"),
+    })
+    bass = mixer.node("bass", "faust:bass", gain=0.3)
+    verb = mixer.node("verb", "faust:verb", gain=0.3)
+    _ = bass >> verb  # must not raise
+
+
+def test_remove_works_for_any_node() -> None:
+    """remove() works regardless of whether node was source or effect."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.node("bass", "faust:bass", gain=0.3)
+    mixer.remove("bass")  # must not raise
+
+
+def test_gain_works_for_any_node() -> None:
+    """gain() works on any node."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:verb": ("in", "room"),
+    })
+    mixer.node("verb", "faust:verb", gain=0.3)
+    mixer.gain("verb", 0.5)  # must not raise
+
+
+def test_mute_unmute_any_node() -> None:
+    """mute/unmute works on any node."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:verb": ("in", "room"),
+    })
+    mixer.node("verb", "faust:verb", gain=0.3)
+    mixer.mute("verb")
+    assert mixer.is_muted("verb")
+    mixer.unmute("verb")
+    assert not mixer.is_muted("verb")
+
+
+def test_replace_node_cleans_up_connections() -> None:
+    """Re-creating a node with the same name cleans up old sends."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("in", "room"),
+    })
+    bass = mixer.node("bass", "faust:bass", gain=0.3)
+    verb = mixer.node("verb", "faust:verb", gain=0.3)
+    _ = bass >> verb
+
+    # Replace verb — should not crash on rebuild
+    verb2 = mixer.node("verb", "faust:verb", gain=0.5)
+    _ = bass >> verb2  # re-route, must not raise

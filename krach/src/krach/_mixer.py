@@ -46,16 +46,22 @@ class Scene:
 
 
 @dataclass
-class Voice:
-    """A named audio voice — mono (count=1) or polyphonic (count>1)."""
+class Node:
+    """A node in the audio graph — source (num_inputs=0) or effect (num_inputs>0)."""
 
     type_id: str
     gain: float
     controls: tuple[str, ...]
+    num_inputs: int = 0
     count: int = 1
     init: tuple[tuple[str, float], ...] = ()
     source_text: str = field(default="", repr=False)
     alloc: int = field(default=0, repr=False)
+
+
+# Backward compat aliases
+Voice = Node
+Bus = Node
 
 
 @dataclass(frozen=True)
@@ -67,16 +73,6 @@ class DspDef:
     faust: str
     controls: tuple[str, ...]
     num_inputs: int = 0
-
-
-@dataclass(frozen=True)
-class Bus:
-    """An effect bus — a FAUST DSP that takes audio input."""
-
-    type_id: str
-    gain: float
-    controls: tuple[str, ...]
-    num_inputs: int
 
 
 def dsp(fn: Callable[..., Any]) -> DspDef:
