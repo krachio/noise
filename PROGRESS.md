@@ -100,9 +100,29 @@ XLA-style compilation cache for the pattern compiler. Hash pattern structure
 Record live audio input into a buffer, play back as a pattern-triggered node.
 `kr.record("loop1", bars=4)` → captures audio → `loop1.play(kr.hit() * 4)`.
 
-### Stage 12: WASM REPL completion (priority: medium)
+### Stage 12: WASM Engine — full krach in the browser (priority: high)
 
-Complete the JupyterLite integration:
-- Web Audio scheduling loop (pattern eval → AudioParam.setValueAtTime)
-- Pattern-engine-py WASM build via PyO3 + wasm32-emscripten
-- Embed interactive "try it" on krach.io landing page
+Compile the actual Rust engine to WASM instead of reimplementing in JS.
+Same code, different compile target. FAUST JIT in browser via libfaust-wasm.
+
+```
+CLI:  Python → socket → krach-engine (Rust native) → CoreAudio
+Web:  Python (Pyodide) → wasm-bindgen → krach-engine (Rust WASM) → Web Audio
+```
+
+**Components:**
+- `pattern-engine` → WASM (already works with --no-default-features)
+- `audio-engine` → WASM (cpal has wasm-bindgen feature for Web Audio)
+- `faust-dsl` → Pyodide (pure Python, already works)
+- FAUST JIT → `@grame/libfaust` npm package (FAUST compiler in WASM,
+  compiles .dsp → AudioWorklet at runtime in browser)
+- Frontend: CodeMirror cells + Pyodide main thread
+
+**No PyO3 needed.** Python (Pyodide) calls wasm-bindgen JS exports directly.
+The WASM engine exposes the same command interface as the Unix socket protocol.
+
+**Key research findings:**
+- cpal: has `wasm-bindgen` + `audioworklet` features (WebAudio backend)
+- libfaust-wasm: entire FAUST compiler in browser, runtime .dsp → WASM compilation
+- rtrb: compiles to WASM (atomics for cross-thread AudioWorklet)
+- FAUST WASM: ~3-10x slower than LLVM native (acceptable for live coding)
