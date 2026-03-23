@@ -80,4 +80,45 @@ kr.mute("drums")
 
 ## Next
 
-- **Looper**: Record live input into buffer, play back as pattern-triggered voice
+### Stage 9: Graph-first API — `kr.node()` + `>>` operator (priority: high)
+
+Replace voice/bus/send/wire with a unified graph API. Everything is a node.
+Routing uses the `>>` operator. The system auto-detects source vs effect
+from `num_inputs` in the DSP definition.
+
+```python
+bass = kr.node("bass", bass_fn, gain=0.3)     # source (0 inputs)
+verb = kr.node("verb", reverb_fn, gain=0.3)    # effect (1+ inputs, auto-detected)
+bass >> verb                                     # route
+bass >> (0.4, verb)                              # route with send level
+mic >> filter >> verb                            # chain
+```
+
+**Why now:** The voice/bus distinction causes consistent copilot confusion and
+user friction. The graph IS the mental model for a live coding system. This
+simplification removes 4 concepts (voice, bus, send, wire) and replaces them
+with 2 (node, >>).
+
+**Implementation:**
+- `kr.node()` — single constructor, detects num_inputs from DSP
+- `NodeHandle.__rshift__` — `>>` operator for routing
+- Keep `voice()`/`bus()` as thin aliases for backward compat
+- Update context.md, copilot, docs, tests
+
+### Stage 10: Template caching (priority: medium)
+
+XLA-style compilation cache for the pattern compiler. Hash pattern structure
+(excluding seeds/cycle), cache EventTemplates. Same pattern + different seed
+= cache hit at template level. Only parameterization + fill run per cycle.
+
+### Stage 11: Looper (priority: low)
+
+Record live audio input into a buffer, play back as a pattern-triggered node.
+`kr.record("loop1", bars=4)` → captures audio → `loop1.play(kr.hit() * 4)`.
+
+### Stage 12: WASM REPL completion (priority: medium)
+
+Complete the JupyterLite integration:
+- Web Audio scheduling loop (pattern eval → AudioParam.setValueAtTime)
+- Pattern-engine-py WASM build via PyO3 + wasm32-emscripten
+- Embed interactive "try it" on krach.io landing page
