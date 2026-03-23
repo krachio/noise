@@ -89,11 +89,32 @@ Each iteration of the ralph loop follows this exact sequence:
 | Yara | 7 | struct() bypasses type system; Node should be mostly frozen; Scene uses positional tuples |
 | Nils | 5 | PROGRESS.md test counts stale; module docstrings still say "voice"; error messages don't suggest fixes |
 
-### Priority action items for next iteration
-1. **Split _mixer.py** — extract types, graph builder, IR rewriters, pattern builders, handles (Tomás 5, Maren 5)
-2. **Generic IR walker** — replace 3 copy-pasted _bind_* functions with single map_ir (Maren 5, Suki 7)
-3. **Fix `voices`/`buses` properties** — filter by num_inputs or collapse into `nodes` (Kira 6)
-4. **Central config + actionable errors** — replace _repo_root(), add log path hints to errors (Renzo 4)
-5. **Freeze Node fields + typed Scene** — frozen dataclass split, NamedTuple for Scene (Yara 7)
-6. **Update PROGRESS.md + module docstrings** — accurate counts, "node" not "voice" (Nils 5)
-7. **String interning for RT commands** — inline strings or u32 IDs in Command variants (Diego 8)
+### Iteration 2 scores
+
+| Reviewer | Score | Key issues |
+|----------|-------|------------|
+| Kira | 6 | __repr__ prints nodes twice; stale voice/bus sections |
+| Tomás | 5 | _mixer.py still 1267 lines; Scene voices/buses bug; stale _web_audio.py ghost |
+| Suki | 7 | save/recall corrupts poly data (voices/buses snapshot same dict); shadowed _check_finite |
+| Renzo | 4 | Config/error messages still weak |
+| Maren | 5 | _mixer.py 1267 lines; shadowed import; duplicate .clear() in recall |
+| Diego | 8 | String alloc on RT thread (unchanged) |
+| Yara | 7 | Scene frozen but mutable; Callable[..., Any]; Scene uses positional tuples |
+| Nils | 6 | Shadowed _check_finite; stale terminology in __repr__ |
+
+### Resolved in iteration 2
+- Extracted _bind.py (generic map_atoms walker)
+- Extracted _graph.py (build_graph_ir)
+- Extracted _patterns.py (pattern builders)
+- Fixed voices/buses → nodes/sources/effects
+- Updated PROGRESS.md test counts
+
+### Priority items for next iteration
+1. **Fix save/recall bug** — Scene.voices/buses snapshot same dict, recall corrupts (Suki 7, Tomás 5)
+2. **Fix shadowed _check_finite** — delete local duplicate, keep import (Suki, Maren, Nils)
+3. **Fix __repr__** — use nodes/sources/effects, stop printing everything twice (Kira 6)
+4. **Fix duplicate .clear() in recall** — copy-paste artifact (Maren)
+5. **Continue _mixer.py split** — extract Scene+types, NodeHandle (Tomás 5, Maren 5)
+6. **Actionable error messages** — __init__.py errors suggest checking engine.log (Renzo 4)
+7. **Scene: typed tuples → NamedTuple/dataclass** — fix mutability lie (Yara 7)
+8. **String interning for RT commands** — inline strings or u32 IDs (Diego 8)
