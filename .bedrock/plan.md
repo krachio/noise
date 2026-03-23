@@ -120,6 +120,12 @@ Each iteration of the ralph loop follows this exact sequence:
 | Yara | 7 | Scene frozen but mutable; Callable[..., Any]; Scene uses positional tuples |
 | Nils | 6 | Shadowed _check_finite; stale terminology in __repr__ |
 
+### Resolved in iteration 4
+- Removed Voice/Bus/VoiceHandle/BusHandle backward compat aliases (clean break)
+- Extracted NodeHandle into _handle.py (113 lines)
+- Extracted types into _types.py (85 lines)
+- _mixer.py: 1867 → 1075 lines (42% reduction, 5 extracted modules)
+
 ### Resolved in iteration 3
 - Fixed save/recall data corruption (Scene now uses single nodes dict with NodeSnapshot)
 - Deleted shadowed _check_finite (local duplicate)
