@@ -456,6 +456,7 @@ mod tests {
                 PatternNode::Atom { value: note(64) },
             ],
             root: 0,
+            is_control: false,
         };
         let cat_idx = pat.push(PatternNode::Cat {
             children: smallvec![0, 1],
@@ -484,6 +485,7 @@ mod tests {
                 PatternNode::Atom { value: note(64) },
             ],
             root: 0,
+            is_control: false,
         };
         let cat_idx = pat.push(PatternNode::Cat {
             children: smallvec![0, 1, 2],
@@ -510,6 +512,7 @@ mod tests {
                 PatternNode::Atom { value: note(64) },
             ],
             root: 0,
+            is_control: false,
         };
         let stack_idx = pat.push(PatternNode::Stack {
             children: smallvec![0, 1],
@@ -533,6 +536,7 @@ mod tests {
         let mut pat = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         let fast_idx = pat.push(PatternNode::Fast {
             factor: Time::whole(2),
@@ -557,6 +561,7 @@ mod tests {
                 PatternNode::Atom { value: note(64) },
             ],
             root: 0,
+            is_control: false,
         };
         let cat_idx = pat.push(PatternNode::Cat {
             children: smallvec![0, 1],
@@ -595,6 +600,7 @@ mod tests {
         let mut pat = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         let slow_idx = pat.push(PatternNode::Slow {
             factor: Time::whole(2),
@@ -618,6 +624,7 @@ mod tests {
         let mut pat = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         let early_idx = pat.push(PatternNode::Early {
             offset: Time::new(1, 4),
@@ -640,6 +647,7 @@ mod tests {
         let mut pat1 = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         let late_idx = pat1.push(PatternNode::Late {
             offset: Time::new(1, 4),
@@ -650,6 +658,7 @@ mod tests {
         let mut pat2 = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         let early_idx = pat2.push(PatternNode::Early {
             offset: Time::new(-1, 4),
@@ -677,6 +686,7 @@ mod tests {
                 PatternNode::Atom { value: note(64) }, // b
             ],
             root: 0,
+            is_control: false,
         };
         let cat_idx = pat.push(PatternNode::Cat {
             children: smallvec![0, 1],
@@ -704,6 +714,7 @@ mod tests {
         let mut pat = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         let rev_idx = pat.push(PatternNode::Rev { child: 0 });
         pat.root = rev_idx;
@@ -727,6 +738,7 @@ mod tests {
                 PatternNode::Atom { value: note(67) }, // 3: d
             ],
             root: 0,
+            is_control: false,
         };
         let cat1 = pat.push(PatternNode::Cat {
             children: smallvec![0, 1],
@@ -748,6 +760,7 @@ mod tests {
         let mut pat = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         let fast_idx = pat.push(PatternNode::Fast {
             factor: Time::zero(),
@@ -769,6 +782,7 @@ mod tests {
         let mut pat = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         let fast_child = pat.push(PatternNode::Fast {
             factor: Time::whole(2),
@@ -799,6 +813,7 @@ mod tests {
         let mut pat = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         let euclid_idx = pat.push(PatternNode::Euclid {
             pulses: 3,
@@ -817,6 +832,7 @@ mod tests {
         let mut pat = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         let euclid_idx = pat.push(PatternNode::Euclid {
             pulses: 4,
@@ -835,6 +851,7 @@ mod tests {
         let mut pat = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         let euclid_idx = pat.push(PatternNode::Euclid {
             pulses: 3,
@@ -853,6 +870,7 @@ mod tests {
         let mut pat = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         // euclid(1, 4, 0) -> hit at slot 0
         let e1 = pat.push(PatternNode::Euclid {
@@ -888,6 +906,7 @@ mod tests {
                 PatternNode::Atom { value: note(64) },
             ],
             root: 0,
+            is_control: false,
         };
         let cat_idx = pat.push(PatternNode::Cat {
             children: smallvec![0, 1],
@@ -908,6 +927,7 @@ mod tests {
         let mut pat = CompiledPattern {
             nodes: vec![PatternNode::Atom { value: note(60) }],
             root: 0,
+            is_control: false,
         };
         let degrade_idx = pat.push(PatternNode::Degrade {
             prob: 1.0,
@@ -930,6 +950,7 @@ mod tests {
                 PatternNode::Atom { value: note(67) },
             ],
             root: 0,
+            is_control: false,
         };
         let cat_idx = pat.push(PatternNode::Cat {
             children: smallvec![0, 1, 2, 3],
@@ -973,7 +994,7 @@ mod tests {
     #[test]
     fn freeze_is_transparent_in_query() {
         // Freeze wraps a pattern without changing its behavior
-        let mut pat = CompiledPattern { nodes: Vec::new(), root: 0 };
+        let mut pat = CompiledPattern { nodes: Vec::new(), root: 0, is_control: false };
         let atom = pat.push(PatternNode::Atom { value: note(60) });
         let frozen = pat.push(PatternNode::Freeze { child: atom });
         pat.root = frozen;
@@ -998,7 +1019,7 @@ mod tests {
 
         // Build: Freeze(Cat([trig, reset]))
         // This is what mix.hit() produces — Freeze prevents Cat flattening
-        let mut pat = CompiledPattern { nodes: Vec::new(), root: 0 };
+        let mut pat = CompiledPattern { nodes: Vec::new(), root: 0, is_control: false };
         let trig = pat.push(PatternNode::Atom { value: gate_on.clone() });
         let reset = pat.push(PatternNode::Atom { value: gate_off.clone() });
         let inner_cat = pat.push(PatternNode::Cat { children: smallvec![trig, reset] });

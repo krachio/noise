@@ -36,6 +36,10 @@ pub struct CompiledPattern {
     pub nodes: Vec<PatternNode>,
     /// Index of the root node in `nodes`.
     pub root: usize,
+    /// True if every Atom in the pattern is `Value::Control`.
+    /// Control-voice patterns are compiled to block-rate wavetables
+    /// instead of discrete events.
+    pub is_control: bool,
 }
 
 /// A single node in the pattern arena.
@@ -74,9 +78,11 @@ impl CompiledPattern {
     /// Create a pattern with a single atom.
     #[must_use]
     pub fn atom(value: Value) -> Self {
+        let is_control = matches!(value, Value::Control { .. });
         Self {
             nodes: vec![PatternNode::Atom { value }],
             root: 0,
+            is_control,
         }
     }
 
@@ -86,6 +92,17 @@ impl CompiledPattern {
         Self {
             nodes: vec![PatternNode::Silence],
             root: 0,
+            is_control: false,
+        }
+    }
+
+    /// Create an empty pattern for manual arena construction (tests).
+    #[must_use]
+    pub fn empty() -> Self {
+        Self {
+            nodes: Vec::new(),
+            root: 0,
+            is_control: false,
         }
     }
 
@@ -94,6 +111,20 @@ impl CompiledPattern {
         let idx = self.nodes.len();
         self.nodes.push(node);
         idx
+    }
+
+    /// True if every Atom in the arena is `Value::Control` and at least one Atom exists.
+    pub(crate) fn detect_control(nodes: &[PatternNode]) -> bool {
+        let mut has_atom = false;
+        for node in nodes {
+            if let PatternNode::Atom { value } = node {
+                has_atom = true;
+                if !matches!(value, Value::Control { .. }) {
+                    return false;
+                }
+            }
+        }
+        has_atom
     }
 }
 

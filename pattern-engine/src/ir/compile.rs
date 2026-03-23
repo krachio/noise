@@ -12,9 +12,11 @@ pub fn compile(ir: &IrNode) -> Result<CompiledPattern, IrError> {
     let mut pattern = CompiledPattern {
         nodes: Vec::new(),
         root: 0,
+        is_control: false,
     };
     let root = compile_node(ir, &mut pattern);
     pattern.root = root;
+    pattern.is_control = CompiledPattern::detect_control(&pattern.nodes);
     Ok(pattern)
 }
 
@@ -302,5 +304,54 @@ mod tests {
         for (i, e) in events.iter().enumerate() {
             assert!(e.has_onset(), "event {i} should have onset");
         }
+    }
+
+    #[test]
+    fn is_control_true_for_all_control_atoms() {
+        let ir = IrNode::Cat {
+            children: vec![
+                IrNode::Atom {
+                    value: Value::Control { label: "gate".into(), value: 1.0 },
+                },
+                IrNode::Atom {
+                    value: Value::Control { label: "gate".into(), value: 0.0 },
+                },
+            ],
+        };
+        let pat = compile(&ir).unwrap();
+        assert!(pat.is_control);
+    }
+
+    #[test]
+    fn is_control_false_for_note_atoms() {
+        let ir = IrNode::Cat {
+            children: vec![
+                IrNode::Atom { value: note(60) },
+                IrNode::Atom { value: note(64) },
+            ],
+        };
+        let pat = compile(&ir).unwrap();
+        assert!(!pat.is_control);
+    }
+
+    #[test]
+    fn is_control_false_for_mixed_atoms() {
+        let ir = IrNode::Cat {
+            children: vec![
+                IrNode::Atom {
+                    value: Value::Control { label: "freq".into(), value: 440.0 },
+                },
+                IrNode::Atom { value: note(60) },
+            ],
+        };
+        let pat = compile(&ir).unwrap();
+        assert!(!pat.is_control);
+    }
+
+    #[test]
+    fn is_control_false_for_silence_only() {
+        let ir = IrNode::Silence;
+        let pat = compile(&ir).unwrap();
+        assert!(!pat.is_control);
     }
 }

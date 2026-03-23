@@ -547,6 +547,7 @@ mod tests {
                     PatternNode::Atom { value: v2 },
                 ],
                 root: 0,
+                is_control: false,
             };
             let cat = pat.push(PatternNode::Cat { children: smallvec![0, 1] });
             pat.root = cat;
