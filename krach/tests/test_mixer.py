@@ -32,10 +32,10 @@ def _collect_control_labels(node: IrNode) -> set[str]:
 
 
 def test_build_graph_ir_single_voice() -> None:
-    voices = {
+    nodes = {
         "bass": Voice("faust:acid_bass", 0.3, ("freq", "gate", "cutoff")),
     }
-    ir = build_graph_ir(voices)
+    ir = build_graph_ir(nodes)
 
     node_ids = {n.id for n in ir.nodes}
     assert node_ids == {"bass", "bass_g", "out"}
@@ -49,11 +49,11 @@ def test_build_graph_ir_single_voice() -> None:
 
 
 def test_build_graph_ir_two_voices() -> None:
-    voices = {
+    nodes = {
         "kit": Voice("faust:kit", 0.8, ("kick", "hat", "snare")),
         "bass": Voice("faust:acid_bass", 0.3, ("freq", "gate")),
     }
-    ir = build_graph_ir(voices)
+    ir = build_graph_ir(nodes)
 
     assert len(ir.nodes) == 5  # kit, kit_g, bass, bass_g, out
     assert len(ir.connections) == 4
@@ -73,8 +73,8 @@ def test_build_graph_ir_empty_produces_dac_only() -> None:
 
 
 def test_build_graph_ir_gain_node_has_initial_value() -> None:
-    voices = {"bass": Voice("faust:acid_bass", 0.35, ("freq", "gate"))}
-    ir = build_graph_ir(voices)
+    nodes = {"bass": Voice("faust:acid_bass", 0.35, ("freq", "gate"))}
+    ir = build_graph_ir(nodes)
 
     gain_node = next(n for n in ir.nodes if n.id == "bass_g")
     assert gain_node.type_id == "gain"
@@ -82,11 +82,11 @@ def test_build_graph_ir_gain_node_has_initial_value() -> None:
 
 
 def test_build_graph_ir_with_init_values() -> None:
-    voices = {
+    nodes = {
         "bass": Voice("faust:acid_bass", 0.3, ("freq", "gate"),
                        init=(("freq", 55.0), ("gate", 0.0))),
     }
-    ir = build_graph_ir(voices)
+    ir = build_graph_ir(nodes)
 
     bass_node = next(n for n in ir.nodes if n.id == "bass")
     assert bass_node.controls["freq"] == 55.0
@@ -95,10 +95,10 @@ def test_build_graph_ir_with_init_values() -> None:
 
 def test_build_graph_ir_poly_voice_expands_instances() -> None:
     """A voice with count>1 expands to N instances in the IR."""
-    voices = {
+    nodes = {
         "pad": Voice("faust:pad", 0.6, ("freq", "gate"), count=2),
     }
-    ir = build_graph_ir(voices)
+    ir = build_graph_ir(nodes)
 
     node_ids = {n.id for n in ir.nodes}
     assert "pad_v0" in node_ids
@@ -119,10 +119,10 @@ def test_build_graph_ir_poly_voice_expands_instances() -> None:
 
 def test_build_graph_ir_mono_voice_no_suffix() -> None:
     """A voice with count=1 uses name directly (no _v0 suffix)."""
-    voices = {
+    nodes = {
         "bass": Voice("faust:bass", 0.5, ("freq", "gate"), count=1),
     }
-    ir = build_graph_ir(voices)
+    ir = build_graph_ir(nodes)
 
     node_ids = {n.id for n in ir.nodes}
     assert "bass" in node_ids
@@ -131,13 +131,13 @@ def test_build_graph_ir_mono_voice_no_suffix() -> None:
 
 def test_build_graph_ir_poly_sum_node() -> None:
     """Poly voice with sends gets an implicit sum node."""
-    voices = {
+    nodes = {
         "pad": Voice("faust:pad", 0.6, ("freq", "gate"), count=2),
+        "verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1),
     }
-    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
     sends = {("pad", "verb"): 0.4}
 
-    ir = build_graph_ir(voices, buses=buses, sends=sends)
+    ir = build_graph_ir(nodes, sends=sends)
 
     node_ids = {n.id for n in ir.nodes}
     assert "pad_sum" in node_ids  # implicit sum node
@@ -152,13 +152,13 @@ def test_build_graph_ir_poly_sum_node() -> None:
 
 def test_build_graph_ir_mono_no_sum_node() -> None:
     """Mono voice with sends does NOT get a sum node."""
-    voices = {
+    nodes = {
         "bass": Voice("faust:bass", 0.5, ("freq", "gate"), count=1),
+        "verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1),
     }
-    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
     sends = {("bass", "verb"): 0.4}
 
-    ir = build_graph_ir(voices, buses=buses, sends=sends)
+    ir = build_graph_ir(nodes, sends=sends)
 
     node_ids = {n.id for n in ir.nodes}
     assert "bass_sum" not in node_ids
@@ -584,18 +584,15 @@ def test_gain_poly_parent_updates_all_instances() -> None:
 # ── remove/step on missing name ─────────────────────────────────────────────
 
 
-def test_remove_missing_voice_raises_valueerror() -> None:
-    """remove() on a non-existent voice should raise ValueError, not KeyError."""
+def test_remove_missing_voice_is_noop() -> None:
+    """remove() on a non-existent voice is a no-op (idempotent)."""
     from unittest.mock import MagicMock
-
-    import pytest
 
     session = MagicMock()
     from krach._mixer import VoiceMixer
 
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
-    with pytest.raises(ValueError, match="not found"):
-        mixer.remove("nope")
+    mixer.remove("nope")  # must not raise
 
 
 def test_note_free_function_exists() -> None:
@@ -694,18 +691,14 @@ def test_seq_produces_bare_params() -> None:
 # ── Bug: gain() on nonexistent voice raises KeyError ─────────────────────────
 
 
-def test_gain_nonexistent_voice_raises_valueerror() -> None:
+def test_gain_nonexistent_voice_is_noop() -> None:
     from unittest.mock import MagicMock
-
-    import pytest
 
     from krach._mixer import VoiceMixer
 
     session = MagicMock()
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
-
-    with pytest.raises(ValueError, match="not found"):
-        mixer.gain("nope", 0.5)
+    mixer.gain("nope", 0.5)  # must not raise
 
 
 # ── Bug: voice() replacing mono doesn't hush old fade ────────────────────────
@@ -873,18 +866,14 @@ def test_solo_poly_voice() -> None:
     assert v["pad"].gain > 0.0
 
 
-def test_mute_nonexistent_raises() -> None:
+def test_mute_nonexistent_is_noop() -> None:
     from unittest.mock import MagicMock
-
-    import pytest
 
     from krach._mixer import VoiceMixer
 
     session = MagicMock()
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
-
-    with pytest.raises(ValueError, match="not found"):
-        mixer.mute("nope")
+    mixer.mute("nope")  # must not raise
 
 
 # ── FADE_CANCEL_OLD ──────────────────────────────────────────────────────────
@@ -954,18 +943,14 @@ def test_batch_flushes_on_success() -> None:
     assert session.load_graph.call_count == 1
 
 
-def test_fade_nonexistent_voice_raises_valueerror() -> None:
+def test_fade_nonexistent_voice_is_noop() -> None:
     from unittest.mock import MagicMock
-
-    import pytest
 
     from krach._mixer import VoiceMixer
 
     session = MagicMock()
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
-
-    with pytest.raises(ValueError, match="not found"):
-        mixer.fade("nope", target=0.5, bars=4)
+    mixer.fade("nope", target=0.5, bars=4)  # must not raise
 
 
 # ── Unified note() API ───────────────────────────────────────────────────────
@@ -1394,9 +1379,11 @@ def test_voice_over_poly_cleans_instance_muted_entries() -> None:
 
 
 def test_build_graph_ir_with_bus() -> None:
-    voices = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
-    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
-    ir = build_graph_ir(voices, buses=buses)
+    nodes = {
+        "bass": Voice("faust:bass", 0.5, ("freq", "gate")),
+        "verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1),
+    }
+    ir = build_graph_ir(nodes)
 
     node_ids = {n.id for n in ir.nodes}
     assert "verb" in node_ids
@@ -1406,10 +1393,12 @@ def test_build_graph_ir_with_bus() -> None:
 
 
 def test_build_graph_ir_with_send() -> None:
-    voices = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
-    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
+    nodes = {
+        "bass": Voice("faust:bass", 0.5, ("freq", "gate")),
+        "verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1),
+    }
     sends = {("bass", "verb"): 0.4}
-    ir = build_graph_ir(voices, buses=buses, sends=sends)
+    ir = build_graph_ir(nodes, sends=sends)
 
     node_ids = {n.id for n in ir.nodes}
     assert "bass_send_verb" in node_ids
@@ -1422,13 +1411,13 @@ def test_build_graph_ir_with_send() -> None:
 
 
 def test_build_graph_ir_two_sends_same_bus() -> None:
-    voices = {
+    nodes = {
         "bass": Voice("faust:bass", 0.5, ("freq", "gate")),
         "pad": Voice("faust:pad", 0.3, ("freq", "gate")),
+        "verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1),
     }
-    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
     sends = {("bass", "verb"): 0.4, ("pad", "verb"): 0.6}
-    ir = build_graph_ir(voices, buses=buses, sends=sends)
+    ir = build_graph_ir(nodes, sends=sends)
 
     node_ids = {n.id for n in ir.nodes}
     assert "bass_send_verb" in node_ids
@@ -1440,23 +1429,25 @@ def test_build_graph_ir_two_sends_same_bus() -> None:
 
 
 def test_build_graph_ir_send_gain_initial_value() -> None:
-    voices = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
-    buses = {"verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1)}
+    nodes = {
+        "bass": Voice("faust:bass", 0.5, ("freq", "gate")),
+        "verb": Bus("faust:verb", 0.3, ("room",), num_inputs=1),
+    }
     sends = {("bass", "verb"): 0.4}
-    ir = build_graph_ir(voices, buses=buses, sends=sends)
+    ir = build_graph_ir(nodes, sends=sends)
 
     send_node = next(n for n in ir.nodes if n.id == "bass_send_verb")
     assert send_node.controls["gain"] == 0.4
 
 
 def test_build_graph_ir_with_wire() -> None:
-    voices = {
+    nodes = {
         "pad": Voice("faust:pad", 0.5, ("freq", "gate")),
         "kick": Voice("faust:kick", 0.8, ("gate",)),
+        "comp": Bus("faust:comp", 1.0, ("threshold",), num_inputs=2),
     }
-    buses = {"comp": Bus("faust:comp", 1.0, ("threshold",), num_inputs=2)}
     wires = {("pad", "comp"): "in0", ("kick", "comp"): "in1"}
-    ir = build_graph_ir(voices, buses=buses, wires=wires)
+    ir = build_graph_ir(nodes, wires=wires)
 
     wire_conns = [
         (c.from_node, c.to_node, c.to_port)
@@ -1467,9 +1458,9 @@ def test_build_graph_ir_with_wire() -> None:
 
 
 def test_build_graph_ir_no_buses_backward_compatible() -> None:
-    voices = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
-    ir_old = build_graph_ir(voices)
-    ir_new = build_graph_ir(voices, buses=None, sends=None, wires=None)
+    nodes = {"bass": Voice("faust:bass", 0.5, ("freq", "gate"))}
+    ir_old = build_graph_ir(nodes)
+    ir_new = build_graph_ir(nodes, sends=None, wires=None)
     assert ir_old == ir_new
 
 
@@ -1541,10 +1532,8 @@ def test_send_update_instant() -> None:
     session.set_ctrl.assert_called_once_with("bass_send_verb/gain", 0.7)
 
 
-def test_send_validates_voice_exists() -> None:
+def test_send_missing_source_is_noop_old() -> None:
     from unittest.mock import MagicMock
-
-    import pytest
 
     from krach._mixer import VoiceMixer
 
@@ -1553,15 +1542,11 @@ def test_send_validates_voice_exists() -> None:
         "faust:verb": ("room",),
     })
     mixer.bus("verb", "faust:verb", gain=0.3)
-
-    with pytest.raises(ValueError, match="node.*not found"):
-        mixer.send("nope", "verb", level=0.4)
+    mixer.send("nope", "verb", level=0.4)  # must not raise
 
 
-def test_send_validates_bus_exists() -> None:
+def test_send_missing_target_is_noop_old() -> None:
     from unittest.mock import MagicMock
-
-    import pytest
 
     from krach._mixer import VoiceMixer
 
@@ -1570,9 +1555,7 @@ def test_send_validates_bus_exists() -> None:
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
-
-    with pytest.raises(ValueError, match="node.*not found"):
-        mixer.send("bass", "nope", level=0.4)
+    mixer.send("bass", "nope", level=0.4)  # must not raise
 
 
 def test_remove_voice_cleans_sends() -> None:
@@ -1618,10 +1601,9 @@ def test_remove_bus_cleans_sends_and_wires() -> None:
     assert "bass_send_verb" not in node_ids
 
 
-def test_bus_name_collision_with_voice_raises() -> None:
+def test_bus_replaces_voice_with_same_name() -> None:
+    """bus() replaces a voice with an effect node (unified model)."""
     from unittest.mock import MagicMock
-
-    import pytest
 
     from krach._mixer import VoiceMixer
 
@@ -1630,16 +1612,16 @@ def test_bus_name_collision_with_voice_raises() -> None:
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.bus("bass", "faust:bass", gain=0.3)
+    node = mixer.get_node("bass")
+    assert node is not None
+    assert node.gain == 0.3
+    assert node.num_inputs > 0
 
-    with pytest.raises(ValueError, match="name.*already.*voice"):
-        mixer.bus("bass", "faust:bass", gain=0.3)
 
-
-def test_bus_name_collision_with_poly_raises() -> None:
-    """bus() raises ValueError if name collides with a poly voice."""
+def test_bus_replaces_poly_voice() -> None:
+    """bus() replaces a poly voice, cleaning up instances."""
     from unittest.mock import MagicMock
-
-    import pytest
 
     from krach._mixer import VoiceMixer
 
@@ -1649,9 +1631,11 @@ def test_bus_name_collision_with_poly_raises() -> None:
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=2, gain=0.5)
-
-    with pytest.raises(ValueError, match="name.*already.*voice"):
-        mixer.bus("pad", "faust:pad", gain=0.3)
+    mixer.bus("pad", "faust:pad", gain=0.3)
+    node = mixer.get_node("pad")
+    assert node is not None
+    assert node.count == 1  # bus is always mono
+    assert node.num_inputs > 0
 
 
 def test_gain_works_for_bus() -> None:
@@ -2784,19 +2768,15 @@ def test_pattern_retrieval() -> None:
     assert mixer.pattern("bass") is pat
 
 
-def test_pattern_retrieval_unknown_raises() -> None:
-    """pattern() raises ValueError for unknown names."""
+def test_pattern_retrieval_unknown_returns_none() -> None:
+    """pattern() returns None for unknown names."""
     from unittest.mock import MagicMock
-
-    import pytest
 
     from krach._mixer import VoiceMixer
 
     session = MagicMock()
     mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
-
-    with pytest.raises(ValueError, match="no pattern for"):
-        mixer.pattern("nope")
+    assert mixer.pattern("nope") is None
 
 
 def test_handle_pattern_retrieval() -> None:
@@ -3298,10 +3278,10 @@ def test_input_appears_in_graph_ir() -> None:
     """The adc_input node appears in the built graph IR."""
     from krach._mixer import build_graph_ir
 
-    voices = {
+    nodes = {
         "mic": Voice("adc_input", 0.5, ()),
     }
-    ir = build_graph_ir(voices)
+    ir = build_graph_ir(nodes)
 
     node_ids = {n.id for n in ir.nodes}
     assert "mic" in node_ids
@@ -3444,8 +3424,8 @@ def test_export_contains_pattern_json() -> None:
 # ── node() auto-detection ───────────────────────────────────────────────
 
 
-def test_node_with_zero_inputs_creates_voice() -> None:
-    """node() with a 0-input source creates a voice, not a bus."""
+def test_node_creates_entry_in_nodes() -> None:
+    """node() creates an entry in the unified _nodes dict."""
     from unittest.mock import MagicMock
     from krach._mixer import VoiceMixer
 
@@ -3454,8 +3434,8 @@ def test_node_with_zero_inputs_creates_voice() -> None:
         "faust:bass": ("freq", "gate"),
     })
     mixer.node("bass", "faust:bass", gain=0.3)
-    assert mixer.get_voice("bass") is not None
-    assert mixer.get_bus("bass") is None
+    assert mixer.get_node("bass") is not None
+    assert mixer.get_node("bass").num_inputs == 0  # type: ignore[union-attr]
 
 
 def test_connect_voice_to_voice_as_send() -> None:
@@ -3571,3 +3551,198 @@ def test_replace_node_cleans_up_connections() -> None:
     # Replace verb — should not crash on rebuild
     verb2 = mixer.node("verb", "faust:verb", gain=0.5)
     _ = bass >> verb2  # re-route, must not raise
+
+
+def test_bus_replace_existing_bus() -> None:
+    """bus() should allow replacing an existing bus (effect node)."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:verb": ("in", "room"),
+    })
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    # Re-creating should replace, not crash
+    mixer.bus("verb", "faust:verb", gain=0.5)
+    assert mixer.get_node("verb") is not None
+    assert mixer.get_node("verb").gain == 0.5  # type: ignore[union-attr]
+
+
+def test_bus_replace_voice_with_bus() -> None:
+    """bus() should allow replacing a voice with a bus (effect node)."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.3)
+    # Replace voice with bus — should work (unified node model)
+    mixer.bus("bass", "faust:bass", gain=0.5)
+    node = mixer.get_node("bass")
+    assert node is not None
+    assert node.num_inputs > 0  # type: ignore[union-attr]
+
+
+# ── Stale merge artifact fixes ───────────────────────────────────────────
+
+
+def test_mute_single_stores_gain_for_any_node() -> None:
+    """_mute_single stores gain for nodes (no stale elif branch)."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:verb": ("room",),
+    })
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.mute("verb")
+    assert mixer.is_muted("verb")
+    # Unmute should restore gain
+    mixer.unmute("verb")
+    assert not mixer.is_muted("verb")
+
+
+def test_resolve_targets_no_duplicates() -> None:
+    """_resolve_targets returns each match once (not duplicated from stale merge)."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("drums/kick", "faust:bass", gain=0.5)
+    mixer.voice("drums/snare", "faust:bass", gain=0.5)
+    # Group resolution: "drums" should find 2 nodes, not 4 (was doubled)
+    targets = mixer._resolve_targets("drums")  # type: ignore[attr-defined]
+    assert len(targets) == 2
+
+
+# ── Forgiving UX (no crash on typos/missing nodes) ─────────────────────
+
+
+def test_remove_missing_node_is_noop() -> None:
+    """remove() on non-existent node is a no-op, not a crash."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer.remove("nonexistent")  # must not raise
+
+
+def test_remove_bus_missing_is_noop() -> None:
+    """remove_bus() on non-existent bus is a no-op."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer.remove_bus("nonexistent")  # must not raise
+
+
+def test_gain_missing_node_is_noop() -> None:
+    """gain() on non-existent node is a no-op, not a crash."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer.gain("nonexistent", 0.5)  # must not raise
+
+
+def test_mute_missing_node_is_noop() -> None:
+    """mute() on non-existent node is a no-op."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer.mute("nonexistent")  # must not raise
+
+
+def test_unmute_missing_node_is_noop() -> None:
+    """unmute() on non-existent node is a no-op."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer.unmute("nonexistent")  # must not raise
+
+
+def test_fade_missing_node_is_noop() -> None:
+    """fade() on non-existent node is a no-op."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer.fade("nonexistent", 0.5)  # must not raise
+
+
+def test_send_missing_source_is_noop() -> None:
+    """send() with missing source is a no-op."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:verb": ("room",),
+    })
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("nonexistent", "verb")  # must not raise
+
+
+def test_send_missing_target_is_noop() -> None:
+    """send() with missing target is a no-op."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.3)
+    mixer.send("bass", "nonexistent")  # must not raise
+
+
+def test_wire_missing_source_is_noop() -> None:
+    """wire() with missing source is a no-op."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:verb": ("room",),
+    })
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.wire("nonexistent", "verb")  # must not raise
+
+
+def test_wire_missing_target_is_noop() -> None:
+    """wire() with missing target is a no-op."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.3)
+    mixer.wire("bass", "nonexistent")  # must not raise
+
+
+def test_pattern_missing_returns_none() -> None:
+    """pattern() on unplayed slot returns None."""
+    from unittest.mock import MagicMock
+    from krach._mixer import VoiceMixer
+
+    session = MagicMock()
+    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    result = mixer.pattern("nonexistent")
+    assert result is None
