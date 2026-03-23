@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
+      - 'web/**'
       - 'README.md'
       - '.github/workflows/docs.yml'
       - '**/*.rs'
@@ -42,6 +43,13 @@ jobs:
           cargo doc --workspace --no-deps
           cp -r target/doc site/rust
           echo '<meta http-equiv="refresh" content="0;url=pattern_engine/index.html">' > site/rust/index.html
+
+      # JupyterLite REPL
+      - name: Build JupyterLite
+        working-directory: web
+        run: |
+          uv sync
+          uv run jupyter lite build --output-dir ../site/try
 
       # Upload combined site
       - uses: actions/upload-pages-artifact@v3
