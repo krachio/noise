@@ -20,8 +20,8 @@ noise/
 - pattern-engine: 160 Rust tests
 - krach-engine: 25 Rust tests
 - faust-dsl: 68 Python tests
-- krach: 442 Python tests (includes patterns module, namespace tests)
-- **Total: 878 tests**, all green. Pyright strict clean.
+- krach: 495 Python tests (includes patterns module, namespace tests)
+- **Total: 931 tests**, all green. Pyright strict clean.
 
 ## Usage
 
