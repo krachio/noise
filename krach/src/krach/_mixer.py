@@ -1069,27 +1069,43 @@ class VoiceMixer:
         return self._ctrl_values.get(f"{node}/{param}", 0.0)
 
     def is_muted(self, name: str) -> bool:
-        """Check if a voice is currently muted."""
+        """Check if a node is currently muted."""
         return name in self._muted
 
     def get_bus(self, name: str) -> Bus | None:
-        """Look up a single bus by name, or None if not found."""
+        """Backward compat — same as get_node."""
         return self._nodes.get(name)
 
     @property
     def voice_data(self) -> dict[str, Voice]:
-        """Read-only snapshot of active voices as raw Voice structs."""
+        """Read-only snapshot of all nodes as raw Node structs."""
         return dict(self._nodes)
 
     @property
+    def nodes(self) -> dict[str, NodeHandle]:
+        """All nodes as name → NodeHandle."""
+        return {name: NodeHandle(self, name) for name in self._nodes}
+
+    @property
+    def sources(self) -> dict[str, NodeHandle]:
+        """Source nodes (num_inputs=0) as name → NodeHandle."""
+        return {n: NodeHandle(self, n) for n, v in self._nodes.items() if v.num_inputs == 0}
+
+    @property
+    def effects(self) -> dict[str, NodeHandle]:
+        """Effect nodes (num_inputs>0) as name → NodeHandle."""
+        return {n: NodeHandle(self, n) for n, v in self._nodes.items() if v.num_inputs > 0}
+
+    # Backward compat — prefer nodes/sources/effects
+    @property
     def voices(self) -> dict[str, VoiceHandle]:
-        """Active voices as name → VoiceHandle."""
-        return {name: VoiceHandle(self, name) for name in self._nodes}
+        """Alias for sources."""
+        return self.sources  # type: ignore[return-value]
 
     @property
     def buses(self) -> dict[str, BusHandle]:
-        """Active buses as name → BusHandle."""
-        return {name: BusHandle(self, name) for name in self._nodes}
+        """Alias for effects."""
+        return self.effects  # type: ignore[return-value]
 
     @property
     def node_controls(self) -> dict[str, tuple[str, ...]]:
