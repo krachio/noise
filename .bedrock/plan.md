@@ -102,10 +102,24 @@ Each iteration of the ralph loop follows this exact sequence:
 | Yara | 6 | ↓ | Callable[..., Any], Scene still has mutable dict in frozen |
 | Nils | 6 | ↑ | Terminology improved, still some stale naming |
 
+### Iteration 4 scores
+
+| Reviewer | Score | Trend | Blocker |
+|----------|-------|-------|---------|
+| Kira | 7 | ↑↑ | Alias removal helped, minor nits remain |
+| Tomás | 5 | = | _mixer.py still 1075 lines |
+| Suki | 7 | = | Fade path untested |
+| Renzo | 6 | ↑ | Actionable errors helped |
+| Maren | 4 | = | VoiceMixer 1000-line god class |
+| Diego | 8 | = | RT string alloc (Rust-side) |
+| Yara | 7 | ↑ | Types extraction helped |
+| Nils | ~7 | ↑ | Commit quality improved |
+
 ### Priority for next iteration
-1. **Split VoiceMixer class** — extract scene management, fade/automation, and config into mixins or submodules
-2. **Remove Voice/Bus backward compat aliases** — clean break per reviewer principles
-3. **Narrow Callable[..., Any]** — define a DSP protocol type
+1. **Extract scene management** from VoiceMixer into free functions or mixin (~160 lines)
+2. **Extract fade/automation** from VoiceMixer (~100 lines)
+3. **Extract export** from VoiceMixer (~80 lines)
+4. Target: VoiceMixer under 500 lines
 
 ### Iteration 2 scores
 
