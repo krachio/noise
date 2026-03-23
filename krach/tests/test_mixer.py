@@ -2636,7 +2636,7 @@ def test_handle_repr() -> None:
     h = mixer.voice("bass", "faust:bass", gain=0.3)
 
     r = repr(h)
-    assert "VoiceHandle" in r
+    assert "Node" in r
     assert "bass" in r
     assert "faust:bass" in r
     assert "gain=0.30" in r
@@ -2687,7 +2687,7 @@ def test_bus_handle_repr() -> None:
     bh = mixer.bus("verb", "faust:verb", gain=0.5)
 
     r = repr(bh)
-    assert "BusHandle" in r
+    assert "Node" in r
     assert "verb" in r
     assert "faust:verb" in r
     assert "gain=0.50" in r

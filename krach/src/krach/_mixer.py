@@ -732,7 +732,58 @@ class VoiceMixer:
             self._wait_for_type(type_id)
         return type_id, controls, source_text
 
-    def input(self, name: str = "mic", channel: int = 0, gain: float = 0.5) -> VoiceHandle:
+    def node(
+        self,
+        name: str,
+        source: str | DspDef | Callable[..., Any],
+        gain: float = 0.5,
+        count: int = 1,
+        **init: float,
+    ) -> NodeHandle:
+        """Add a node to the audio graph.
+
+        Auto-detects source (0 audio inputs) vs effect (1+ audio inputs)
+        from the DSP definition. Use ``count > 1`` for polyphonic nodes.
+        """
+        num_inputs = 0
+        if isinstance(source, DspDef):
+            num_inputs = source.num_inputs
+        elif callable(source) and not isinstance(source, str):
+            result = _transpile(source)  # type: ignore[arg-type]
+            num_inputs = result.num_inputs
+        if num_inputs > 0:
+            return self.bus(name, source, gain=gain)
+        return self.voice(name, source, gain=gain, count=count, **init)
+
+    def connect(self, source: str, target: str, level: float = 1.0, port: str | None = None) -> None:
+        """Connect source node to target node.
+
+        Creates a gain-controlled send. If ``port`` is specified,
+        creates a direct wire to that port instead.
+        """
+        if port is not None:
+            self.wire(source, target, port=port)
+        else:
+            self.send(source, target, level=level)
+
+    def __getitem__(self, path: str) -> NodeHandle | float:
+        """Path dispatch: ``kr['bass']`` → NodeHandle, ``kr['bass/cutoff']`` → float."""
+        if "/" in path:
+            return self._ctrl_values.get(path, 0.0)
+        if path in self._voices:
+            return NodeHandle(self, path)
+        if path in self._buses:
+            return NodeHandle(self, path)
+        raise KeyError(f"no node named {path!r}")
+
+    def __setitem__(self, path: str, value: float) -> None:
+        """Set via path: ``kr['bass/cutoff'] = 1200`` or ``kr['bass'] = 0.3`` (gain)."""
+        if "/" in path:
+            self.set(path, value)
+        else:
+            self.gain(path, value)
+
+    def input(self, name: str = "mic", channel: int = 0, gain: float = 0.5) -> NodeHandle:
         """Add an audio input voice (ADC).
 
         Starts the system audio input stream (if not already started) and
@@ -1487,6 +1538,10 @@ class VoiceMixer:
         """Look up a single voice by name, or None if not found."""
         return self._voices.get(name)
 
+    def get_ctrl(self, node: str, param: str) -> float:
+        """Get the last-set value for a node's control parameter."""
+        return self._ctrl_values.get(f"{node}/{param}", 0.0)
+
     def is_muted(self, name: str) -> bool:
         """Check if a voice is currently muted."""
         return name in self._muted
@@ -1556,14 +1611,69 @@ class VoiceMixer:
         raise TimeoutError(f"FAUST type '{type_id}' not ready after {timeout}s")
 
 
-class VoiceHandle:
-    """Proxy for a named voice — delegates all operations to VoiceMixer."""
+class NodeHandle:
+    """Proxy for a named node in the audio graph.
+
+    Supports operator DSL for REPL jamming:
+    - ``>>`` for routing (signal flow)
+    - ``@`` for playing patterns (+ mini-notation strings)
+    - ``[]`` for control get/set
+
+    All operators delegate to the explicit VoiceMixer API.
+    """
 
     def __init__(self, mixer: VoiceMixer, name: str) -> None:
         self._mixer = mixer
         self._name = name
 
+    # ── Operator DSL ────────────────────────────────────────────────
+
+    def __rshift__(self, other: NodeHandle | tuple[NodeHandle, float]) -> NodeHandle:
+        """Route signal: ``bass >> verb`` or ``bass >> (verb, 0.4)``."""
+        if isinstance(other, tuple):
+            target, level = other
+            self._mixer.connect(self._name, target._name, level=level)
+            return target
+        if isinstance(other, NodeHandle):  # pyright: ignore[reportUnnecessaryIsInstance]
+            self._mixer.connect(self._name, other._name)
+            return other
+        raise TypeError(
+            f"{self._name} >> {type(other).__name__} — expected NodeHandle or (NodeHandle, float).\n"
+            f"  Try: {self._name} >> verb           — route to verb\n"
+            f"       {self._name} >> (verb, 0.4)    — route at 40% level"
+        )
+
+    def __matmul__(self, pattern: Pattern | str | tuple[str, Pattern] | None) -> NodeHandle:
+        """Play pattern: ``bass @ pattern``, ``bass @ \"A2 D3\"``, ``bass @ None``."""
+        if pattern is None:
+            self._mixer.hush(self._name)
+        elif isinstance(pattern, str):
+            from krach._mininotation import p
+            self._mixer.play(self._name, p(pattern))
+        elif isinstance(pattern, tuple):
+            if len(pattern) == 2:
+                param, pat = pattern
+                if isinstance(param, str) and isinstance(pat, Pattern):  # pyright: ignore[reportUnnecessaryIsInstance]
+                    self._mixer.play(f"{self._name}/{param}", pat)
+                    return self
+            raise TypeError(f"expected (str, Pattern) tuple, got {pattern!r}")
+        else:
+            # Pattern (narrowed type after None, str, tuple are excluded)
+            self._mixer.play(self._name, pattern)
+        return self
+
+    def __getitem__(self, param: str) -> float:
+        """Get control value: ``bass[\"cutoff\"]``."""
+        return self._mixer.get_ctrl(self._name, param)
+
+    def __setitem__(self, param: str, value: float) -> None:
+        """Set control value: ``bass[\"cutoff\"] = 1200``."""
+        self._mixer.set(f"{self._name}/{param}", value)
+
+    # ── Explicit API (Level 2) ──────────────────────────────────────
+
     def play(self, target_or_pattern: str | Pattern, pattern: Pattern | None = None) -> None:
+        """Play a pattern on this node or a specific control path."""
         if pattern is not None and isinstance(target_or_pattern, str):
             self._mixer.play(f"{self._name}/{target_or_pattern}", pattern)
         else:
@@ -1571,7 +1681,7 @@ class VoiceHandle:
             self._mixer.play(self._name, target_or_pattern)
 
     def pattern(self) -> Pattern:
-        """Retrieve the last unbound pattern played on this voice."""
+        """Retrieve the last unbound pattern played on this node."""
         return self._mixer.pattern(self._name)
 
     def set(self, param: str, value: float) -> None:
@@ -1580,8 +1690,8 @@ class VoiceHandle:
     def fade(self, param: str, target: float, bars: int = 4) -> None:
         self._mixer.fade(f"{self._name}/{param}", target, bars=bars)
 
-    def send(self, bus: BusHandle | str, level: float = 0.5) -> None:
-        bus_name = bus.name if isinstance(bus, BusHandle) else bus
+    def send(self, bus: NodeHandle | str, level: float = 0.5) -> None:
+        bus_name = bus.name if isinstance(bus, NodeHandle) else bus
         self._mixer.send(self._name, bus_name, level)
 
     def mute(self) -> None:
@@ -1602,35 +1712,19 @@ class VoiceHandle:
 
     def __repr__(self) -> str:
         v = self._mixer.get_voice(self._name)
-        if not v:
-            return f"VoiceHandle('{self._name}', removed)"
-        parts = f"VoiceHandle('{self._name}', {v.type_id}, gain={v.gain:.2f}"
-        if v.count > 1:
-            parts += f", count={v.count}"
-        if self._mixer.is_muted(self._name):
-            parts += ", muted"
-        return parts + ")"
-
-
-class BusHandle:
-    """Proxy for a named bus — delegates to VoiceMixer."""
-
-    def __init__(self, mixer: VoiceMixer, name: str) -> None:
-        self._mixer = mixer
-        self._name = name
-
-    def set(self, param: str, value: float) -> None:
-        self._mixer.set(f"{self._name}/{param}", value)
-
-    def gain(self, value: float) -> None:
-        self._mixer.gain(self._name, value)
-
-    @property
-    def name(self) -> str:
-        return self._name
-
-    def __repr__(self) -> str:
+        if v:
+            parts = f"Node('{self._name}', {v.type_id}, gain={v.gain:.2f}"
+            if v.count > 1:
+                parts += f", count={v.count}"
+            if self._mixer.is_muted(self._name):
+                parts += ", muted"
+            return parts + ")"
         b = self._mixer.get_bus(self._name)
-        if not b:
-            return f"BusHandle('{self._name}', removed)"
-        return f"BusHandle('{self._name}', {b.type_id}, gain={b.gain:.2f})"
+        if b:
+            return f"Node('{self._name}', {b.type_id}, gain={b.gain:.2f})"
+        return f"Node('{self._name}', removed)"
+
+
+# Backward compat aliases
+VoiceHandle = NodeHandle
+BusHandle = NodeHandle
