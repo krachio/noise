@@ -33,7 +33,7 @@ from krach._pitch import parse_note as _parse_note
 class Scene:
     """Snapshot of the mixer state — voices, buses, sends, patterns, controls."""
 
-    voices: dict[str, tuple[str, float, tuple[str, ...], int, tuple[tuple[str, float], ...]]]
+    voices: dict[str, tuple[str, float, tuple[str, ...], int, tuple[tuple[str, float], ...], str]]
     buses: dict[str, tuple[str, float, tuple[str, ...], int]]
     sends: dict[tuple[str, str], float]
     wires: dict[tuple[str, str], str]
@@ -53,6 +53,7 @@ class Voice:
     controls: tuple[str, ...]
     count: int = 1
     init: tuple[tuple[str, float], ...] = ()
+    source_text: str = field(default="", repr=False)
     alloc: int = field(default=0, repr=False)
 
 
@@ -701,28 +702,34 @@ class VoiceMixer:
         name: str,
         source: str | DspDef | Callable[..., Any],
         fallback_controls: tuple[str, ...] = (),
-    ) -> tuple[str, tuple[str, ...]]:
-        """Resolve a source to (type_id, controls). Writes .dsp and waits for JIT if needed."""
+    ) -> tuple[str, tuple[str, ...], str]:
+        """Resolve a source to (type_id, controls, source_text).
+
+        Writes .dsp and .py to dsp_dir and waits for JIT if needed.
+        ``source_text`` is the Python source code (empty for string type_ids).
+        """
         if isinstance(source, DspDef):
             type_id = f"faust:{name}"
-            py_path = self._dsp_dir.joinpath(f"{name}.py")
-            py_path.parent.mkdir(parents=True, exist_ok=True)
-            py_path.write_text(source.source)
+            source_text = source.source
             faust_code, controls = source.faust, source.controls
         elif callable(source):
             type_id = f"faust:{name}"
+            source_text = textwrap.dedent(inspect.getsource(source))
             result = _transpile(source)  # type: ignore[arg-type]
             faust_code, controls = result.source, tuple(c.name for c in result.schema.controls)
         else:
-            return source, self._node_controls.get(source, fallback_controls)
+            return source, self._node_controls.get(source, fallback_controls), ""
 
+        py_path = self._dsp_dir.joinpath(f"{name}.py")
+        py_path.parent.mkdir(parents=True, exist_ok=True)
+        py_path.write_text(source_text)
         dsp_path = self._dsp_dir.joinpath(f"{name}.dsp")
         dsp_path.parent.mkdir(parents=True, exist_ok=True)
         dsp_path.write_text(faust_code)
         self._node_controls[type_id] = controls
         if not self._batching:
             self._wait_for_type(type_id)
-        return type_id, controls
+        return type_id, controls, source_text
 
     def input(self, name: str = "mic", channel: int = 0, gain: float = 0.5) -> VoiceHandle:
         """Add an audio input voice (ADC).
@@ -772,7 +779,7 @@ class VoiceMixer:
         """
         if count < 1:
             raise ValueError("count must be at least 1")
-        type_id, controls = self._resolve_source(name, source, tuple(init.keys()))
+        type_id, controls, source_text = self._resolve_source(name, source, tuple(init.keys()))
         self._muted.pop(name, None)
 
         # Clean up old voice state if replacing
@@ -796,6 +803,7 @@ class VoiceMixer:
             controls=controls,
             count=count,
             init=tuple(init.items()),
+            source_text=source_text,
             alloc=0,
         )
         if not self._batching:
@@ -947,7 +955,7 @@ class VoiceMixer:
     def save(self, name: str) -> None:
         """Save current state as a named scene."""
         self._scenes[name] = Scene(
-            voices={n: (v.type_id, v.gain, v.controls, v.count, v.init) for n, v in self._voices.items()},
+            voices={n: (v.type_id, v.gain, v.controls, v.count, v.init, v.source_text) for n, v in self._voices.items()},
             buses={n: (b.type_id, b.gain, b.controls, b.num_inputs) for n, b in self._buses.items()},
             sends=dict(self._sends),
             wires=dict(self._wires),
@@ -973,8 +981,11 @@ class VoiceMixer:
         self._sends.clear()
         self._wires.clear()
 
-        for vname, (type_id, gain, controls, count, init) in scene.voices.items():
-            self._voices[vname] = Voice(type_id=type_id, gain=gain, controls=controls, count=count, init=init)
+        for vname, (type_id, gain, controls, count, init, source_text) in scene.voices.items():
+            self._voices[vname] = Voice(
+                type_id=type_id, gain=gain, controls=controls,
+                count=count, init=init, source_text=source_text,
+            )
         for bname, (type_id, gain, controls, num_inputs) in scene.buses.items():
             self._buses[bname] = Bus(type_id=type_id, gain=gain, controls=controls, num_inputs=num_inputs)
         self._sends = dict(scene.sends)
@@ -1200,7 +1211,7 @@ class VoiceMixer:
         """
         if name in self._voices:
             raise ValueError(f"name '{name}' already used as a voice")
-        type_id, controls = self._resolve_source(name, source)
+        type_id, controls, _source_text = self._resolve_source(name, source)
         num_inputs: int
         if isinstance(source, DspDef):
             num_inputs = source.num_inputs
