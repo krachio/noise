@@ -89,6 +89,24 @@ Each iteration of the ralph loop follows this exact sequence:
 | Yara | 7 | struct() bypasses type system; Node should be mostly frozen; Scene uses positional tuples |
 | Nils | 5 | PROGRESS.md test counts stale; module docstrings still say "voice"; error messages don't suggest fixes |
 
+### Iteration 3 scores
+
+| Reviewer | Score | Trend | Key blocker |
+|----------|-------|-------|-------------|
+| Kira | 5 | ↓ | Voice/Bus backward compat aliases still confusing |
+| Tomás | 5 | = | _mixer.py still 1270 lines (2.5x limit) |
+| Suki | 7 | = | Round-trip test coverage improved but fade untested |
+| Renzo | 5 | ↑ | Error messages improved, still needs central config |
+| Maren | 4 | ↓ | _mixer.py god module, VoiceMixer 1000-line class |
+| Diego | 8 | = | RT string alloc (unchanged, Rust-side) |
+| Yara | 6 | ↓ | Callable[..., Any], Scene still has mutable dict in frozen |
+| Nils | 6 | ↑ | Terminology improved, still some stale naming |
+
+### Priority for next iteration
+1. **Split VoiceMixer class** — extract scene management, fade/automation, and config into mixins or submodules
+2. **Remove Voice/Bus backward compat aliases** — clean break per reviewer principles
+3. **Narrow Callable[..., Any]** — define a DSP protocol type
+
 ### Iteration 2 scores
 
 | Reviewer | Score | Key issues |
