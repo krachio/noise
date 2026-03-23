@@ -9,7 +9,13 @@ from krach._mixer import VoiceMixer
 
 
 def _repo_root() -> Path:
-    return Path(__file__).parent.parent.parent.parent
+    """Walk up from this file until we find Cargo.toml (monorepo root)."""
+    p = Path(__file__).resolve().parent
+    for _ in range(10):
+        if (p / "Cargo.toml").exists():
+            return p
+        p = p.parent
+    raise RuntimeError("cannot find monorepo root (no Cargo.toml in ancestors)")
 
 
 def _wait_for_socket(path: Path, timeout: float = 5.0) -> bool:
@@ -76,7 +82,12 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> VoiceM
     atexit.register(_cleanup)
 
     if not _wait_for_socket(engine_sock):
-        raise RuntimeError("krach-engine socket not ready after 5s")
+        raise RuntimeError(
+            f"krach-engine socket not ready after 5s.\n"
+            f"  Check engine log: {log_path}\n"
+            f"  Binary: {engine_bin}\n"
+            f"  Socket: {engine_sock}"
+        )
 
     mm = Session(socket_path=str(engine_sock))
     mm.connect()
@@ -105,7 +116,11 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> VoiceM
         except (TimeoutError, ConnectionError):
             time.sleep(0.1)
     else:
-        raise RuntimeError("krach-engine not ready after 10s")
+        raise RuntimeError(
+            f"krach-engine not responding after 10s.\n"
+            f"  Check engine log: {log_path}\n"
+            f"  Socket: {engine_sock}"
+        )
 
     return kr
 
