@@ -128,4 +128,5 @@ impl CompiledPattern {
     }
 }
 
+pub mod curve;
 pub use query::query;
