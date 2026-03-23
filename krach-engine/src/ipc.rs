@@ -222,6 +222,9 @@ fn handle_pattern(msg: PatternMsg, cmd_tx: &crossbeam_channel::Sender<LoopComman
     }
 }
 
+/// Timeout for waiting on main loop acknowledgment.
+const ACK_TIMEOUT: Duration = Duration::from_secs(5);
+
 fn handle_graph(
     msg: ClientMessage,
     cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
@@ -233,57 +236,27 @@ fn handle_graph(
             let types = node_types.read().map_or_else(|_| vec![], |g| g.clone());
             IpcResponse::NodeTypes { types }
         }
-        ClientMessage::StartInput { channel } => {
-            if cmd_tx
-                .send(LoopCommand::Graph(ClientMessage::StartInput { channel }))
-                .is_err()
-            {
-                warn!("main loop disconnected");
-            }
-            IpcResponse::Ok {
-                msg: format!("input started (ch {channel})"),
-            }
-        }
-        ClientMessage::MidiMap {
-            channel,
-            cc,
-            label,
-            lo,
-            hi,
-        } => {
-            if cmd_tx
-                .send(LoopCommand::Graph(ClientMessage::MidiMap {
-                    channel,
-                    cc,
-                    label: label.clone(),
-                    lo,
-                    hi,
-                }))
-                .is_err()
-            {
-                warn!("main loop disconnected");
-            }
-            IpcResponse::Ok {
-                msg: format!("midi_map: ch{channel} cc{cc} → {label}"),
-            }
-        }
-        ClientMessage::Shutdown => {
-            if cmd_tx
-                .send(LoopCommand::Graph(ClientMessage::Shutdown))
-                .is_err()
-            {
-                warn!("main loop disconnected");
-            }
-            IpcResponse::Ok {
-                msg: "shutting down".into(),
-            }
-        }
-        other => {
-            if cmd_tx.send(LoopCommand::Graph(other)).is_err() {
-                warn!("main loop disconnected");
-            }
-            IpcResponse::Ok { msg: "ok".into() }
-        }
+        other => send_and_wait(other, cmd_tx),
+    }
+}
+
+/// Send a graph command to the main loop and wait for acknowledgment.
+fn send_and_wait(
+    msg: ClientMessage,
+    cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
+) -> IpcResponse {
+    let (ack_tx, ack_rx) = crossbeam_channel::bounded::<crate::AckResult>(1);
+    if cmd_tx.send(LoopCommand::Graph(msg, ack_tx)).is_err() {
+        return IpcResponse::Error {
+            msg: "main loop disconnected".into(),
+        };
+    }
+    match ack_rx.recv_timeout(ACK_TIMEOUT) {
+        Ok(Ok(description)) => IpcResponse::Ok { msg: description },
+        Ok(Err(error)) => IpcResponse::Error { msg: error },
+        Err(_) => IpcResponse::Error {
+            msg: "main loop did not respond within 5s".into(),
+        },
     }
 }
 
@@ -382,12 +355,17 @@ mod tests {
         let (tx, rx) = crossbeam_channel::unbounded();
         let types = Arc::new(RwLock::new(vec![]));
         let msg = r#"{"type":"load_graph","nodes":[],"connections":[],"exposed_controls":{}}"#;
+        // dispatch() sends the command and blocks waiting for ack.
+        // Spawn a thread to respond so dispatch doesn't timeout.
+        let rx_clone = rx.clone();
+        let responder = std::thread::spawn(move || {
+            let cmd = rx_clone.recv().unwrap();
+            if let LoopCommand::Graph(_, ack_tx) = cmd {
+                let _ = ack_tx.send(Ok("ok".into()));
+            }
+        });
         let resp = dispatch(msg, &tx, &types);
+        responder.join().unwrap();
         assert!(matches!(resp, IpcResponse::Ok { .. }));
-        let cmd = rx.try_recv().unwrap();
-        assert!(matches!(
-            cmd,
-            LoopCommand::Graph(ClientMessage::LoadGraph(_))
-        ));
     }
 }

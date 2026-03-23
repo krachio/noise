@@ -59,11 +59,69 @@ fn compute_blocks_per_cycle(bpm: f64, bpc: f64, sample_rate: u32, block_size: us
         .max(1.0) as usize
 }
 
+/// Process a graph command on the main loop. Returns Ok(description) or Err(error).
+/// Caller is responsible for logging errors and sending ack if needed.
+fn handle_graph_cmd(
+    msg: ClientMessage,
+    audio_engine: &mut audio_faust::hot_reload::HotReloadEngine,
+    backend: &mut audio_engine::output::cpal_backend::CpalBackend,
+    pattern_engine: &pattern_engine::engine::Engine,
+    config: &audio_engine::engine::config::EngineConfig,
+    node_types: &Arc<RwLock<Vec<String>>>,
+    midi_mappings: &mut HashMap<(u8, u8), MidiMapping>,
+) -> Result<String, String> {
+    match msg {
+        ClientMessage::Shutdown => Ok("shutting down".into()),
+        ClientMessage::LoadGraph(ir) => {
+            let cf = crossfade_samples(pattern_engine.bpm(), config.sample_rate);
+            audio_engine.controller_mut().set_crossfade_samples(cf);
+            audio_engine.load_graph(ir).map_err(|e| format!("load_graph: {e}"))?;
+            if let Ok(mut types) = node_types.write() {
+                *types = audio_engine.controller_mut().list_node_types();
+            }
+            Ok("graph loaded".into())
+        }
+        ClientMessage::StartInput { channel } => {
+            let consumer = backend
+                .start_input(config.sample_rate, channel as usize)
+                .map_err(|e| format!("start_input: {e}"))?;
+            let adc = audio_engine::nodes::adc::AdcNode::new(consumer);
+            audio_engine
+                .controller_mut()
+                .inject_node("adc_in".into(), Box::new(adc));
+            info!("audio input started (ch {channel})");
+            Ok(format!("input started (ch {channel})"))
+        }
+        ClientMessage::MidiMap {
+            channel,
+            cc,
+            label,
+            lo,
+            hi,
+        } => {
+            midi_mappings.insert((channel, cc), MidiMapping { label: label.clone(), lo, hi });
+            info!("midi_map: ch{channel} cc{cc} → [{lo}, {hi}]");
+            Ok(format!("midi_map: ch{channel} cc{cc} → {label}"))
+        }
+        other => {
+            audio_engine
+                .controller_mut()
+                .handle_message(other)
+                .map_err(|e| format!("handle_message: {e}"))?;
+            Ok("ok".into())
+        }
+    }
+}
+
+/// Result sent back from the main loop to the IPC thread for acknowledged commands.
+pub type AckResult = Result<String, String>;
+
 /// Commands routed from the IPC thread to the main loop.
 /// Single channel, single try_recv(), single match.
 enum LoopCommand {
     Pattern(EngineCommand),
-    Graph(ClientMessage),
+    /// Graph command with acknowledgment — IPC thread waits for the result.
+    Graph(ClientMessage, crossbeam_channel::Sender<AckResult>),
 }
 
 /// A MIDI CC → exposed control mapping. CC values (0–127) are scaled to [lo, hi].
@@ -306,51 +364,20 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                         config.block_size,
                     );
                 }
-                LoopCommand::Graph(msg) => {
-                    match msg {
-                        ClientMessage::Shutdown => {
-                            backend.stop();
-                            return Ok(());
-                        }
-                        ClientMessage::LoadGraph(ir) => {
-                            let cf = crossfade_samples(pattern_engine.bpm(), config.sample_rate);
-                            audio_engine.controller_mut().set_crossfade_samples(cf);
-                            if let Err(e) = audio_engine.load_graph(ir) {
-                                warn!("load_graph: {e}");
-                            }
-                            // Update shared node types after potential registry change.
-                            if let Ok(mut types) = node_types.write() {
-                                *types = audio_engine.controller_mut().list_node_types();
-                            }
-                        }
-                        ClientMessage::StartInput { channel } => {
-                            match backend.start_input(config.sample_rate, channel as usize) {
-                                Ok(consumer) => {
-                                    let adc = audio_engine::nodes::adc::AdcNode::new(consumer);
-                                    audio_engine
-                                        .controller_mut()
-                                        .inject_node("adc_in".into(), Box::new(adc));
-                                    info!("audio input started (ch {channel})");
-                                }
-                                Err(e) => warn!("start_input: {e}"),
-                            }
-                        }
-                        ClientMessage::MidiMap {
-                            channel,
-                            cc,
-                            label,
-                            lo,
-                            hi,
-                        } => {
-                            midi_mappings.insert((channel, cc), MidiMapping { label, lo, hi });
-                            info!("midi_map: ch{channel} cc{cc} → [{lo}, {hi}]");
-                        }
-                        other => {
-                            if let Err(e) = audio_engine.controller_mut().handle_message(other) {
-                                warn!("handle_message: {e}");
-                            }
-                        }
+                LoopCommand::Graph(msg, ack_tx) => {
+                    if matches!(msg, ClientMessage::Shutdown) {
+                        let _ = ack_tx.send(Ok("shutting down".into()));
+                        backend.stop();
+                        return Ok(());
                     }
+                    let result = handle_graph_cmd(
+                        msg, &mut audio_engine, &mut backend,
+                        &pattern_engine, &config, &node_types, &mut midi_mappings,
+                    );
+                    if let Err(ref e) = result {
+                        warn!("{e}");
+                    }
+                    let _ = ack_tx.send(result);
                 }
             }
         }
