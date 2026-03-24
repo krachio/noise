@@ -3420,6 +3420,61 @@ def test_export_contains_pattern_json() -> None:
         assert "dict_to_ir" in code
 
 
+def test_export_inlines_dsp_function() -> None:
+    """export() inlines DSP source text and references function by name."""
+    import tempfile
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer, hit
+
+    session = MagicMock()
+    session.tempo = 120.0
+    session.meter = 4.0
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mixer = Mixer(session=session, dsp_dir=Path(tmpdir), node_controls={})
+
+        mixer.voice("synth", "faust:synth", gain=0.5)
+        mixer._nodes["synth"].source_text = (
+            "def synth() -> krs.Signal:\n"
+            "    freq = krs.control('freq', 220.0, 20.0, 2000.0)\n"
+            "    return krs.saw(freq)\n"
+        )
+        mixer.play("synth", hit() * 4)
+
+        out = Path(tmpdir) / "session.py"
+        mixer.export(str(out))
+        code = out.read_text()
+
+        # Inlined function present
+        assert "def synth()" in code
+        # Node references function, not string
+        assert 'kr.node("synth", synth' in code
+
+
+def test_export_string_source_uses_string() -> None:
+    """export() uses string type_id for nodes without source_text."""
+    import tempfile
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    session.tempo = 120.0
+    session.meter = 4.0
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mixer = Mixer(session=session, dsp_dir=Path(tmpdir), node_controls={
+            "faust:kick": ("gate",),
+        })
+        mixer.voice("kick", "faust:kick", gain=0.8)
+
+        out = Path(tmpdir) / "session.py"
+        mixer.export(str(out))
+        code = out.read_text()
+
+        # String source — uses quoted type_id
+        assert '"faust:kick"' in code
+
+
 # ── node() auto-detection ───────────────────────────────────────────────
 
 
