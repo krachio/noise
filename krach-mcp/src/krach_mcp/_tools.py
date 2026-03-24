@@ -293,6 +293,20 @@ def register_tools(mcp: FastMCP) -> None:
         return f"Tempo = {bpm} BPM"
 
     @mcp.tool()
+    def set_meter(beats: float) -> str:
+        """Set the meter (beats per cycle). Default 4 (4/4 time).
+
+        Example: set_meter(3)   — waltz (3/4)
+        Example: set_meter(7)   — 7/8
+
+        Args:
+            beats: Beats per cycle.
+        """
+        kr = get_session()
+        kr.meter = beats
+        return f"Meter = {beats} beats/cycle"
+
+    @mcp.tool()
     def remove(name: str) -> str:
         """Remove a node and all its routing.
 
@@ -302,3 +316,98 @@ def register_tools(mcp: FastMCP) -> None:
         kr = get_session()
         kr.remove(name)
         return f"Removed '{name}'"
+
+    @mcp.tool()
+    def disconnect(source: str, target: str) -> str:
+        """Remove a send/wire between two nodes without destroying either node.
+
+        Example: disconnect("bass", "verb")
+
+        Args:
+            source: Source node name.
+            target: Target node name.
+        """
+        kr = get_session()
+        kr.unsend(source, target)
+        return f"Disconnected '{source}' → '{target}'"
+
+    @mcp.tool()
+    def save(name: str) -> str:
+        """Save current session as a named in-memory scene snapshot.
+
+        Example: save("verse")
+
+        Args:
+            name: Scene name (recall later with recall()).
+        """
+        kr = get_session()
+        kr.save(name)
+        return f"Saved scene '{name}'"
+
+    @mcp.tool()
+    def recall(name: str) -> str:
+        """Recall a saved scene — rebuilds graph, replays patterns, restores controls.
+
+        Example: recall("verse")
+
+        Args:
+            name: Scene name (previously saved with save()).
+        """
+        kr = get_session()
+        try:
+            kr.recall(name)
+            return f"Recalled scene '{name}'"
+        except ValueError as e:
+            return f"Error: {e}"
+
+    @mcp.tool()
+    def export_session(path: str) -> str:
+        """Export current session to a reloadable Python file.
+
+        Example: export_session("~/.krach/sessions/my_jam.py")
+
+        Args:
+            path: File path to write. Use ~/.krach/sessions/ for the standard location.
+        """
+        import os
+        kr = get_session()
+        resolved = os.path.expanduser(path)
+        os.makedirs(os.path.dirname(resolved), exist_ok=True)
+        kr.export(resolved)
+        return f"Exported to {resolved}"
+
+    @mcp.tool()
+    def load_session(path: str) -> str:
+        """Load a previously exported session file.
+
+        Example: load_session("~/.krach/sessions/my_jam.py")
+
+        Args:
+            path: File path to load.
+        """
+        import os
+        kr = get_session()
+        resolved = os.path.expanduser(path)
+        try:
+            kr.load(resolved)
+            return f"Loaded {resolved}"
+        except (FileNotFoundError, RuntimeError) as e:
+            return f"Error: {e}"
+
+    @mcp.tool()
+    def mod(path: str, shape: str, lo: float = 0.0, hi: float = 1.0, bars: int = 4) -> str:
+        """Native engine automation — more efficient than pattern-based modulation.
+
+        Example: mod("bass/cutoff", "sine", lo=200, hi=2000, bars=8)
+        Example: mod("verb/room", "tri", lo=0.3, hi=0.9, bars=16)
+
+        Args:
+            path: Control path ("bass/cutoff").
+            shape: Automation shape — "sine", "tri", "ramp", "square".
+            lo: Minimum value (must be within control range).
+            hi: Maximum value (must be within control range).
+            bars: Duration in bars.
+        """
+        kr = get_session()
+        kr.mod(path, shape, lo=lo, hi=hi, bars=bars)
+        return f"Modulating {path} with {shape} [{lo}, {hi}] over {bars} bars"

@@ -4197,6 +4197,44 @@ def test_ctrl_values_property() -> None:
     assert mixer.ctrl_values["bass/cutoff"] == 1200.0
 
 
+# ── disconnect ─────────────────────────────────────────────────────────
+
+
+def test_disconnect_removes_send() -> None:
+    """disconnect() removes a send and rebuilds the graph."""
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq",),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("bass", "verb", level=0.4)
+    assert len(mixer.routing) == 1
+
+    mixer.unsend("bass", "verb")
+    assert len(mixer.routing) == 0
+
+
+def test_disconnect_noop_if_not_connected() -> None:
+    """disconnect() is a no-op (no rebuild) if no connection exists."""
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    rebuild_count = session.load_graph.call_count
+
+    mixer.unsend("bass", "nonexistent")
+    assert session.load_graph.call_count == rebuild_count  # no extra rebuild
+
+
 def test_play_control_path_warns_mod_outside_range() -> None:
     """kr.play('bass/freq', mod_sine(0.5, 1.5)) warns when freq range is [20, 2000]."""
     import warnings

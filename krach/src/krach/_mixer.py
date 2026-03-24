@@ -481,6 +481,14 @@ class Mixer(MixerInfra):
         if not self._batching:
             self._rebuild()
 
+    def unsend(self, source: str, target: str) -> None:
+        """Remove a send or wire between two nodes. Rebuilds the graph."""
+        key = (source, target)
+        removed = key in self._sends or key in self._wires
+        self._sends.pop(key, None)
+        self._wires.pop(key, None)
+        if removed:
+            self._rebuild()
 
     def mod(
         self, path: str, pattern_or_shape: Pattern | str,
