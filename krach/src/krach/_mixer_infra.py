@@ -18,7 +18,7 @@ from krach._patterns import (
     mod_sine, mod_square, mod_tri, note, rand, ramp, saw, seq, sine, stack, struct,
 )
 from krach._pitch import ftom as _ftom, mtof as _mtof, parse_note as _parse_note
-from krach._types import Node, dsp
+from krach._types import ControlPath, GroupPath, Node, NodePath, UnknownPath, dsp, resolve_path
 from krach.patterns.pattern import Pattern
 from krach.patterns.session import SlotState
 from krach.patterns.pattern import rest as _rest
@@ -219,10 +219,20 @@ class MixerInfra:
 
     # ── Gain / mute / solo ─────────────────────────────────────────
 
+    def _resolve_node_targets(self, name: str) -> list[str]:
+        """Resolve name to matching node names via resolve_path."""
+        match resolve_path(name, self._nodes):
+            case NodePath(n):
+                return [n]
+            case GroupPath(members=members):
+                return list(members)
+            case ControlPath() | UnknownPath():
+                return []
+
     def gain(self, name: str, value: float) -> None:
         """Update a node or group gain. Instant — no graph rebuild."""
         _check_finite(value, f"gain for '{name}'")
-        for t in self._resolve_targets_soft(name):
+        for t in self._resolve_node_targets(name):
             self._gain_single(t, value)
 
     def _gain_single(self, name: str, value: float) -> None:
@@ -242,14 +252,14 @@ class MixerInfra:
 
     def mute(self, name: str) -> None:
         """Mute a node or group. No-op if not found."""
-        for t in self._resolve_targets_soft(name):
+        for t in self._resolve_node_targets(name):
             if t not in self._muted and t in self._nodes:
                 self._muted[t] = self._nodes[t].gain
             self._gain_single(t, 0.0)
 
     def unmute(self, name: str) -> None:
         """Unmute a node or group — restores gain saved by mute()."""
-        targets = self._resolve_targets_soft(name)
+        targets = self._resolve_node_targets(name)
         if not targets:
             self._muted.pop(name, None)
             return
@@ -259,7 +269,7 @@ class MixerInfra:
 
     def solo(self, name: str) -> None:
         """Solo a node or group — mutes all others. No-op if not found."""
-        targets = set(self._resolve_targets_soft(name))
+        targets = set(self._resolve_node_targets(name))
         if not targets:
             return
         for n in set(self._nodes.keys()):
@@ -279,32 +289,40 @@ class MixerInfra:
     # ── Control set ────────────────────────────────────────────────
 
     def set(self, path: str, value: float) -> None:
-        """Set a control value by path. Instant unless inside ``transition()``."""
+        """Set a control value by path. Fans out to all instances for poly nodes."""
         _check_finite(value, path)
+        self._ctrl_values[path] = value
         if self._transition_bars > 0:
             self.fade(path, value, bars=self._transition_bars)
-        else:
-            self._session.set_ctrl(path, float(value))
-        self._ctrl_values[path] = value
+            return
+        for label in self._expand_poly_labels(path):
+            self._session.set_ctrl(label, float(value))
 
-    def _resolve_targets_soft(self, name: str) -> list[str]:
-        """Resolve name to matching nodes. Exact match first, then prefix."""
-        if name in self._nodes:
-            return [name]
-        prefix = name + "/"
-        return [n for n in self._nodes if n.startswith(prefix)]
+    def _expand_poly_labels(self, path: str) -> list[str]:
+        """Expand a control path to per-instance labels for poly nodes.
 
-    # ── Path resolution ────────────────────────────────────────────
+        'pad/cutoff' with count=4 → ['pad_v0/cutoff', ..., 'pad_v3/cutoff'].
+        'bass/cutoff' with count=1 → ['bass/cutoff'] (unchanged).
+        """
+        match resolve_path(path, self._nodes):
+            case ControlPath(node=node, param=param):
+                n = self._nodes.get(node)
+                if n is not None and n.count > 1:
+                    return [
+                        f"{_inst_name(node, i, n.count)}/{param}"
+                        for i in range(n.count)
+                    ]
+                return [path]
+            case _:
+                return [path]
 
-    def _resolve_path(self, path: str) -> str:
-        """Convert user-facing path to exposed control label."""
-        if "/" not in path:
-            return path
-        name, param = path.rsplit("/", 1)
-        if param.endswith("_send"):
-            bus = param[: -len("_send")]
-            return f"{name}_send_{bus}/gain"
-        return path
+    def _resolve_label(self, path: str) -> str:
+        """Resolve a user-facing path to an engine control label."""
+        match resolve_path(path, self._nodes):
+            case ControlPath(label=label):
+                return label
+            case _:
+                return path
 
     # ── Fade / automation ──────────────────────────────────────────
 
@@ -314,29 +332,36 @@ class MixerInfra:
         """Fade any parameter to target over N bars."""
         if bars < 1 or steps_per_bar < 1:
             raise ValueError("bars and steps_per_bar must be >= 1")
-        if "/" in path:
-            self._fade_path(path, target, bars)
-        else:
-            self._fade_node(path, target, bars)
+        match resolve_path(path, self._nodes):
+            case NodePath(name):
+                self._fade_node(name, target, bars)
+            case ControlPath(node=node, param=param, label=label):
+                self._fade_control(path, node, param, label, target, bars)
+            case GroupPath(members=members):
+                for m in members:
+                    self._fade_node(m, target, bars)
+            case UnknownPath():
+                self._fade_node(path, target, bars)
 
-    def _fade_path(self, path: str, target: float, bars: int) -> None:
-        parts = path.split("/", 1)
-        node_name, param = parts[0], parts[1]
+    def _fade_control(
+        self, path: str, node: str, param: str, label: str,
+        target: float, bars: int,
+    ) -> None:
         if path in self._ctrl_values:
             current = self._ctrl_values[path]
-        elif param == "gain" and node_name in self._nodes:
-            current = self._nodes[node_name].gain
+        elif param == "gain" and node in self._nodes:
+            current = self._nodes[node].gain
         else:
             current = 0.0
         ctrl_slot = f"_ctrl_{path.replace('/', '_')}"
         self._session.hush(ctrl_slot)
-        label = self._resolve_path(path)
         beats = bars * self._session.meter
         period_secs = beats * 60.0 / max(float(self._session.tempo), 1.0)
-        self._session.set_automation(label, "ramp", current, target, period_secs, one_shot=True)
+        for inst_label in self._expand_poly_labels(path):
+            self._session.set_automation(inst_label, "ramp", current, target, period_secs, one_shot=True)
         self._ctrl_values[path] = target
-        if param == "gain" and node_name in self._nodes:
-            self._nodes[node_name].gain = target
+        if param == "gain" and node in self._nodes:
+            self._nodes[node].gain = target
 
     def _fade_node(self, name: str, target: float, bars: int) -> None:
         if name not in self._nodes:

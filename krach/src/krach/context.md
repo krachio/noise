@@ -362,6 +362,35 @@ kr.node("bass", acid_bass, gain=0.3)
 | `krs.adsr(a, d, s, r, gate)` | ADSR envelope |
 | `krs.reverb(sig, room)` | Freeverb -- signal first, room 0.0-1.0 second |
 | `krs.control(name, init, lo, hi)` | Exposed parameter |
+| `krs.pow_(sig, exp)` | Power: sig^exp |
+| `krs.abs_(sig)` | Absolute value |
+| `krs.sqrt(sig)` | Square root |
+| `krs.min_(a, b)` | Minimum of two signals |
+| `krs.max_(a, b)` | Maximum of two signals |
+| `krs.exp(sig)` | e^sig |
+| `krs.log(sig)` | Natural logarithm |
+| `krs.sin(sig)` | Sine (of radians) |
+| `krs.cos(sig)` | Cosine (of radians) |
+| `krs.select2(cond, a, b)` | Conditional: b when cond>0, else a |
+| `krs.delay(sig, n)` | Delay by n samples |
+| `krs.mem(sig)` | One-sample delay |
+| `krs.feedback(fn)` | Feedback loop: fn receives previous output |
+
+### Signal arithmetic
+
+All Python arithmetic operators work on `krs.Signal`:
+```python
+sig + 1.0       # add
+sig - 0.5       # subtract
+sig * gain       # multiply
+sig / 2.0        # divide
+sig % 1.0        # modulo (wraps to 0-1)
+sig ** 2.0       # power (NEW)
+2.0 ** sig       # reverse power (NEW)
+abs(sig)         # absolute value (NEW)
+-sig             # negate
+sig > 0.0        # comparison (returns 0.0 or 1.0)
+```
 
 ---
 

@@ -14,7 +14,10 @@ from typing import Literal
 
 from krach._bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
-from krach._types import DspDef, DspSource, Node, Scene, dsp as dsp, resolve_dsp_source  # noqa: F401
+from krach._types import (  # noqa: F401
+    ControlPath, DspDef, DspSource, GroupPath, Node, NodePath, Scene,
+    UnknownPath, dsp as dsp, resolve_dsp_source, resolve_path,
+)
 from krach._graph import build_graph_ir as build_graph_ir  # noqa: F401 re-export
 from krach._graph import inst_name as _inst_name
 from krach._mixer_infra import MixerInfra
@@ -152,18 +155,27 @@ class Mixer(MixerInfra):
 
     def __getitem__(self, path: str) -> NodeHandle | float:
         """Path dispatch: ``kr['bass']`` → NodeHandle, ``kr['bass/cutoff']`` → float."""
-        if "/" in path:
-            return self._ctrl_values.get(path, 0.0)
-        if path in self._nodes:
-            return NodeHandle(self, path)
-        raise KeyError(f"no node named {path!r}")
+        match resolve_path(path, self._nodes):
+            case NodePath(name):
+                return NodeHandle(self, name)
+            case ControlPath(label=label):
+                return self._ctrl_values.get(label, 0.0)
+            case GroupPath():
+                raise KeyError(f"{path!r} is a group prefix, not a single node")
+            case UnknownPath(raw):
+                raise KeyError(f"no node named {raw!r}")
 
     def __setitem__(self, path: str, value: float) -> None:
         """Set via path: ``kr['bass/cutoff'] = 1200`` or ``kr['bass'] = 0.3`` (gain)."""
-        if "/" in path:
-            self.set(path, value)
-        else:
-            self.gain(path, value)
+        match resolve_path(path, self._nodes):
+            case NodePath(name):
+                self.gain(name, value)
+            case ControlPath():
+                self.set(path, value)
+            case GroupPath(prefix=prefix):
+                self.gain(prefix, value)
+            case UnknownPath():
+                self.gain(path, value)
 
     def input(self, name: str = "mic", channel: int = 0, gain: float = 0.5) -> NodeHandle:
         """Add an audio input node (ADC).
@@ -192,7 +204,7 @@ class Mixer(MixerInfra):
         ``lo``/``hi``: output range the CC 0-127 is scaled to.
         ``channel``: MIDI channel (0-based, default 0).
         """
-        label = self._resolve_path(path)
+        label = self._resolve_label(path)
         self._session.midi_map(channel, cc, label, lo, hi)
 
     def voice(
@@ -243,25 +255,18 @@ class Mixer(MixerInfra):
 
     def hush(self, name: str) -> None:
         """Stop the pattern, its fade, and release gates for a node, control path, or group."""
-        # Control path: hush the _ctrl_ slot
-        if "/" in name:
-            slot = f"_ctrl_{name.replace('/', '_')}"
-            self._session.hush(slot)
-            # Also try group-prefix resolution
-            targets = self._resolve_targets_soft(name)
-            for t in targets:
-                self._hush_single(t)
-            return
-
-        # Exact match or group prefix
-        targets = self._resolve_targets_soft(name)
-        if targets:
-            for t in targets:
-                self._hush_single(t)
-        else:
-            # Not found — still pass through to session (e.g. custom slot names)
-            self._session.hush(name)
-            self._session.hush(f"_fade_{name}")
+        match resolve_path(name, self._nodes):
+            case NodePath(n):
+                self._hush_single(n)
+            case ControlPath():
+                slot = f"_ctrl_{name.replace('/', '_')}"
+                self._session.hush(slot)
+            case GroupPath(members=members):
+                for m in members:
+                    self._hush_single(m)
+            case UnknownPath(raw):
+                self._session.hush(raw)
+                self._session.hush(f"_fade_{raw}")
 
     def _hush_single(self, name: str) -> None:
         """Hush a single node (not a group or path)."""
@@ -356,24 +361,34 @@ class Mixer(MixerInfra):
             pattern = pattern.swing(swing)
         self._patterns[target] = pattern
         send = self._session.play_from_zero if from_zero else self._session.play
-        target_node = self._nodes.get(target)
-        if target_node is not None and target_node.count > 1:
-            bound_node, new_alloc = bind_voice_poly(
-                pattern.node, target, target_node.count, target_node.alloc
-            )
-            target_node.alloc = new_alloc
-            send(target, Pattern(bound_node))
-        elif target in self._nodes:
-            bound = Pattern(bind_voice(pattern.node, target))
-            send(target, bound)
-        elif "/" in target:
-            label = self._resolve_path(target)
-            bound = Pattern(bind_ctrl(pattern.node, label))
-            slot = f"_ctrl_{target.replace('/', '_')}"
-            send(slot, bound)
-        else:
-            bound = Pattern(bind_voice(pattern.node, target))
-            send(target, bound)
+
+        match resolve_path(target, self._nodes):
+            case NodePath(name):
+                node = self._nodes[name]
+                if node.count > 1:
+                    bound_node, new_alloc = bind_voice_poly(
+                        pattern.node, name, node.count, node.alloc
+                    )
+                    node.alloc = new_alloc
+                    send(name, Pattern(bound_node))
+                else:
+                    send(name, Pattern(bind_voice(pattern.node, name)))
+            case ControlPath(node=node_name, param=param):
+                n = self._nodes.get(node_name)
+                if n is not None and n.count > 1:
+                    for i in range(n.count):
+                        inst_label = f"{_inst_name(node_name, i, n.count)}/{param}"
+                        slot = f"_ctrl_{inst_label.replace('/', '_')}"
+                        send(slot, Pattern(bind_ctrl(pattern.node, inst_label)))
+                else:
+                    inst_label = self._resolve_label(target)
+                    slot = f"_ctrl_{target.replace('/', '_')}"
+                    send(slot, Pattern(bind_ctrl(pattern.node, inst_label)))
+            case GroupPath(members=members):
+                for m in members:
+                    send(m, Pattern(bind_voice(pattern.node, m)))
+            case UnknownPath(raw):
+                send(raw, Pattern(bind_voice(pattern.node, raw)))
 
     def pattern(self, name: str) -> Pattern | None:
         """Retrieve the last unbound pattern played on a target. None if unplayed."""
@@ -461,7 +476,7 @@ class Mixer(MixerInfra):
         ``"tri"``), sends a native automation to the audio engine.
         """
         if isinstance(pattern_or_shape, str):
-            label = self._resolve_path(path)
+            label = self._resolve_label(path)
             beats = bars * self._session.meter
             period_secs = beats * 60.0 / self.tempo
             self._session.set_automation(label, pattern_or_shape, lo, hi, period_secs)

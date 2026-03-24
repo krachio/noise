@@ -3606,19 +3606,16 @@ def test_mute_single_stores_gain_for_any_node() -> None:
 
 
 def test_resolve_targets_no_duplicates() -> None:
-    """_resolve_targets returns each match once (not duplicated from stale merge)."""
-    from unittest.mock import MagicMock
-    from krach._mixer import Mixer
+    """Group resolution returns each match once."""
+    from krach._types import GroupPath, resolve_path, Node
 
-    session = MagicMock()
-    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
-        "faust:bass": ("freq", "gate"),
-    })
-    mixer.voice("drums/kick", "faust:bass", gain=0.5)
-    mixer.voice("drums/snare", "faust:bass", gain=0.5)
-    # Group resolution: "drums" should find 2 nodes, not 4 (was doubled)
-    targets = mixer._resolve_targets_soft("drums")  # type: ignore[attr-defined]
-    assert len(targets) == 2
+    nodes = {
+        "drums/kick": Node(type_id="faust:kick", gain=0.5, controls=("gate",)),
+        "drums/snare": Node(type_id="faust:snare", gain=0.5, controls=("gate",)),
+    }
+    result = resolve_path("drums", nodes)
+    assert isinstance(result, GroupPath)
+    assert len(result.members) == 2
 
 
 # ── Forgiving UX (no crash on typos/missing nodes) ─────────────────────
@@ -3734,6 +3731,51 @@ def test_wire_missing_target_is_noop() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
     mixer.wire("bass", "nonexistent")  # must not raise
+
+
+def test_getitem_slashed_node_name_returns_handle() -> None:
+    """kr['drums/kick'] returns NodeHandle when a node is named 'drums/kick'."""
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+    from krach._handle import NodeHandle
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:kick": ("gate",),
+    })
+    mixer.voice("drums/kick", "faust:kick", gain=0.5)
+    result = mixer["drums/kick"]
+    assert isinstance(result, NodeHandle)
+    assert result.name == "drums/kick"
+
+
+def test_setitem_slashed_node_name_sets_gain() -> None:
+    """kr['drums/kick'] = 0.3 sets gain, not control value."""
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:kick": ("gate",),
+    })
+    mixer.voice("drums/kick", "faust:kick", gain=0.5)
+    mixer["drums/kick"] = 0.3
+    assert mixer.get_node("drums/kick").gain == 0.3  # type: ignore[union-attr]
+
+
+def test_hush_slashed_node_name() -> None:
+    """hush('drums/kick') hushed the node, not treated as control path."""
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:kick": ("gate",),
+    })
+    mixer.voice("drums/kick", "faust:kick", gain=0.5)
+    mixer.hush("drums/kick")
+    # Should have hushed via session.hush("drums/kick"), not _ctrl_ path
+    session.hush.assert_any_call("drums/kick")
 
 
 def test_pattern_missing_returns_none() -> None:
@@ -3860,6 +3902,86 @@ def test_save_recall_preserves_poly_count() -> None:
     node = mixer.get_node("pad")
     assert node is not None
     assert node.count == 4  # must survive round-trip
+
+
+# ── Poly node control fan-out ──────────────────────────────────────────
+
+
+def test_set_poly_fans_out_to_instances() -> None:
+    """kr.set('pad/cutoff', 1200) must send to pad_v0/cutoff .. pad_v3/cutoff."""
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("pad", "faust:pad", count=4, gain=0.5)
+    session.reset_mock()
+
+    mixer.set("pad/cutoff", 1200.0)
+
+    # Must have sent to all 4 instances
+    calls = [c for c in session.set_ctrl.call_args_list if "cutoff" in str(c)]
+    labels = sorted(c.args[0] for c in calls)
+    assert labels == ["pad_v0/cutoff", "pad_v1/cutoff", "pad_v2/cutoff", "pad_v3/cutoff"]
+
+
+def test_set_mono_sends_direct() -> None:
+    """kr.set('bass/cutoff', 1200) sends directly — no fan-out for count=1."""
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    session.reset_mock()
+
+    mixer.set("bass/cutoff", 1200.0)
+
+    session.set_ctrl.assert_called_once_with("bass/cutoff", 1200.0)
+
+
+def test_play_poly_control_fans_out() -> None:
+    """kr.play('pad/cutoff', pattern) must fan out to per-instance control slots."""
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+    from krach._patterns import mod_sine
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("pad", "faust:pad", count=3, gain=0.5)
+    session.reset_mock()
+
+    mixer.play("pad/cutoff", mod_sine(100.0, 2000.0))
+
+    # Should have called session.play for each instance
+    assert session.play.call_count == 3
+    slots = sorted(c.args[0] for c in session.play.call_args_list)
+    assert slots == ["_ctrl_pad_v0_cutoff", "_ctrl_pad_v1_cutoff", "_ctrl_pad_v2_cutoff"]
+
+
+def test_set_poly_gain_fans_out() -> None:
+    """kr.set('pad/gain', 0.8) must fan out to per-instance gain labels."""
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.voice("pad", "faust:pad", count=3, gain=0.5)
+    session.reset_mock()
+
+    mixer.set("pad/gain", 0.9)
+
+    calls = [c for c in session.set_ctrl.call_args_list if "gain" in str(c)]
+    labels = sorted(c.args[0] for c in calls)
+    assert labels == ["pad_v0/gain", "pad_v1/gain", "pad_v2/gain"]
 
 
 def test_save_recall_preserves_source_text() -> None:

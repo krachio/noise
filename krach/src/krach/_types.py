@@ -5,12 +5,15 @@
 - Scene: complete mixer state snapshot
 - DspDef: pre-transpiled DSP definition
 - dsp(): decorator for pre-transpilation
+- ResolvedPath: sum type for path disambiguation
+- resolve_path(): single source of truth for path resolution
 """
 
 from __future__ import annotations
 
 import inspect
 import textwrap
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Union
@@ -119,3 +122,81 @@ def resolve_dsp_source(
     if wait is not None:
         wait(type_id)
     return type_id, controls, source_text
+
+
+# ── Path resolution ───────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class NodePath:
+    """Exact node name match."""
+    name: str
+
+
+@dataclass(frozen=True)
+class ControlPath:
+    """Node + param, resolved to engine label."""
+    node: str
+    param: str
+    label: str
+
+
+@dataclass(frozen=True)
+class GroupPath:
+    """Prefix matching multiple nodes."""
+    prefix: str
+    members: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class UnknownPath:
+    """No node, control, or group match."""
+    raw: str
+
+
+type ResolvedPath = NodePath | ControlPath | GroupPath | UnknownPath
+
+
+def _make_label(node: str, param: str) -> str:
+    """Convert user-facing node/param to engine control label."""
+    if param.endswith("_send"):
+        target = param[: -len("_send")]
+        return f"{node}_send_{target}/gain"
+    return f"{node}/{param}"
+
+
+def resolve_path(path: str, nodes: Mapping[str, object]) -> ResolvedPath:
+    """Single source of truth for path disambiguation.
+
+    Priority (longest node-name match wins):
+    1. Exact node name → NodePath
+    2. Rightmost split where left side is a node → ControlPath
+    3. Prefix matching multiple nodes → GroupPath
+    4. Nothing → UnknownPath
+    """
+    # 1. Exact node name (handles slashed names like "drums/kick")
+    if path in nodes:
+        return NodePath(path)
+
+    # 2. Try splits from right to find longest matching node name.
+    #    "a/b/c/param" tries "a/b/c" first, then "a/b", then "a".
+    parts = path.split("/")
+    for i in range(len(parts) - 1, 0, -1):
+        node_name = "/".join(parts[:i])
+        param = "/".join(parts[i:])
+        if node_name in nodes:
+            return ControlPath(node_name, param, _make_label(node_name, param))
+
+    # 3. Group prefix
+    prefix = path + "/"
+    members = tuple(n for n in nodes if n.startswith(prefix))
+    if members:
+        return GroupPath(path, members)
+
+    # 4. Has "/" but no node match → treat as a control path (engine-internal label)
+    if "/" in path:
+        node_part, param_part = path.rsplit("/", 1)
+        return ControlPath(node_part, param_part, _make_label(node_part, param_part))
+
+    # 5. Not found
+    return UnknownPath(path)
