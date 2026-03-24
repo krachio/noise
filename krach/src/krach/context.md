@@ -73,7 +73,8 @@ bass >> (verb, 0.4)                      # with level
 kr.note(*pitches: str | int | float, vel: float = 1.0, **params: float) -> Pattern
 kr.hit(param: str = "gate", **kwargs: float) -> Pattern
 kr.seq(*notes: str | int | float | None, vel: float = 1.0) -> Pattern
-kr.rest() -> Pattern
+kr.rest() -> Pattern          # silence (one beat of nothing)
+kr.p(notation: str) -> Pattern  # mini-notation (see below)
 ```
 
 **note()** — melodic trigger (sets freq + gate on/off):
@@ -164,9 +165,13 @@ The API warns if values fall outside the range.
 ## Mute / solo / stop
 
 ```python
-kr.mute("bass")     kr.unmute("bass")
-kr.solo("bass")     kr.unsolo()
-kr.hush("bass")     kr.stop()
+kr.mute("bass")
+kr.unmute("bass")
+kr.solo("bass")
+kr.unsolo()
+kr.hush("bass")          # silence one node
+kr.stop()                # silence all
+kr.remove("bass")        # delete node + routing
 ```
 
 ## Groups
