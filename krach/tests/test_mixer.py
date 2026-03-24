@@ -3392,7 +3392,7 @@ def test_export_contains_voice_and_tempo() -> None:
         mixer.export(str(out))
 
         code = out.read_text()
-        assert 'kr.voice("kick"' in code
+        assert 'kr.node("kick"' in code
         assert "kr.tempo = 140.0" in code
         assert "kr.master = 0.6" in code
 

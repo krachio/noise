@@ -67,10 +67,10 @@ def export_session(
         src = emitted_fns.get(node.type_id, f'"{node.type_id}"')
         init_kw = "".join(f", {k}={v}" for k, v in node.init)
         count_kw = f", count={node.count}" if node.count > 1 else ""
-        lines.append(f'    kr.voice("{name}", {src}, gain={node.gain}{count_kw}{init_kw})')
+        lines.append(f'    kr.node("{name}", {src}, gain={node.gain}{count_kw}{init_kw})')
     for name, node in effects.items():
         src = emitted_fns.get(node.type_id, f'"{node.type_id}"')
-        lines.append(f'    kr.bus("{name}", {src}, gain={node.gain})')
+        lines.append(f'    kr.node("{name}", {src}, gain={node.gain})')
 
     # Sends and wires
     for (voice, bus), level in sends.items():
