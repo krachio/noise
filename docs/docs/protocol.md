@@ -4,7 +4,7 @@ krach uses a single Unix socket for all communication between the Python REPL an
 
 ## Transport
 
-- **Socket**: `/tmp/krach.sock` (override with `NOISE_SOCKET` env var)
+- **Socket**: `$TMPDIR/krach-engine.sock` (override with `NOISE_SOCKET` env var)
 - **Format**: one JSON object per line, terminated by `\n`
 - **Direction**: request/response — the client sends a command, the server replies with one JSON line
 
@@ -246,17 +246,17 @@ Patterns are JSON trees tagged by `"op"`. Every pattern occupies one cycle (one 
 
 ```bash
 # Ping the engine
-echo '{"cmd": "Ping"}' | socat - UNIX-CONNECT:/tmp/krach.sock
+echo '{"cmd": "Ping"}' | socat - UNIX-CONNECT:$TMPDIR/krach-engine.sock
 
 # Set a pattern
-echo '{"cmd": "SetPattern", "slot": "d1", "pattern": {"op": "Cat", "children": [{"op": "Atom", "value": {"type": "Note", "channel": 0, "note": 60, "velocity": 100, "dur": 0.5}}, {"op": "Atom", "value": {"type": "Note", "channel": 0, "note": 64, "velocity": 100, "dur": 0.5}}]}}' | socat - UNIX-CONNECT:/tmp/krach.sock
+echo '{"cmd": "SetPattern", "slot": "d1", "pattern": {"op": "Cat", "children": [{"op": "Atom", "value": {"type": "Note", "channel": 0, "note": 60, "velocity": 100, "dur": 0.5}}, {"op": "Atom", "value": {"type": "Note", "channel": 0, "note": 64, "velocity": 100, "dur": 0.5}}]}}' | socat - UNIX-CONNECT:$TMPDIR/krach-engine.sock
 
 # Load an audio graph
-echo '{"type": "load_graph", "nodes": [{"id": "osc1", "type_id": "oscillator", "controls": {"freq": 440.0}}, {"id": "out", "type_id": "dac", "controls": {}}], "connections": [{"from_node": "osc1", "from_port": "out", "to_node": "out", "to_port": "in"}], "exposed_controls": {"pitch": ["osc1", "freq"]}}' | socat - UNIX-CONNECT:/tmp/krach.sock
+echo '{"type": "load_graph", "nodes": [{"id": "osc1", "type_id": "oscillator", "controls": {"freq": 440.0}}, {"id": "out", "type_id": "dac", "controls": {}}], "connections": [{"from_node": "osc1", "from_port": "out", "to_node": "out", "to_port": "in"}], "exposed_controls": {"pitch": ["osc1", "freq"]}}' | socat - UNIX-CONNECT:$TMPDIR/krach-engine.sock
 
 # Set a control
-echo '{"type": "set_control", "label": "pitch", "value": 880.0}' | socat - UNIX-CONNECT:/tmp/krach.sock
+echo '{"type": "set_control", "label": "pitch", "value": 880.0}' | socat - UNIX-CONNECT:$TMPDIR/krach-engine.sock
 
 # Hush all
-echo '{"cmd": "HushAll"}' | socat - UNIX-CONNECT:/tmp/krach.sock
+echo '{"cmd": "HushAll"}' | socat - UNIX-CONNECT:$TMPDIR/krach-engine.sock
 ```

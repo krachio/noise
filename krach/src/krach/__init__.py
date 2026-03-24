@@ -196,8 +196,8 @@ def main() -> None:
     print("  \u2588\u2588\u2551  \u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551")
     print("  \u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d")
     print()
-    print(f"  kr    Mixer — kr.node(), kr.play(), kr.note(), kr.hit(), ...")
-    print(f"  krs   krach.dsp  — krs.Signal, krs.control(), krs.saw(), krs.lowpass(), ...")
+    print("  kr    Mixer — kr.node(), kr.play(), kr.note(), kr.hit(), ...")
+    print("  krs   krach.dsp  — krs.Signal, krs.control(), krs.saw(), krs.lowpass(), ...")
     print()
 
     import IPython

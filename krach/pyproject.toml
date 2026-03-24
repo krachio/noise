@@ -40,3 +40,12 @@ dev = [
     "pytest>=8",
     "ruff>=0.15.7",
 ]
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+ignore = ["E702"]  # allow semicolons for MIDI note constant tables
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E741"]  # allow short var names in tests

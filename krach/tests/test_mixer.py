@@ -2461,11 +2461,11 @@ def test_tempo_property_write() -> None:
     assert session.tempo == 180.0
 
 
-# ── Commit 6: VoiceHandle / BusHandle ────────────────────────────────────────
+# ── Commit 6: NodeHandle / NodeHandle ────────────────────────────────────────
 
 
 def test_voice_returns_handle() -> None:
-    """voice() returns a VoiceHandle."""
+    """voice() returns a NodeHandle."""
     from unittest.mock import MagicMock
 
     from krach._mixer import NodeHandle, Mixer
@@ -2607,7 +2607,7 @@ def test_handle_hush() -> None:
 
 
 def test_handle_repr() -> None:
-    """VoiceHandle repr shows voice info."""
+    """NodeHandle repr shows voice info."""
     from unittest.mock import MagicMock
 
     from krach._mixer import Mixer
@@ -2626,7 +2626,7 @@ def test_handle_repr() -> None:
 
 
 def test_bus_returns_handle() -> None:
-    """bus() returns a BusHandle."""
+    """bus() returns a NodeHandle."""
     from unittest.mock import MagicMock
 
     from krach._mixer import NodeHandle, Mixer
@@ -2658,7 +2658,7 @@ def test_bus_handle_set() -> None:
 
 
 def test_bus_handle_repr() -> None:
-    """BusHandle repr shows bus info."""
+    """NodeHandle repr shows bus info."""
     from unittest.mock import MagicMock
 
     from krach._mixer import Mixer
@@ -2779,7 +2779,7 @@ def test_pattern_retrieval_unknown_returns_none() -> None:
 
 
 def test_handle_pattern_retrieval() -> None:
-    """VoiceHandle.pattern() delegates to mixer.pattern()."""
+    """NodeHandle.pattern() delegates to mixer.pattern()."""
     from unittest.mock import MagicMock
 
     from krach._mixer import Mixer, note
@@ -2905,7 +2905,7 @@ def test_bpm_alias_for_tempo() -> None:
 
 
 def test_voices_returns_handles() -> None:
-    """voices property returns dict of VoiceHandles."""
+    """voices property returns dict of NodeHandles."""
     from unittest.mock import MagicMock
 
     from krach._mixer import NodeHandle, Mixer
@@ -2923,7 +2923,7 @@ def test_voices_returns_handles() -> None:
 
 
 def test_buses_returns_handles() -> None:
-    """buses property returns dict of BusHandles."""
+    """buses property returns dict of NodeHandles."""
     from unittest.mock import MagicMock
 
     from krach._mixer import NodeHandle, Mixer

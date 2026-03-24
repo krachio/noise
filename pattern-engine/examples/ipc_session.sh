@@ -7,11 +7,11 @@
 #
 # Usage: ./examples/ipc_session.sh [socket_path]
 #
-# Default socket path: /tmp/krach.sock
+# Default socket path: $TMPDIR/krach-engine.sock
 
 set -euo pipefail
 
-SOCK="${1:-/tmp/krach.sock}"
+SOCK="${1:-$TMPDIR/krach-engine.sock}"
 
 if ! command -v socat &>/dev/null; then
     echo "Error: socat is required. Install with: brew install socat (macOS) or apt install socat (Linux)"

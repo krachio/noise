@@ -31,7 +31,7 @@ noise/
 ```
 krach (Python REPL)
     │
-    │  JSON over Unix socket (/tmp/krach.sock)
+    │  JSON over Unix socket ($TMPDIR/krach-engine.sock)
     │
     ▼
 krach-engine (Rust, single process)
@@ -150,7 +150,7 @@ FAUST LLVM JIT is not thread-safe — tests run serialized via `.cargo/config.to
 
 krach-engine is a single process with:
 
-- **One socket** (`/tmp/krach.sock`) for all IPC
+- **One socket** (`$TMPDIR/krach-engine.sock`) for all IPC
 - **One audio callback** (cpal → CoreAudio)
 - **One main loop** that drains the command channel, queries patterns, dispatches events, and pumps the audio controller
 
@@ -170,7 +170,7 @@ MIDI note-offs are tracked in a `BinaryHeap<PendingNoteOff>` ordered by fire tim
 
 | Env var | Default | Description |
 |---------|---------|-------------|
-| `NOISE_SOCKET` | `/tmp/krach.sock` | IPC socket path |
+| `NOISE_SOCKET` | `$TMPDIR/krach-engine.sock` | IPC socket path |
 | `NOISE_DSP_DIR` | `~/.krach/dsp/` | FAUST .dsp file directory |
 | `PATTERN_ENGINE_MIDI_CLOCK` | off | Set to `1` for 24 ppqn MIDI clock |
 
