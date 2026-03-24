@@ -80,3 +80,45 @@ def test_missing_rule_raises() -> None:
     fake_p = PatternPrimitive("nonexistent_op")
     with pytest.raises(RuntimeError, match="No summary rule"):
         get_summary_rule(fake_p)
+
+
+# ── Freeze(Stack) acceptance test (behavioral pin) ───────────────────────
+# This tests the EXISTING bind_voice_poly behavior that must survive
+# the migration to the new PatternNode + fold system.
+
+
+def test_freeze_stack_allocates_separate_voices() -> None:
+    """Freeze(Stack([note_A, note_C, note_E])) allocates one voice per note.
+
+    A chord like kr.note("A4", "C5", "E5") produces Freeze(Stack([Freeze(note_A), ...])).
+    Each inner Freeze gets its own voice instance. The outer Freeze does NOT allocate.
+    """
+    from krach._bind import bind_voice_poly
+    from krach.patterns.ir import Atom, Cat, Control, Freeze, Stack
+
+    # Simulate kr.note("A4", "C5", "E5") → Freeze(Stack([3 inner Freezes]))
+    note_a = Freeze(Cat((
+        Stack((Atom(Control("freq", 440.0)), Atom(Control("gate", 1.0)))),
+        Atom(Control("gate", 0.0)),
+    )))
+    note_c = Freeze(Cat((
+        Stack((Atom(Control("freq", 523.25)), Atom(Control("gate", 1.0)))),
+        Atom(Control("gate", 0.0)),
+    )))
+    note_e = Freeze(Cat((
+        Stack((Atom(Control("freq", 659.25)), Atom(Control("gate", 1.0)))),
+        Atom(Control("gate", 0.0)),
+    )))
+    chord = Freeze(Stack((note_a, note_c, note_e)))
+
+    bound, alloc = bind_voice_poly(chord, "pad", count=4, alloc=0)
+
+    # Each note should be bound to a different voice: pad_v0, pad_v1, pad_v2
+    assert alloc == 3  # 3 voices allocated
+
+    # Verify the bound tree has the right voice labels
+    from krach._bind import collect_control_labels
+    labels = collect_control_labels(bound)
+    # Should have pad_v0/freq, pad_v0/gate, pad_v1/freq, pad_v1/gate, pad_v2/freq, pad_v2/gate
+    freq_labels = sorted(lab for lab in labels if "freq" in lab)
+    assert freq_labels == ["pad_v0/freq", "pad_v1/freq", "pad_v2/freq"]
