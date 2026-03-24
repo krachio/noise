@@ -140,23 +140,32 @@ def test_freeze_stack_allocates_separate_voices() -> None:
     A chord like kr.note("A4", "C5", "E5") produces Freeze(Stack([Freeze(note_A), ...])).
     Each inner Freeze gets its own voice instance. The outer Freeze does NOT allocate.
     """
-    from krach._bind import bind_voice_poly
-    from krach.patterns.ir import Atom, Cat, Control, Freeze, Stack
+    from krach.ir.pattern import (
+        AtomParams, CatParams, FreezeParams, PatternNode, StackParams,
+    )
+    from krach.patterns.bind import bind_voice_poly, collect_control_labels
+    from krach.patterns.ir import Control
+    from krach.patterns.primitives import atom_p, cat_p, freeze_p, stack_p
+
+    def _ctrl(label: str, value: float) -> PatternNode:
+        return PatternNode(atom_p, (), AtomParams(Control(label, value)))
 
     # Simulate kr.note("A4", "C5", "E5") → Freeze(Stack([3 inner Freezes]))
-    note_a = Freeze(Cat((
-        Stack((Atom(Control("freq", 440.0)), Atom(Control("gate", 1.0)))),
-        Atom(Control("gate", 0.0)),
-    )))
-    note_c = Freeze(Cat((
-        Stack((Atom(Control("freq", 523.25)), Atom(Control("gate", 1.0)))),
-        Atom(Control("gate", 0.0)),
-    )))
-    note_e = Freeze(Cat((
-        Stack((Atom(Control("freq", 659.25)), Atom(Control("gate", 1.0)))),
-        Atom(Control("gate", 0.0)),
-    )))
-    chord = Freeze(Stack((note_a, note_c, note_e)))
+    note_a = PatternNode(freeze_p, (PatternNode(cat_p, (
+        PatternNode(stack_p, (_ctrl("freq", 440.0), _ctrl("gate", 1.0)), StackParams()),
+        _ctrl("gate", 0.0),
+    ), CatParams()),), FreezeParams())
+    note_c = PatternNode(freeze_p, (PatternNode(cat_p, (
+        PatternNode(stack_p, (_ctrl("freq", 523.25), _ctrl("gate", 1.0)), StackParams()),
+        _ctrl("gate", 0.0),
+    ), CatParams()),), FreezeParams())
+    note_e = PatternNode(freeze_p, (PatternNode(cat_p, (
+        PatternNode(stack_p, (_ctrl("freq", 659.25), _ctrl("gate", 1.0)), StackParams()),
+        _ctrl("gate", 0.0),
+    ), CatParams()),), FreezeParams())
+    chord = PatternNode(freeze_p, (
+        PatternNode(stack_p, (note_a, note_c, note_e), StackParams()),
+    ), FreezeParams())
 
     bound, alloc = bind_voice_poly(chord, "pad", count=4, alloc=0)
 
@@ -164,7 +173,6 @@ def test_freeze_stack_allocates_separate_voices() -> None:
     assert alloc == 3  # 3 voices allocated
 
     # Verify the bound tree has the right voice labels
-    from krach._bind import collect_control_labels
     labels = collect_control_labels(bound)
     # Should have pad_v0/freq, pad_v0/gate, pad_v1/freq, pad_v1/gate, pad_v2/freq, pad_v2/gate
     freq_labels = sorted(lab for lab in labels if "freq" in lab)

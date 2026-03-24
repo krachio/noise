@@ -1,30 +1,27 @@
 from pathlib import Path
 
-from krach.patterns.ir import Atom, Cat, Control, Freeze, IrNode, Osc, Silence, Stack
+from krach.ir.pattern import AtomParams, PatternNode
+from krach.patterns.ir import Control, Osc, Value
 from krach.patterns.pattern import Pattern
+from krach.patterns.primitives import atom_p, fold
 
 from krach._mixer import Node, build_graph_ir, build_hit, build_note
 
 
-def _collect_values(node: IrNode) -> list[object]:
-    """Walk an IR tree and collect all Atom values."""
-    match node:
-        case Atom(value):
-            return [value]
-        case Freeze(child):
-            return _collect_values(child)
-        case Cat(children):
-            return [v for c in children for v in _collect_values(c)]
-        case Stack(children):
-            return [v for c in children for v in _collect_values(c)]
-        case Silence():
-            return []
-        case _:
-            return []
+def _collect_values(node: PatternNode) -> list[Value]:
+    """Walk a PatternNode tree and collect all Atom values."""
+    values: list[Value] = []
+
+    def _visit(nd: PatternNode, _children: tuple[object, ...]) -> None:
+        if nd.primitive == atom_p and isinstance(nd.params, AtomParams):
+            values.append(nd.params.value)
+
+    fold(node, _visit)
+    return values
 
 
-def _collect_control_labels(node: IrNode) -> set[str]:
-    """Walk an IR tree and collect all Control labels."""
+def _collect_control_labels(node: PatternNode) -> set[str]:
+    """Walk a PatternNode tree and collect all Control labels."""
     return {v.label for v in _collect_values(node) if isinstance(v, Control)}
 
 
@@ -180,14 +177,14 @@ def test_build_note_returns_frozen_compound() -> None:
 def test_build_note_with_extra_params() -> None:
     pat = build_note("bass", ("freq", "gate", "cutoff"), pitch=55.0, cutoff=800.0)
     assert pat.node.primitive.name == "freeze"
-    labels = _collect_control_labels(pat.ir_node)
+    labels = _collect_control_labels(pat.node)
     assert "bass/cutoff" in labels, "cutoff kwarg should appear as bass/cutoff in IR"
 
 
 def test_build_note_skips_unknown_controls() -> None:
     pat = build_note("bass", ("freq", "gate"), pitch=55.0, reverb=0.8)
     assert pat.node.primitive.name == "freeze"
-    labels = _collect_control_labels(pat.ir_node)
+    labels = _collect_control_labels(pat.node)
     assert not any("reverb" in l for l in labels), "unknown control should not appear in IR"
 
 
@@ -676,14 +673,14 @@ def test_seq_raises_on_empty() -> None:
 
 def test_seq_produces_bare_params() -> None:
     """Free seq() produces notes with bare param names for later binding."""
-    from krach.patterns.ir import ir_to_dict
+    from krach.patterns.serialize import pattern_node_to_dict
 
     from krach._mixer import seq
 
     pat = seq(220.0, 330.0, 440.0)
     assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 3
-    ir_str = str(ir_to_dict(pat.ir_node))
+    ir_str = str(pattern_node_to_dict(pat.node))
     assert "'label': 'freq'" in ir_str
 
 
@@ -980,15 +977,15 @@ def test_note_chord_returns_frozen_stack() -> None:
 def test_note_vel_kwarg_sends_vel_control() -> None:
     pat = build_note("bass", ("freq", "gate", "vel"), pitch=55.0, vel=0.7)
     assert pat.node.primitive.name == "freeze"
-    labels = _collect_control_labels(pat.ir_node)
+    labels = _collect_control_labels(pat.node)
     assert "bass/vel" in labels, "vel kwarg should produce bass/vel Control in IR"
 
 
 def test_note_vel_default_not_sent() -> None:
-    from krach.patterns.ir import ir_to_dict
+    from krach.patterns.serialize import pattern_node_to_dict
 
     pat = build_note("bass", ("freq", "gate", "vel"), pitch=55.0)
-    ir_json = str(ir_to_dict(pat.ir_node))
+    ir_json = str(pattern_node_to_dict(pat.node))
     assert "bass/vel" not in ir_json
 
 
@@ -1929,35 +1926,35 @@ def test_mod_send_param_label() -> None:
 
 
 def test_free_note_returns_freeze_with_bare_params() -> None:
-    from krach.patterns.ir import ir_to_dict
+    from krach.patterns.serialize import pattern_node_to_dict
 
     from krach._mixer import note
 
     pat = note(440.0)
     assert isinstance(pat, Pattern)
     assert pat.node.primitive.name == "freeze"
-    ir_str = str(ir_to_dict(pat.ir_node))
+    ir_str = str(pattern_node_to_dict(pat.node))
     assert "'label': 'freq'" in ir_str
     assert "'label': 'gate'" in ir_str
 
 
 def test_free_note_string_pitch() -> None:
-    from krach.patterns.ir import ir_to_dict
+    from krach.patterns.serialize import pattern_node_to_dict
 
     from krach._mixer import note
 
     pat = note("C4")
-    ir_str = str(ir_to_dict(pat.ir_node))
+    ir_str = str(pattern_node_to_dict(pat.node))
     assert "'label': 'freq'" in ir_str
 
 
 def test_free_note_int_pitch() -> None:
-    from krach.patterns.ir import ir_to_dict
+    from krach.patterns.serialize import pattern_node_to_dict
 
     from krach._mixer import note
 
     pat = note(60)  # MIDI note 60 = C4
-    ir_str = str(ir_to_dict(pat.ir_node))
+    ir_str = str(pattern_node_to_dict(pat.node))
     assert "'label': 'freq'" in ir_str
 
 
@@ -1972,34 +1969,34 @@ def test_free_note_chord() -> None:
 
 
 def test_free_note_vel() -> None:
-    from krach.patterns.ir import ir_to_dict
+    from krach.patterns.serialize import pattern_node_to_dict
 
     from krach._mixer import note
 
     pat = note(440.0, vel=0.7)
-    ir_str = str(ir_to_dict(pat.ir_node))
+    ir_str = str(pattern_node_to_dict(pat.node))
     assert "'label': 'vel'" in ir_str
 
 
 def test_free_hit_returns_freeze_with_bare_param() -> None:
-    from krach.patterns.ir import ir_to_dict
+    from krach.patterns.serialize import pattern_node_to_dict
 
     from krach._mixer import hit
 
     pat = hit()
     assert isinstance(pat, Pattern)
     assert pat.node.primitive.name == "freeze"
-    ir_str = str(ir_to_dict(pat.ir_node))
+    ir_str = str(pattern_node_to_dict(pat.node))
     assert "'label': 'gate'" in ir_str
 
 
 def test_free_hit_custom_param() -> None:
-    from krach.patterns.ir import ir_to_dict
+    from krach.patterns.serialize import pattern_node_to_dict
 
     from krach._mixer import hit
 
     pat = hit("kick")
-    ir_str = str(ir_to_dict(pat.ir_node))
+    ir_str = str(pattern_node_to_dict(pat.node))
     assert "'label': 'kick'" in ir_str
 
 
@@ -2032,43 +2029,45 @@ def test_free_seq_string_pitches() -> None:
 
 
 def test_bind_voice_rewrites_bare_params() -> None:
-    from krach.patterns.ir import ir_to_dict
+    from krach.patterns.bind import bind_voice
+    from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._bind import bind_voice
     from krach._mixer import note
 
     pat = note(440.0)
-    bound = bind_voice(pat.ir_node, "bass")
-    ir_str = str(ir_to_dict(bound))
-    assert "'label': 'bass/freq'" in ir_str
-    assert "'label': 'bass/gate'" in ir_str
-    assert "'label': 'freq'" not in ir_str
-    assert "'label': 'gate'" not in ir_str
+    bound = bind_voice(pat.node, "bass")
+    d_str = str(pattern_node_to_dict(bound))
+    assert "'label': 'bass/freq'" in d_str
+    assert "'label': 'bass/gate'" in d_str
+    assert "'label': 'freq'" not in d_str
+    assert "'label': 'gate'" not in d_str
 
 
 def test_bind_voice_skips_already_bound() -> None:
-    from krach.patterns.ir import Atom, Osc, OscFloat, OscStr, ir_to_dict
+    from krach.ir.pattern import AtomParams, PatternNode
+    from krach.patterns.bind import bind_voice
+    from krach.patterns.ir import Osc, OscFloat, OscStr
+    from krach.patterns.primitives import atom_p
+    from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._bind import bind_voice
-
-    node = Atom(Osc("/audio/set", (OscStr("other/freq"), OscFloat(440.0))))
+    node = PatternNode(atom_p, (), AtomParams(Osc("/audio/set", (OscStr("other/freq"), OscFloat(440.0)))))
     bound = bind_voice(node, "bass")
-    ir_str = str(ir_to_dict(bound))
-    assert "'Str': 'other/freq'" in ir_str
+    d_str = str(pattern_node_to_dict(bound))
+    assert "'Str': 'other/freq'" in d_str
 
 
 def test_bind_voice_walks_nested_tree() -> None:
-    from krach.patterns.ir import ir_to_dict
+    from krach.patterns.bind import bind_voice
+    from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._bind import bind_voice
     from krach._mixer import seq
 
     pat = seq(440.0, 330.0)
-    bound = bind_voice(pat.ir_node, "pad")
-    ir_str = str(ir_to_dict(bound))
-    assert "'label': 'pad/freq'" in ir_str
-    assert "'label': 'pad/gate'" in ir_str
-    assert "'label': 'freq'" not in ir_str
+    bound = bind_voice(pat.node, "pad")
+    d_str = str(pattern_node_to_dict(bound))
+    assert "'label': 'pad/freq'" in d_str
+    assert "'label': 'pad/gate'" in d_str
+    assert "'label': 'freq'" not in d_str
 
 
 # ── mix.play() path dispatch ─────────────────────────────────────────────────
@@ -2077,7 +2076,7 @@ def test_bind_voice_walks_nested_tree() -> None:
 def test_play_voice_binds_pattern() -> None:
     from unittest.mock import MagicMock
 
-    from krach.patterns.ir import ir_to_dict
+    from krach.patterns.serialize import pattern_node_to_dict
 
     from krach._mixer import Mixer, note
 
@@ -2094,7 +2093,7 @@ def test_play_voice_binds_pattern() -> None:
     played_name = call_args.args[0]
     played_pattern = call_args.args[1]
     assert played_name == "bass"
-    ir_str = str(ir_to_dict(played_pattern.ir_node))
+    ir_str = str(pattern_node_to_dict(played_pattern.node))
     assert "'label': 'bass/freq'" in ir_str
     assert "'label': 'bass/gate'" in ir_str
 
@@ -2102,8 +2101,9 @@ def test_play_voice_binds_pattern() -> None:
 def test_play_control_path_binds_ctrl() -> None:
     from unittest.mock import MagicMock
 
-    from krach.patterns.ir import OscFloat, OscStr, ir_to_dict
+    from krach.patterns.ir import OscFloat, OscStr
     from krach.patterns.pattern import osc
+    from krach.patterns.serialize import pattern_node_to_dict
 
     from krach._mixer import Mixer
 
@@ -2120,7 +2120,7 @@ def test_play_control_path_binds_ctrl() -> None:
     played_name = call_args.args[0]
     played_pattern = call_args.args[1]
     assert played_name == "_ctrl_bass_cutoff"
-    ir_str = str(ir_to_dict(played_pattern.ir_node))
+    ir_str = str(pattern_node_to_dict(played_pattern.node))
     assert "'Str': 'bass/cutoff'" in ir_str
 
 
@@ -2200,6 +2200,7 @@ def test_ramp_uses_ctrl_placeholder() -> None:
     assert pat.node.primitive.name == "cat"
     first = pat.node.children[0]
     assert first.primitive.name == "atom"
+    assert isinstance(first.params, AtomParams)
     assert isinstance(first.params.value, Control)
     assert first.params.value.label == "ctrl"
 
@@ -3390,7 +3391,7 @@ def test_export_contains_voice_and_tempo() -> None:
 
 
 def test_export_contains_pattern_json() -> None:
-    """export() serializes patterns as JSON for dict_to_ir round-trip."""
+    """export() serializes patterns as JSON for dict_to_pattern_node round-trip."""
     import tempfile
     from unittest.mock import MagicMock
 
@@ -3409,7 +3410,7 @@ def test_export_contains_pattern_json() -> None:
 
         code = out.read_text()
         assert "_patterns = json.loads(" in code
-        assert "dict_to_ir" in code
+        assert "dict_to_pattern_node" in code
 
 
 def test_export_inlines_dsp_function() -> None:

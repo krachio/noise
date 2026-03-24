@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from krach.patterns.ir import Degrade, Fast, Rev
 from krach.patterns.pattern import note
 from krach.patterns.transform import reverse, fast, thin
 
@@ -25,17 +24,16 @@ class TestTransformComposition:
         fx = fast(2) >> thin(0.1)
         result = fx(p)
         expected = p.fast(2).thin(0.1)
-        assert result.ir_node == expected.ir_node
+        assert result.node == expected.node
 
     def test_triple_compose(self) -> None:
         p = note(60)
         fx = fast(2) >> reverse >> thin(0.1)
         result = fx(p)
-        assert isinstance(result.ir_node, Degrade)
-        assert isinstance(result.ir_node.child, Rev)
-        inner = result.ir_node.child
-        assert isinstance(inner, Rev)
-        assert isinstance(inner.child, Fast)
+        assert result.node.primitive.name == "degrade"
+        child = result.node.children[0]
+        assert child.primitive.name == "rev"
+        assert child.children[0].primitive.name == "fast"
 
 
 class TestTransformImmutability:

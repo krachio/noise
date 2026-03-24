@@ -1,4 +1,5 @@
 import pytest
+from krach.ir.pattern import AtomParams
 from krach.patterns.ir import Control
 
 from krach._mininotation import p
@@ -11,7 +12,7 @@ def test_single_hit() -> None:
     inner = pat.node.children[0]
     assert inner.primitive.name == "cat"
     assert any(
-        c.primitive.name == "atom" and hasattr(c.params, "value") and isinstance(c.params.value, Control) and c.params.value.label == "gate"
+        c.primitive.name == "atom" and isinstance(c.params, AtomParams) and isinstance(c.params.value, Control) and c.params.value.label == "gate"
         for c in inner.children
     )
 

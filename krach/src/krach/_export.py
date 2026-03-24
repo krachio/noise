@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from krach.patterns.ir import ir_to_dict
 from krach.patterns.pattern import Pattern
+from krach.patterns.serialize import pattern_node_to_dict
 
 if TYPE_CHECKING:
     from krach._types import Node
@@ -29,8 +29,8 @@ def export_session(
     lines: list[str] = [
         '"""Exported krach session."""',
         "import json",
-        "from krach.patterns.ir import dict_to_ir",
         "from krach.patterns.pattern import Pattern",
+        "from krach.patterns.serialize import dict_to_pattern_node",
         "import krach.dsp as krs",
         "",
     ]
@@ -86,12 +86,12 @@ def export_session(
 
     # Patterns as JSON
     if patterns:
-        pat_dict = {slot: ir_to_dict(pat.ir_node) for slot, pat in patterns.items()}
+        pat_dict = {slot: pattern_node_to_dict(pat.node) for slot, pat in patterns.items()}
         pat_json = json.dumps(pat_dict, separators=(",", ":"))
         lines.append("")
         lines.append(f"_patterns = json.loads('{pat_json}')")
-        lines.append("for _slot, _ir in _patterns.items():")
-        lines.append("    kr.play(_slot, Pattern(dict_to_ir(_ir)))")
+        lines.append("for _slot, _d in _patterns.items():")
+        lines.append("    kr.play(_slot, Pattern(dict_to_pattern_node(_d)))")
 
     # Control values
     for ctrl_path, value in ctrl_values.items():
