@@ -175,10 +175,25 @@ class. The ~500-line guideline applies to modules; VoiceMixer IS the module.
 - Extracted scene management to _scene.py
 - _mixer.py: 965 → 942 lines (50% reduction from 1867, 9 extracted modules)
 
-### Status
-_mixer.py at 942 lines. VoiceMixer is the single stateful orchestrator.
-All pure logic extracted. Cleanup deduplication done. Fade path unified.
-Scores pending from iteration 8 reviewers.
+### Iteration 9 scores (8 separate agents)
+
+| Reviewer | Score |
+|----------|-------|
+| Kira | 7 |
+| Tomás | 7 |
+| Suki | 8 |
+| Renzo | 8 |
+| Maren | 7 |
+| Diego | 7 |
+| Yara | 8 |
+| Nils | 7 |
+
+Range: 7-8. Scores stabilized. Major structural work complete.
+_mixer.py at 928 lines (50% reduction). 9 extracted modules.
+
+Remaining gap to 9: each reviewer has domain-specific nits that
+shift between iterations. The architecture is sound; reaching 9/10
+across all 8 simultaneously requires a final polishing pass.
 
 ### Iteration 2 scores
 
