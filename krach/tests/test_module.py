@@ -238,6 +238,82 @@ def test_module_ir_json_round_trip() -> None:
     assert restored.tempo == 140.0
 
 
+# ── ModuleProxy (trace) ──────────────────────────────────────────
+
+
+def test_proxy_records_nodes() -> None:
+    from krach._module_proxy import ModuleProxy
+
+    proxy = ModuleProxy()
+    proxy.node("bass", "faust:bass", gain=0.3)
+    proxy.node("verb", "faust:verb", gain=0.5)
+
+    ir = proxy.build()
+    assert len(ir.nodes) == 2
+    assert ir.nodes[0].name == "bass"
+    assert ir.nodes[0].gain == 0.3
+
+
+def test_proxy_records_routing() -> None:
+    from krach._module_proxy import ModuleProxy
+
+    proxy = ModuleProxy()
+    proxy.node("bass", "faust:bass")
+    proxy.node("verb", "faust:verb")
+    proxy.send("bass", "verb", level=0.4)
+
+    ir = proxy.build()
+    assert len(ir.routing) == 1
+    assert ir.routing[0].level == 0.4
+
+
+def test_proxy_records_transport() -> None:
+    from krach._module_proxy import ModuleProxy
+
+    proxy = ModuleProxy()
+    proxy.tempo = 140
+    proxy.meter = 3
+    proxy.master = 0.6
+
+    ir = proxy.build()
+    assert ir.tempo == 140
+    assert ir.meter == 3
+    assert ir.master == 0.6
+
+
+def test_proxy_records_controls_and_patterns() -> None:
+    from krach._module_proxy import ModuleProxy
+    from krach.patterns.pattern import ctrl, freeze
+
+    proxy = ModuleProxy()
+    proxy.node("bass", "faust:bass")
+    proxy.set("bass/freq", 220.0)
+    proxy.play("bass", freeze(ctrl("gate", 1.0) + ctrl("gate", 0.0)))
+
+    ir = proxy.build()
+    assert len(ir.controls) == 1
+    assert ir.controls[0].value == 220.0
+    assert len(ir.patterns) == 1
+    assert ir.patterns[0].target == "bass"
+
+
+def test_proxy_to_instantiate_round_trip() -> None:
+    """Proxy → ModuleIr → instantiate on a live mixer."""
+    from krach._module_proxy import ModuleProxy
+
+    proxy = ModuleProxy()
+    proxy.node("kick", "faust:kick", gain=0.8)
+    proxy.tempo = 140
+
+    ir = proxy.build()
+
+    mixer = _make_mixer()
+    mixer.instantiate(ir)
+
+    assert "kick" in mixer.node_data
+    assert mixer.node_data["kick"].gain == 0.8
+
+
 def test_instantiate_applies_mutes() -> None:
     mixer = _make_mixer()
     ir = ModuleIr(

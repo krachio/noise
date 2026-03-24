@@ -15,6 +15,7 @@ from typing import Literal
 from krach.patterns.bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
 from krach._module_ir import ControlDef, ModuleIr, MutedDef, NodeDef, RouteDef
+from krach._module_proxy import ModuleProxy
 from krach._types import (  # noqa: F401
     ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
     ResolvedSource, UnknownPath,
@@ -333,6 +334,25 @@ class Mixer(MixerInfra):
     def scenes(self) -> list[str]:
         """List of saved scene names."""
         return list(self._scenes.keys())
+
+    def trace(self) -> ModuleProxy:
+        """Return a tracing proxy that records calls as ModuleIr.
+
+        Usage::
+
+            proxy = kr.trace()
+            proxy.node("bass", bass_fn, gain=0.3)
+            proxy.send("bass", "verb", level=0.4)
+            ir = proxy.build()
+            kr.instantiate(ir)
+        """
+        return ModuleProxy()
+
+    def module(self, name: str) -> ModuleIr:
+        """Get a saved module/scene by name."""
+        if name not in self._scenes:
+            raise ValueError(f"module '{name}' not found")
+        return self._scenes[name]
 
     def load(self, path: str) -> None:
         """Load and execute a Python file with ``kr`` in scope."""
