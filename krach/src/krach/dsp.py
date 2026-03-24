@@ -52,6 +52,7 @@ from faust_dsl import (
     abs_ as abs_,
     floor as floor,
     ceil as ceil,
+    round_ as round_,
 )
 
 # Math (binary)
@@ -60,5 +61,6 @@ from faust_dsl import (
     max_ as max_,
     pow_ as pow_,
     fmod as fmod,
+    remainder as remainder,
     atan2 as atan2,
 )

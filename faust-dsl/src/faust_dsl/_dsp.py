@@ -45,6 +45,8 @@ from faust_dsl._primitives import (
     min_p,
     ne_p,
     pow_p,
+    remainder_p,
+    round_p,
     select2_p,
     sin_p,
     sqrt_p,
@@ -68,7 +70,17 @@ def sr() -> Signal:
 
 
 def faust_expr(template: str, *inputs: SignalLike) -> Signal:
-    """Inline Faust expression escape hatch."""
+    """Inline Faust expression escape hatch.
+
+    Placeholders ``{0}``, ``{1}``, ... are replaced with the corresponding inputs.
+    """
+    import re
+    placeholders = {int(m.group(1)) for m in re.finditer(r"\{(\d+)\}", template)}
+    if placeholders and max(placeholders) >= len(inputs):
+        raise ValueError(
+            f"faust_expr template has placeholder {{{max(placeholders)}}} "
+            f"but only {len(inputs)} input(s) provided"
+        )
     return faust_expr_p.bind(*inputs, params=FaustExprParams(template=template))
 
 
@@ -149,6 +161,10 @@ def ceil(sig: Signal) -> Signal:
     return ceil_p.bind(sig, params=NoParams())
 
 
+def round_(sig: Signal) -> Signal:
+    return round_p.bind(sig, params=NoParams())
+
+
 # ---------------------------------------------------------------------------
 # Binary math intrinsics
 # ---------------------------------------------------------------------------
@@ -168,6 +184,10 @@ def pow_(base: SignalLike, exponent: SignalLike) -> Signal:
 
 def fmod(a: SignalLike, b: SignalLike) -> Signal:
     return fmod_p.bind(a, b, params=NoParams())
+
+
+def remainder(a: SignalLike, b: SignalLike) -> Signal:
+    return remainder_p.bind(a, b, params=NoParams())
 
 
 def atan2(y: SignalLike, x: SignalLike) -> Signal:

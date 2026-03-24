@@ -38,6 +38,8 @@ from faust_dsl._dsp import (
     min_,
     ne,
     pow_,
+    remainder,
+    round_,
     sample_rate,
     select2,
     sin,
@@ -101,7 +103,9 @@ __all__ = [
     "max_",
     "pow_",
     "fmod",
+    "remainder",
     "atan2",
+    "round_",
     # Comparison
     "gt",
     "lt",

@@ -28,6 +28,9 @@ _FOLDABLE_OPS: dict[str, Callable[..., float]] = {
     "min": min,
     "max": max,
     "pow": operator.pow,
+    "round": round,
+    "remainder": math.remainder,
+    "fmod": math.fmod,
 }
 
 

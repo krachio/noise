@@ -241,7 +241,7 @@ def _register_all() -> None:
         abs_p, acos_p, add_p, asin_p, atan2_p, atan_p, ceil_p, const_p,
         cos_p, div_p, exp_p, floor_p, fmod_p, gt_p, lt_p,
         log10_p, log_p, max_p, mem_p, min_p, mod_p, mul_p,
-        pow_p, select2_p, sin_p, sqrt_p, sr_p, sub_p, tan_p,
+        pow_p, remainder_p, round_p, select2_p, sin_p, sqrt_p, sr_p, sub_p, tan_p,
         feedback_p, delay_p,
     )
 
@@ -346,6 +346,7 @@ def _register_all() -> None:
 
     register_jvp(mod_p, _jvp_mod)
     register_jvp(fmod_p, _jvp_mod)
+    register_jvp(remainder_p, _jvp_mod)
 
     # -- sin -----------------------------------------------------------------
     def _jvp_sin(
@@ -566,6 +567,7 @@ def _register_all() -> None:
     # -- floor, ceil — zero tangent -----------------------------------------
     register_jvp(floor_p, _jvp_zero_output)
     register_jvp(ceil_p, _jvp_zero_output)
+    register_jvp(round_p, _jvp_zero_output)
 
     # -- comparisons — zero tangent -----------------------------------------
     from faust_dsl._primitives import COMPARISON_PRIMS

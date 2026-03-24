@@ -52,6 +52,7 @@ UNARY_MATH_NAMES = (
     "abs",
     "floor",
     "ceil",
+    "round",
 )
 
 sin_p = Primitive("sin")
@@ -67,6 +68,7 @@ sqrt_p = Primitive("sqrt")
 abs_p = Primitive("abs")
 floor_p = Primitive("floor")
 ceil_p = Primitive("ceil")
+round_p = Primitive("round")
 
 UNARY_MATH_PRIMS: dict[str, Primitive] = {
     "sin": sin_p,
@@ -82,18 +84,20 @@ UNARY_MATH_PRIMS: dict[str, Primitive] = {
     "abs": abs_p,
     "floor": floor_p,
     "ceil": ceil_p,
+    "round": round_p,
 }
 
 # ---------------------------------------------------------------------------
 # Primitive instances — math intrinsics (binary)
 # ---------------------------------------------------------------------------
 
-BINARY_MATH_NAMES = ("min", "max", "pow", "fmod", "atan2")
+BINARY_MATH_NAMES = ("min", "max", "pow", "fmod", "remainder", "atan2")
 
 min_p = Primitive("min")
 max_p = Primitive("max")
 pow_p = Primitive("pow")
 fmod_p = Primitive("fmod")
+remainder_p = Primitive("remainder")
 atan2_p = Primitive("atan2")
 
 BINARY_MATH_PRIMS: dict[str, Primitive] = {
@@ -101,6 +105,7 @@ BINARY_MATH_PRIMS: dict[str, Primitive] = {
     "max": max_p,
     "pow": pow_p,
     "fmod": fmod_p,
+    "remainder": remainder_p,
     "atan2": atan2_p,
 }
 

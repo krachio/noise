@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import pytest
+
 from faust_dsl._core import Signal
 from faust_dsl._codegen import emit_faust
-from faust_dsl._dsp import feedback
+from faust_dsl._dsp import faust_expr, feedback
 from faust_dsl.transpile import make_graph
 
 
@@ -56,3 +58,12 @@ def test_multioutput_process_tuple() -> None:
     process_line = [line for line in source.splitlines() if "process" in line]
     assert len(process_line) >= 1
     assert "," in process_line[0]
+
+
+def test_faust_expr_missing_placeholder_raises() -> None:
+    """faust_expr with fewer inputs than placeholders must raise."""
+    def dsp(a: Signal) -> Signal:
+        return faust_expr("{0} + {1}", a)  # {1} has no input
+
+    with pytest.raises(ValueError, match="placeholder"):
+        make_graph(dsp)
