@@ -171,6 +171,21 @@ class MixerInfra:
         """Read-only snapshot of known node type controls."""
         return dict(self._node_controls)
 
+    @property
+    def routing(self) -> list[tuple[str, str, str, float | str]]:
+        """Routing snapshot: list of (source, target, kind, level_or_port)."""
+        result: list[tuple[str, str, str, float | str]] = []
+        for (src, tgt), lvl in self._sends.items():
+            result.append((src, tgt, "send", lvl))
+        for (src, tgt), port in self._wires.items():
+            result.append((src, tgt, "wire", port))
+        return result
+
+    @property
+    def ctrl_values(self) -> dict[str, float]:
+        """Read-only snapshot of all set control values."""
+        return dict(self._ctrl_values)
+
     # ── Graph rebuild infrastructure ──────────────────────────────────
 
     def disconnect(self) -> None:

@@ -4132,6 +4132,71 @@ def test_set_no_warning_without_ranges() -> None:
         assert len(range_warnings) == 0
 
 
+# ── Public routing/ctrl_values properties ──────────────────────────────
+
+
+def test_routing_property_returns_sends_and_wires() -> None:
+    """kr.routing returns list of (src, tgt, kind, level_or_port) tuples."""
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("bass", "verb", level=0.4)
+
+    routes = mixer.routing
+    assert len(routes) == 1
+    src, tgt, kind, lvl = routes[0]
+    assert src == "bass"
+    assert tgt == "verb"
+    assert kind == "send"
+    assert lvl == 0.4
+
+
+def test_routing_is_snapshot() -> None:
+    """Mutating routing return value doesn't affect internal state."""
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq",),
+        "faust:verb": ("room",),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.bus("verb", "faust:verb", gain=0.3)
+    mixer.send("bass", "verb", level=0.4)
+
+    routes = mixer.routing
+    routes.clear()
+    assert len(mixer.routing) == 1  # internal unchanged
+
+
+def test_ctrl_values_property() -> None:
+    """kr.ctrl_values returns snapshot of set control values."""
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer.set("bass/cutoff", 1200.0)
+
+    vals = mixer.ctrl_values
+    assert vals["bass/cutoff"] == 1200.0
+
+    # Mutation doesn't affect internal
+    vals["bass/cutoff"] = 9999.0
+    assert mixer.ctrl_values["bass/cutoff"] == 1200.0
+
+
 def test_play_control_path_warns_mod_outside_range() -> None:
     """kr.play('bass/freq', mod_sine(0.5, 1.5)) warns when freq range is [20, 2000]."""
     import warnings
