@@ -44,12 +44,13 @@ jobs:
           cp -r target/doc site/rust
           echo '<meta http-equiv="refresh" content="0;url=pattern_engine/index.html">' > site/rust/index.html
 
-      # JupyterLite REPL
-      - name: Build JupyterLite
-        working-directory: web
+      # Web REPL (static — no build step)
+      - name: Copy web REPL
         run: |
-          uv sync
-          uv run jupyter lite build --output-dir ../site/try
+          mkdir -p site/try
+          cp web/index.html site/try/
+          cp web/krach_web.py site/try/
+          cp -r web/pypi site/try/pypi
 
       # Upload combined site
       - uses: actions/upload-pages-artifact@v3
