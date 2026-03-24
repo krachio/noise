@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from krach.ir.pattern import AtomParams, PatternNode
-from krach.patterns.ir import Control, Osc, Value
+from krach.patterns.values import Control, Osc, Value
 from krach.patterns.pattern import Pattern
 from krach.patterns.primitives import atom_p, fold
 
@@ -2112,7 +2112,7 @@ def test_bind_voice_rewrites_bare_params() -> None:
 def test_bind_voice_skips_already_bound() -> None:
     from krach.ir.pattern import AtomParams, PatternNode
     from krach.patterns.bind import bind_voice
-    from krach.patterns.ir import Osc, OscFloat, OscStr
+    from krach.patterns.values import Osc, OscFloat, OscStr
     from krach.patterns.primitives import atom_p
     from krach.patterns.serialize import pattern_node_to_dict
 
@@ -2167,7 +2167,7 @@ def test_play_voice_binds_pattern() -> None:
 def test_play_control_path_binds_ctrl() -> None:
     from unittest.mock import MagicMock
 
-    from krach.patterns.ir import OscFloat, OscStr
+    from krach.patterns.values import OscFloat, OscStr
     from krach.patterns.pattern import osc
     from krach.patterns.serialize import pattern_node_to_dict
 

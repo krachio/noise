@@ -5,12 +5,10 @@ import json
 
 import pytest
 
-from krach.patterns.ir import (
+from krach.backends.pattern_protocol import (
     Atom,
     Batch,
     Cat,
-    Cc,
-    Control,
     Degrade,
     Early,
     Euclid,
@@ -21,11 +19,6 @@ from krach.patterns.ir import (
     HushAll,
     IrNode,
     Late,
-    Note,
-    Osc,
-    OscFloat,
-    OscInt,
-    OscStr,
     Ping,
     Rev,
     SetBpm,
@@ -38,6 +31,7 @@ from krach.patterns.ir import (
     dict_to_ir,
     ir_to_dict,
 )
+from krach.patterns.values import Cc, Control, Note, Osc, OscFloat, OscInt, OscStr
 
 
 class TestValueSerialization:

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from krach.patterns.ir import (
+from krach.backends.pattern_protocol import (
     Atom,
     Cat,
     Degrade,
@@ -9,12 +9,12 @@ from krach.patterns.ir import (
     Every,
     Fast,
     Late,
-    Note,
     Rev,
     Silence,
     Slow,
     Stack,
 )
+from krach.patterns.values import Note
 from krach.patterns.pattern import cc, note, rest
 
 
@@ -32,7 +32,7 @@ class TestAtomConstructors:
         assert p.ir_node == Silence()
 
     def test_cc(self) -> None:
-        from krach.patterns.ir import Cc
+        from krach.patterns.values import Cc
 
         p = cc(74, 127, channel=1)
         assert p.ir_node == Atom(Cc(channel=1, controller=74, value=127))
@@ -258,7 +258,7 @@ class TestFastInfNan:
 
 class TestSwing:
     def test_swing_produces_warp_node(self) -> None:
-        from krach.patterns.ir import Warp
+        from krach.backends.pattern_protocol import Warp
         pat = note(60).swing(0.67)
         assert isinstance(pat.ir_node, Warp)
         assert pat.ir_node.kind == "swing"
@@ -266,14 +266,14 @@ class TestSwing:
         assert pat.ir_node.grid == 8
 
     def test_swing_default_args(self) -> None:
-        from krach.patterns.ir import Warp
+        from krach.backends.pattern_protocol import Warp
         pat = note(60).swing()
         assert isinstance(pat.ir_node, Warp)
         assert pat.ir_node.amount == 0.67
         assert pat.ir_node.grid == 8
 
     def test_swing_custom_grid(self) -> None:
-        from krach.patterns.ir import Warp
+        from krach.backends.pattern_protocol import Warp
         pat = note(60).swing(0.6, grid=4)
         assert isinstance(pat.ir_node, Warp)
         assert pat.ir_node.grid == 4

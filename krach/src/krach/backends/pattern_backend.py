@@ -23,7 +23,7 @@ from krach.ir.pattern import (
     StackParams,
     WarpParams,
 )
-from krach.patterns.ir import (
+from krach.backends.pattern_protocol import (
     Atom,
     Cat,
     Degrade,

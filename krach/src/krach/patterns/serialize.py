@@ -21,71 +21,11 @@ from krach.ir.pattern import (
     StackParams,
     WarpParams,
 )
-from krach.patterns.ir import (
-    Cc,
-    Control,
-    Note,
-    Osc,
-    OscArg,
-    OscFloat,
-    OscInt,
-    OscStr,
-    Value,
-)
+from krach.patterns.values import dict_to_value, value_to_dict
 from krach.patterns.primitives import (
     atom_p, cat_p, degrade_p, def_serialize, early_p, euclid_p, every_p,
     fast_p, fold, freeze_p, late_p, rev_p, silence_p, slow_p, stack_p, warp_p,
 )
-
-
-# ── Value serialization (shared with IrNode protocol) ────────────────────
-
-
-def _osc_arg_to_dict(a: OscArg) -> dict[str, Any]:
-    if isinstance(a, OscFloat):
-        return {"Float": a.value}
-    if isinstance(a, OscInt):
-        return {"Int": a.value}
-    return {"Str": a.value}
-
-
-def _value_to_dict(v: Value) -> dict[str, Any]:
-    if isinstance(v, Note):
-        return {"type": "Note", "channel": v.channel, "note": v.note,
-                "velocity": v.velocity, "dur": v.dur}
-    if isinstance(v, Cc):
-        return {"type": "Cc", "channel": v.channel, "controller": v.controller,
-                "value": v.value}
-    if isinstance(v, Osc):
-        return {"type": "Osc", "address": v.address,
-                "args": [_osc_arg_to_dict(a) for a in v.args]}
-    return {"type": "Control", "label": v.label, "value": v.value}
-
-
-def _dict_to_osc_arg(d: dict[str, Any]) -> OscArg:
-    if "Float" in d:
-        return OscFloat(d["Float"])
-    if "Int" in d:
-        return OscInt(d["Int"])
-    if "Str" in d:
-        return OscStr(d["Str"])
-    raise ValueError(f"unknown OscArg: {d}")
-
-
-def _dict_to_value(d: dict[str, Any]) -> Value:
-    t = d["type"]
-    if t == "Note":
-        return Note(channel=d["channel"], note=d["note"],
-                    velocity=d["velocity"], dur=d["dur"])
-    if t == "Control":
-        return Control(label=d["label"], value=d["value"])
-    if t == "Cc":
-        return Cc(channel=d["channel"], controller=d["controller"],
-                  value=d["value"])
-    if t == "Osc":
-        return Osc(address=d["address"],
-                   args=tuple(_dict_to_osc_arg(a) for a in d["args"]))
-    raise ValueError(f"unknown value type: {t}")
 
 
 # ── Per-primitive serialize rules ────────────────────────────────────────
@@ -93,7 +33,7 @@ def _dict_to_value(d: dict[str, Any]) -> Value:
 
 def _atom_ser(node: PatternNode, _children: tuple[Any, ...]) -> dict[str, Any]:
     assert isinstance(node.params, AtomParams)
-    return {"op": "Atom", "value": _value_to_dict(node.params.value)}
+    return {"op": "Atom", "value": value_to_dict(node.params.value)}
 
 
 def _silence_ser(_node: PatternNode, _children: tuple[Any, ...]) -> dict[str, Any]:
@@ -193,7 +133,7 @@ def dict_to_pattern_node(d: dict[str, Any]) -> PatternNode:
     """Deserialize a dict back to a PatternNode tree."""
     op = d["op"]
     if op == "Atom":
-        return PatternNode(atom_p, (), AtomParams(_dict_to_value(d["value"])))
+        return PatternNode(atom_p, (), AtomParams(dict_to_value(d["value"])))
     if op == "Silence":
         return PatternNode(silence_p, (), SilenceParams())
 
@@ -234,3 +174,10 @@ def dict_to_pattern_node(d: dict[str, Any]) -> PatternNode:
         return PatternNode(warp_p, (child,), WarpParams(
             kind=d["kind"], amount=d["amount"], grid=d["grid"]))
     raise ValueError(f"unknown PatternNode op: {op}")
+
+
+# ── Import-time completeness check ──────────────────────────────────────
+
+from krach.patterns.primitives import check_completeness  # noqa: E402
+
+check_completeness()

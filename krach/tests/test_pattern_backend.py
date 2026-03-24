@@ -8,10 +8,11 @@ from krach.ir.pattern import (
     EveryParams, FastParams, FreezeParams, LateParams, PatternNode,
     RevParams, SilenceParams, SlowParams, StackParams, WarpParams,
 )
-from krach.patterns.ir import (
-    Atom, Cat, Control, Degrade, Early, Euclid, Every,
-    Fast, Freeze, Late, Note, Rev, Silence, Slow, Stack, Warp,
+from krach.backends.pattern_protocol import (
+    Atom, Cat, Degrade, Early, Euclid, Every,
+    Fast, Freeze, Late, Rev, Silence, Slow, Stack, Warp,
 )
+from krach.patterns.values import Control, Note
 from krach.patterns.primitives import (
     atom_p, cat_p, degrade_p, early_p, euclid_p, every_p,
     fast_p, freeze_p, late_p, rev_p, silence_p, slow_p, stack_p, warp_p,

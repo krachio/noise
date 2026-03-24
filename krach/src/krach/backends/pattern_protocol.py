@@ -1,58 +1,21 @@
+"""Pattern protocol — IrNode types, client messages, and wire serialization.
+
+This is the wire format spoken between krach (Python) and krach-engine (Rust).
+IrNode is the old tree IR consumed by the Rust pattern engine.
+ClientMessage wraps commands sent over the socket.
+"""
+
 from __future__ import annotations
 
 import json
 from dataclasses import dataclass
 from typing import Any
 
-# ── Value types ──────────────────────────────────────────────────────────────
-
-
-@dataclass(frozen=True)
-class Note:
-    channel: int
-    note: int
-    velocity: int
-    dur: float
-
-
-@dataclass(frozen=True)
-class Cc:
-    channel: int
-    controller: int
-    value: int
-
-
-@dataclass(frozen=True)
-class OscFloat:
-    value: float
-
-
-@dataclass(frozen=True)
-class OscInt:
-    value: int
-
-
-@dataclass(frozen=True)
-class OscStr:
-    value: str
-
-
-OscArg = OscFloat | OscInt | OscStr
-
-
-@dataclass(frozen=True)
-class Osc:
-    address: str
-    args: tuple[OscArg, ...]
-
-
-@dataclass(frozen=True)
-class Control:
-    label: str
-    value: float
-
-
-Value = Note | Cc | Osc | Control
+from krach.patterns.values import (
+    Value,
+    value_to_dict,
+    dict_to_value,
+)
 
 # ── IR node types ────────────────────────────────────────────────────────────
 
@@ -262,47 +225,10 @@ ClientMessage = SimpleCommand | Batch
 # ── Serialization ────────────────────────────────────────────────────────────
 
 
-def _osc_arg_to_dict(arg: OscArg) -> dict[str, Any]:
-    match arg:
-        case OscFloat(v):
-            return {"Float": v}
-        case OscInt(v):
-            return {"Int": v}
-        case OscStr(v):
-            return {"Str": v}
-
-
-def _value_to_dict(v: Value) -> dict[str, Any]:
-    match v:
-        case Note(channel, note, velocity, dur):
-            return {
-                "type": "Note",
-                "channel": channel,
-                "note": note,
-                "velocity": velocity,
-                "dur": dur,
-            }
-        case Cc(channel, controller, value):
-            return {
-                "type": "Cc",
-                "channel": channel,
-                "controller": controller,
-                "value": value,
-            }
-        case Osc(address, args):
-            return {
-                "type": "Osc",
-                "address": address,
-                "args": [_osc_arg_to_dict(a) for a in args],
-            }
-        case Control(label=label, value=value):
-            return {"type": "Control", "label": label, "value": value}
-
-
 def ir_to_dict(node: IrNode) -> dict[str, Any]:
     match node:
         case Atom(value):
-            return {"op": "Atom", "value": _value_to_dict(value)}
+            return {"op": "Atom", "value": value_to_dict(value)}
         case Silence():
             return {"op": "Silence"}
         case Freeze(child):
@@ -384,7 +310,6 @@ def _command_to_dict(msg: ClientMessage) -> dict[str, Any]:
             }
 
 
-
 def command_to_json(msg: ClientMessage) -> str:
     return json.dumps(_command_to_dict(msg), separators=(",", ":"))
 
@@ -392,39 +317,12 @@ def command_to_json(msg: ClientMessage) -> str:
 # ── Deserialization ─────────────────────────────────────────────────────────
 
 
-def _dict_to_osc_arg(d: dict[str, Any]) -> OscArg:
-    if "Float" in d:
-        return OscFloat(d["Float"])
-    if "Int" in d:
-        return OscInt(d["Int"])
-    if "Str" in d:
-        return OscStr(d["Str"])
-    raise ValueError(f"unknown OscArg: {d}")
-
-
-def _dict_to_value(d: dict[str, Any]) -> Value:
-    match d["type"]:
-        case "Note":
-            return Note(channel=d["channel"], note=d["note"],
-                        velocity=d["velocity"], dur=d["dur"])
-        case "Control":
-            return Control(label=d["label"], value=d["value"])
-        case "Osc":
-            return Osc(address=d["address"],
-                       args=tuple(_dict_to_osc_arg(a) for a in d["args"]))
-        case "Cc":
-            return Cc(channel=d["channel"], controller=d["controller"],
-                      value=d["value"])
-        case _:
-            raise ValueError(f"unknown value type: {d['type']}")
-
-
 def dict_to_ir(d: dict[str, Any]) -> IrNode:
     """Reconstruct an IR node from a dict (inverse of ``ir_to_dict``)."""
     op = d["op"]
     match op:
         case "Atom":
-            return Atom(_dict_to_value(d["value"]))
+            return Atom(dict_to_value(d["value"]))
         case "Silence":
             return Silence()
         case "Freeze":

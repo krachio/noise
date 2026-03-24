@@ -9,7 +9,7 @@ from krach.ir.pattern import (
     AtomParams,
     PatternNode,
 )
-from krach.patterns.ir import Control, Osc, OscStr
+from krach.patterns.values import Control, Osc, OscStr
 from krach.patterns.primitives import atom_p, freeze_p, fold, fold_with_state, stack_p
 
 

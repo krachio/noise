@@ -7,7 +7,7 @@ from krach.patterns.bind import (
     bind_ctrl, bind_voice, bind_voice_poly,
     collect_control_labels, collect_control_values,
 )
-from krach.patterns.ir import Control, Osc, OscFloat, OscInt, OscStr
+from krach.patterns.values import Control, Osc, OscFloat, OscInt, OscStr
 from krach.patterns.primitives import atom_p, cat_p, freeze_p, silence_p
 
 

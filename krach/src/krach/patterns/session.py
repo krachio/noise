@@ -5,7 +5,7 @@ import socket
 from dataclasses import dataclass, field
 from typing import IO, Any
 
-from krach.patterns.ir import (
+from krach.backends.pattern_protocol import (
     Batch,
     ClientMessage,
     Hush,

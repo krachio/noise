@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from krach.patterns.ir import (
+from krach.backends.pattern_protocol import (
     Atom,
     Batch,
     Cat,
@@ -12,12 +12,12 @@ from krach.patterns.ir import (
     Every,
     Fast,
     Late,
-    Note,
     Ping,
     SetBpm,
     Slow,
     Stack,
 )
+from krach.patterns.values import Note
 from krach.patterns.pattern import note
 
 

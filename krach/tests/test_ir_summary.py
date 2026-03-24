@@ -6,7 +6,7 @@ from krach.ir.pattern import (
     FreezeParams, PatternNode, SilenceParams, SlowParams, StackParams,
     WarpParams,
 )
-from krach.patterns.ir import Control, Note
+from krach.patterns.values import Control, Note
 from krach.patterns.primitives import (
     atom_p, cat_p, degrade_p, euclid_p, fast_p, freeze_p,
     silence_p, slow_p, stack_p, warp_p,

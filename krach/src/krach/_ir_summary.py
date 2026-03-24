@@ -17,7 +17,7 @@ from krach.ir.pattern import (
     SlowParams,
     WarpParams,
 )
-from krach.patterns.ir import Cc, Control, Note
+from krach.patterns.values import Cc, Control, Note
 
 
 def summarize(node: PatternNode, max_items: int = 8) -> str:

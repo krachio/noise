@@ -12,7 +12,7 @@ from krach.ir.pattern import (
     SilenceParams,
     StackParams,
 )
-from krach.patterns.ir import Control
+from krach.patterns.values import Control
 from krach.patterns.primitives import (
     atom_p,
     cat_p,
@@ -132,7 +132,7 @@ def test_freeze_stack_allocates_separate_voices() -> None:
         AtomParams, CatParams, FreezeParams, PatternNode, StackParams,
     )
     from krach.patterns.bind import bind_voice_poly, collect_control_labels
-    from krach.patterns.ir import Control
+    from krach.patterns.values import Control
     from krach.patterns.primitives import atom_p, cat_p, freeze_p, stack_p
 
     def _ctrl(label: str, value: float) -> PatternNode:
