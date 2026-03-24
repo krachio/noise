@@ -16,10 +16,8 @@ from krach.patterns.ir import Control
 from krach.patterns.primitives import (
     atom_p,
     cat_p,
-    def_summary,
     fold,
     fold_with_state,
-    get_summary_rule,
     silence_p,
     stack_p,
 )
@@ -63,17 +61,6 @@ def test_fold_nested() -> None:
         return max(child_results) + 1
 
     assert fold(cat, depth) == 2  # cat → stack → leaf
-
-
-def test_summary_rule_registration() -> None:
-    """Registered summary rules are retrievable."""
-    test_p = PatternPrimitive("test_summary_op")
-    def_summary(test_p, lambda node, children: "test")
-    rule = get_summary_rule(test_p)
-    assert rule(
-        PatternNode(primitive=test_p, children=(), params=SilenceParams()),
-        ()
-    ) == "test"
 
 
 def test_fold_with_state_counts_atoms() -> None:
@@ -122,11 +109,12 @@ def test_fold_with_state_threads_left_to_right() -> None:
     assert labels == [("a", 0), ("b", 1)]
 
 
-def test_missing_rule_raises() -> None:
-    """Accessing an unregistered rule raises RuntimeError."""
+def test_missing_serialize_rule_raises() -> None:
+    """Accessing an unregistered serialize rule raises RuntimeError."""
+    from krach.patterns.primitives import get_serialize_rule
     fake_p = PatternPrimitive("nonexistent_op")
-    with pytest.raises(RuntimeError, match="No summary rule"):
-        get_summary_rule(fake_p)
+    with pytest.raises(RuntimeError, match="No serialize rule"):
+        get_serialize_rule(fake_p)
 
 
 # ── Freeze(Stack) acceptance test (behavioral pin) ───────────────────────

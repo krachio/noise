@@ -1,8 +1,8 @@
-"""Pattern primitives — registered operations with bind/summary/serialize rules.
+"""Pattern primitives — registered operations with per-primitive serialize rules.
 
-Each primitive is a PatternPrimitive singleton. Rules are registered in a
-separate dict (not on the frozen primitive). Import-time completeness check
-asserts every primitive has all required rules.
+Each primitive is a PatternPrimitive singleton. Serialize rules are registered
+in a dict keyed by name. Import-time completeness check asserts every primitive
+has all required rules. Summary uses a direct recursive function (no registry).
 """
 
 from __future__ import annotations
@@ -39,29 +39,14 @@ ALL_PATTERN_PRIMITIVES: tuple[PatternPrimitive, ...] = (
 # Each rule is a function: (node: PatternNode, child_results: tuple, ...extra) -> result
 # The exact signature depends on the rule type.
 
-SummaryRule = Callable[[PatternNode, tuple[str, ...]], str]
 SerializeRule = Callable[[PatternNode, tuple[Any, ...]], Any]
 
-_summary_rules: dict[str, SummaryRule] = {}
 _serialize_rules: dict[str, SerializeRule] = {}
-
-
-def def_summary(primitive: PatternPrimitive, fn: SummaryRule) -> None:
-    """Register a summary rule for a primitive."""
-    _summary_rules[primitive.name] = fn
 
 
 def def_serialize(primitive: PatternPrimitive, fn: SerializeRule) -> None:
     """Register a serialize rule for a primitive."""
     _serialize_rules[primitive.name] = fn
-
-
-def get_summary_rule(primitive: PatternPrimitive) -> SummaryRule:
-    """Get the summary rule for a primitive. Raises if not registered."""
-    rule = _summary_rules.get(primitive.name)
-    if rule is None:
-        raise RuntimeError(f"No summary rule for pattern primitive {primitive.name!r}")
-    return rule
 
 
 def get_serialize_rule(primitive: PatternPrimitive) -> SerializeRule:
@@ -116,8 +101,6 @@ def check_completeness() -> None:
     """Assert every primitive has all required rules. Call at module load time."""
     missing: list[str] = []
     for p in ALL_PATTERN_PRIMITIVES:
-        if p.name not in _summary_rules:
-            missing.append(f"{p.name}: missing summary rule")
         if p.name not in _serialize_rules:
             missing.append(f"{p.name}: missing serialize rule")
     if missing:

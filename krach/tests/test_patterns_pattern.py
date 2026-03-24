@@ -291,3 +291,29 @@ class TestSwing:
             note(60).swing(0.67, grid=7)
         with pytest.raises(ValueError, match="grid must be even"):
             note(60).swing(0.67, grid=0)
+
+
+class TestRepr:
+    def test_note_repr(self) -> None:
+        p = note(60)
+        assert repr(p) == "Pattern(C4)"
+
+    def test_rest_repr(self) -> None:
+        p = rest()
+        assert repr(p) == "Pattern(~)"
+
+    def test_sequence_repr(self) -> None:
+        p = note(60) + note(64) + note(67)
+        r = repr(p)
+        assert r.startswith("Pattern(")
+        assert "C4" in r
+        assert "E4" in r
+        assert "G4" in r
+
+    def test_fast_repr(self) -> None:
+        p = note(60).fast(2)
+        assert "*2" in repr(p)
+
+    def test_over_repr(self) -> None:
+        p = note(60).over(2)
+        assert "/2" in repr(p)

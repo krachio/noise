@@ -70,6 +70,10 @@ class Pattern:
         from krach.backends.pattern_backend import to_ir_node
         return to_ir_node(self.node)
 
+    def __repr__(self) -> str:
+        from krach._ir_summary import summarize
+        return f"Pattern({summarize(self.node)})"
+
     # ── Operators ────────────────────────────────────────────────────────
 
     def __add__(self, other: Pattern) -> Pattern:
