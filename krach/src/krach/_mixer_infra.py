@@ -9,7 +9,7 @@ from __future__ import annotations
 import time
 from collections.abc import Generator
 from contextlib import contextmanager
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from krach._graph import build_graph_ir, inst_name as _inst_name
 from krach._handle import NodeHandle
@@ -108,9 +108,9 @@ class MixerInfra:
     # ── State accessors ───────────────────────────────────────────────
 
     @property
-    def slots(self) -> dict[str, Any]:
+    def slots(self) -> dict[str, object]:
         """Read-only snapshot of session slots."""
-        return self._session.slots
+        return self._session.slots  # type: ignore[return-value]
 
     def get_node(self, name: str) -> Node | None:
         """Look up a node by name, or None if not found."""
@@ -133,17 +133,14 @@ class MixerInfra:
     def nodes(self) -> dict[str, NodeHandle]:
         """All nodes as name → NodeHandle."""
         return {name: NodeHandle(self, name) for name in self._nodes}  # type: ignore[arg-type]
-
     @property
     def sources(self) -> dict[str, NodeHandle]:
         """Source nodes (num_inputs=0) as name → NodeHandle."""
         return {n: NodeHandle(self, n) for n, v in self._nodes.items() if v.num_inputs == 0}  # type: ignore[arg-type]
-
     @property
     def effects(self) -> dict[str, NodeHandle]:
         """Effect nodes (num_inputs>0) as name → NodeHandle."""
         return {n: NodeHandle(self, n) for n, v in self._nodes.items() if v.num_inputs > 0}  # type: ignore[arg-type]
-
     @property
     def node_controls(self) -> dict[str, tuple[str, ...]]:
         """Read-only snapshot of known node type controls."""
