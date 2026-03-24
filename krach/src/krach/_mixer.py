@@ -17,7 +17,7 @@ from typing import Any, Callable  # Any still used for DspDef.fn
 from faust_dsl import transpile as _transpile
 from krach._bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
-from krach._types import DspDef, Node, NodeSnapshot, Scene, dsp
+from krach._types import DspDef, Node, Scene, dsp
 from krach._graph import inst_name as _inst_name, build_graph_ir
 from krach._patterns import (  # noqa: F401 — re-exported for backward compat
     build_hit as build_hit,
@@ -438,22 +438,10 @@ class VoiceMixer:
 
     def save(self, name: str) -> None:
         """Save current state as a named scene."""
-        self._scenes[name] = Scene(
-            nodes={
-                n: NodeSnapshot(
-                    type_id=v.type_id, gain=v.gain, controls=v.controls,
-                    num_inputs=v.num_inputs, count=v.count, init=v.init,
-                    source_text=v.source_text,
-                )
-                for n, v in self._nodes.items()
-            },
-            sends=dict(self._sends),
-            wires=dict(self._wires),
-            patterns=dict(self._patterns),
-            ctrl_values=dict(self._ctrl_values),
-            tempo=self.tempo,
-            master=self._master_gain,
-            muted=dict(self._muted),
+        from krach._scene import save_scene
+        self._scenes[name] = save_scene(
+            self._nodes, self._sends, self._wires, self._patterns,
+            self._ctrl_values, self.tempo, self._master_gain, self._muted,
         )
 
     def recall(self, name: str) -> None:
@@ -461,35 +449,17 @@ class VoiceMixer:
         if name not in self._scenes:
             raise ValueError(f"scene '{name}' not found")
         scene = self._scenes[name]
-
-        # Stop everything
         self.stop()
-
-        # Rebuild nodes
-        self._nodes.clear()
-        self._sends.clear()
-        self._wires.clear()
-
-        for nname, snap in scene.nodes.items():
-            self._nodes[nname] = Node(
-                type_id=snap.type_id, gain=snap.gain, controls=snap.controls,
-                num_inputs=snap.num_inputs, count=snap.count, init=snap.init,
-                source_text=snap.source_text,
-            )
+        from krach._scene import restore_scene
+        self._nodes = restore_scene(scene)
         self._sends = dict(scene.sends)
         self._wires = dict(scene.wires)
         self._muted = dict(scene.muted)
         self._rebuild()
-
-        # Restore tempo and master
         self.tempo = scene.tempo
         self.master = scene.master
-
-        # Restore control values
         for path, value in scene.ctrl_values.items():
             self.set(path, value)
-
-        # Replay patterns
         for slot, pattern in scene.patterns.items():
             self.play(slot, pattern)
 
@@ -499,16 +469,9 @@ class VoiceMixer:
         return list(self._scenes.keys())
 
     def load(self, path: str) -> None:
-        """Load and execute a Python file with ``kr`` (and ``mix`` compat) in scope."""
-        p = Path(path)
-        if not p.exists():
-            raise FileNotFoundError(f"scene file not found: {path}")
-        code = p.read_text()
-        ns: dict[str, object] = {"kr": self, "mix": self}
-        try:
-            exec(compile(code, path, "exec"), ns)  # noqa: S102
-        except Exception as e:
-            raise RuntimeError(f"error loading {path}: {e}") from e
+        """Load and execute a Python file with ``kr`` in scope."""
+        from krach._scene import load_file
+        load_file(path, {"kr": self, "mix": self})
 
     def export(self, path: str) -> None:
         """Export current session state to a reloadable Python script."""
