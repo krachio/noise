@@ -10,18 +10,28 @@ noise/
 ├── audio-faust/       Rust — FAUST LLVM JIT plugin (hot reload, recursive dir watcher)
 ├── pattern-engine/    Rust — pattern sequencer (min-heap, rational time, phase-reset, meter)
 ├── krach-engine/      Rust — unified binary (pattern-engine + audio-engine + audio-faust, one socket)
-├── faust-dsl/         Python — Python → Faust .dsp transpiler
-└── krach/             Python — live coding REPL (graph API, patterns, copilot, DSP design)
+├── krach/             Python — live coding REPL (graph API, patterns, DSP transpiler, MCP server)
+└── krach-mcp/         Python — MCP server (22 tools for Claude Code to drive krach)
 ```
+
+faust-dsl merged into krach as `krach.ir.signal`, `krach.dsl.*`, `krach.backends.faust*`.
+
+### IR architecture (unified)
+
+Three typed IRs, each domain-specific:
+- **Signal IR** (`krach.ir.signal`): `SignalPrimitive`, `SignalEqn`, `DspGraph` — flat DAG, data flows forward
+- **Pattern IR** (`krach.ir.pattern`): `PatternPrimitive`, `PatternNode` — tree, nesting IS temporal semantics
+- **Module IR** (`krach._module_ir`): `ModuleIr`, `NodeDef`, `RouteDef`, `PatternDef` — flat record
+
+Pattern primitives use per-primitive rule registration (serialize). Generic `fold`/`fold_with_state` for tree traversal. `DspGraph` has canonicalization + structural hashing for cache keys.
 
 ### Test counts
 - audio-engine: 163 Rust tests
 - audio-faust: 29 Rust tests
 - pattern-engine: 172 Rust tests
 - krach-engine: 25 Rust tests
-- faust-dsl: 68 Python tests
-- krach: 499 Python tests (includes patterns module, namespace tests)
-- **Total: 956 tests**, all green. Pyright strict clean.
+- krach: 707 Python tests
+- **Total: 1096 tests**, all green. Pyright strict clean.
 
 ## Usage
 
@@ -41,11 +51,6 @@ def acid_bass() -> krs.Signal:
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
-def kick_fn() -> krs.Signal:
-    gate = krs.control("gate", 0.0, 0.0, 1.0)
-    env = krs.adsr(0.001, 0.15, 0.0, 0.04, gate)
-    return krs.sine_osc(55.0) * env * 0.9
-
 # Effects take an audio input parameter — auto-detected by kr.node()
 def reverb_fn(inp: krs.Signal) -> krs.Signal:
     room = krs.control("room", 0.7, 0.0, 1.0)
@@ -53,13 +58,11 @@ def reverb_fn(inp: krs.Signal) -> krs.Signal:
 
 # Create nodes
 bass = kr.node("bass", acid_bass, gain=0.3)
-kick = kr.node("drums/kick", kick_fn, gain=0.8)
 verb = kr.node("verb", reverb_fn, gain=0.3)
 
 # Operator DSL: >> routes, @ plays, [] controls
 bass >> (verb, 0.4)
 bass @ kr.seq("A2", "D3", None, "E2").over(2)
-kick @ (kr.hit() * 4)
 bass @ ("cutoff", kr.sine(400, 2000).over(4))
 bass["cutoff"] = 1200
 
@@ -79,62 +82,33 @@ kr.mute("drums")
 - **Node handles**: `bass = kr.node(...)` returns proxy — `bass @ pattern`, `bass["cutoff"] = 1200`, `bass >> verb`
 - **Unified routing**: `kr.connect()` / `>>` replaces send/wire split — level and port as params
 - **FAUST auto-smoothing**: DSP controls with si.smoo applied automatically, no zipper noise
-- **Protocol hardening**: IPC message validation, length-prefixed framing, reconnect on stale socket, acknowledged graph commands (compile errors surface to Python)
+- **Protocol hardening**: IPC message validation, length-prefixed framing, reconnect on stale socket
 - **Native automation lanes**: block-rate modulation on audio thread (AutoShape + GraphSwapper)
 - **Typed Control IR**: `Control(label, value)` replaces OSC string convention
 - **Continuous patterns**: `kr.sine()`, `kr.saw()`, `kr.rand()` — smooth control sweeps
-- **Multi-pattern combinators**: `kr.cat()`, `kr.stack()`, `kr.struct()` — cycle-level composition
-- **Pattern transforms**: `.mask()`, `.sometimes()` — selective silence and probabilistic variation
-- **Transition blocks**: `with kr.transition(bars=N)` — all changes fade smoothly
 - **Mini-notation**: `kr.p("x . x . x . . x")` for fast pattern entry
 - **Scenes**: `kr.save("verse")` / `kr.recall("chorus")` — snapshot + restore
-- **Music as code**: `kr.load("songs/verse.py")` — exec Python files as scenes
-- **Master gain**: `kr.master = 0.7` — prevents CoreAudio clipping
-- **Group operations**: `kr.mute("drums")` — prefix matching for `/`-grouped nodes
-- **ADC input**: `kr.input("mic")` — live audio from CoreAudio input into the graph
-- **MIDI CC mapping**: `kr.midi_map(cc=74, path="bass/cutoff", lo=200, hi=4000)`
-- **Pattern compiler**: Control-voice patterns compile to block-rate wavetables (172 updates/sec)
-- **Phase-reset**: fades/mods start from beat 1 via `SetPatternFromZero`
-- **Meter**: `kr.meter = 3` for waltz, 7 for 7/8
-- **Pattern retrieval**: `kr.pattern("kick")` returns unbound pattern
-- **Unified Node model**: `Node(count=N)` — no separate voice/bus/poly concept
+- **MCP server**: 25 tools for Claude Code to drive krach (node, play, status, capture, export, etc.)
+- **Pattern IR**: PatternNode tree with per-primitive rules, generic fold, structural `__repr__`
+- **DspGraph caching**: `dsp()` LRU keyed by hash of transpiled Faust IR (canonicalized)
+- **Module system**: `kr.capture()` → ModuleIr, `kr.instantiate(ir)`, `kr.trace()` proxy
+- **ModuleIr serialization**: `to_dict()` / `from_dict()` — JSON round-trip for persistence
+- **Batch rollback**: all 6 state dicts restored on failed `with kr.batch():`
 
 ## Next
+
+### Module system: composition layer (done)
+
+`kr.capture()` → `ModuleIr` → `kr.instantiate(ir)`. `kr.trace()` returns
+a proxy that records calls without audio. `ModuleIr.to_dict()` / `.from_dict()`
+for JSON persistence. save/recall use ModuleIr under the hood.
 
 ### Stage 10: Template caching (priority: medium)
 
 XLA-style compilation cache for the pattern compiler. Hash pattern structure
-(excluding seeds/cycle), cache EventTemplates. Same pattern + different seed
-= cache hit at template level. Only parameterization + fill run per cycle.
-
-### Stage 11: Looper (priority: low)
-
-Record live audio input into a buffer, play back as a pattern-triggered node.
-`kr.record("loop1", bars=4)` → captures audio → `loop1.play(kr.hit() * 4)`.
+(excluding seeds/cycle), cache EventTemplates.
 
 ### Stage 12: WASM Engine — full krach in the browser (priority: high)
 
 Compile the actual Rust engine to WASM instead of reimplementing in JS.
 Same code, different compile target. FAUST JIT in browser via libfaust-wasm.
-
-```
-CLI:  Python → socket → krach-engine (Rust native) → CoreAudio
-Web:  Python (Pyodide) → wasm-bindgen → krach-engine (Rust WASM) → Web Audio
-```
-
-**Components:**
-- `pattern-engine` → WASM (already works with --no-default-features)
-- `audio-engine` → WASM (cpal has wasm-bindgen feature for Web Audio)
-- `faust-dsl` → Pyodide (pure Python, already works)
-- FAUST JIT → `@grame/libfaust` npm package (FAUST compiler in WASM,
-  compiles .dsp → AudioWorklet at runtime in browser)
-- Frontend: CodeMirror cells + Pyodide main thread
-
-**No PyO3 needed.** Python (Pyodide) calls wasm-bindgen JS exports directly.
-The WASM engine exposes the same command interface as the Unix socket protocol.
-
-**Key research findings:**
-- cpal: has `wasm-bindgen` + `audioworklet` features (WebAudio backend)
-- libfaust-wasm: entire FAUST compiler in browser, runtime .dsp → WASM compilation
-- rtrb: compiles to WASM (atomics for cross-thread AudioWorklet)
-- FAUST WASM: ~3-10x slower than LLVM native (acceptable for live coding)
