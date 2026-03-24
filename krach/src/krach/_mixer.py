@@ -1,4 +1,4 @@
-"""VoiceMixer — named audio nodes with stable control labels.
+"""VoiceMixer — graph-based audio node manager.
 
 Manages FAUST DSP nodes (sources and effects), per-node gain, and the
 underlying audio graph. Control labels: ``{node_name}/{param}``.
@@ -45,11 +45,11 @@ from krach._pitch import parse_note as _parse_note
 
 
 class VoiceMixer:
-    """Manages named audio voices with stable control labels.
+    """Manages named audio nodes with stable control labels.
 
-    Each voice is a FAUST DSP node (string type_id or Python function) with
-    an independent gain stage.  Adding/removing voices rebuilds the audio
-    graph transparently.  ``gain()`` updates are instant (no rebuild).
+    Each node is a FAUST DSP source or effect (string type_id or Python function)
+    with an independent gain stage. Adding/removing nodes rebuilds the audio
+    graph transparently. ``gain()`` updates are instant (no rebuild).
 
     Pattern builders and pitch utilities are exposed as static methods so
     that ``kr.note()``, ``kr.hit()``, etc. work when ``kr`` is an instance.
@@ -231,7 +231,7 @@ class VoiceMixer:
             self.gain(path, value)
 
     def input(self, name: str = "mic", channel: int = 0, gain: float = 0.5) -> NodeHandle:
-        """Add an audio input voice (ADC).
+        """Add an audio input node (ADC).
 
         Starts the system audio input stream (if not already started) and
         creates an ``adc_input`` node in the graph.
@@ -240,7 +240,6 @@ class VoiceMixer:
         """
         self._session.start_input(channel)
         self._node_controls["adc_input"] = ()
-        # Use voice() with the built-in adc_input type.
         return self.voice(name, "adc_input", gain=gain)
 
     def midi_map(
@@ -269,12 +268,10 @@ class VoiceMixer:
         count: int = 1,
         **init: float,
     ) -> NodeHandle:
-        """Add or replace a voice.  Rebuilds the graph.
-
-        ``source`` is a ``@dsp``-decorated function, a registered type_id
-        string, or a raw Python DSP function (transpiled on the fly).
+        """Add or replace a source node. Rebuilds the graph.
 
         ``count``: 1 for mono, >1 for polyphonic (N instances, round-robin).
+        Prefer ``node()`` which auto-detects source vs effect.
         """
         if count < 1:
             raise ValueError("count must be at least 1")
@@ -308,12 +305,7 @@ class VoiceMixer:
         self._rebuild()
 
     def hush(self, name: str) -> None:
-        """Stop the pattern, its fade, and release gates for a voice, control path, or group.
-
-        - Control path (contains ``/``): hushes the ``_ctrl_`` slot
-        - Node name: hushes node + fade + gates
-        - Group prefix: hushes all matching voices
-        """
+        """Stop the pattern, its fade, and release gates for a node, control path, or group."""
         # Control path: hush the _ctrl_ slot
         if "/" in name:
             slot = f"_ctrl_{name.replace('/', '_')}"
@@ -335,7 +327,7 @@ class VoiceMixer:
             self._session.hush(f"_fade_{name}")
 
     def _hush_single(self, name: str) -> None:
-        """Hush a single voice (not a group or path)."""
+        """Hush a single node (not a group or path)."""
         self._session.hush(name)
         self._session.hush(f"_fade_{name}")
         voice = self._nodes.get(name)
@@ -349,15 +341,15 @@ class VoiceMixer:
                     self._session.set_ctrl(f"{inst}/gate", 0.0)
 
     def stop(self) -> None:
-        """Hush all voices and release all gates."""
+        """Hush all nodes and release all gates."""
         for name in self._nodes:
             self.hush(name)
 
     def gain(self, name: str, value: float) -> None:
         """Update a node or group gain. Instant — no graph rebuild.
 
-        For poly voices, distributes gain equally across instances.
-        Prefix matching: ``gain("drums", 0.5)`` applies to all ``drums/*`` voices.
+        For poly nodes, distributes gain equally across instances.
+        Prefix matching: ``gain("drums", 0.5)`` applies to all ``drums/*`` nodes.
         """
         _check_finite(value, f"gain for '{name}'")
         targets = self._resolve_targets_soft(name)
@@ -398,7 +390,7 @@ class VoiceMixer:
         self._gain_single(name, 0.0)
 
     def unmute(self, name: str) -> None:
-        """Unmute a voice or group — restores gain saved by mute()."""
+        """Unmute a node or group — restores gain saved by mute()."""
         targets = self._resolve_targets_soft(name)
         if not targets:
             if name not in self._muted:
@@ -424,7 +416,7 @@ class VoiceMixer:
                 self._gain_single(t, self._muted.pop(t))
 
     def unsolo(self) -> None:
-        """Unmute all muted voices — reverses solo() or manual mutes."""
+        """Unmute all muted nodes — reverses solo() or manual mutes."""
         for name in list(self._muted):
             self.unmute(name)
 
@@ -487,12 +479,12 @@ class VoiceMixer:
         self, target: str, pattern: Pattern, *,
         from_zero: bool = False, swing: float | None = None,
     ) -> None:
-        """Play a pattern on a voice or control path.
+        """Play a pattern on a node or control path.
 
-        - Known voice name (exact match): binds bare params to ``voice/param``
-        - Poly voice (count>1): round-robin allocates instances
+        - Known node name (exact match): binds bare params to ``node/param``
+        - Poly node (count>1): round-robin allocates instances
         - Otherwise with ``/``: control path — rewrites ``"ctrl"`` placeholder
-        - Otherwise without ``/``: mono voice binding (may be a new slot)
+        - Otherwise without ``/``: mono node binding
 
         ``from_zero``: if True, uses ``play_from_zero`` so the pattern phase
         starts at 0 regardless of the current cycle position.
@@ -562,10 +554,10 @@ class VoiceMixer:
     ) -> None:
         """Fade any parameter to target over N bars. One-shot (holds at target).
 
-        Accepts either a voice name (fades gain) or a ``/``-separated path
+        Accepts either a node name (fades gain) or a ``/``-separated path
         like ``"bass/gain"``, ``"bass/cutoff"``.
 
-        For voice names: poly voices fade all instances proportionally.
+        For node names: poly nodes fade all instances proportionally.
         """
         if bars < 1 or steps_per_bar < 1:
             raise ValueError("bars and steps_per_bar must be >= 1")
@@ -601,7 +593,7 @@ class VoiceMixer:
                 self._update_gain_bookkeeping(voice_name, target)
             return
 
-        # Plain voice name → fade gain
+        # Plain node name → fade gain
         name = path
         if name not in self._nodes:
             return
