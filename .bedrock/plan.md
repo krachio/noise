@@ -310,3 +310,30 @@ Scores oscillate 5-9 due to batched reviewer variance. Best achieved:
 6. **Actionable error messages** — __init__.py errors suggest checking engine.log (Renzo 4)
 7. **Scene: typed tuples → NamedTuple/dataclass** — fix mutability lie (Yara 7)
 8. **String interning for RT commands** — inline strings or u32 IDs (Diego 8)
+
+### Iteration 16 (individual scoring — 8 separate Opus agents)
+
+| Reviewer | Score |
+|----------|-------|
+| Kira | 7 |
+| Tomás | 6 |
+| Suki | 8 |
+| Renzo | 8 |
+| Maren | 7 |
+| Diego | 7 |
+| Yara | 7 |
+| Nils | 6 |
+
+Individual reviewers score 1-2 points harsher than batched (who gave 6×9 + 2×8).
+After 16 iterations, scores oscillate 6-9 — each fresh reviewer finds different nits.
+
+### Work completed (16 iterations, 60+ commits)
+
+- _mixer.py: 1867 → 505 lines (73% reduction), 12 extracted modules
+- IPC error propagation (Rust acknowledged commands)
+- bus() validates audio inputs, save/recall data corruption fixed
+- All Voice/Bus terminology purged, unified Node model
+- DspSource type alias, no double-transpile
+- 502 tests, pyright strict clean
+- context.md fully updated for kr.node() API
+- Actionable error messages, portable paths
