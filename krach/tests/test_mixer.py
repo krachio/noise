@@ -374,9 +374,9 @@ def test_remove_hushes_fade_pattern() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
 
-    # Start a fade — schedules _fade_bass pattern
+    # Start a fade — schedules native automation
     mixer.fade("bass", target=0.1, bars=4)
-    assert session.play.call_count == 1
+    assert session.set_automation.call_count >= 1
 
     # Remove the voice — must also hush _fade_bass
     session.reset_mock()
@@ -880,7 +880,7 @@ def test_mute_nonexistent_is_noop() -> None:
 
 
 def test_fade_cancels_existing_fade() -> None:
-    """Starting a new fade must hush the existing fade pattern first."""
+    """Starting a new fade replaces the existing automation."""
     from unittest.mock import MagicMock
 
     from krach._mixer import VoiceMixer
@@ -892,13 +892,10 @@ def test_fade_cancels_existing_fade() -> None:
     mixer.voice("bass", "faust:bass", gain=0.5)
 
     mixer.fade("bass", target=0.2, bars=4)
-    session.reset_mock()
+    first_count = session.set_automation.call_count
     mixer.fade("bass", target=0.8, bars=2)
-
-    hushed_names = [c.args[0] for c in session.hush.call_args_list]
-    assert "_fade_bass" in hushed_names, (
-        f"new fade must hush old '_fade_bass', but hushed: {hushed_names}"
-    )
+    # Second fade should issue another set_automation (replaces the first)
+    assert session.set_automation.call_count > first_count
 
 
 # ── BATCH_EXCEPTION ──────────────────────────────────────────────────────────

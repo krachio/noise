@@ -29,7 +29,6 @@ from krach._patterns import (  # noqa: F401 — re-exported for backward compat
 from krach._patterns import check_finite as _check_finite
 from krach.patterns import Session
 from krach.patterns.pattern import Pattern
-from krach.patterns.pattern import ctrl as _ctrl
 from krach.patterns.pattern import rest as _rest
 
 from krach._pitch import ftom as _ftom
@@ -125,6 +124,25 @@ class VoiceMixer:
         self._transition_bars: int = 0
         self._flush_scheduled: bool = False
         self._session.master_gain(self._master_gain)
+
+    def _cleanup_node(self, name: str, both_sides: bool = False) -> None:
+        """Clean up state for a node being replaced or removed."""
+        if name in self._nodes:
+            old = self._nodes[name]
+            self.hush(name)
+            self._muted.pop(name, None)
+            for i in range(old.count):
+                self._muted.pop(_inst_name(name, i, old.count), None)
+        if both_sides:
+            for key in [k for k in self._sends if k[0] == name or k[1] == name]:
+                del self._sends[key]
+            for key in [k for k in self._wires if k[0] == name or k[1] == name]:
+                del self._wires[key]
+        else:
+            for key in [k for k in self._sends if k[0] == name]:
+                del self._sends[key]
+            for key in [k for k in self._wires if k[0] == name]:
+                del self._wires[key]
 
     def _resolve_source(
         self,
@@ -263,20 +281,7 @@ class VoiceMixer:
             raise ValueError("count must be at least 1")
         type_id, controls, source_text = self._resolve_source(name, source, tuple(init.keys()))
         self._muted.pop(name, None)
-
-        # Clean up old voice state if replacing
-        if name in self._nodes:
-            old = self._nodes[name]
-            self.hush(name)
-            # Clean instance-level muted entries from old poly
-            for i in range(old.count):
-                self._muted.pop(_inst_name(name, i, old.count), None)
-
-        # Clean sends/wires from old voice
-        for key in [k for k in self._sends if k[0] == name]:
-            del self._sends[key]
-        for key in [k for k in self._wires if k[0] == name]:
-            del self._wires[key]
+        self._cleanup_node(name)
 
         is_new = name not in self._nodes
         self._nodes[name] = Node(
@@ -299,17 +304,7 @@ class VoiceMixer:
         """Remove a node. Rebuilds the graph. No-op if not found."""
         if name not in self._nodes:
             return
-        voice = self._nodes[name]
-        self._muted.pop(name, None)
-        self.hush(name)
-        # Clean instance-level muted entries
-        for i in range(voice.count):
-            self._muted.pop(_inst_name(name, i, voice.count), None)
-        # Clean sends/wires where this voice is the source
-        for key in [k for k in self._sends if k[0] == name]:
-            del self._sends[key]
-        for key in [k for k in self._wires if k[0] == name]:
-            del self._wires[key]
+        self._cleanup_node(name)
         del self._nodes[name]
         self._rebuild()
 
@@ -625,10 +620,8 @@ class VoiceMixer:
     def _fade_voice(
         self, name: str, target: float, bars: int, steps_per_bar: int
     ) -> None:
-        """Schedule a gain fade for a single voice instance."""
-        self._session.hush(f"_fade_{name}")
+        """Schedule a gain fade for a single voice instance using native automation."""
         # Find current gain for this instance
-        # For poly instances, compute from parent
         current = target  # fallback
         for vname, voice in self._nodes.items():
             if voice.count == 1 and vname == name:
@@ -640,20 +633,14 @@ class VoiceMixer:
                         current = voice.gain / voice.count
                         break
 
-        total_steps = bars * steps_per_bar
-        ramp_atoms: list[Pattern] = []
-        for i in range(total_steps + 1):
-            t = i / total_steps
-            value = current + (target - current) * t
-            ramp_atoms.append(_ctrl(f"{name}/gain", value))
-        # Hold: repeat target for 19x (one-shot behavior)
-        hold_atom = _ctrl(f"{name}/gain", target)
-        hold_atoms = [hold_atom] * (total_steps * 19)
-        all_atoms = ramp_atoms + hold_atoms
-        pattern = all_atoms[0]
-        for a in all_atoms[1:]:
-            pattern = pattern + a
-        self._session.play(f"_fade_{name}", pattern.over(bars * 20))
+        try:
+            beats = bars * float(self.meter)
+            period_secs = beats * 60.0 / max(float(self.tempo), 1.0)
+        except (TypeError, ValueError):
+            period_secs = bars * 2.0  # fallback: 2s per bar at 120bpm
+        self._session.set_automation(
+            f"{name}/gain", "ramp", current, target, period_secs, one_shot=True,
+        )
 
     def _update_gain_bookkeeping(self, name: str, target: float) -> None:
         """Update gain bookkeeping after a path-based fade."""
@@ -680,17 +667,7 @@ class VoiceMixer:
                 f"bus '{name}': DSP has no audio inputs — effects need function "
                 f"parameters for audio input, e.g. def verb(inp: Signal) -> Signal"
             )
-        # Clean up old node if replacing
-        if name in self._nodes:
-            old = self._nodes[name]
-            self.hush(name)
-            self._muted.pop(name, None)
-            for i in range(old.count):
-                self._muted.pop(_inst_name(name, i, old.count), None)
-            for key in [k for k in self._sends if k[0] == name or k[1] == name]:
-                del self._sends[key]
-            for key in [k for k in self._wires if k[0] == name or k[1] == name]:
-                del self._wires[key]
+        self._cleanup_node(name, both_sides=True)
         type_id, controls, _source_text = self._resolve_source(name, source)
         self._nodes[name] = Node(type_id=type_id, gain=gain, controls=controls, num_inputs=num_inputs)
         if not self._batching:
