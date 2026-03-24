@@ -255,12 +255,19 @@ class Mixer(MixerInfra):
         return NodeHandle(self, name)
 
     def remove(self, name: str) -> None:
-        """Remove a node and all its routing. Rebuilds the graph. No-op if not found."""
-        if name not in self._nodes:
-            return
-        self._cleanup_node(name, direction="both")
-        del self._nodes[name]
-        self._rebuild()
+        """Remove a node or group and all routing. Rebuilds once. No-op if not found."""
+        match resolve_path(name, self._nodes):
+            case NodePath(n):
+                self._cleanup_node(n, direction="both")
+                del self._nodes[n]
+                self._rebuild()
+            case GroupPath(_, members):
+                for m in members:
+                    self._cleanup_node(m, direction="both")
+                    del self._nodes[m]
+                self._rebuild()
+            case _:
+                return  # no-op
 
     remove_bus = remove
 

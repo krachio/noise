@@ -593,6 +593,31 @@ def test_remove_missing_voice_is_noop() -> None:
     mixer.remove("nope")  # must not raise
 
 
+def test_remove_group_removes_all_prefixed() -> None:
+    """remove('drums') removes drums/kick and drums/hat."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:kick", "faust:hat", "dac", "gain"]
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:kick": ("gate",),
+        "faust:hat": ("gate",),
+    })
+    with mixer.batch():
+        mixer.voice("drums/kick", "faust:kick", gain=0.8)
+        mixer.voice("drums/hat", "faust:hat", gain=0.5)
+
+    assert "drums/kick" in mixer.nodes
+    assert "drums/hat" in mixer.nodes
+
+    mixer.remove("drums")
+
+    assert "drums/kick" not in mixer.nodes
+    assert "drums/hat" not in mixer.nodes
+
+
 def test_note_free_function_exists() -> None:
     """note() is now a free function, not a mixer method."""
     from krach._mixer import note
@@ -1080,6 +1105,47 @@ def test_batch_exception_rolls_back_voices() -> None:
     assert "bass" not in mixer.nodes, (
         "failed batch left 'bass' in _voices without loading graph"
     )
+
+
+def test_batch_exception_rolls_back_sends() -> None:
+    """Failed batch must restore sends, wires, patterns, ctrl_values, muted."""
+    from unittest.mock import MagicMock
+
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:bass", "faust:verb", "dac", "gain"]
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("room",),
+    })
+
+    # Set up initial state
+    with mixer.batch():
+        mixer.voice("bass", "faust:bass", gain=0.5)
+        mixer.voice("verb", "faust:verb", gain=0.3)
+
+    mixer.send("bass", "verb", level=0.4)
+    mixer.mute("bass")
+    mixer.set("bass/freq", 220.0)
+
+    # Snapshot pre-batch state
+    sends_before = dict(mixer._sends)
+    muted_before = dict(mixer._muted)
+    ctrl_before = dict(mixer._ctrl_values)
+
+    try:
+        with mixer.batch():
+            mixer.send("bass", "verb", level=0.9)  # modify send
+            mixer.unmute("bass")  # modify muted
+            mixer.set("bass/freq", 440.0)  # modify ctrl
+            raise RuntimeError("simulated error")
+    except RuntimeError:
+        pass
+
+    assert mixer._sends == sends_before, "sends not rolled back"
+    assert mixer._muted == muted_before, "muted not rolled back"
+    assert mixer._ctrl_values == ctrl_before, "ctrl_values not rolled back"
 
 
 # ── Sprint 13: MUTED_LEAK ─────────────────────────────────────────────────

@@ -31,6 +31,9 @@ if TYPE_CHECKING:
 class MixerInfra:
     """Infrastructure mixin: properties, accessors, graph rebuild, static API surface."""
 
+    # Type declarations for attrs initialized in Mixer.__init__
+    _patterns: dict[str, Pattern]
+
     # ── Pattern builders (static) ─────────────────────────────────────
     note = staticmethod(note)
     hit = staticmethod(hit)
@@ -214,7 +217,12 @@ class MixerInfra:
     def batch(self) -> Generator[None]:
         """Batch node declarations into a single graph rebuild."""
         self._batching = True
-        snap = dict(self._nodes)
+        snap_nodes = dict(self._nodes)
+        snap_sends = dict(self._sends)
+        snap_wires = dict(self._wires)
+        snap_ctrl = dict(self._ctrl_values)
+        snap_patterns = dict(self._patterns)
+        snap_muted = dict(self._muted)
         ok = False
         try:
             yield
@@ -224,7 +232,12 @@ class MixerInfra:
             if ok:
                 self._flush()
             else:
-                self._nodes = snap
+                self._nodes = snap_nodes
+                self._sends = snap_sends
+                self._wires = snap_wires
+                self._ctrl_values = snap_ctrl
+                self._patterns = snap_patterns
+                self._muted = snap_muted
 
     @contextmanager
     def transition(self, bars: int = 4) -> Generator[None]:
