@@ -74,6 +74,41 @@ def test_same_control_same_hash() -> None:
     assert graph_key(g1) == graph_key(g2)
 
 
+def test_feedback_same_hash() -> None:
+    """Feedback graphs with identical structure produce the same canonical hash."""
+    def integrator(x: Signal) -> Signal:
+        return feedback(lambda fb: fb * 0.99 + x * 0.01)
+
+    g1 = make_graph(integrator, num_inputs=1)
+    g2 = make_graph(integrator, num_inputs=1)
+    assert g1.inputs[0].id != g2.inputs[0].id
+    assert graph_key(g1) == graph_key(g2)
+
+
+def test_feedback_different_body_different_hash() -> None:
+    """Feedback graphs with different body computations differ."""
+    def integrator_a(x: Signal) -> Signal:
+        return feedback(lambda fb: fb * 0.99 + x * 0.01)
+
+    def integrator_b(x: Signal) -> Signal:
+        return feedback(lambda fb: fb * 0.5 + x * 0.5)
+
+    g1 = make_graph(integrator_a, num_inputs=1)
+    g2 = make_graph(integrator_b, num_inputs=1)
+    assert graph_key(g1) != graph_key(g2)
+
+
+def test_feedback_canonical_idempotent() -> None:
+    """Canonicalizing a feedback graph twice gives the same result."""
+    def osc(x: Signal) -> Signal:
+        return feedback(lambda fb: fb * 0.99 + x)
+
+    g = make_graph(osc, num_inputs=1)
+    c1 = canonicalize(g)
+    c2 = canonicalize(c1)
+    assert graph_key(c1) == graph_key(c2)
+
+
 def test_precision_matters() -> None:
     """Different precision produces different hash."""
     fn = lambda x: x * 2.0  # noqa: E731
