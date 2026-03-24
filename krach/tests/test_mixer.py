@@ -4012,6 +4012,71 @@ def test_set_poly_gain_fans_out() -> None:
     assert labels == ["pad_v0/gain", "pad_v1/gain", "pad_v2/gain"]
 
 
+# ── Control range validation ───────────────────────────────────────────
+
+
+def test_set_warns_value_outside_control_range() -> None:
+    """kr.set('bass/cutoff', 0.5) warns when cutoff range is [100, 6000]."""
+    import warnings
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    # Manually set control ranges (normally comes from transpiler)
+    mixer._nodes["bass"].control_ranges = {"cutoff": (100.0, 6000.0), "freq": (20.0, 2000.0)}
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        mixer.set("bass/cutoff", 0.5)  # way below min of 100
+        assert len(w) == 1
+        assert "outside" in str(w[0].message).lower()
+        assert "cutoff" in str(w[0].message)
+
+
+def test_set_no_warning_when_in_range() -> None:
+    """kr.set('bass/cutoff', 1200) should NOT warn when in range."""
+    import warnings
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer._nodes["bass"].control_ranges = {"cutoff": (100.0, 6000.0)}
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        mixer.set("bass/cutoff", 1200.0)
+        range_warnings = [x for x in w if "outside" in str(x.message).lower()]
+        assert len(range_warnings) == 0
+
+
+def test_set_no_warning_without_ranges() -> None:
+    """kr.set() should not warn when control ranges are not available."""
+    import warnings
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    # No control_ranges set — should not crash or warn
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        mixer.set("bass/freq", 0.5)
+        range_warnings = [x for x in w if "outside" in str(x.message).lower()]
+        assert len(range_warnings) == 0
+
+
 def test_save_recall_preserves_source_text() -> None:
     """save/recall round-trip must preserve source_text."""
     from unittest.mock import MagicMock

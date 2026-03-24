@@ -15,8 +15,9 @@ from typing import Literal
 from krach._bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
 from krach._types import (  # noqa: F401
-    ControlPath, DspDef, DspSource, GroupPath, Node, NodePath, Scene,
-    UnknownPath, dsp as dsp, resolve_dsp_source, resolve_path,
+    ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
+    ResolvedSource, Scene, UnknownPath,
+    dsp as dsp, resolve_dsp_source, resolve_path,
 )
 from krach._graph import build_graph_ir as build_graph_ir  # noqa: F401 re-export
 from krach._graph import inst_name as _inst_name
@@ -109,8 +110,8 @@ class Mixer(MixerInfra):
 
     def _resolve_source(
         self, name: str, source: DspSource, fallback_controls: tuple[str, ...] = (),
-    ) -> tuple[str, tuple[str, ...], str]:
-        """Resolve a source to (type_id, controls, source_text)."""
+    ) -> ResolvedSource:
+        """Resolve a source to type_id, controls, source_text, and control ranges."""
         return resolve_dsp_source(
             name, source, self._dsp_dir, self._node_controls, fallback_controls,
             wait=None if self._batching else self._wait_for_type,
@@ -226,23 +227,24 @@ class Mixer(MixerInfra):
         """
         if count < 1:
             raise ValueError("count must be at least 1")
-        type_id, controls, source_text = self._resolve_source(name, source, tuple(init.keys()))
+        resolved = self._resolve_source(name, source, tuple(init.keys()))
         self._muted.pop(name, None)
         self._cleanup_node(name)
 
         is_new = name not in self._nodes
         self._nodes[name] = Node(
-            type_id=type_id,
+            type_id=resolved.type_id,
             gain=gain,
-            controls=controls,
+            controls=resolved.controls,
             count=count,
             init=tuple(init.items()),
-            source_text=source_text,
+            source_text=resolved.source_text,
+            control_ranges=resolved.control_ranges,
             alloc=0,
         )
         if not self._batching:
             if is_new and self._graph_loaded and count == 1:
-                self._session.add_voice(name, type_id, controls, gain)
+                self._session.add_voice(name, resolved.type_id, resolved.controls, gain)
             else:
                 self._rebuild()
         return NodeHandle(self, name)
@@ -420,8 +422,11 @@ class Mixer(MixerInfra):
                 f"parameters for audio input, e.g. def verb(inp: Signal) -> Signal"
             )
         self._cleanup_node(name, direction="both")
-        type_id, controls, _source_text = self._resolve_source(name, source)
-        self._nodes[name] = Node(type_id=type_id, gain=gain, controls=controls, num_inputs=num_inputs)
+        resolved = self._resolve_source(name, source)
+        self._nodes[name] = Node(
+            type_id=resolved.type_id, gain=gain, controls=resolved.controls,
+            num_inputs=num_inputs, control_ranges=resolved.control_ranges,
+        )
         if not self._batching:
             self._rebuild()
         return NodeHandle(self, name)

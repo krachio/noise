@@ -291,12 +291,34 @@ class MixerInfra:
     def set(self, path: str, value: float) -> None:
         """Set a control value by path. Fans out to all instances for poly nodes."""
         _check_finite(value, path)
+        self._warn_if_outside_range(path, value)
         self._ctrl_values[path] = value
         if self._transition_bars > 0:
             self.fade(path, value, bars=self._transition_bars)
             return
         for label in self._expand_poly_labels(path):
             self._session.set_ctrl(label, float(value))
+
+    def _warn_if_outside_range(self, path: str, value: float) -> None:
+        """Warn if value is outside the control's declared range."""
+        import warnings
+        match resolve_path(path, self._nodes):
+            case ControlPath(node=node_name, param=param):
+                n = self._nodes.get(node_name)
+                if n is None:
+                    return
+                rng = n.control_ranges.get(param)
+                if rng is None:
+                    return
+                lo, hi = rng
+                if value < lo or value > hi:
+                    warnings.warn(
+                        f"set('{path}', {value}): value outside declared range "
+                        f"[{lo}, {hi}] for '{param}' — Faust will clamp",
+                        stacklevel=3,
+                    )
+            case _:
+                pass
 
     def _expand_poly_labels(self, path: str) -> list[str]:
         """Expand a control path to per-instance labels for poly nodes.

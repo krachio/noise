@@ -37,6 +37,7 @@ class NodeSnapshot:
     num_inputs: int = 0
     count: int = 1
     init: tuple[tuple[str, float], ...] = ()
+    control_ranges: dict[str, tuple[float, float]] = field(default_factory=lambda: dict[str, tuple[float, float]]())
     source_text: str = ""
 
 
@@ -66,6 +67,7 @@ class Node:
     init: tuple[tuple[str, float], ...] = ()
     source_text: str = field(default="", repr=False)
     alloc: int = field(default=0, repr=False)
+    control_ranges: dict[str, tuple[float, float]] = field(default_factory=lambda: dict[str, tuple[float, float]](), repr=False)
 
 
 @dataclass(frozen=True)
@@ -77,6 +79,7 @@ class DspDef:
     faust: str
     controls: tuple[str, ...]
     num_inputs: int = 0
+    control_ranges: dict[str, tuple[float, float]] = field(default_factory=lambda: dict[str, tuple[float, float]]())
 
 
 def dsp(fn: Callable[..., Any]) -> DspDef:
@@ -89,7 +92,17 @@ def dsp(fn: Callable[..., Any]) -> DspDef:
         faust=result.source,
         controls=tuple(c.name for c in result.schema.controls),
         num_inputs=result.num_inputs,
+        control_ranges={c.name: (c.lo, c.hi) for c in result.schema.controls},
     )
+
+
+@dataclass(frozen=True)
+class ResolvedSource:
+    """Result of resolving a DSP source."""
+    type_id: str
+    controls: tuple[str, ...]
+    source_text: str
+    control_ranges: dict[str, tuple[float, float]]
 
 
 def resolve_dsp_source(
@@ -99,19 +112,25 @@ def resolve_dsp_source(
     node_controls: dict[str, tuple[str, ...]],
     fallback_controls: tuple[str, ...] = (),
     wait: Callable[..., None] | None = None,
-) -> tuple[str, tuple[str, ...], str]:
-    """Resolve a DSP source to (type_id, controls, source_text). Writes .dsp/.py files."""
+) -> ResolvedSource:
+    """Resolve a DSP source to type_id, controls, source_text, and control ranges."""
+    ranges: dict[str, tuple[float, float]] = {}
     if isinstance(source, DspDef):
         type_id = f"faust:{name}"
         source_text = source.source
         faust_code, controls = source.faust, source.controls
+        ranges = source.control_ranges
     elif callable(source):
         type_id = f"faust:{name}"
         source_text = textwrap.dedent(inspect.getsource(source))
         result = _transpile(source)  # type: ignore[arg-type]
-        faust_code, controls = result.source, tuple(c.name for c in result.schema.controls)
+        faust_code = result.source
+        controls = tuple(c.name for c in result.schema.controls)
+        ranges = {c.name: (c.lo, c.hi) for c in result.schema.controls}
     else:
-        return source, node_controls.get(source, fallback_controls), ""
+        return ResolvedSource(
+            source, node_controls.get(source, fallback_controls), "", {},
+        )
     py_path = dsp_dir.joinpath(f"{name}.py")
     py_path.parent.mkdir(parents=True, exist_ok=True)
     py_path.write_text(source_text)
@@ -121,7 +140,7 @@ def resolve_dsp_source(
     node_controls[type_id] = controls
     if wait is not None:
         wait(type_id)
-    return type_id, controls, source_text
+    return ResolvedSource(type_id, controls, source_text, ranges)
 
 
 # ── Path resolution ───────────────────────────────────────────────────────
