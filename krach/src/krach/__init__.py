@@ -34,7 +34,7 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> Mixer:
     Env vars ``NOISE_SOCKET`` and ``NOISE_DSP_DIR`` override config.
     """
     from krach.patterns import Session
-    from krach._copilot import parse_dsp_controls
+    from krach._types import parse_dsp_controls
 
     cfg = load_config()
     cfg.ensure_dirs()
@@ -119,70 +119,10 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> Mixer:
 
 
 def main() -> None:
-    import anthropic
-
-    from krach._copilot import SessionState, ask_claude, build_context, extract_code, format_status, split_cells
     from krach._pitch import NOTES as _NOTES
     import krach.dsp as krs
 
     kr = connect()
-
-    _user_ns_keys: tuple[str, ...] = ()  # populated after user_ns is built
-
-    def _session_state() -> SessionState:
-        return SessionState(
-            bpm=kr.tempo,
-            playing=tuple(k for k, v in kr.slots.items() if v.playing),
-            stopped=tuple(k for k, v in kr.slots.items() if not v.playing),
-            nodes=tuple(kr.node_controls.keys()),
-            node_controls=tuple(kr.node_controls.items()),
-            in_scope=_user_ns_keys,
-            active_nodes=tuple(
-                (name, v.type_id, v.gain, v.controls) for name, v in kr.node_data.items()
-            ),
-        )
-
-    def status() -> None:
-        """Print current session state: BPM, slots, loaded nodes."""
-        print(format_status(_session_state()))
-
-    _cell_queue: list[str] = []
-
-    def _paste(cell: str) -> None:
-        import IPython
-        print(cell)
-        IPython.get_ipython().set_next_input(cell)  # type: ignore[union-attr]
-
-    def c(prompt: str) -> None:
-        """Ask Claude for help; splits response into cells, pastes the first."""
-        model = os.environ.get("KRACH_MODEL", "claude-sonnet-4-6")
-        client = anthropic.Anthropic()
-        system = build_context(_session_state())
-        response = ask_claude(client, model, system, prompt)
-        code = extract_code(response)
-        if not code:
-            print(response)
-            return
-        cells = split_cells(code)
-        _cell_queue.clear()
-        _cell_queue.extend(cells[1:])
-        _paste(cells[0])
-        if _cell_queue:
-            print(f"\n  ({len(_cell_queue)} more cell(s) — call cn() to advance)")
-
-    def cn() -> None:
-        """Paste the next queued cell (from the last c() call)."""
-        if not _cell_queue:
-            print("cell queue empty")
-            return
-        _paste(_cell_queue.pop(0))
-        if _cell_queue:
-            print(f"\n  ({len(_cell_queue)} more cell(s) — call cn() to advance)")
-
-    # Bind session helpers onto kr instance
-    kr.status = status  # type: ignore[attr-defined]
-    kr.c = c  # type: ignore[attr-defined]
-    kr.cn = cn  # type: ignore[attr-defined]
 
     print()
     print("  \u2588\u2588\u2557  \u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2588\u2557  \u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2557  \u2588\u2588\u2557")
@@ -192,8 +132,8 @@ def main() -> None:
     print("  \u2588\u2588\u2551  \u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551")
     print("  \u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d")
     print()
-    print("  kr    Mixer — kr.node(), kr.play(), kr.note(), kr.hit(), ...")
-    print("  krs   krach.dsp  — krs.Signal, krs.control(), krs.saw(), krs.lowpass(), ...")
+    print("  kr    Mixer \u2014 kr.node(), kr.play(), kr.note(), kr.hit(), ...")
+    print("  krs   krach.dsp \u2014 krs.Signal, krs.control(), krs.saw(), krs.lowpass(), ...")
     print()
 
     import IPython
@@ -201,14 +141,8 @@ def main() -> None:
     user_ns: dict[str, object] = {
         "kr": kr,
         "krs": krs,
-        # Note constants for convenience (C0..B8)
         **_NOTES,
-        # Compat aliases (will be removed in future)
-        "status": status,
-        "c": c,
-        "cn": cn,
     }
-    _user_ns_keys = tuple(sorted(user_ns))
 
     IPython.embed(  # type: ignore[reportUnknownMemberType]
         user_ns=user_ns,

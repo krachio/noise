@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import inspect
+import re
 import textwrap
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -219,3 +220,16 @@ def resolve_path(path: str, nodes: Mapping[str, object]) -> ResolvedPath:
 
     # 5. Not found
     return UnknownPath(path)
+
+
+# ── DSP file parsing ──────────────────────────────────────────────────────
+
+_HSLIDER_RE = re.compile(r'hslider\("([^"]+)"')
+
+
+def parse_dsp_controls(source: str) -> tuple[str, ...]:
+    """Extract deduplicated hslider control names from a FAUST .dsp source string."""
+    seen: dict[str, None] = {}
+    for name in _HSLIDER_RE.findall(source):
+        seen[name] = None
+    return tuple(seen)

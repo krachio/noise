@@ -7,7 +7,7 @@ Every user-facing string in krach is one of:
 - UnknownPath: no match
 """
 
-from krach._types import Node, NodePath, ControlPath, GroupPath, UnknownPath, resolve_path
+from krach._types import Node, NodePath, ControlPath, GroupPath, UnknownPath, parse_dsp_controls, resolve_path
 
 
 def _nodes(*names: str) -> dict[str, Node]:
@@ -153,3 +153,20 @@ def test_ambiguous_depth_prefers_longest_node() -> None:
     assert isinstance(result, ControlPath)
     assert result.node == "a/b"
     assert result.param == "param"
+
+
+# ── parse_dsp_controls ───────────────────────────────────────────────────
+
+
+def test_parse_dsp_controls_extracts_hslider_names() -> None:
+    source = 'process = hslider("freq", 440, 20, 20000, 0.01) * hslider("gate", 0, 0, 1, 1);'
+    assert parse_dsp_controls(source) == ("freq", "gate")
+
+
+def test_parse_dsp_controls_deduplicates() -> None:
+    source = 'hslider("freq", 0, 0, 1, 0.01) + hslider("freq", 0, 0, 1, 0.01)'
+    assert parse_dsp_controls(source) == ("freq",)
+
+
+def test_parse_dsp_controls_empty() -> None:
+    assert parse_dsp_controls("process = 0;") == ()

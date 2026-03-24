@@ -8,8 +8,6 @@ dependencies = [
 
 [project.optional-dependencies]
 repl = ["ipython>=8"]
-copilot = ["anthropic>=0.86.0"]
-full = ["ipython>=8", "anthropic>=0.86.0"]
 
 [project.scripts]
 krach = "krach:main"
