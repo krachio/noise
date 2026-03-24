@@ -1,0 +1,252 @@
+"""Tests for the module system — capture, instantiate, serialize."""
+
+from __future__ import annotations
+
+from pathlib import Path
+from unittest.mock import MagicMock
+
+from krach._mixer import Mixer
+from krach._module_ir import (
+    ControlDef,
+    ModuleIr,
+    MutedDef,
+    NodeDef,
+    PatternDef,
+    RouteDef,
+)
+
+
+def _make_mixer() -> Mixer:
+    session = MagicMock()
+    session.list_nodes.return_value = [
+        "faust:bass", "faust:verb", "faust:kick", "dac", "gain",
+    ]
+    return Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+        "faust:verb": ("room",),
+        "faust:kick": ("gate",),
+    })
+
+
+# ── capture() ────────────────────────────────────────────────────────
+
+
+def test_capture_empty_mixer() -> None:
+    mixer = _make_mixer()
+    ir = mixer.capture()
+    assert isinstance(ir, ModuleIr)
+    assert ir.nodes == ()
+    assert ir.routing == ()
+
+
+def test_capture_nodes() -> None:
+    mixer = _make_mixer()
+    with mixer.batch():
+        mixer.voice("bass", "faust:bass", gain=0.3)
+        mixer.voice("verb", "faust:verb", gain=0.5)
+
+    ir = mixer.capture()
+    names = {n.name for n in ir.nodes}
+    assert names == {"bass", "verb"}
+    bass_def = next(n for n in ir.nodes if n.name == "bass")
+    assert bass_def.gain == 0.3
+    assert bass_def.source == "faust:bass"
+
+
+def test_capture_routing() -> None:
+    mixer = _make_mixer()
+    with mixer.batch():
+        mixer.voice("bass", "faust:bass", gain=0.3)
+        mixer.voice("verb", "faust:verb", gain=0.5)
+    mixer.send("bass", "verb", level=0.4)
+
+    ir = mixer.capture()
+    assert len(ir.routing) == 1
+    route = ir.routing[0]
+    assert route.source == "bass"
+    assert route.target == "verb"
+    assert route.kind == "send"
+    assert route.level == 0.4
+
+
+def test_capture_controls() -> None:
+    mixer = _make_mixer()
+    with mixer.batch():
+        mixer.voice("bass", "faust:bass", gain=0.3)
+    mixer.set("bass/freq", 220.0)
+
+    ir = mixer.capture()
+    assert any(c.path == "bass/freq" and c.value == 220.0 for c in ir.controls)
+
+
+def test_capture_muted() -> None:
+    mixer = _make_mixer()
+    with mixer.batch():
+        mixer.voice("bass", "faust:bass", gain=0.3)
+    mixer.mute("bass")
+
+    ir = mixer.capture()
+    assert any(m.name == "bass" for m in ir.muted)
+
+
+def test_capture_transport() -> None:
+    mixer = _make_mixer()
+    mixer.tempo = 140
+    mixer.meter = 3
+
+    ir = mixer.capture()
+    assert ir.tempo == 140
+    assert ir.meter == 3
+
+
+# ── instantiate() ────────────────────────────────────────────────────
+
+
+def test_instantiate_creates_nodes() -> None:
+    mixer = _make_mixer()
+    ir = ModuleIr(
+        nodes=(
+            NodeDef(name="kick", source="faust:kick", gain=0.8),
+        ),
+    )
+    mixer.instantiate(ir)
+    assert "kick" in mixer.node_data
+    assert mixer.node_data["kick"].gain == 0.8
+
+
+def test_instantiate_creates_routing() -> None:
+    mixer = _make_mixer()
+    ir = ModuleIr(
+        nodes=(
+            NodeDef(name="bass", source="faust:bass", gain=0.3),
+            NodeDef(name="verb", source="faust:verb", gain=0.5),
+        ),
+        routing=(
+            RouteDef(source="bass", target="verb", kind="send", level=0.4),
+        ),
+    )
+    mixer.instantiate(ir)
+    assert ("bass", "verb") in mixer._sends
+    assert mixer._sends[("bass", "verb")] == 0.4
+
+
+def test_instantiate_sets_controls() -> None:
+    mixer = _make_mixer()
+    ir = ModuleIr(
+        nodes=(
+            NodeDef(name="bass", source="faust:bass", gain=0.3),
+        ),
+        controls=(
+            ControlDef(path="bass/freq", value=220.0),
+        ),
+    )
+    mixer.instantiate(ir)
+    assert mixer._ctrl_values.get("bass/freq") == 220.0
+
+
+def test_instantiate_sets_transport() -> None:
+    mixer = _make_mixer()
+    ir = ModuleIr(tempo=140, meter=3, master=0.6)
+    mixer.instantiate(ir)
+    # Transport is delegated to session
+    mixer._session.tempo  # accessed via property
+
+
+def test_capture_instantiate_round_trip() -> None:
+    """capture() → instantiate() on a fresh mixer reproduces the state."""
+    mixer1 = _make_mixer()
+    with mixer1.batch():
+        mixer1.voice("bass", "faust:bass", gain=0.3)
+        mixer1.voice("verb", "faust:verb", gain=0.5)
+    mixer1.send("bass", "verb", level=0.4)
+    mixer1.set("bass/freq", 220.0)
+    mixer1.mute("bass")
+
+    ir = mixer1.capture()
+
+    mixer2 = _make_mixer()
+    mixer2.instantiate(ir)
+
+    assert set(mixer2.node_data.keys()) == {"bass", "verb"}
+    assert mixer2._sends[("bass", "verb")] == 0.4
+    assert mixer2._ctrl_values.get("bass/freq") == 220.0
+    assert mixer2.is_muted("bass")
+    # Muted bass: gain is 0 (muted), saved gain is 0.3
+    assert mixer2._muted["bass"] == 0.3
+
+
+# ── to_dict / from_dict ───────────────────────────────────────────
+
+
+def test_module_ir_round_trip_empty() -> None:
+    ir = ModuleIr()
+    d = ir.to_dict()
+    assert d == {}
+    assert ModuleIr.from_dict(d) == ir
+
+
+def test_module_ir_round_trip_full() -> None:
+    from krach.patterns.pattern import ctrl, freeze
+
+    ir = ModuleIr(
+        nodes=(
+            NodeDef(name="bass", source="faust:bass", gain=0.3),
+            NodeDef(name="verb", source="faust:verb", gain=0.5),
+        ),
+        routing=(
+            RouteDef(source="bass", target="verb", kind="send", level=0.4),
+        ),
+        patterns=(
+            PatternDef(target="bass", pattern=freeze(ctrl("gate", 1.0) + ctrl("gate", 0.0))),
+        ),
+        controls=(
+            ControlDef(path="bass/freq", value=220.0),
+        ),
+        muted=(
+            MutedDef(name="bass", saved_gain=0.3),
+        ),
+        tempo=128.0,
+        meter=4.0,
+        master=0.7,
+    )
+    d = ir.to_dict()
+    restored = ModuleIr.from_dict(d)
+
+    assert len(restored.nodes) == 2
+    assert restored.nodes[0].name == "bass"
+    assert len(restored.routing) == 1
+    assert len(restored.patterns) == 1
+    assert restored.patterns[0].target == "bass"
+    assert len(restored.controls) == 1
+    assert len(restored.muted) == 1
+    assert restored.tempo == 128.0
+    assert restored.master == 0.7
+
+
+def test_module_ir_json_round_trip() -> None:
+    """to_dict → JSON → from_dict produces equivalent ModuleIr."""
+    import json
+
+    ir = ModuleIr(
+        nodes=(NodeDef(name="kick", source="faust:kick", gain=0.8),),
+        tempo=140.0,
+    )
+    j = json.dumps(ir.to_dict())
+    restored = ModuleIr.from_dict(json.loads(j))
+    assert restored.nodes[0].name == "kick"
+    assert restored.nodes[0].gain == 0.8
+    assert restored.tempo == 140.0
+
+
+def test_instantiate_applies_mutes() -> None:
+    mixer = _make_mixer()
+    ir = ModuleIr(
+        nodes=(
+            NodeDef(name="bass", source="faust:bass", gain=0.3),
+        ),
+        muted=(
+            MutedDef(name="bass", saved_gain=0.3),
+        ),
+    )
+    mixer.instantiate(ir)
+    assert mixer.is_muted("bass")

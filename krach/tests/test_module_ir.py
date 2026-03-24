@@ -13,7 +13,7 @@ from krach._module_ir import (
     PatternDef,
     RouteDef,
 )
-from krach.patterns.ir import Atom, Cat, Control, Freeze
+from krach.patterns.pattern import ctrl, freeze
 
 
 # ── Frozen immutability ──────────────────────────────────────────────────
@@ -60,9 +60,9 @@ def test_route_def_wire() -> None:
     assert rd.port == "sidechain"
 
 
-def test_pattern_def_with_ir_node() -> None:
-    pat_ir = Freeze(Cat((Atom(Control("gate", 1.0)), Atom(Control("gate", 0.0)))))
-    pd = PatternDef(target="kick", pattern=pat_ir)
+def test_pattern_def_with_pattern() -> None:
+    pat = freeze(ctrl("gate", 1.0) + ctrl("gate", 0.0))
+    pd = PatternDef(target="kick", pattern=pat)
     assert pd.swing is None
 
 

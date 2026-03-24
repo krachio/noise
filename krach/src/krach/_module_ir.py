@@ -11,12 +11,10 @@ If it's not IR, it doesn't exist.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Literal, Union
+from typing import Any, Literal, Union
 
-from krach.patterns.ir import IrNode
-
-# Forward reference for DspDef (avoid circular import)
 from krach._types import DspDef
+from krach.patterns.pattern import Pattern
 
 
 @dataclass(frozen=True)
@@ -51,7 +49,7 @@ class PatternDef:
     """Specification of a pattern assignment."""
 
     target: str
-    pattern: IrNode
+    pattern: Pattern
     swing: float | None = None
 
 
@@ -100,3 +98,101 @@ class ModuleIr:
     meter: float | None = None
     master: float | None = None
     sub_modules: tuple[tuple[str, ModuleIr], ...] = ()
+
+    def to_dict(self) -> dict[str, Any]:
+        """Serialize to a JSON-friendly dict."""
+        from krach.patterns.serialize import pattern_node_to_dict
+
+        d: dict[str, Any] = {}
+        if self.nodes:
+            d["nodes"] = [
+                {"name": n.name, "source": n.source if isinstance(n.source, str) else n.source.faust,
+                 "gain": n.gain, "count": n.count, "init": list(n.init)}
+                for n in self.nodes
+            ]
+        if self.routing:
+            d["routing"] = [
+                {"source": r.source, "target": r.target, "kind": r.kind,
+                 "level": r.level, "port": r.port}
+                for r in self.routing
+            ]
+        if self.patterns:
+            d["patterns"] = [
+                {"target": p.target, "pattern": pattern_node_to_dict(p.pattern.node),
+                 **({"swing": p.swing} if p.swing is not None else {})}
+                for p in self.patterns
+            ]
+        if self.controls:
+            d["controls"] = [{"path": c.path, "value": c.value} for c in self.controls]
+        if self.automations:
+            d["automations"] = [
+                {"path": a.path, "shape": a.shape, "lo": a.lo, "hi": a.hi, "bars": a.bars}
+                for a in self.automations
+            ]
+        if self.muted:
+            d["muted"] = [{"name": m.name, "saved_gain": m.saved_gain} for m in self.muted]
+        if self.tempo is not None:
+            d["tempo"] = self.tempo
+        if self.meter is not None:
+            d["meter"] = self.meter
+        if self.master is not None:
+            d["master"] = self.master
+        if self.sub_modules:
+            d["sub_modules"] = [
+                {"prefix": prefix, "module": sub.to_dict()}
+                for prefix, sub in self.sub_modules
+            ]
+        return d
+
+    @staticmethod
+    def from_dict(d: dict[str, Any]) -> ModuleIr:
+        """Deserialize from a dict (inverse of to_dict)."""
+        from krach.patterns.serialize import dict_to_pattern_node
+
+        nodes = tuple(
+            NodeDef(
+                name=n["name"], source=n["source"], gain=n["gain"],
+                count=n["count"], init=tuple(tuple(x) for x in n["init"]),
+            )
+            for n in d.get("nodes", ())
+        )
+        routing = tuple(
+            RouteDef(
+                source=r["source"], target=r["target"], kind=r["kind"],
+                level=r["level"], port=r["port"],
+            )
+            for r in d.get("routing", ())
+        )
+        patterns = tuple(
+            PatternDef(
+                target=p["target"],
+                pattern=Pattern(dict_to_pattern_node(p["pattern"])),
+                swing=p.get("swing"),
+            )
+            for p in d.get("patterns", ())
+        )
+        controls = tuple(
+            ControlDef(path=c["path"], value=c["value"])
+            for c in d.get("controls", ())
+        )
+        automations = tuple(
+            AutomationDef(
+                path=a["path"], shape=a["shape"],
+                lo=a["lo"], hi=a["hi"], bars=a["bars"],
+            )
+            for a in d.get("automations", ())
+        )
+        muted = tuple(
+            MutedDef(name=m["name"], saved_gain=m["saved_gain"])
+            for m in d.get("muted", ())
+        )
+        sub_modules = tuple(
+            (s["prefix"], ModuleIr.from_dict(s["module"]))
+            for s in d.get("sub_modules", ())
+        )
+        return ModuleIr(
+            nodes=nodes, routing=routing, patterns=patterns,
+            controls=controls, automations=automations, muted=muted,
+            tempo=d.get("tempo"), meter=d.get("meter"), master=d.get("master"),
+            sub_modules=sub_modules,
+        )

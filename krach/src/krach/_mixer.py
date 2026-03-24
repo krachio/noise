@@ -14,6 +14,7 @@ from typing import Literal
 
 from krach.patterns.bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
+from krach._module_ir import ControlDef, ModuleIr, MutedDef, NodeDef, RouteDef
 from krach._types import (  # noqa: F401
     ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
     ResolvedSource, Scene, UnknownPath,
@@ -344,6 +345,78 @@ class Mixer(MixerInfra):
         """Load and execute a Python file with ``kr`` in scope."""
         from krach._scene import load_file
         load_file(path, {"kr": self, "mix": self})
+
+    # ── Module capture / instantiate ──────────────────────────────────
+
+    def capture(self) -> ModuleIr:
+        """Snapshot current mixer state as a frozen ModuleIr."""
+        nodes = tuple(
+            NodeDef(
+                name=name,
+                source=node.type_id,
+                gain=self._muted.get(name, node.gain),
+                count=node.count,
+                init=node.init,
+            )
+            for name, node in self._nodes.items()
+        )
+        routing: list[RouteDef] = []
+        for (src, tgt), level in self._sends.items():
+            routing.append(RouteDef(source=src, target=tgt, kind="send", level=level))
+        for (src, tgt), port in self._wires.items():
+            routing.append(RouteDef(source=src, target=tgt, kind="wire", port=port))
+
+        controls = tuple(
+            ControlDef(path=path, value=val)
+            for path, val in self._ctrl_values.items()
+        )
+        muted = tuple(
+            MutedDef(name=name, saved_gain=gain)
+            for name, gain in self._muted.items()
+        )
+        try:
+            tempo = float(self.tempo)
+        except (TypeError, ValueError):
+            tempo = None
+        try:
+            meter = float(self.meter)
+        except (TypeError, ValueError):
+            meter = None
+
+        return ModuleIr(
+            nodes=nodes,
+            routing=tuple(routing),
+            controls=controls,
+            muted=muted,
+            tempo=tempo,
+            meter=meter,
+            master=self._master_gain,
+        )
+
+    def instantiate(self, ir: ModuleIr) -> None:
+        """Replay a ModuleIr onto this mixer. Batches all nodes into one rebuild."""
+        with self.batch():
+            for nd in ir.nodes:
+                self.voice(nd.name, nd.source, gain=nd.gain, count=nd.count, **dict(nd.init))
+
+        for rd in ir.routing:
+            if rd.kind == "send":
+                self.send(rd.source, rd.target, level=rd.level)
+            else:
+                self.wire(rd.source, rd.target, port=rd.port)
+
+        if ir.tempo is not None:
+            self.tempo = ir.tempo
+        if ir.meter is not None:
+            self.meter = ir.meter
+        if ir.master is not None:
+            self.master = ir.master
+
+        for cd in ir.controls:
+            self.set(cd.path, cd.value)
+
+        for md in ir.muted:
+            self.mute(md.name)
 
     def export(self, path: str) -> None:
         """Export current session state to a reloadable Python script."""
