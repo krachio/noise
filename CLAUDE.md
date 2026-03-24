@@ -70,3 +70,12 @@ Flat data, obvious flow, no unnecessary abstraction. Every type must map to a do
 
 1. Name the specific bug it prevents — not a category, a scenario in this code
 2. If you can't → delete it and use a function
+
+### No whack-a-mole fixes
+
+When a bug appears in multiple call sites (or will appear once someone adds site N+1):
+1. Identify the missing abstraction — a sum type, a resolver, a single function that owns the decision
+2. Centralize — all call sites consume it via exhaustive pattern match
+3. Make the wrong thing unrepresentable — if a new call site can forget a case, the abstraction is incomplete
+
+A scattered `if` check in N places is a bug report waiting for N+1. A sum type with exhaustive match is a proof.
