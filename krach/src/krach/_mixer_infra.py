@@ -7,6 +7,8 @@ These are pure read/delegate operations with no orchestration logic.
 from __future__ import annotations
 
 import time
+from collections.abc import Generator
+from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
 from krach._graph import build_graph_ir
@@ -31,6 +33,8 @@ class MixerInfra:
     _wires: dict[tuple[str, str], str]
     _node_controls: dict[str, tuple[str, ...]]
     _graph_loaded: bool
+    _batching: bool
+    _transition_bars: int
 
     # ── Transport properties ──────────────────────────────────────────
 
@@ -135,6 +139,53 @@ class MixerInfra:
         ir = build_graph_ir(self._nodes, sends=self._sends, wires=self._wires)
         self._session.load_graph(ir)
         self._graph_loaded = True
+
+    # ── Context managers ───────────────────────────────────────────
+
+    @contextmanager
+    def batch(self) -> Generator[None]:
+        """Batch node declarations into a single graph rebuild."""
+        self._batching = True
+        snap = dict(self._nodes)
+        ok = False
+        try:
+            yield
+            ok = True
+        finally:
+            self._batching = False
+            if ok:
+                self._flush()
+            else:
+                self._nodes = snap
+
+    @contextmanager
+    def transition(self, bars: int = 4) -> Generator[None]:
+        """Scoped interpolation: gain/control changes become fades over N bars."""
+        if self._transition_bars > 0:
+            raise RuntimeError("nested transitions not supported")
+        self._transition_bars = bars
+        try:
+            yield
+        finally:
+            self._transition_bars = 0
+
+    # ── Repr ──────────────────────────────────────────────────────
+
+    def __repr__(self) -> str:
+        count = len(self._nodes)
+        lines = [f"VoiceMixer({count} nodes)"]
+        if not self._nodes:
+            return lines[0]
+        max_name = max(len(n) for n in self._nodes)
+        for name, node in self._nodes.items():
+            kind = "fx" if node.num_inputs > 0 else "src"
+            parts = f"  {name + ':':.<{max_name + 2}} {node.type_id}  gain={node.gain:.2f}  [{kind}]"
+            if name in self._muted:
+                parts += "  [muted]"
+            if node.count > 1:
+                parts += f"  poly({node.count})"
+            lines.append(parts)
+        return "\n".join(lines)
 
     def _wait_for_type(self, type_id: str, timeout: float = 10.0) -> None:
         """Poll until the engine has loaded the given FAUST type."""

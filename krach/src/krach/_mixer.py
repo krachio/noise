@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import inspect
 import textwrap
-from collections.abc import Generator
-from contextlib import contextmanager
 from pathlib import Path
-from typing import Literal
+from typing import Callable, Literal
 
 from faust_dsl import transpile as _transpile
 from krach._bind import bind_ctrl, bind_voice, bind_voice_poly
@@ -41,6 +39,38 @@ from krach._pitch import parse_note as _parse_note
 
 
 
+
+
+def _resolve_dsp_source(
+    name: str,
+    source: DspSource,
+    dsp_dir: Path,
+    node_controls: dict[str, tuple[str, ...]],
+    fallback_controls: tuple[str, ...] = (),
+    wait: Callable[[str], None] | None = None,
+) -> tuple[str, tuple[str, ...], str]:
+    """Resolve a DSP source to (type_id, controls, source_text). Writes .dsp/.py files."""
+    if isinstance(source, DspDef):
+        type_id = f"faust:{name}"
+        source_text = source.source
+        faust_code, controls = source.faust, source.controls
+    elif callable(source):
+        type_id = f"faust:{name}"
+        source_text = textwrap.dedent(inspect.getsource(source))
+        result = _transpile(source)  # type: ignore[arg-type]
+        faust_code, controls = result.source, tuple(c.name for c in result.schema.controls)
+    else:
+        return source, node_controls.get(source, fallback_controls), ""
+    py_path = dsp_dir.joinpath(f"{name}.py")
+    py_path.parent.mkdir(parents=True, exist_ok=True)
+    py_path.write_text(source_text)
+    dsp_path = dsp_dir.joinpath(f"{name}.dsp")
+    dsp_path.parent.mkdir(parents=True, exist_ok=True)
+    dsp_path.write_text(faust_code)
+    node_controls[type_id] = controls
+    if wait is not None:
+        wait(type_id)
+    return type_id, controls, source_text
 
 
 # ── VoiceMixer ────────────────────────────────────────────────────────────────
@@ -147,38 +177,13 @@ class VoiceMixer(MixerInfra):
             del self._wires[key]
 
     def _resolve_source(
-        self,
-        name: str,
-        source: DspSource,
-        fallback_controls: tuple[str, ...] = (),
+        self, name: str, source: DspSource, fallback_controls: tuple[str, ...] = (),
     ) -> tuple[str, tuple[str, ...], str]:
-        """Resolve a source to (type_id, controls, source_text).
-
-        Writes .dsp and .py to dsp_dir and waits for JIT if needed.
-        ``source_text`` is the Python source code (empty for string type_ids).
-        """
-        if isinstance(source, DspDef):
-            type_id = f"faust:{name}"
-            source_text = source.source
-            faust_code, controls = source.faust, source.controls
-        elif callable(source):
-            type_id = f"faust:{name}"
-            source_text = textwrap.dedent(inspect.getsource(source))
-            result = _transpile(source)  # type: ignore[arg-type]
-            faust_code, controls = result.source, tuple(c.name for c in result.schema.controls)
-        else:
-            return source, self._node_controls.get(source, fallback_controls), ""
-
-        py_path = self._dsp_dir.joinpath(f"{name}.py")
-        py_path.parent.mkdir(parents=True, exist_ok=True)
-        py_path.write_text(source_text)
-        dsp_path = self._dsp_dir.joinpath(f"{name}.dsp")
-        dsp_path.parent.mkdir(parents=True, exist_ok=True)
-        dsp_path.write_text(faust_code)
-        self._node_controls[type_id] = controls
-        if not self._batching:
-            self._wait_for_type(type_id)
-        return type_id, controls, source_text
+        """Resolve a source to (type_id, controls, source_text)."""
+        return _resolve_dsp_source(
+            name, source, self._dsp_dir, self._node_controls, fallback_controls,
+            wait=None if self._batching else self._wait_for_type,
+        )
 
     def node(
         self,
@@ -713,59 +718,7 @@ class VoiceMixer(MixerInfra):
         else:
             self.play(path, pattern_or_shape.over(bars), from_zero=True)
 
-    @contextmanager
-    def batch(self) -> Generator[None]:
-        """Batch voice declarations into a single graph rebuild.
 
-        Writes all .dsp files immediately but defers hot-reload waits and
-        graph loading until the context manager exits.
-        """
-        self._batching = True
-        snap_voices = dict(self._nodes)
-        ok = False
-        try:
-            yield
-            ok = True
-        finally:
-            self._batching = False
-            if ok:
-                self._flush()
-            else:
-                self._nodes = snap_voices
-
-    @contextmanager
-    def transition(self, bars: int = 4) -> Generator[None]:
-        """Scoped interpolation: all gain/control changes inside become fades.
-
-        Every ``set()``, ``gain()``, and ``NodeHandle[param] = value``
-        inside this block will emit a ``fade()`` over ``bars`` bars
-        instead of an instant change.
-        """
-        if self._transition_bars > 0:
-            raise RuntimeError("nested transitions not supported")
-        self._transition_bars = bars
-        try:
-            yield
-        finally:
-            self._transition_bars = 0
-
-    def __repr__(self) -> str:
-        count = len(self._nodes)
-        lines = [f"VoiceMixer({count} nodes)"]
-        if not self._nodes:
-            return lines[0]
-
-        max_name = max(len(n) for n in self._nodes)
-        for name, node in self._nodes.items():
-            kind = "fx" if node.num_inputs > 0 else "src"
-            parts = f"  {name + ':':.<{max_name + 2}} {node.type_id}  gain={node.gain:.2f}  [{kind}]"
-            if name in self._muted:
-                parts += "  [muted]"
-            if node.count > 1:
-                parts += f"  poly({node.count})"
-            lines.append(parts)
-
-        return "\n".join(lines)
 
 
 
