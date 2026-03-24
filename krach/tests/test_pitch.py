@@ -1,6 +1,6 @@
 import pytest
 
-from krach._pitch import NOTES, ftom, mtof, parse_note
+from krach._pitch import NOTES, ftom, midi_to_name, mtof, parse_note
 
 
 class TestMtof:
@@ -98,6 +98,34 @@ class TestFtomOutputRange:
         assert 0 <= result <= 127, (
             f"ftom(100000.0) returned {result}, outside MIDI 0-127"
         )
+
+
+# ── midi_to_name ─────────────────────────────────────────────────────────────
+
+
+class TestMidiToName:
+    def test_a4(self) -> None:
+        assert midi_to_name(69) == "A4"
+
+    def test_c4(self) -> None:
+        assert midi_to_name(60) == "C4"
+
+    def test_cs4(self) -> None:
+        assert midi_to_name(61) == "Cs4"
+
+    def test_c_minus1(self) -> None:
+        assert midi_to_name(0) == "C-1"
+
+    def test_g9(self) -> None:
+        assert midi_to_name(127) == "G9"
+
+    def test_round_trip_with_parse(self) -> None:
+        """midi_to_name should produce strings parseable by parse_note."""
+        for midi in (36, 48, 60, 69, 72):
+            name = midi_to_name(midi)
+            hz_from_name = parse_note(name)
+            hz_from_midi = mtof(midi)
+            assert abs(hz_from_name - hz_from_midi) < 0.01, f"{name}: {hz_from_name} != {hz_from_midi}"
 
 
 # ── parse_note ────────────────────────────────────────────────────────────────

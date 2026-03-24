@@ -11,6 +11,11 @@ _SEMITONES = {"C": 0, "D": 2, "E": 4, "F": 5, "G": 7, "A": 9, "B": 11}
 _NOTE_RE = re.compile(r"^([A-G])([#sb]?)(\d)$")
 
 
+def midi_to_name(midi: int) -> str:
+    """MIDI note number to name string, e.g. 69 → 'A4', 60 → 'C4'."""
+    return f"{_NAMES[midi % 12]}{(midi // 12) - 1}"
+
+
 def mtof(note: int) -> float:
     """MIDI note number to frequency in Hz."""
     if note < 0 or note > 127:
