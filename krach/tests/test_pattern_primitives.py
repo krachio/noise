@@ -18,6 +18,7 @@ from krach.patterns.primitives import (
     cat_p,
     def_summary,
     fold,
+    fold_with_state,
     get_summary_rule,
     silence_p,
     stack_p,
@@ -73,6 +74,52 @@ def test_summary_rule_registration() -> None:
         PatternNode(primitive=test_p, children=(), params=SilenceParams()),
         ()
     ) == "test"
+
+
+def test_fold_with_state_counts_atoms() -> None:
+    """fold_with_state threads a counter through the tree."""
+    a = PatternNode(primitive=atom_p, children=(), params=AtomParams(value=Control("a", 1.0)))
+    b = PatternNode(primitive=atom_p, children=(), params=AtomParams(value=Control("b", 2.0)))
+    cat = PatternNode(primitive=cat_p, children=(a, b), params=CatParams())
+
+    def count_atoms(
+        node: PatternNode,
+        child_results: tuple[tuple[PatternNode, int], ...],
+        state: int,
+    ) -> tuple[PatternNode, int]:
+        if node.primitive == atom_p:
+            return node, state + 1
+        new_children = tuple(cr[0] for cr in child_results)
+        return PatternNode(node.primitive, new_children, node.params), state
+
+    result_node, count = fold_with_state(cat, 0, count_atoms)
+    assert count == 2
+    assert result_node.primitive == cat_p
+
+
+def test_fold_with_state_threads_left_to_right() -> None:
+    """State threads through children in order: a gets state=0, b gets state=1."""
+    a = PatternNode(primitive=atom_p, children=(), params=AtomParams(value=Control("a", 0.0)))
+    b = PatternNode(primitive=atom_p, children=(), params=AtomParams(value=Control("b", 0.0)))
+    cat = PatternNode(primitive=cat_p, children=(a, b), params=CatParams())
+
+    labels: list[tuple[str, int]] = []
+
+    def label_with_index(
+        node: PatternNode,
+        child_results: tuple[tuple[PatternNode, int], ...],
+        state: int,
+    ) -> tuple[PatternNode, int]:
+        if node.primitive == atom_p:
+            assert isinstance(node.params, AtomParams)
+            assert isinstance(node.params.value, Control)
+            labels.append((node.params.value.label, state))
+            return node, state + 1
+        new_children = tuple(cr[0] for cr in child_results)
+        return PatternNode(node.primitive, new_children, node.params), state
+
+    fold_with_state(cat, 0, label_with_index)
+    assert labels == [("a", 0), ("b", 1)]
 
 
 def test_missing_rule_raises() -> None:

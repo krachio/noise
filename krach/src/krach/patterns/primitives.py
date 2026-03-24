@@ -85,6 +85,30 @@ def fold(node: PatternNode, visitor: Callable[[PatternNode, tuple[Any, ...]], An
     return visitor(node, child_results)
 
 
+S = Any  # State type variable (used in fold_with_state)
+
+
+def fold_with_state(
+    node: PatternNode,
+    state: S,
+    visitor: Callable[[PatternNode, tuple[tuple[PatternNode, S], ...], S], tuple[PatternNode, S]],
+) -> tuple[PatternNode, S]:
+    """Stateful tree fold — threads state through children left-to-right.
+
+    visitor(node, child_results, state) -> (new_node, new_state)
+    child_results is tuple of (rewritten_child, state_after_child).
+    State threads: initial → child_0 → child_1 → ... → visitor.
+
+    Used by bind_voice_poly where state = alloc counter.
+    """
+    child_results: list[tuple[PatternNode, S]] = []
+    current_state = state
+    for child in node.children:
+        rewritten, current_state = fold_with_state(child, current_state, visitor)
+        child_results.append((rewritten, current_state))
+    return visitor(node, tuple(child_results), current_state)
+
+
 # ── Import-time completeness check ──────────────────────────────────────
 
 
