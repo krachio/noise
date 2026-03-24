@@ -10,6 +10,7 @@ from krach._pitch import midi_to_name
 from krach.patterns.ir import (
     Atom,
     Cat,
+    Cc,
     Control,
     Degrade,
     Early,
@@ -20,6 +21,7 @@ from krach.patterns.ir import (
     IrNode,
     Late,
     Note,
+    Osc,
     Rev,
     Silence,
     Slow,
@@ -35,6 +37,10 @@ def summarize(node: IrNode, max_items: int = 8) -> str:
             return midi_to_name(midi)
         case Atom(Control(label=label, value=value)):
             return f"{label}={_fmt_value(value)}"
+        case Atom(Cc(controller=cc, value=val)):
+            return f"cc({cc},{val})"
+        case Atom(Osc(address=address)):
+            return f"osc({address})"
         case Atom():
             return "atom"
         case Silence():

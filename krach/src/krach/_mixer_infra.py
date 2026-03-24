@@ -174,10 +174,12 @@ class MixerInfra:
     @property
     def routing(self) -> list[tuple[str, str, str, float | str]]:
         """Routing snapshot: list of (source, target, kind, level_or_port)."""
+        sends = dict(self._sends)
+        wires = dict(self._wires)
         result: list[tuple[str, str, str, float | str]] = []
-        for (src, tgt), lvl in self._sends.items():
+        for (src, tgt), lvl in sends.items():
             result.append((src, tgt, "send", lvl))
-        for (src, tgt), port in self._wires.items():
+        for (src, tgt), port in wires.items():
             result.append((src, tgt, "wire", port))
         return result
 

@@ -211,7 +211,7 @@ def register_tools(mcp: FastMCP) -> None:
                 try:
                     summary = _summarize(state.pattern.node)
                     lines.append(f"  {slot}: {label} — {summary}")
-                except Exception:
+                except (ValueError, TypeError, KeyError):
                     lines.append(f"  {slot}: {label}")
 
         # Available types
