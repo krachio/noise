@@ -159,38 +159,72 @@ def register_tools(mcp: FastMCP) -> None:
 
     @mcp.tool()
     def status() -> str:
-        """Return full session state: transport, nodes, routing, active patterns."""
+        """Return full session state in one call: transport, nodes with controls, routing, patterns, available types.
+
+        Call this before making changes to understand the current session.
+        """
+        from krach._ir_summary import summarize as _summarize
+
         kr = get_session()
-        lines = [f"tempo={kr.tempo} bpm, master={kr.master}"]
+        lines = [f"tempo={kr.tempo} bpm, meter={kr.meter}, master={kr.master:.2f}"]
 
-        # Nodes
-        lines.append("\nNodes:")
-        for name, n in kr.node_data.items():
-            kind = "fx" if n.num_inputs > 0 else "src"
-            parts = f"  {name}: {n.type_id} gain={n.gain:.2f} [{kind}]"
-            if n.count > 1:
-                parts += f" poly({n.count})"
-            if kr.is_muted(name):
-                parts += " [muted]"
-            lines.append(parts)
+        # Nodes with inline controls
+        if kr.node_data:
+            lines.append("\nNodes:")
+            ctrl_vals = kr.ctrl_values
+            for name, n in kr.node_data.items():
+                kind = "fx" if n.num_inputs > 0 else "src"
+                parts = f"  {name}: {n.type_id} gain={n.gain:.2f} [{kind}]"
+                if n.count > 1:
+                    parts += f" poly({n.count})"
+                if kr.is_muted(name):
+                    parts += " [muted]"
+                lines.append(parts)
+                # Inline controls: name=current [lo, hi]
+                if n.controls:
+                    ctrls = []
+                    for ctrl in n.controls:
+                        current = ctrl_vals.get(f"{name}/{ctrl}", 0.0)
+                        rng = n.control_ranges.get(ctrl)
+                        if rng:
+                            ctrls.append(f"{ctrl}={current:.2g} [{rng[0]:.4g}, {rng[1]:.4g}]")
+                        else:
+                            ctrls.append(f"{ctrl}={current:.2g}")
+                    lines.append(f"    {', '.join(ctrls)}")
 
-        # Routing
-        sends = kr._sends  # type: ignore[attr-defined]
-        wires = kr._wires  # type: ignore[attr-defined]
-        if sends or wires:
+        # Routing (public API — no private attr access)
+        routes = kr.routing
+        if routes:
             lines.append("\nRouting:")
-            for (src, tgt), lvl in sends.items():
-                lines.append(f"  {src} → {tgt} (level={lvl:.2f})")
-            for (src, tgt), port in wires.items():
-                lines.append(f"  {src} → {tgt}:{port}")
+            for src, tgt, kind, val in routes:
+                if kind == "send":
+                    lines.append(f"  {src} -> {tgt} (send, level={val})")
+                else:
+                    lines.append(f"  {src} -> {tgt}:{val}")
 
-        # Active patterns
+        # Active patterns with content summaries
         slots = kr.slots
         if slots:
             lines.append("\nPatterns:")
             for slot, state in slots.items():
                 label = "playing" if state.playing else "stopped"
-                lines.append(f"  {slot}: {label}")
+                try:
+                    summary = _summarize(state.pattern.node)
+                    lines.append(f"  {slot}: {label} — {summary}")
+                except Exception:
+                    lines.append(f"  {slot}: {label}")
+
+        # Available types
+        types = kr.node_controls
+        if types:
+            lines.append("\nAvailable types:")
+            for tid, ctrls in types.items():
+                lines.append(f"  {tid} ({', '.join(ctrls)})")
+
+        # Scenes
+        scenes = kr.scenes
+        if scenes:
+            lines.append(f"\nScenes: {', '.join(scenes)}")
 
         return "\n".join(lines)
 
