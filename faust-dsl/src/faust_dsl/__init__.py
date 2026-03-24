@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from faust_dsl._core import (
-    FaustGraph,
+    DspGraph,
     Precision,
     Signal,
     SignalLike,
@@ -64,7 +64,7 @@ from faust_dsl.transpile import (
 __all__ = [
     # Core types
     "DspFunc",
-    "FaustGraph",
+    "DspGraph",
     "Precision",
     "Signal",
     "SignalLike",

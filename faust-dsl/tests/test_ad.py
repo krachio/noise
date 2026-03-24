@@ -7,7 +7,7 @@ from collections.abc import Callable
 import pytest
 
 from faust_dsl import (
-    FaustGraph,
+    DspGraph,
     Signal,
     abs_,
     ceil,
@@ -38,8 +38,8 @@ def _aval() -> SignalType:
 type DspFn1 = Callable[[Signal], Signal]
 
 
-def _eval_graph(graph: FaustGraph, *input_vals: float) -> list[float]:
-    """Numerically evaluate a FaustGraph by walking equations in order."""
+def _eval_graph(graph: DspGraph, *input_vals: float) -> list[float]:
+    """Numerically evaluate a DspGraph by walking equations in order."""
     import math as _math
 
     vals: dict[int, float] = {}
@@ -491,7 +491,7 @@ def test_jvp_feedback_raises() -> None:
 
 
 # ---------------------------------------------------------------------------
-# jvp — public API accepts FaustGraph directly
+# jvp — public API accepts DspGraph directly
 # ---------------------------------------------------------------------------
 
 

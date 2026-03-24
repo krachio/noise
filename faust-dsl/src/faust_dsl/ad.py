@@ -1,4 +1,4 @@
-"""Forward-mode automatic differentiation (JVP) for FaustGraph.
+"""Forward-mode automatic differentiation (JVP) for DspGraph.
 
 Usage::
 
@@ -18,7 +18,7 @@ from dataclasses import dataclass
 
 from faust_dsl._core import (
     ConstParams,
-    FaustGraph,
+    DspGraph,
     Precision,
     Primitive,
     PrimitiveParams,
@@ -112,7 +112,7 @@ def register_jvp(prim: Primitive, fn: JvpRule) -> None:
 # ---------------------------------------------------------------------------
 
 
-def jvp_graph(graph: FaustGraph, *, wrt: list[int] | None = None) -> FaustGraph:
+def jvp_graph(graph: DspGraph, *, wrt: list[int] | None = None) -> DspGraph:
     """Transform graph into one that computes (primals..., tangents...).
 
     Args:
@@ -140,7 +140,7 @@ def jvp_graph(graph: FaustGraph, *, wrt: list[int] | None = None) -> FaustGraph:
 
 
 def _setup_inputs(
-    graph: FaustGraph,
+    graph: DspGraph,
     ctx: TraceContext,
     wrt: list[int],
 ) -> tuple[dict[int, Signal], dict[int, Tangent]]:
@@ -188,7 +188,7 @@ def _process_equation(
 
 
 def _collect_outputs(
-    graph: FaustGraph,
+    graph: DspGraph,
     env: dict[int, Signal],
     tang: dict[int, Tangent],
 ) -> tuple[Signal, ...]:
@@ -203,25 +203,25 @@ def _collect_outputs(
 
 
 def jvp(
-    fn_or_graph: Callable[..., Signal | tuple[Signal, ...]] | DspFunc | FaustGraph,
+    fn_or_graph: Callable[..., Signal | tuple[Signal, ...]] | DspFunc | DspGraph,
     *,
     num_inputs: int | None = None,
     wrt: list[int] | None = None,
     precision: Precision = Precision.FLOAT32,
-) -> FaustGraph:
+) -> DspGraph:
     """Compute the forward-mode JVP transform of a DSP function or graph.
 
     Args:
-        fn_or_graph: A Python DSP function or an existing FaustGraph.
+        fn_or_graph: A Python DSP function or an existing DspGraph.
         num_inputs: Required when fn_or_graph is a callable (if not auto-detectable).
         wrt: Input indices to differentiate w.r.t. Defaults to all inputs.
-        precision: Tracing precision (ignored when fn_or_graph is a FaustGraph).
+        precision: Tracing precision (ignored when fn_or_graph is a DspGraph).
 
     Returns:
-        A FaustGraph with inputs [primals..., tangent_inputs...] and
+        A DspGraph with inputs [primals..., tangent_inputs...] and
         outputs [primals..., tangents...].
     """
-    if isinstance(fn_or_graph, FaustGraph):
+    if isinstance(fn_or_graph, DspGraph):
         graph = fn_or_graph
     else:
         from faust_dsl.transpile import make_graph

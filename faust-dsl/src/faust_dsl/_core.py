@@ -1,4 +1,4 @@
-"""Foundation types: Signal, Equation, FaustGraph, TraceContext, Primitive."""
+"""Foundation types: Signal, Equation, DspGraph, TraceContext, Primitive."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from faust_dsl._lowering import LoweringContext
+    from faust_dsl._lowering import FaustLoweringContext
 
 # ---------------------------------------------------------------------------
 # Precision
@@ -178,7 +178,7 @@ class DelayParams:
 @dataclass(frozen=True, slots=True)
 class FeedbackParams:
     """Parameters for the feedback primitive (Faust ~)."""
-    body_graph: FaustGraph
+    body_graph: DspGraph
     feedback_input_index: int
     free_var_signals: tuple[Signal, ...]
 
@@ -224,12 +224,12 @@ class Equation:
 
 
 # ---------------------------------------------------------------------------
-# FaustGraph — the IR
+# DspGraph — the IR
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True, slots=True)
-class FaustGraph:
+class DspGraph:
     """The traced program IR."""
     inputs: tuple[Signal, ...]
     outputs: tuple[Signal, ...]
@@ -259,7 +259,7 @@ class FaustGraph:
 # ---------------------------------------------------------------------------
 
 type AbstractEvalRule = Callable[..., SignalType]
-type LoweringRule = Callable[[LoweringContext, Equation], str]
+type LoweringRule = Callable[[FaustLoweringContext, Equation], str]
 
 
 # ---------------------------------------------------------------------------
@@ -320,7 +320,7 @@ class Primitive:
         ctx.record(eqn)
         return out_signal
 
-    def lower(self, ctx: LoweringContext, eqn: Equation) -> str:
+    def lower(self, ctx: FaustLoweringContext, eqn: Equation) -> str:
         if self._lowering_rule is None:
             raise RuntimeError(f"No lowering rule for primitive {self.name!r}")
         return self._lowering_rule(ctx, eqn)
@@ -379,8 +379,8 @@ class TraceContext:
     def record(self, eqn: Equation) -> None:
         self.equations.append(eqn)
 
-    def to_graph(self, outputs: tuple[Signal, ...]) -> FaustGraph:
-        return FaustGraph(
+    def to_graph(self, outputs: tuple[Signal, ...]) -> DspGraph:
+        return DspGraph(
             inputs=tuple(self.inputs),
             outputs=outputs,
             equations=tuple(self.equations),

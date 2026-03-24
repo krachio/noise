@@ -9,7 +9,7 @@ from faust_dsl._core import (
     DelayParams,
     Equation,
     FaustExprParams,
-    FaustGraph,
+    DspGraph,
     FeedbackParams,
     NoParams,
     Signal,
@@ -283,7 +283,7 @@ def feedback(
     else:
         body_outputs = (output, feedback_value)
 
-    body_graph = FaustGraph(
+    body_graph = DspGraph(
         inputs=tuple(child_ctx.inputs),
         outputs=body_outputs,
         equations=tuple(rewritten_eqns),

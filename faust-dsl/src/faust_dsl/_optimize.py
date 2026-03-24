@@ -9,7 +9,7 @@ from collections.abc import Callable
 from faust_dsl._core import (
     ConstParams,
     Equation,
-    FaustGraph,
+    DspGraph,
     PrimitiveParams,
     Signal,
 )
@@ -34,7 +34,7 @@ _FOLDABLE_OPS: dict[str, Callable[..., float]] = {
 }
 
 
-def constant_fold(graph: FaustGraph) -> FaustGraph:
+def constant_fold(graph: DspGraph) -> DspGraph:
     """Fold equations whose inputs are all constants into a single const equation."""
     const_values: dict[int, float] = {}
     new_equations: list[Equation] = []
@@ -68,7 +68,7 @@ def constant_fold(graph: FaustGraph) -> FaustGraph:
 
         new_equations.append(eqn)
 
-    return FaustGraph(
+    return DspGraph(
         inputs=graph.inputs,
         outputs=graph.outputs,
         equations=tuple(new_equations),
@@ -81,7 +81,7 @@ def constant_fold(graph: FaustGraph) -> FaustGraph:
 # ---------------------------------------------------------------------------
 
 
-def common_subexpression_elimination(graph: FaustGraph) -> FaustGraph:
+def common_subexpression_elimination(graph: DspGraph) -> DspGraph:
     """Deduplicate equations with identical (primitive, inputs, params) tuples."""
     seen: dict[tuple[str, tuple[int, ...], PrimitiveParams], Signal] = {}
     remap: dict[int, Signal] = {}
@@ -117,7 +117,7 @@ def common_subexpression_elimination(graph: FaustGraph) -> FaustGraph:
 
     new_outputs = tuple(remap.get(s.id, s) for s in graph.outputs)
 
-    return FaustGraph(
+    return DspGraph(
         inputs=graph.inputs,
         outputs=new_outputs,
         equations=tuple(new_equations),
@@ -130,7 +130,7 @@ def common_subexpression_elimination(graph: FaustGraph) -> FaustGraph:
 # ---------------------------------------------------------------------------
 
 
-def dead_code_elimination(graph: FaustGraph) -> FaustGraph:
+def dead_code_elimination(graph: DspGraph) -> DspGraph:
     """Remove equations whose outputs are not reachable from the graph outputs."""
     live: set[int] = set()
     for s in graph.outputs:
@@ -145,7 +145,7 @@ def dead_code_elimination(graph: FaustGraph) -> FaustGraph:
         eqn for eqn in graph.equations if any(s.id in live for s in eqn.outputs)
     ]
 
-    return FaustGraph(
+    return DspGraph(
         inputs=graph.inputs,
         outputs=graph.outputs,
         equations=tuple(new_equations),
@@ -158,7 +158,7 @@ def dead_code_elimination(graph: FaustGraph) -> FaustGraph:
 # ---------------------------------------------------------------------------
 
 
-def optimize_graph(graph: FaustGraph, *, max_iterations: int = 3) -> FaustGraph:
+def optimize_graph(graph: DspGraph, *, max_iterations: int = 3) -> DspGraph:
     """Run the full optimization pipeline: constant folding, CSE, then DCE."""
     for _ in range(max_iterations):
         prev = graph

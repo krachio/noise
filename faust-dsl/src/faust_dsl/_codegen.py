@@ -1,13 +1,13 @@
-"""emit_faust(): FaustGraph -> Faust source string."""
+"""emit_faust(): DspGraph -> Faust source string."""
 
 from __future__ import annotations
 
-from faust_dsl._core import FaustGraph
-from faust_dsl._lowering import LoweringContext
+from faust_dsl._core import DspGraph
+from faust_dsl._lowering import FaustLoweringContext
 
 
-def emit_faust(graph: FaustGraph, *, optimize: bool = False) -> str:
-    """Lower a FaustGraph to a complete Faust source string.
+def emit_faust(graph: DspGraph, *, optimize: bool = False) -> str:
+    """Lower a DspGraph to a complete Faust source string.
 
     Args:
         graph: The computation graph to lower.
@@ -20,7 +20,7 @@ def emit_faust(graph: FaustGraph, *, optimize: bool = False) -> str:
         from faust_dsl._optimize import optimize_graph
         graph = optimize_graph(graph)
 
-    ctx = LoweringContext()
+    ctx = FaustLoweringContext()
 
     input_names = [f"input{i}" for i in range(len(graph.inputs))]
     for inp, name in zip(graph.inputs, input_names, strict=True):

@@ -1,4 +1,4 @@
-"""Lowering rules: FaustGraph equations -> Faust expression strings."""
+"""Lowering rules: DspGraph equations -> Faust expression strings."""
 
 from __future__ import annotations
 
@@ -35,11 +35,11 @@ from faust_dsl._primitives import (
 )
 
 # ---------------------------------------------------------------------------
-# LoweringContext — maps Signals to Faust expression strings
+# FaustLoweringContext — maps Signals to Faust expression strings
 # ---------------------------------------------------------------------------
 
 
-class LoweringContext:
+class FaustLoweringContext:
     """Accumulates Faust expression bindings during lowering."""
 
     __slots__ = ("_bindings", "with_defs", "body_counter")
@@ -69,7 +69,7 @@ class LoweringContext:
 
 
 def _make_infix_lower(op: str) -> LoweringRule:
-    def _lower(ctx: LoweringContext, eqn: Equation) -> str:
+    def _lower(ctx: FaustLoweringContext, eqn: Equation) -> str:
         a, b = eqn.inputs
         return f"({ctx.expr(a)} {op} {ctx.expr(b)})"
     return _lower
@@ -82,7 +82,7 @@ div_p.def_lowering(_make_infix_lower("/"))
 mod_p.def_lowering(_make_infix_lower("%"))
 
 
-def _lower_const(_ctx: LoweringContext, eqn: Equation) -> str:
+def _lower_const(_ctx: FaustLoweringContext, eqn: Equation) -> str:
     if not isinstance(eqn.params, ConstParams):
         raise TypeError(f"Expected ConstParams, got {type(eqn.params).__name__}")
     v = eqn.params.value
@@ -94,7 +94,7 @@ def _lower_const(_ctx: LoweringContext, eqn: Equation) -> str:
 const_p.def_lowering(_lower_const)
 
 
-def _lower_mem(ctx: LoweringContext, eqn: Equation) -> str:
+def _lower_mem(ctx: FaustLoweringContext, eqn: Equation) -> str:
     (a,) = eqn.inputs
     return f"{ctx.expr(a)}'"
 
@@ -102,7 +102,7 @@ def _lower_mem(ctx: LoweringContext, eqn: Equation) -> str:
 mem_p.def_lowering(_lower_mem)
 
 
-def _lower_delay(ctx: LoweringContext, eqn: Equation) -> str:
+def _lower_delay(ctx: FaustLoweringContext, eqn: Equation) -> str:
     if not isinstance(eqn.params, DelayParams):
         raise TypeError(f"Expected DelayParams, got {type(eqn.params).__name__}")
     sig, n = eqn.inputs
@@ -118,7 +118,7 @@ delay_p.def_lowering(_lower_delay)
 
 
 def _make_unary_lower(name: str) -> LoweringRule:
-    def _lower(ctx: LoweringContext, eqn: Equation) -> str:
+    def _lower(ctx: FaustLoweringContext, eqn: Equation) -> str:
         (a,) = eqn.inputs
         return f"{name}({ctx.expr(a)})"
     return _lower
@@ -134,7 +134,7 @@ for _name, _prim in UNARY_MATH_PRIMS.items():
 
 
 def _make_binary_func_lower(name: str) -> LoweringRule:
-    def _lower(ctx: LoweringContext, eqn: Equation) -> str:
+    def _lower(ctx: FaustLoweringContext, eqn: Equation) -> str:
         a, b = eqn.inputs
         return f"{name}({ctx.expr(a)}, {ctx.expr(b)})"
     return _lower
@@ -166,7 +166,7 @@ for _name, _prim in COMPARISON_PRIMS.items():
 # ---------------------------------------------------------------------------
 
 
-def _lower_select2(ctx: LoweringContext, eqn: Equation) -> str:
+def _lower_select2(ctx: FaustLoweringContext, eqn: Equation) -> str:
     sel, a, b = eqn.inputs
     return f"select2({ctx.expr(sel)}, {ctx.expr(a)}, {ctx.expr(b)})"
 
@@ -179,7 +179,7 @@ select2_p.def_lowering(_lower_select2)
 # ---------------------------------------------------------------------------
 
 
-def _lower_feedback(ctx: LoweringContext, eqn: Equation) -> str:
+def _lower_feedback(ctx: FaustLoweringContext, eqn: Equation) -> str:
     if not isinstance(eqn.params, FeedbackParams):
         raise TypeError(f"Expected FeedbackParams, got {type(eqn.params).__name__}")
     body_graph = eqn.params.body_graph
@@ -188,7 +188,7 @@ def _lower_feedback(ctx: LoweringContext, eqn: Equation) -> str:
     body_name = ctx.fresh_body_name()
     body_id = body_name.removeprefix("body_")
 
-    body_ctx = LoweringContext()
+    body_ctx = FaustLoweringContext()
     body_ctx.body_counter = ctx.body_counter
 
     fb_param = f"fb{body_id}"
@@ -240,7 +240,7 @@ feedback_p.def_lowering(_lower_feedback)
 # ---------------------------------------------------------------------------
 
 
-def _lower_sr(_ctx: LoweringContext, _eqn: Equation) -> str:
+def _lower_sr(_ctx: FaustLoweringContext, _eqn: Equation) -> str:
     return "ma.SR"
 
 
@@ -252,7 +252,7 @@ sr_p.def_lowering(_lower_sr)
 # ---------------------------------------------------------------------------
 
 
-def _lower_faust_expr(ctx: LoweringContext, eqn: Equation) -> str:
+def _lower_faust_expr(ctx: FaustLoweringContext, eqn: Equation) -> str:
     if not isinstance(eqn.params, FaustExprParams):
         raise TypeError(f"Expected FaustExprParams, got {type(eqn.params).__name__}")
     template = eqn.params.template
@@ -276,7 +276,7 @@ faust_expr_p.def_lowering(_lower_faust_expr)
 _GATE_NAMES = ("gate", "trig", "trigger")
 
 
-def _lower_control(_ctx: LoweringContext, eqn: Equation) -> str:
+def _lower_control(_ctx: FaustLoweringContext, eqn: Equation) -> str:
     if not isinstance(eqn.params, ControlParams):
         raise TypeError(f"Expected ControlParams, got {type(eqn.params).__name__}")
     p = eqn.params

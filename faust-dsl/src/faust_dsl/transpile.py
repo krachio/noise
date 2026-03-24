@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from faust_dsl._codegen import emit_faust
 from faust_dsl._core import (
     ControlParams,
-    FaustGraph,
+    DspGraph,
     Precision,
     Signal,
     TraceContext,
@@ -76,7 +76,7 @@ def control(
 
 
 # ---------------------------------------------------------------------------
-# make_graph — trace a Python DSP function into a FaustGraph
+# make_graph — trace a Python DSP function into a DspGraph
 # ---------------------------------------------------------------------------
 
 
@@ -85,8 +85,8 @@ def make_graph(
     *,
     num_inputs: int | None = None,
     precision: Precision = Precision.FLOAT32,
-) -> FaustGraph:
-    """Trace a Python DSP function into a FaustGraph."""
+) -> DspGraph:
+    """Trace a Python DSP function into a DspGraph."""
     if num_inputs is None:
         num_inputs = get_num_inputs(fn)
 
@@ -118,14 +118,14 @@ def make_graph(
 # ---------------------------------------------------------------------------
 
 
-def _collect_controls(graph: FaustGraph) -> tuple[ControlSpec, ...]:
+def _collect_controls(graph: DspGraph) -> tuple[ControlSpec, ...]:
     """Walk equations and collect all control_p params."""
     specs: list[ControlSpec] = []
     _collect_controls_recursive(graph, specs)
     return tuple(specs)
 
 
-def _collect_controls_recursive(graph: FaustGraph, specs: list[ControlSpec]) -> None:
+def _collect_controls_recursive(graph: DspGraph, specs: list[ControlSpec]) -> None:
     from faust_dsl._core import FeedbackParams
     for eqn in graph.equations:
         if isinstance(eqn.params, ControlParams):
