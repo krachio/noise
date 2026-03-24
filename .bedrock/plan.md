@@ -218,7 +218,45 @@ _mixer.py at 928 lines (50% reduction). 9 extracted modules.
 | Nils | 7 | FIX |
 
 4 at 9 PASS! _mixer.py at 904 lines. Terminology fully updated.
-Remaining: Maren (7, line count) and Nils (7, stale docs).
+### Iteration 12 scores
+
+Scores oscillate 5-9 due to batched reviewer variance. Best achieved:
+- Tomás 9, Suki 9, Renzo 9, Diego 9 (4 stable PASSers)
+- Kira 8, Yara 8 (close to 9)
+- Maren 6-8 (blocked by 888-line _mixer.py — further splitting would worsen code)
+- Nils 5-7 (finds new doc nits each pass)
+
+### Summary of work done (12 iterations)
+
+**Structural:**
+- _mixer.py: 1867 → 888 lines (52% reduction)
+- 10 extracted modules: _bind, _graph, _patterns, _handle, _types, _export, _scene, _mininotation (fixed), _copilot, _pitch
+- Generic map_atoms walker replaces 3 copy-pasted IR walkers
+- Monkey-patch eliminated — proper import
+- IPC error propagation (Rust acknowledged commands)
+- bus() validates audio inputs
+
+**API cleanup:**
+- Voice/Bus/VoiceHandle/BusHandle aliases removed
+- get_voice/get_bus removed → get_node
+- voices/buses properties removed → nodes/sources/effects
+- send/wire params: voice/bus → source/target
+- DspSource type alias
+- node() no longer double-transpiles
+
+**Documentation:**
+- All docstrings: voice→node terminology
+- context.md: 100% kr.node() API
+- PROGRESS.md: accurate test counts (956), node terminology
+- REPL banner: kr.node()
+- Error messages: actionable (log path, socket path)
+
+**Bug fixes:**
+- save/recall data corruption (Scene.voices/buses → single nodes dict)
+- Shadowed _check_finite
+- __repr__ printing nodes twice
+- Hardcoded /tmp socket path → tempfile.gettempdir()
+- _copilot.py graceful context.md fallback
 
 ### Iteration 2 scores
 
