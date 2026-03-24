@@ -71,9 +71,12 @@ class ModuleProxy:
         """Record a send connection."""
         self.send(source, target, level=level)
 
-    def play(self, target: str, pattern: Pattern, **_kwargs: object) -> None:
+    def play(
+        self, target: str, pattern: Pattern, *,
+        from_zero: bool = False, swing: float | None = None,
+    ) -> None:
         """Record a pattern assignment."""
-        self._patterns.append(PatternDef(target=target, pattern=pattern.node))
+        self._patterns.append(PatternDef(target=target, pattern=pattern.node, swing=swing))
 
     def set(self, path: str, value: float) -> None:
         """Record a control value."""

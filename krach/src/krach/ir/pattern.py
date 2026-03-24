@@ -11,7 +11,6 @@ This is NOT flat equations like the Signal IR — patterns are trees.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Union
 
 from krach.patterns.values import Value
 
@@ -142,11 +141,11 @@ class WarpParams:
             raise ValueError(f"grid must be even and > 0, got {self.grid}")
 
 
-PatternParams = Union[
-    AtomParams, SilenceParams, CatParams, StackParams, FreezeParams,
-    FastParams, SlowParams, EarlyParams, LateParams, RevParams,
-    EveryParams, EuclidParams, DegradeParams, WarpParams,
-]
+type PatternParams = (
+    AtomParams | SilenceParams | CatParams | StackParams | FreezeParams |
+    FastParams | SlowParams | EarlyParams | LateParams | RevParams |
+    EveryParams | EuclidParams | DegradeParams | WarpParams
+)
 
 
 # ── Node ─────────────────────────────────────────────────────────────────

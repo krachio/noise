@@ -11,7 +11,7 @@ If it's not IR, it doesn't exist.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Literal, Union
+from typing import Any, Literal
 
 from krach._types import DspDef
 from krach.ir.pattern import PatternNode
@@ -22,7 +22,7 @@ class NodeDef:
     """Specification of an audio node."""
 
     name: str
-    source: Union[DspDef, str]  # DspDef or type_id string
+    source: DspDef | str
     gain: float = 0.5
     count: int = 1
     num_inputs: int = 0

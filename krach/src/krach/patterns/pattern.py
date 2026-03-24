@@ -125,18 +125,23 @@ class Pattern:
         return Pattern(PatternNode(warp_p, (self.node,), WarpParams("swing", amount, grid)))
 
     def mask(self, mask_str: str) -> Pattern:
+        import warnings
         tokens = mask_str.split()
         keep = [t in ("1", "x", "X") for t in tokens]
         node = self.node
-        if node.primitive == cat_p:
-            new_children: list[PatternNode] = []
-            for i, child in enumerate(node.children):
-                if i < len(keep) and not keep[i]:
-                    new_children.append(PatternNode(silence_p, (), SilenceParams()))
-                else:
-                    new_children.append(child)
-            return Pattern(PatternNode(cat_p, tuple(new_children), CatParams()))
-        return self
+        if node.primitive != cat_p:
+            warnings.warn(
+                f"mask() has no effect on {node.primitive.name} patterns — only works on sequences (Cat)",
+                stacklevel=2,
+            )
+            return self
+        new_children: list[PatternNode] = []
+        for i, child in enumerate(node.children):
+            if i < len(keep) and not keep[i]:
+                new_children.append(PatternNode(silence_p, (), SilenceParams()))
+            else:
+                new_children.append(child)
+        return Pattern(PatternNode(cat_p, tuple(new_children), CatParams()))
 
     def sometimes(self, prob: float, fn: Callable[[Pattern], Pattern], seed: int = 0) -> Pattern:
         transformed = fn(self)
