@@ -3,9 +3,7 @@
 Live coding audio system. Define synths in Python, sequence them with composable patterns, hear them instantly.
 
 ```python
-import krach.dsp as krs
-
-@kr.dsp
+# Define a synth — just a Python function
 def acid_bass() -> krs.Signal:
     freq = krs.control("freq", 55.0, 20.0, 800.0)
     gate = krs.control("gate", 0.0, 0.0, 1.0)
@@ -13,11 +11,17 @@ def acid_bass() -> krs.Signal:
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
+# Define an effect — takes audio input
+def reverb(inp: krs.Signal) -> krs.Signal:
+    room = krs.control("room", 0.7, 0.0, 1.0)
+    return krs.reverb(inp, room) * 0.8
+
+# Create nodes, route, play
 bass = kr.node("bass", acid_bass, gain=0.3)
-verb = kr.node("verb", reverb_fn, gain=0.3)
-bass >> verb                                       # route
-bass @ kr.seq("A2", "D3", None, "E2").over(2)      # play
-bass["cutoff"] = 1200                               # control
+verb = kr.node("verb", reverb, gain=0.3)
+bass >> verb                                       # route signal
+bass @ kr.seq("A2", "D3", None, "E2").over(2)      # play pattern
+bass["cutoff"] = 1200                               # set control
 ```
 
 ## What makes krach different
