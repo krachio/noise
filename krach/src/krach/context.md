@@ -12,7 +12,7 @@ on its own line. The user steps through each section one cell at a time.
 Rules (MUST follow):
 - Never write import statements. All symbols are listed under "Available symbols".
 - Use ONLY node types listed under "Node controls" or "Active voices".
-- When modifying: KEEP existing voice names. Use kr.voice() to ADD new ones.
+- When modifying: KEEP existing voice names. Use kr.node() to ADD new ones.
 - All comments must use Python syntax (# prefix). No prose outside code.
 - Use at most 2 x `# ---` dividers (3 cells maximum).
 
@@ -55,22 +55,20 @@ kr.mute("bass")
 kr.hush("bass")
 ```
 
-Both `kr.voice()`/`kr.bus()` still work as aliases for `kr.node()`.
-
 ---
 
-## Voices -- `kr` (VoiceMixer)
+## Nodes -- `kr` (VoiceMixer)
 
-Voices are named audio instruments with stable control labels. Adding or removing
-a voice never breaks other voices' patterns.
+Nodes are named audio elements (sources or effects) with stable control labels.
+Adding or removing a node never breaks other nodes' patterns.
 
-### Managing voices
+### Managing nodes
 ```python
-# Add a voice -- pass a Python DSP function directly:
-kr.voice("bass", my_bass_fn, gain=0.3)
+# Add a node -- pass a Python DSP function directly:
+kr.node("bass", my_bass_fn, gain=0.3)
 
 # Or reference a pre-existing type from "Node controls" in session state:
-kr.voice("bass", "faust:bass", gain=0.3)
+kr.node("bass", "faust:bass", gain=0.3)
 
 # Adjust gain without rebuilding the graph:
 kr.gain("bass", 0.15)
@@ -83,9 +81,9 @@ kr.remove("bass")
 
 # Batch multiple voices (one rebuild instead of N -- use for initial setup):
 with kr.batch():
-    kr.voice("kick", kick_fn, gain=0.8)
-    kr.voice("bass", bass_fn, gain=0.3)
-    kr.voice("lead", lead_fn, gain=0.25)
+    kr.node("kick", kick_fn, gain=0.8)
+    kr.node("bass", bass_fn, gain=0.3)
+    kr.node("lead", lead_fn, gain=0.25)
 
 # Smooth fade over N bars (any param -- one-shot, holds at target):
 kr.fade("bass/gain", target=0.15, bars=8)
@@ -102,8 +100,8 @@ def acid_bass() -> krs.Signal:
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
-# acid_bass is now a DspDef -- pass directly to kr.voice():
-kr.voice("bass", acid_bass, gain=0.3)
+# acid_bass is now a DspDef -- pass directly to kr.node():
+kr.node("bass", acid_bass, gain=0.3)
 # Saves both .py (source) and .dsp (FAUST) to dsp_dir
 ```
 
@@ -130,7 +128,7 @@ kr.note(220.0, 330.0, 440.0)
 #   kr.note("A4", "C5", "E5")           ← multiple pitches in one call
 #   kr.note("A4") | kr.note("C5")       ← pipe operator (stack)
 # AND the voice MUST have count >= number of simultaneous notes:
-#   kr.voice("rhodes", rhodes_fn, count=4)  ← poly voice for chords
+#   kr.node("rhodes", rhodes_fn, count=4)  ← poly voice for chords
 
 # Percussive trigger (trig + reset on a control):
 kr.hit()                # default: gate
@@ -157,7 +155,7 @@ kr.play("hat", (kr.rest() + kr.hit()) * 4)
 kr.play("bass", kr.seq("A2", "C3", "D3", "E3").over(2))
 
 # Chord stabs (MUST use count= for poly, and kr.note with multiple pitches):
-kr.voice("rhodes", rhodes_fn, gain=0.3, count=4)  # count >= chord size
+kr.node("rhodes", rhodes_fn, gain=0.3, count=4)  # count >= chord size
 kr.play("rhodes", kr.note("A4", "C5", "E5") + kr.rest())
 # NOT kr.seq("A4", "C5", "E5") — that's a melody, not a chord!
 ```
@@ -180,19 +178,19 @@ kr.play("bass/cutoff", kr.mod_sine(200.0, 2000.0).over(8))
 
 ### Control naming convention
 Labels are always `{voice_name}/{param}`. Example:
-- `kr.voice("bass", my_bass_fn)` with controls (freq, gate, cutoff) ->
+- `kr.node("bass", my_bass_fn)` with controls (freq, gate, cutoff) ->
   labels: bass/freq, bass/gate, bass/cutoff
 
 ### Effect buses, sends, and wires
 
 IMPORTANT: Effects like reverb/delay that receive audio from other voices MUST use
-`kr.bus()`, NOT `kr.voice()`. A bus has audio inputs; a voice does not.
+`kr.bus()`, NOT `kr.node()`. A bus has audio inputs; a voice does not.
 
 ```python
 # CORRECT: reverb as a bus (has audio input -- receives sends)
 kr.bus("verb", "faust:verb", gain=0.3)
 
-# WRONG: kr.voice("verb", "faust:verb") -- this creates a voice, not a bus!
+# WRONG: kr.node("verb", "faust:verb") -- this creates a voice, not a bus!
 # Sends won't work if the effect is created with voice() instead of bus().
 
 # Route a voice to a bus via a gain-controlled send:
@@ -234,8 +232,8 @@ All return Pattern objects. Optional `steps=64` controls resolution.
 ### Group operations
 ```python
 # Voice names with / act as groups:
-kr.voice("drums/kick", kick_fn, gain=0.8)
-kr.voice("drums/hat", hat_fn, gain=0.6)
+kr.node("drums/kick", kick_fn, gain=0.8)
+kr.node("drums/hat", hat_fn, gain=0.6)
 
 # Group operations apply to all voices matching the prefix:
 kr.gain("drums", 0.4)    # sets both drums/kick and drums/hat
@@ -289,8 +287,8 @@ kr.stop()             # hush all slots
 
 ### Voice handles (eliminates name repetition)
 ```python
-kick = kr.voice("drums/kick", kick_fn, gain=0.8)
-bass = kr.voice("bass", bass_fn, gain=0.5)
+kick = kr.node("drums/kick", kick_fn, gain=0.8)
+bass = kr.node("bass", bass_fn, gain=0.5)
 verb = kr.bus("verb", reverb_fn, gain=0.3)
 
 kick.play(kr.hit() * 4)
@@ -328,7 +326,7 @@ kr.rest()       # silence atom
 
 ## DSP synthesis -- `krs` (krach.dsp)
 
-DSP functions define synths in Python. Pass them directly to `kr.voice()`:
+DSP functions define synths in Python. Pass them directly to `kr.node()`:
 ```python
 def acid_bass() -> krs.Signal:
     freq = krs.control("freq", 55.0, 20.0, 800.0)
@@ -338,7 +336,7 @@ def acid_bass() -> krs.Signal:
     filt_env = krs.adsr(0.005, 0.2, 0.2, 0.1, gate)
     return krs.lowpass(krs.saw(freq), cutoff + filt_env * 1200.0) * env * 0.55
 
-kr.voice("bass", acid_bass, gain=0.3)
+kr.node("bass", acid_bass, gain=0.3)
 ```
 
 ### Primitives reference (`krs.*`)
@@ -391,9 +389,9 @@ def acid_bass() -> krs.Signal:
 
 # --- Set up voices (all Python functions -- no dependency on pre-existing DSPs)
 with kr.batch():
-    kr.voice("kick", my_kick,   gain=0.8)
-    kr.voice("hat",  my_hat,    gain=0.5)
-    kr.voice("bass", acid_bass, gain=0.3)
+    kr.node("kick", my_kick,   gain=0.8)
+    kr.node("hat",  my_hat,    gain=0.5)
+    kr.node("bass", acid_bass, gain=0.3)
 
 # --- Play patterns
 kr.tempo = 128
@@ -408,9 +406,9 @@ kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
 ## Tips
 
 - ONLY use properties and methods documented above. Do NOT invent features.
-- `kr.voice()` accepts Python functions -- no separate dsp() step needed
+- `kr.node()` accepts Python functions -- no separate dsp() step needed
 - `kr.gain("bass", 0.15)` is instant (no graph rebuild)
-- Adding a voice with `kr.voice("lead", ...)` never breaks kick/bass patterns
+- Adding a voice with `kr.node("lead", ...)` never breaks kick/bass patterns
 - `kr.note()`, `kr.hit()`, `kr.seq()` are pattern builders -- bind to voice via `kr.play()`
 - `kr.mod_sine(lo, hi)` etc. return Patterns -- compose with `.over()`, `+`, etc.
 - Pattern `+` divides the cycle equally -- 4 atoms = 4 beats per cycle
