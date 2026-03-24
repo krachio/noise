@@ -4,12 +4,31 @@ from __future__ import annotations
 
 from mcp.server.fastmcp import FastMCP
 
-from krach_mcp._session import get_session
+from krach_mcp._session import get_session, start_session
 from krach_mcp._patterns import parse_pattern
 
 
 def register_tools(mcp: FastMCP) -> None:
     """Register all krach tools on the MCP server."""
+
+    @mcp.tool()
+    def start(build: bool = True, bpm: float = 120, master: float = 0.7) -> str:
+        """Start the krach audio engine. Call this first before making music.
+
+        Example: start()                    — build engine + connect
+        Example: start(build=False)         — connect to already-running engine
+        Example: start(bpm=140, master=0.8) — custom tempo and master gain
+
+        Args:
+            build: If True, runs cargo build before starting (slower but ensures latest code).
+            bpm: Initial tempo in beats per minute.
+            master: Master output gain (0.0-1.0).
+        """
+        try:
+            kr = start_session(build=build, bpm=bpm, master=master)
+            return f"Engine started. tempo={kr.tempo} bpm, master={kr.master:.2f}"
+        except Exception as e:
+            return f"Error starting engine: {e}"
 
     @mcp.tool()
     def node(
