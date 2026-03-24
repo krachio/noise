@@ -8,6 +8,40 @@ from krach_mcp._session import get_session, start_session
 from krach_mcp._patterns import parse_pattern
 
 
+def _node_from_file(
+    kr: object, name: str, path: str, gain: float, count: int,
+) -> object:
+    """Load a DSP function from a .py file and create a node."""
+    import os
+    import krach.dsp as krs
+    from krach._types import DspDef
+    from faust_dsl import transpile as _transpile
+
+    resolved = os.path.expanduser(path)
+    if not os.path.isfile(resolved):
+        raise FileNotFoundError(f"DSP file not found: {resolved}")
+
+    source_text = open(resolved).read()  # noqa: SIM115
+    ns: dict[str, object] = {"__builtins__": {}, "krs": krs}
+    exec(compile(source_text, resolved, "exec"), ns)  # noqa: S102
+
+    fn = next((v for v in ns.values() if callable(v) and v is not krs), None)
+    if fn is None:
+        raise ValueError(f"no function found in {resolved}")
+
+    result = _transpile(fn)
+    dsp_def = DspDef(
+        fn=fn,
+        source=source_text,
+        faust=result.source,
+        controls=tuple(c.name for c in result.schema.controls),
+        num_inputs=result.num_inputs,
+        control_ranges={c.name: (c.lo, c.hi) for c in result.schema.controls},
+        control_defaults={c.name: c.init for c in result.schema.controls},
+    )
+    return kr.node(name, dsp_def, gain=gain, count=count)
+
+
 def register_tools(mcp: FastMCP) -> None:
     """Register all krach tools on the MCP server."""
 
@@ -39,40 +73,31 @@ def register_tools(mcp: FastMCP) -> None:
     ) -> str:
         """Create or replace an audio node.
 
-        Example: node("bass", "def bass():\\n  freq = krs.control('freq', 55, 20, 800)\\n  gate = krs.control('gate', 0, 0, 1)\\n  return krs.saw(freq) * gate", gain=0.3)
+        source is either a registered type_id or a path to a Python DSP file.
+        To create a DSP, write a .py file first (using the Write tool), then
+        pass its path here.
+
         Example: node("kick", "faust:kick", gain=0.8)
+        Example: node("bass", "~/.krach/dsp/bass.py", gain=0.3)
+
+        The .py file should define a function using krs.* primitives
+        (krs is available automatically — no import needed):
+            def bass():
+                freq = krs.control("freq", 55.0, 20.0, 800.0)
+                gate = krs.control("gate", 0.0, 0.0, 1.0)
+                return krs.saw(freq) * gate
 
         Args:
             name: Node name (e.g. "bass", "drums/kick").
-            source: Either a registered type_id ("faust:kick") or Python DSP function source.
-                    DSP functions use krs.* for oscillators/filters/controls.
+            source: Registered type_id ("faust:kick") or path to a .py DSP file.
             gain: Output gain (0.0-1.0 typical, warn above 2.0).
             count: Poly instances for chords (must be >= simultaneous notes).
         """
         kr = get_session()
-        if source.startswith("faust:") or "def " not in source:
-            handle = kr.node(name, source, gain=gain, count=count)
+        if source.endswith(".py"):
+            handle = _node_from_file(kr, name, source, gain, count)
         else:
-            # Compile source → function → transpile → DspDef
-            import krach.dsp as krs
-            from krach._types import DspDef
-            from faust_dsl import transpile as _transpile
-            ns: dict[str, object] = {"__builtins__": {}, "krs": krs}
-            exec(compile(source, f"<dsp:{name}>", "exec"), ns)  # noqa: S102
-            fn = next((v for v in ns.values() if callable(v) and v is not krs), None)
-            if fn is None:
-                return f"Error: no function found in source code for '{name}'"
-            result = _transpile(fn)
-            dsp_def = DspDef(
-                fn=fn,
-                source=source,
-                faust=result.source,
-                controls=tuple(c.name for c in result.schema.controls),
-                num_inputs=result.num_inputs,
-                control_ranges={c.name: (c.lo, c.hi) for c in result.schema.controls},
-                control_defaults={c.name: c.init for c in result.schema.controls},
-            )
-            handle = kr.node(name, dsp_def, gain=gain, count=count)
+            handle = kr.node(name, source, gain=gain, count=count)
         return str(handle)
 
     @mcp.tool()
