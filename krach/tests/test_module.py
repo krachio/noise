@@ -34,9 +34,10 @@ def _make_mixer() -> Mixer:
 def test_capture_empty_mixer() -> None:
     mixer = _make_mixer()
     ir = mixer.capture()
-    assert isinstance(ir, ModuleIr)
     assert ir.nodes == ()
     assert ir.routing == ()
+    assert ir.controls == ()
+    assert ir.master == 0.7
 
 
 def test_capture_nodes() -> None:
@@ -86,7 +87,9 @@ def test_capture_muted() -> None:
     mixer.mute("bass")
 
     ir = mixer.capture()
-    assert any(m.name == "bass" for m in ir.muted)
+    muted = [m for m in ir.muted if m.name == "bass"]
+    assert len(muted) == 1
+    assert muted[0].saved_gain == 0.3
 
 
 def test_capture_transport() -> None:
@@ -126,8 +129,7 @@ def test_instantiate_creates_routing() -> None:
         ),
     )
     mixer.instantiate(ir)
-    assert ("bass", "verb") in mixer._sends
-    assert mixer._sends[("bass", "verb")] == 0.4
+    assert ("bass", "verb", "send", 0.4) in mixer.routing
 
 
 def test_instantiate_sets_controls() -> None:
@@ -141,7 +143,7 @@ def test_instantiate_sets_controls() -> None:
         ),
     )
     mixer.instantiate(ir)
-    assert mixer._ctrl_values.get("bass/freq") == 220.0
+    assert mixer.ctrl_values.get("bass/freq") == 220.0
 
 
 def test_instantiate_sets_transport() -> None:
@@ -149,7 +151,7 @@ def test_instantiate_sets_transport() -> None:
     ir = ModuleIr(tempo=140, meter=3, master=0.6)
     mixer.instantiate(ir)
     # Transport is delegated to session
-    mixer._session.tempo  # accessed via property
+    mixer._session.tempo  # type: ignore[reportPrivateUsage]  # accessed via property on mock
 
 
 def test_capture_instantiate_round_trip() -> None:
@@ -168,11 +170,13 @@ def test_capture_instantiate_round_trip() -> None:
     mixer2.instantiate(ir)
 
     assert set(mixer2.node_data.keys()) == {"bass", "verb"}
-    assert mixer2._sends[("bass", "verb")] == 0.4
-    assert mixer2._ctrl_values.get("bass/freq") == 220.0
+    assert ("bass", "verb", "send", 0.4) in mixer2.routing
+    assert mixer2.ctrl_values.get("bass/freq") == 220.0
     assert mixer2.is_muted("bass")
-    # Muted bass: gain is 0 (muted), saved gain is 0.3
-    assert mixer2._muted["bass"] == 0.3
+    # Muted bass: saved gain is 0.3 — verify via capture()
+    ir2 = mixer2.capture()
+    muted_bass = [m for m in ir2.muted if m.name == "bass"]
+    assert len(muted_bass) == 1 and muted_bass[0].saved_gain == 0.3
 
 
 # ── to_dict / from_dict ───────────────────────────────────────────

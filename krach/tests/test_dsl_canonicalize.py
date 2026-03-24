@@ -8,6 +8,22 @@ from krach.dsl.core import sin, feedback
 from krach.ir.canonicalize import canonicalize, graph_key
 
 
+def _double(x: Signal) -> Signal:
+    return x * 2.0
+
+
+def _add_two(x: Signal) -> Signal:
+    return x + 2.0
+
+
+def _double_plus_one(x: Signal) -> Signal:
+    return x * 2.0 + 1.0
+
+
+def _square_plus_one(x: Signal) -> Signal:
+    return x * x + 1.0
+
+
 def test_same_fn_same_canonical_hash() -> None:
     """Two traces of the same function produce the same canonical hash."""
     def osc(x: Signal) -> Signal:
@@ -23,14 +39,14 @@ def test_same_fn_same_canonical_hash() -> None:
 
 def test_different_fn_different_hash() -> None:
     """Different computations produce different hashes."""
-    g1 = make_graph(lambda x: x * 2.0, num_inputs=1)
-    g2 = make_graph(lambda x: x + 2.0, num_inputs=1)
+    g1 = make_graph(_double, num_inputs=1)
+    g2 = make_graph(_add_two, num_inputs=1)
     assert graph_key(g1) != graph_key(g2)
 
 
 def test_canonical_ids_sequential() -> None:
     """After canonicalization, signal IDs are sequential starting from 0."""
-    g = make_graph(lambda x: x * 2.0 + 1.0, num_inputs=1)
+    g = make_graph(_double_plus_one, num_inputs=1)
     c = canonicalize(g)
     all_ids: set[int] = set()
     for s in c.inputs:
@@ -45,7 +61,7 @@ def test_canonical_ids_sequential() -> None:
 
 def test_idempotent() -> None:
     """Canonicalizing a canonical graph produces the same result."""
-    g = make_graph(lambda x: x * x + 1.0, num_inputs=1)
+    g = make_graph(_square_plus_one, num_inputs=1)
     c1 = canonicalize(g)
     c2 = canonicalize(c1)
     assert graph_key(c1) == graph_key(c2)
@@ -111,7 +127,6 @@ def test_feedback_canonical_idempotent() -> None:
 
 def test_precision_matters() -> None:
     """Different precision produces different hash."""
-    fn = lambda x: x * 2.0  # noqa: E731
-    g32 = make_graph(fn, num_inputs=1, precision=Precision.FLOAT32)
-    g64 = make_graph(fn, num_inputs=1, precision=Precision.FLOAT64)
+    g32 = make_graph(_double, num_inputs=1, precision=Precision.FLOAT32)
+    g64 = make_graph(_double, num_inputs=1, precision=Precision.FLOAT64)
     assert graph_key(g32) != graph_key(g64)

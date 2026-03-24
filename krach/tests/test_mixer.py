@@ -1130,9 +1130,9 @@ def test_batch_exception_rolls_back_sends() -> None:
     mixer.set("bass/freq", 220.0)
 
     # Snapshot pre-batch state
-    sends_before = dict(mixer._sends)
-    muted_before = dict(mixer._muted)
-    ctrl_before = dict(mixer._ctrl_values)
+    sends_before = list(mixer.routing)
+    muted_before = mixer.is_muted("bass")
+    ctrl_before = dict(mixer.ctrl_values)
 
     try:
         with mixer.batch():
@@ -1143,9 +1143,9 @@ def test_batch_exception_rolls_back_sends() -> None:
     except RuntimeError:
         pass
 
-    assert mixer._sends == sends_before, "sends not rolled back"
-    assert mixer._muted == muted_before, "muted not rolled back"
-    assert mixer._ctrl_values == ctrl_before, "ctrl_values not rolled back"
+    assert list(mixer.routing) == sends_before, "sends not rolled back"
+    assert mixer.is_muted("bass") == muted_before, "muted not rolled back"
+    assert dict(mixer.ctrl_values) == ctrl_before, "ctrl_values not rolled back"
 
 
 # ── Sprint 13: MUTED_LEAK ─────────────────────────────────────────────────
@@ -3493,7 +3493,7 @@ def test_export_inlines_dsp_function() -> None:
         mixer = Mixer(session=session, dsp_dir=Path(tmpdir), node_controls={})
 
         mixer.voice("synth", "faust:synth", gain=0.5)
-        mixer._nodes["synth"].source_text = (
+        mixer.node_data["synth"].source_text = (
             "def synth() -> krs.Signal:\n"
             "    freq = krs.control('freq', 220.0, 20.0, 2000.0)\n"
             "    return krs.saw(freq)\n"
@@ -3940,7 +3940,7 @@ def test_node_with_effect_dspdef_routes_to_bus() -> None:
         mixer = Mixer(session=session, dsp_dir=Path(tmpdir))
 
         effect = DspDef(
-            fn=lambda x: x,
+            fn=lambda x: x,  # type: ignore[reportUnknownLambdaType]
             source="def f(x): return x",
             faust='import("stdfaust.lib");\nprocess(input0) = input0;',
             controls=("room",),
@@ -4065,7 +4065,7 @@ def test_callable_with_default_none_is_source() -> None:
 
     session = MagicMock()
 
-    def fake_synth(inp=None):  # type: ignore
+    def fake_synth(inp: object = None) -> None:
         pass
 
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
@@ -4141,7 +4141,7 @@ def test_set_warns_value_outside_control_range() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
     # Manually set control ranges (normally comes from transpiler)
-    mixer._nodes["bass"].control_ranges = {"cutoff": (100.0, 6000.0), "freq": (20.0, 2000.0)}
+    mixer.node_data["bass"].control_ranges = {"cutoff": (100.0, 6000.0), "freq": (20.0, 2000.0)}
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -4162,7 +4162,7 @@ def test_set_no_warning_when_in_range() -> None:
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
-    mixer._nodes["bass"].control_ranges = {"cutoff": (100.0, 6000.0)}
+    mixer.node_data["bass"].control_ranges = {"cutoff": (100.0, 6000.0)}
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -4306,7 +4306,7 @@ def test_play_control_path_warns_mod_outside_range() -> None:
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
-    mixer._nodes["bass"].control_ranges = {"freq": (20.0, 2000.0), "gate": (0.0, 1.0)}
+    mixer.node_data["bass"].control_ranges = {"freq": (20.0, 2000.0), "gate": (0.0, 1.0)}
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -4371,7 +4371,7 @@ def test_play_control_path_no_warn_when_in_range() -> None:
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
-    mixer._nodes["bass"].control_ranges = {"freq": (20.0, 2000.0)}
+    mixer.node_data["bass"].control_ranges = {"freq": (20.0, 2000.0)}
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
@@ -4392,7 +4392,7 @@ def test_save_recall_preserves_source_text() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
     # Manually set source_text to simulate transpiled DSP
-    mixer._nodes["bass"].source_text = "def bass(): pass"
+    mixer.node_data["bass"].source_text = "def bass(): pass"
     mixer.save("test")
 
     mixer.remove("bass")
