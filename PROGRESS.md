@@ -62,7 +62,7 @@ kr.mute("drums")
 - **Graph-first API**: `kr.node()` auto-detects source vs effect — one constructor for everything
 - **Operator DSL**: `>>` routes signal, `@` plays patterns, `[]` gets/sets controls — fast REPL workflow
 - **Two-symbol API**: `kr` (audio graph) + `krs` (krach.dsp) — clean namespace for live coding
-- **Voice-free patterns**: `kr.note("C4")`, `kr.hit()`, `kr.seq("A2", "D3")` — bind at play time
+- **Unbound patterns**: `kr.note("C4")`, `kr.hit()`, `kr.seq("A2", "D3")` — bind to node at play time
 - **`/` path addressing**: `kr.set("bass/cutoff", 1200)`, `kr.fade("verb/room", 0.8, bars=8)`
 - **Node handles**: `bass = kr.node(...)` returns proxy — `bass @ pattern`, `bass["cutoff"] = 1200`, `bass >> verb`
 - **Unified routing**: `kr.connect()` / `>>` replaces send/wire split — level and port as params
@@ -85,7 +85,7 @@ kr.mute("drums")
 - **Phase-reset**: fades/mods start from beat 1 via `SetPatternFromZero`
 - **Meter**: `kr.meter = 3` for waltz, 7 for 7/8
 - **Pattern retrieval**: `kr.pattern("kick")` returns unbound pattern
-- **Unified Voice model**: `Voice(count=N)` — no separate poly concept
+- **Unified Node model**: `Node(count=N)` — no separate voice/bus/poly concept
 
 ## Next
 
