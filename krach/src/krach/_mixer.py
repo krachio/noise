@@ -241,8 +241,12 @@ class Mixer(MixerInfra):
             init=tuple(init.items()),
             source_text=resolved.source_text,
             control_ranges=resolved.control_ranges,
+            control_defaults=resolved.control_defaults,
             alloc=0,
         )
+        # Seed ctrl_values with hslider defaults so __getitem__ returns init values
+        for ctrl, default in resolved.control_defaults.items():
+            self._ctrl_values.setdefault(f"{name}/{ctrl}", default)
         if not self._batching:
             if is_new and self._graph_loaded and count == 1:
                 self._session.add_voice(name, resolved.type_id, resolved.controls, gain)
@@ -434,7 +438,10 @@ class Mixer(MixerInfra):
         self._nodes[name] = Node(
             type_id=resolved.type_id, gain=gain, controls=resolved.controls,
             num_inputs=num_inputs, control_ranges=resolved.control_ranges,
+            control_defaults=resolved.control_defaults,
         )
+        for ctrl, default in resolved.control_defaults.items():
+            self._ctrl_values.setdefault(f"{name}/{ctrl}", default)
         if not self._batching:
             self._rebuild()
         return NodeHandle(self, name)

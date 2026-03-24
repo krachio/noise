@@ -98,8 +98,8 @@ class MixerInfra:
     @master.setter
     def master(self, value: float) -> None:
         _check_finite(value, "master gain")
-        if value > 2.0:
-            warnings.warn(f"master gain {value} is very high (>2.0) — risk of clipping", stacklevel=2)
+        if abs(value) > 2.0:
+            warnings.warn(f"master gain {value}: magnitude >2.0 — risk of clipping", stacklevel=2)
         self._master_gain = value
         self._session.master_gain(value)
 
@@ -252,8 +252,8 @@ class MixerInfra:
     def gain(self, name: str, value: float) -> None:
         """Update a node or group gain. Instant — no graph rebuild."""
         _check_finite(value, f"gain for '{name}'")
-        if value > 2.0:
-            warnings.warn(f"gain('{name}', {value}): very high (>2.0) — risk of clipping", stacklevel=2)
+        if abs(value) > 2.0:
+            warnings.warn(f"gain('{name}', {value}): magnitude >2.0 — risk of clipping", stacklevel=2)
         for t in self._resolve_node_targets(name):
             self._gain_single(t, value)
 

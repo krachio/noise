@@ -70,6 +70,7 @@ def register_tools(mcp: FastMCP) -> None:
                 controls=tuple(c.name for c in result.schema.controls),
                 num_inputs=result.num_inputs,
                 control_ranges={c.name: (c.lo, c.hi) for c in result.schema.controls},
+                control_defaults={c.name: c.init for c in result.schema.controls},
             )
             handle = kr.node(name, dsp_def, gain=gain, count=count)
         return str(handle)

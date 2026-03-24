@@ -71,7 +71,11 @@ class NodeHandle:
         if pattern is not None and isinstance(target_or_pattern, str):
             self._mixer.play(f"{self._name}/{target_or_pattern}", pattern)
         else:
-            assert isinstance(target_or_pattern, Pattern)
+            if not isinstance(target_or_pattern, Pattern):
+                raise TypeError(
+                    f"{self._name}.play() expected Pattern or (param_name, Pattern), "
+                    f"got {type(target_or_pattern).__name__}"
+                )
             self._mixer.play(self._name, target_or_pattern)
 
     def pattern(self) -> Pattern | None:

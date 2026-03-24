@@ -29,6 +29,7 @@ def save_scene(
                 num_inputs=v.num_inputs, count=v.count, init=v.init,
                 source_text=v.source_text,
                 control_ranges=dict(v.control_ranges),
+                control_defaults=dict(v.control_defaults),
             )
             for n, v in nodes.items()
         },
@@ -50,6 +51,7 @@ def restore_scene(scene: Scene) -> dict[str, Node]:
             num_inputs=snap.num_inputs, count=snap.count, init=snap.init,
             source_text=snap.source_text,
             control_ranges=dict(snap.control_ranges),
+            control_defaults=dict(snap.control_defaults),
         )
         for name, snap in scene.nodes.items()
     }
