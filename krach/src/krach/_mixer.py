@@ -302,14 +302,14 @@ class VoiceMixer(MixerInfra):
         """Hush a single node (not a group or path)."""
         self._session.hush(name)
         self._session.hush(f"_fade_{name}")
-        voice = self._nodes.get(name)
-        if voice is not None:
-            for i in range(voice.count):
-                inst = _inst_name(name, i, voice.count)
-                if voice.count > 1:
+        node = self._nodes.get(name)
+        if node is not None:
+            for i in range(node.count):
+                inst = _inst_name(name, i, node.count)
+                if node.count > 1:
                     self._session.hush(inst)
                     self._session.hush(f"_fade_{inst}")
-                if "gate" in voice.controls:
+                if "gate" in node.controls:
                     self._session.set_ctrl(f"{inst}/gate", 0.0)
 
     def stop(self) -> None:
@@ -391,12 +391,12 @@ class VoiceMixer(MixerInfra):
             pattern = pattern.swing(swing)
         self._patterns[target] = pattern
         send = self._session.play_from_zero if from_zero else self._session.play
-        voice = self._nodes.get(target)
-        if voice is not None and voice.count > 1:
+        target_node = self._nodes.get(target)
+        if target_node is not None and target_node.count > 1:
             bound_node, new_alloc = bind_voice_poly(
-                pattern.node, target, voice.count, voice.alloc
+                pattern.node, target, target_node.count, target_node.alloc
             )
-            voice.alloc = new_alloc
+            target_node.alloc = new_alloc
             send(target, Pattern(bound_node))
         elif target in self._nodes:
             bound = Pattern(bind_voice(pattern.node, target))
