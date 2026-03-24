@@ -41,6 +41,10 @@ CODING_STYLE.md
 */.claude/ralph-loop.local.md
 .ralph-review/
 
+# Session exports (created by kr.export())
+**/my_session.py
+**/session.py
+
 # OS
 .DS_Store
 *.swp
