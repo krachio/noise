@@ -134,14 +134,17 @@ class MixerInfra:
     def nodes(self) -> dict[str, NodeHandle]:
         """All nodes as name → NodeHandle."""
         return {name: NodeHandle(self, name) for name in self._nodes}  # type: ignore[arg-type]
+
     @property
     def sources(self) -> dict[str, NodeHandle]:
         """Source nodes (num_inputs=0) as name → NodeHandle."""
         return {n: NodeHandle(self, n) for n, v in self._nodes.items() if v.num_inputs == 0}  # type: ignore[arg-type]
+
     @property
     def effects(self) -> dict[str, NodeHandle]:
         """Effect nodes (num_inputs>0) as name → NodeHandle."""
         return {n: NodeHandle(self, n) for n, v in self._nodes.items() if v.num_inputs > 0}  # type: ignore[arg-type]
+
     @property
     def node_controls(self) -> dict[str, tuple[str, ...]]:
         """Read-only snapshot of known node type controls."""
