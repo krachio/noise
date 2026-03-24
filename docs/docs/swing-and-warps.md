@@ -54,7 +54,7 @@ def hat() -> krs.Signal:
     env = krs.adsr(0.001, 0.04, 0.0, 0.02, gate)
     return krs.highpass(krs.white_noise(), 8000.0) * env * 0.5
 
-kr.voice("hat", hat, gain=0.5)
+kr.node("hat", hat, gain=0.5)
 
 # Straight 8ths
 kr.play("hat", kr.hit() * 8)

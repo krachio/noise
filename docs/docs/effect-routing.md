@@ -32,8 +32,7 @@ mic >> filt >> verb           # mic -> filter -> reverb
 
 ## `kr.node()` -- unified constructor
 
-`kr.node()` replaces the old `kr.voice()` / `kr.bus()` split. It detects the
-node type from the DSP's `num_inputs`:
+`kr.node()` auto-detects the node type from the DSP function's audio inputs:
 
 ```python
 # Source (0 audio inputs) -- generates audio
@@ -46,9 +45,9 @@ verb = kr.node("verb", reverb_fn, gain=0.3)
 No need to decide upfront. If the DSP has audio input controls, it becomes an
 effect node automatically.
 
-!!! note "Backward compatibility"
-    `kr.voice()` and `kr.bus()` still work as aliases for `kr.node()`. Existing
-    code does not need to change.
+!!! note
+    Sources have no audio input parameters. Effects take `inp: krs.Signal` as
+    their first parameter — this is how `kr.node()` detects them automatically.
 
 ## `kr.connect()` -- explicit routing
 
@@ -62,14 +61,14 @@ kr.connect("kick", "comp", port="in0")     # direct wire to port
 Use `kr.connect()` when building routing from strings (e.g., in loops or
 abstractions). Use `>>` for interactive REPL work.
 
-## Voice vs effect auto-detection
+## Source vs effect auto-detection
 
-| | Source (0 inputs) | Effect (1+ inputs) |
+| | Source (0 audio inputs) | Effect (1+ audio inputs) |
 |---|---|---|
 | **Purpose** | Sound source (synth, sampler) | Processor (reverb, delay, compressor) |
+| **DSP signature** | `def synth() -> Signal` | `def fx(inp: Signal) -> Signal` |
 | **Created with** | `kr.node()` (auto) | `kr.node()` (auto) |
-| **Receives routes** | No | Yes |
-| **Old API** | `kr.voice()` | `kr.bus()` |
+| **Receives sends** | No | Yes |
 
 ## Send levels
 
@@ -216,7 +215,7 @@ Remove a node and clean up all its routes:
 
 ```python
 kr.remove("bass")
-kr.remove_bus("verb")
+kr.remove("verb")
 ```
 
 ## Full routing example

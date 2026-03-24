@@ -19,10 +19,10 @@ def acid_bass() -> krs.Signal:
 ```
 
 After decoration, `acid_bass` is a `DspDef` object. Pass it directly to
-`kr.voice()`:
+`kr.node()`:
 
 ```python
-kr.voice("bass", acid_bass, gain=0.3)
+kr.node("bass", acid_bass, gain=0.3)
 ```
 
 The decorator saves both the Python source (`.py`) and the generated FAUST
@@ -71,7 +71,7 @@ All DSP building blocks live in the `krs` namespace (`krach.dsp`).
 ## Controls: `krs.control(name, init, lo, hi)`
 
 Controls are the bridge between patterns and audio. Each control becomes an
-automatable parameter on the voice.
+automatable parameter on the node.
 
 ```python
 freq = krs.control("freq", 55.0, 20.0, 800.0)
@@ -116,22 +116,24 @@ cutoff + filt_env * 1200.0
 
 These operations translate directly to FAUST arithmetic in the generated code.
 
-## Multi-input effects (buses)
+## Effects (audio processors)
 
-Effects that receive audio from other voices -- reverb, delay, compressors --
-must be defined with audio inputs. Create them with `kr.bus()`, not
-`kr.voice()`:
+Effects that receive audio from other nodes — reverb, delay, compressors —
+must take an audio input **parameter**. `kr.node()` auto-detects them:
 
 ```python
-@kr.dsp
-def simple_reverb() -> krs.Signal:
+def simple_reverb(inp: krs.Signal) -> krs.Signal:
     room = krs.control("room", 0.6, 0.0, 1.0)
-    sig = krs.control("in0", 0.0, -1.0, 1.0)  # audio input
-    return krs.reverb(sig, room)
+    return krs.reverb(inp, room)
 
-kr.bus("verb", simple_reverb, gain=0.3)
+kr.node("verb", simple_reverb, gain=0.3)  # auto-detected as effect
 kr.send("bass", "verb", level=0.4)
 ```
+
+!!! warning "Do NOT use `krs.control('in', ...)` for audio input"
+    Using a control slider for audio input creates a 0-input generator,
+    not an effect. Sends will fail with "unknown port 'in'". Always use
+    a function parameter: `def fx(inp: krs.Signal) -> krs.Signal`.
 
 See [Effect Routing](effect-routing.md) for the full send/wire system.
 
@@ -144,7 +146,7 @@ Edit your `.py` synth file, and the system picks up changes automatically:
 3. LLVM recompiles the DSP to native code
 4. The audio graph hot-swaps the node with a crossfade
 
-No restart needed. Just redefine the function and call `kr.voice()` again:
+No restart needed. Just redefine the function and call `kr.node()` again:
 
 ```python
 # Change the synth -- hear the difference immediately
@@ -158,7 +160,7 @@ def acid_bass() -> krs.Signal:
     # Added filter envelope modulation
     return krs.lowpass(krs.saw(freq), cutoff + filt_env * 1200.0) * env * 0.55
 
-kr.voice("bass", acid_bass, gain=0.3)  # hot-swaps, patterns keep playing
+kr.node("bass", acid_bass, gain=0.3)  # hot-swaps, patterns keep playing
 ```
 
 ## Example synths
@@ -219,14 +221,12 @@ def pad() -> krs.Signal:
 
 ### Simple reverb
 
-A bus effect using Freeverb:
+An effect using Freeverb (note the `inp` audio input parameter):
 
 ```python
-@kr.dsp
-def simple_reverb() -> krs.Signal:
+def simple_reverb(inp: krs.Signal) -> krs.Signal:
     room = krs.control("room", 0.6, 0.0, 1.0)
-    sig = krs.control("in0", 0.0, -1.0, 1.0)
-    return krs.reverb(sig, room)
+    return krs.reverb(inp, room)
 ```
 
 ## Putting it together
@@ -247,8 +247,8 @@ def acid_bass() -> krs.Signal:
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
 with kr.batch():
-    kr.voice("kick", kick, gain=0.8)
-    kr.voice("bass", acid_bass, gain=0.3)
+    kr.node("kick", kick, gain=0.8)
+    kr.node("bass", acid_bass, gain=0.3)
 
 kr.tempo = 128
 kr.play("kick", kr.hit() * 4)

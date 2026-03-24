@@ -2,7 +2,7 @@
 
 Patterns are the sequencing system in krach. They describe *what* happens and
 *when*, using composable IR trees with rational time. Patterns are independent
-of voices -- you build a pattern, then bind it to a voice with `kr.play()`.
+of nodes -- you build a pattern, then bind it to a node with `kr.play()`.
 
 ## What is a pattern?
 
@@ -15,7 +15,7 @@ Patterns are:
 
 - **Composable** -- combine with `+`, `|`, `*`, and transforms
 - **Rational time** -- subdivisions are exact, no floating-point drift
-- **Reusable** -- the same pattern can play on different voices
+- **Reusable** -- the same pattern can play on different nodes
 
 ## Atoms
 
@@ -77,7 +77,7 @@ kr.note("A4") | kr.note("C5") | kr.note("E5")
     The voice **must** have `count` >= the number of simultaneous pitches:
 
     ```python
-    kr.voice("rhodes", rhodes_fn, gain=0.3, count=4)  # poly voice
+    kr.node("rhodes", rhodes_fn, gain=0.3, count=4)  # poly node
     kr.play("rhodes", kr.note("A4", "C5", "E5") + kr.rest())
     ```
 
@@ -394,7 +394,7 @@ kr.play("bass/cutoff", kr.ramp(200.0, 2000.0).over(4))
 
 ### Node handles
 
-`kr.node()`, `kr.voice()`, and `kr.bus()` all return a handle:
+`kr.node()`, `kr.node()`, and `kr.node()` all return a handle:
 
 ```python
 bass = kr.node("bass", acid_bass, gain=0.3)
@@ -416,14 +416,14 @@ kr.play("kick", kr.hit() * 8, swing=0.67)
 
 ## Pattern retrieval
 
-Get the current pattern from a voice to modify and replay:
+Get the current pattern from a node to modify and replay:
 
 ```python
 p = kr.pattern("kick")            # get current pattern by name
 kr.play("kick", p.fast(2))       # modify and replay
 
-# Or via a voice handle:
-kick = kr.voice("drums/kick", kick_fn, gain=0.8)
+# Or via a node handle:
+kick = kr.node("drums/kick", kick_fn, gain=0.8)
 p = kick.pattern()
 kick.play(p.every(4, lambda p: p.reverse()))
 ```
@@ -432,18 +432,18 @@ kick.play(p.every(4, lambda p: p.reverse()))
 
 Pattern atoms like `kr.note()` and `kr.hit()` produce **bare parameter
 names** (e.g., `freq`, `gate`). When you call `kr.play("bass", pattern)`, the
-system binds those bare names to the voice's control namespace:
+system binds those bare names to the node's control namespace:
 
 - `freq` becomes `bass/freq`
 - `gate` becomes `bass/gate`
 - `cutoff` becomes `bass/cutoff`
 
-This means the same pattern can be reused on different voices:
+This means the same pattern can be reused on different nodes:
 
 ```python
 melody = kr.seq("A2", "D3", None, "E2").over(2)
 kr.play("bass", melody)
-kr.play("lead", melody)   # same pattern, different voice
+kr.play("lead", melody)   # same pattern, different node
 ```
 
 ## Common recipes
@@ -469,7 +469,7 @@ kr.play("bass", kr.seq("A2", "C3", "D3", "E3").over(2))
 ### Chord stabs
 
 ```python
-kr.voice("rhodes", rhodes_fn, gain=0.3, count=4)
+kr.node("rhodes", rhodes_fn, gain=0.3, count=4)
 kr.play("rhodes", kr.note("A4", "C5", "E5") + kr.rest())
 ```
 

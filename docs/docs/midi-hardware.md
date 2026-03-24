@@ -77,7 +77,7 @@ Live audio inputs can be sent to buses just like voices:
 
 ```python
 mic = kr.input("mic", channel=0, gain=0.5)
-verb = kr.bus("verb", reverb_fn, gain=0.3)
+verb = kr.node("verb", reverb_fn, gain=0.3)
 
 mic.send(verb, 0.4)   # send mic to reverb at 40%
 ```

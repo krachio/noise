@@ -59,7 +59,7 @@ The `@kr.dsp` decorator transpiles your Python function to FAUST, compiles it vi
 ### 2. Create a voice and play it
 
 ```python
-kr.voice("kick", kick, gain=0.8)
+kr.node("kick", kick, gain=0.8)
 kr.play("kick", kr.hit() * 4)
 ```
 
@@ -86,7 +86,7 @@ def bass() -> krs.Signal:
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
-bass = kr.voice("bass", bass, gain=0.3)
+bass = kr.node("bass", bass, gain=0.3)
 ```
 
 ### 5. Play a bass line
@@ -124,7 +124,7 @@ reverb = kr.node("verb", verb, gain=0.3)
 
 !!! note
     `kr.node()` auto-detects whether a DSP has audio inputs. Effects (like reverb)
-    are detected automatically -- no need to choose between `voice()` and `bus()`.
+    are detected automatically -- effects are detected automatically from audio input parameters.
 
 ### 8. Route the bass to reverb with `>>`
 
@@ -143,7 +143,7 @@ kr.unmute("kick")         # bring it back
 kr.fade("bass/gain", 0.0, bars=4)  # fade bass out over 4 bars
 kr.solo("bass")           # mute everything except bass
 kr.unsolo()               # unmute all
-kr.hush("kick")           # stop kick pattern (voice stays, can replay)
+kr.hush("kick")           # stop kick pattern (node stays, can replay)
 kr.stop()                 # stop all patterns
 ```
 
