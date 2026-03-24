@@ -344,7 +344,7 @@ class MixerInfra:
     def _warn_unknown_controls(self, name: str, node: Node, pattern: Pattern) -> None:
         """Warn if a pattern references controls not present on the node."""
         from krach._bind import collect_control_labels
-        labels = collect_control_labels(pattern.node)
+        labels = collect_control_labels(pattern.ir_node)
         if not labels:
             return
         known = set(node.controls) | {"gain"}
@@ -366,7 +366,7 @@ class MixerInfra:
         if rng is None:
             return
         lo, hi = rng
-        values = collect_control_values(pattern.node)
+        values = collect_control_values(pattern.ir_node)
         if not values:
             return
         v_min, v_max = min(values), max(values)

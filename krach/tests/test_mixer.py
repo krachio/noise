@@ -174,26 +174,26 @@ def test_build_note_returns_frozen_compound() -> None:
     """build_note returns Freeze(Fast(2, Cat([Stack(onset), reset])))."""
     pat = build_note("bass", ("freq", "gate"), pitch=55.0)
     assert isinstance(pat, Pattern)
-    assert isinstance(pat.node, Freeze), f"expected Freeze, got {type(pat.node).__name__}"
+    assert pat.node.primitive.name == "freeze", f"expected Freeze, got {type(pat.node).__name__}"
 
 
 def test_build_note_with_extra_params() -> None:
     pat = build_note("bass", ("freq", "gate", "cutoff"), pitch=55.0, cutoff=800.0)
-    assert isinstance(pat.node, Freeze)
-    labels = _collect_control_labels(pat.node)
+    assert pat.node.primitive.name == "freeze"
+    labels = _collect_control_labels(pat.ir_node)
     assert "bass/cutoff" in labels, "cutoff kwarg should appear as bass/cutoff in IR"
 
 
 def test_build_note_skips_unknown_controls() -> None:
     pat = build_note("bass", ("freq", "gate"), pitch=55.0, reverb=0.8)
-    assert isinstance(pat.node, Freeze)
-    labels = _collect_control_labels(pat.node)
+    assert pat.node.primitive.name == "freeze"
+    labels = _collect_control_labels(pat.ir_node)
     assert not any("reverb" in l for l in labels), "unknown control should not appear in IR"
 
 
 def test_build_note_gate_only_voice() -> None:
     pat = build_note("pad", ("gate",))
-    assert isinstance(pat.node, Freeze)
+    assert pat.node.primitive.name == "freeze"
 
 
 def test_build_note_no_triggerable_controls_raises() -> None:
@@ -209,7 +209,7 @@ def test_build_hit_returns_frozen_compound() -> None:
     """build_hit returns Freeze(Fast(2, Cat([trig, reset])))."""
     pat = build_hit("kit", "kick")
     assert isinstance(pat, Pattern)
-    assert isinstance(pat.node, Freeze)
+    assert pat.node.primitive.name == "freeze"
 
 
 # ── Pattern algebra compatibility ─────────────────────────────────────────────
@@ -221,7 +221,7 @@ def test_step_combinable_with_add() -> None:
     s2 = build_note("bass", ("freq", "gate"), pitch=73.0)
     combined = s1 + s2
     assert isinstance(combined, Pattern)
-    assert isinstance(combined.node, Cat)
+    assert combined.node.primitive.name == "cat"
     assert len(combined.node.children) == 2  # 2 Freeze compounds
 
 
@@ -229,7 +229,7 @@ def test_rest_plus_hit_is_two_atoms() -> None:
     """rest() + hit() should be 2 atoms — hit fires at 1/2, not 1/3."""
     from krach.patterns.pattern import rest
     pat = rest() + build_hit("kit", "kick")
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 2  # Silence + Freeze
 
 
@@ -645,25 +645,23 @@ def test_build_note_raises_when_pitch_but_no_freq() -> None:
 
 def test_seq_builds_cat_of_steps() -> None:
     """Free seq() returns a Cat pattern with correct number of children."""
-    from krach.patterns.ir import Cat
 
     from krach._mixer import seq
 
     pat = seq(55, 73, 65)
     assert isinstance(pat, Pattern)
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 3
 
 
 def test_seq_with_none_inserts_rest() -> None:
     """None entries in free seq() produce Silence nodes."""
-    from krach.patterns.ir import Cat, Silence
 
     from krach._mixer import seq
 
     pat = seq(55, None, 65)
-    assert isinstance(pat.node, Cat)
-    assert isinstance(pat.node.children[1], Silence)
+    assert pat.node.primitive.name == "cat"
+    assert pat.node.children[1].primitive.name == "silence"
 
 
 def test_seq_raises_on_empty() -> None:
@@ -678,14 +676,14 @@ def test_seq_raises_on_empty() -> None:
 
 def test_seq_produces_bare_params() -> None:
     """Free seq() produces notes with bare param names for later binding."""
-    from krach.patterns.ir import Cat, ir_to_dict
+    from krach.patterns.ir import ir_to_dict
 
     from krach._mixer import seq
 
     pat = seq(220.0, 330.0, 440.0)
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 3
-    ir_str = str(ir_to_dict(pat.node))
+    ir_str = str(ir_to_dict(pat.ir_node))
     assert "'label': 'freq'" in ir_str
 
 
@@ -959,31 +957,30 @@ def test_note_single_pitch_returns_freeze() -> None:
 
     pat = note(55.0)
     assert isinstance(pat, Pattern)
-    assert isinstance(pat.node, Freeze)
+    assert pat.node.primitive.name == "freeze"
 
 
 def test_note_gate_only_returns_freeze() -> None:
     from krach._mixer import note
 
     pat = note()
-    assert isinstance(pat.node, Freeze)
+    assert pat.node.primitive.name == "freeze"
 
 
 def test_note_chord_returns_frozen_stack() -> None:
-    from krach.patterns.ir import Stack
 
     from krach._mixer import note
 
     pat = note(220.0, 330.0, 440.0)
-    assert isinstance(pat.node, Freeze)
-    inner = pat.node.child
-    assert isinstance(inner, Stack)
+    assert pat.node.primitive.name == "freeze"
+    inner = pat.node.children[0]
+    assert inner.primitive.name == "stack"
 
 
 def test_note_vel_kwarg_sends_vel_control() -> None:
     pat = build_note("bass", ("freq", "gate", "vel"), pitch=55.0, vel=0.7)
-    assert isinstance(pat.node, Freeze)
-    labels = _collect_control_labels(pat.node)
+    assert pat.node.primitive.name == "freeze"
+    labels = _collect_control_labels(pat.ir_node)
     assert "bass/vel" in labels, "vel kwarg should produce bass/vel Control in IR"
 
 
@@ -991,7 +988,7 @@ def test_note_vel_default_not_sent() -> None:
     from krach.patterns.ir import ir_to_dict
 
     pat = build_note("bass", ("freq", "gate", "vel"), pitch=55.0)
-    ir_json = str(ir_to_dict(pat.node))
+    ir_json = str(ir_to_dict(pat.ir_node))
     assert "bass/vel" not in ir_json
 
 
@@ -1831,7 +1828,6 @@ def test_remove_voice_cleans_wires() -> None:
 
 
 def test_mod_shapes_range() -> None:
-    from krach.patterns.ir import Cat
 
     from krach._mixer import mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square, mod_tri
 
@@ -1839,7 +1835,7 @@ def test_mod_shapes_range() -> None:
     for shape in shapes:
         pat = shape(0.0, 1.0, steps=16)
         assert isinstance(pat, Pattern), f"{shape.__name__} must return Pattern"
-        assert isinstance(pat.node, Cat)
+        assert pat.node.primitive.name == "cat"
         assert len(pat.node.children) == 16
 
 
@@ -1939,8 +1935,8 @@ def test_free_note_returns_freeze_with_bare_params() -> None:
 
     pat = note(440.0)
     assert isinstance(pat, Pattern)
-    assert isinstance(pat.node, Freeze)
-    ir_str = str(ir_to_dict(pat.node))
+    assert pat.node.primitive.name == "freeze"
+    ir_str = str(ir_to_dict(pat.ir_node))
     assert "'label': 'freq'" in ir_str
     assert "'label': 'gate'" in ir_str
 
@@ -1951,7 +1947,7 @@ def test_free_note_string_pitch() -> None:
     from krach._mixer import note
 
     pat = note("C4")
-    ir_str = str(ir_to_dict(pat.node))
+    ir_str = str(ir_to_dict(pat.ir_node))
     assert "'label': 'freq'" in ir_str
 
 
@@ -1961,19 +1957,18 @@ def test_free_note_int_pitch() -> None:
     from krach._mixer import note
 
     pat = note(60)  # MIDI note 60 = C4
-    ir_str = str(ir_to_dict(pat.node))
+    ir_str = str(ir_to_dict(pat.ir_node))
     assert "'label': 'freq'" in ir_str
 
 
 def test_free_note_chord() -> None:
-    from krach.patterns.ir import Stack
 
     from krach._mixer import note
 
     pat = note(220.0, 330.0, 440.0)
-    assert isinstance(pat.node, Freeze)
-    inner = pat.node.child
-    assert isinstance(inner, Stack)
+    assert pat.node.primitive.name == "freeze"
+    inner = pat.node.children[0]
+    assert inner.primitive.name == "stack"
 
 
 def test_free_note_vel() -> None:
@@ -1982,7 +1977,7 @@ def test_free_note_vel() -> None:
     from krach._mixer import note
 
     pat = note(440.0, vel=0.7)
-    ir_str = str(ir_to_dict(pat.node))
+    ir_str = str(ir_to_dict(pat.ir_node))
     assert "'label': 'vel'" in ir_str
 
 
@@ -1993,8 +1988,8 @@ def test_free_hit_returns_freeze_with_bare_param() -> None:
 
     pat = hit()
     assert isinstance(pat, Pattern)
-    assert isinstance(pat.node, Freeze)
-    ir_str = str(ir_to_dict(pat.node))
+    assert pat.node.primitive.name == "freeze"
+    ir_str = str(ir_to_dict(pat.ir_node))
     assert "'label': 'gate'" in ir_str
 
 
@@ -2004,7 +1999,7 @@ def test_free_hit_custom_param() -> None:
     from krach._mixer import hit
 
     pat = hit("kick")
-    ir_str = str(ir_to_dict(pat.node))
+    ir_str = str(ir_to_dict(pat.ir_node))
     assert "'label': 'kick'" in ir_str
 
 
@@ -2012,25 +2007,24 @@ def test_free_seq_returns_cat() -> None:
     from krach._mixer import seq
 
     pat = seq(440.0, 330.0, 220.0)
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 3
 
 
 def test_free_seq_with_none_rest() -> None:
-    from krach.patterns.ir import Silence
 
     from krach._mixer import seq
 
     pat = seq(440.0, None, 220.0)
-    assert isinstance(pat.node, Cat)
-    assert isinstance(pat.node.children[1], Silence)
+    assert pat.node.primitive.name == "cat"
+    assert pat.node.children[1].primitive.name == "silence"
 
 
 def test_free_seq_string_pitches() -> None:
     from krach._mixer import seq
 
     pat = seq("C4", "E4", "G4")
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 3
 
 
@@ -2044,7 +2038,7 @@ def test_bind_voice_rewrites_bare_params() -> None:
     from krach._mixer import note
 
     pat = note(440.0)
-    bound = bind_voice(pat.node, "bass")
+    bound = bind_voice(pat.ir_node, "bass")
     ir_str = str(ir_to_dict(bound))
     assert "'label': 'bass/freq'" in ir_str
     assert "'label': 'bass/gate'" in ir_str
@@ -2070,7 +2064,7 @@ def test_bind_voice_walks_nested_tree() -> None:
     from krach._mixer import seq
 
     pat = seq(440.0, 330.0)
-    bound = bind_voice(pat.node, "pad")
+    bound = bind_voice(pat.ir_node, "pad")
     ir_str = str(ir_to_dict(bound))
     assert "'label': 'pad/freq'" in ir_str
     assert "'label': 'pad/gate'" in ir_str
@@ -2100,7 +2094,7 @@ def test_play_voice_binds_pattern() -> None:
     played_name = call_args.args[0]
     played_pattern = call_args.args[1]
     assert played_name == "bass"
-    ir_str = str(ir_to_dict(played_pattern.node))
+    ir_str = str(ir_to_dict(played_pattern.ir_node))
     assert "'label': 'bass/freq'" in ir_str
     assert "'label': 'bass/gate'" in ir_str
 
@@ -2126,7 +2120,7 @@ def test_play_control_path_binds_ctrl() -> None:
     played_name = call_args.args[0]
     played_pattern = call_args.args[1]
     assert played_name == "_ctrl_bass_cutoff"
-    ir_str = str(ir_to_dict(played_pattern.node))
+    ir_str = str(ir_to_dict(played_pattern.ir_node))
     assert "'Str': 'bass/cutoff'" in ir_str
 
 
@@ -2170,24 +2164,22 @@ def test_set_validates_finite() -> None:
 
 
 def test_ramp_pattern_values() -> None:
-    from krach.patterns.ir import Cat
 
     from krach._mixer import ramp
 
     pat = ramp(0.0, 1.0, steps=8)
     assert isinstance(pat, Pattern)
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 8
 
 
 def test_mod_sine_pattern_length() -> None:
-    from krach.patterns.ir import Cat
 
     from krach._mixer import mod_sine
 
     pat = mod_sine(0.0, 1.0, steps=32)
     assert isinstance(pat, Pattern)
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 32
 
 
@@ -2205,11 +2197,11 @@ def test_ramp_uses_ctrl_placeholder() -> None:
     from krach._mixer import ramp
 
     pat = ramp(0.0, 1.0, steps=4)
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     first = pat.node.children[0]
-    assert isinstance(first, Atom)
-    assert isinstance(first.value, Control)
-    assert first.value.label == "ctrl"
+    assert first.primitive.name == "atom"
+    assert isinstance(first.params.value, Control)
+    assert first.params.value.label == "ctrl"
 
 
 def test_mod_tri_returns_pattern() -> None:
@@ -2220,13 +2212,12 @@ def test_mod_tri_returns_pattern() -> None:
 
 
 def test_mod_ramp_same_as_ramp() -> None:
-    from krach.patterns.ir import Cat
 
     from krach._mixer import mod_ramp
 
     pat = mod_ramp(0.0, 1.0, steps=8)
     assert isinstance(pat, Pattern)
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 8
 
 

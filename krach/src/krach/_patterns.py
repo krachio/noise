@@ -11,7 +11,6 @@ from typing import Callable
 
 from krach._pitch import mtof as _mtof
 from krach._pitch import parse_note as _parse_note
-from krach.patterns.ir import Cat, Freeze, IrNode, Silence
 from krach.patterns.pattern import Pattern
 from krach.patterns.pattern import ctrl as _ctrl
 from krach.patterns.pattern import freeze as _freeze
@@ -126,17 +125,16 @@ def stack(*patterns: Pattern) -> Pattern:
 
 def struct(rhythm: Pattern, melody: Pattern) -> Pattern:
     """Impose rhythm's onset structure onto melody's values."""
+    from krach.ir.pattern import PatternNode
 
-    melody_atoms: list[Pattern] = []
+    melody_atoms: list[PatternNode] = []
 
-    def _extract_atoms(node: object) -> None:
-        if isinstance(node, Freeze):
-            melody_atoms.append(Pattern(node))
-        elif hasattr(node, "children"):
-            for c in getattr(node, "children", ()):
-                _extract_atoms(c)  # type: ignore[arg-type]
-        elif hasattr(node, "child"):
-            _extract_atoms(getattr(node, "child"))  # type: ignore[arg-type]
+    def _extract_atoms(node: PatternNode) -> None:
+        if node.primitive.name == "freeze":
+            melody_atoms.append(node)
+        else:
+            for c in node.children:
+                _extract_atoms(c)
 
     _extract_atoms(melody.node)
     if not melody_atoms:
@@ -144,26 +142,18 @@ def struct(rhythm: Pattern, melody: Pattern) -> Pattern:
 
     idx = 0
 
-    def _replace(node: object) -> object:
+    def _replace(node: PatternNode) -> PatternNode:
         nonlocal idx
-        if isinstance(node, Freeze):
+        if node.primitive.name == "freeze":
             result = melody_atoms[idx % len(melody_atoms)]
             idx += 1
-            return result.node
-        if isinstance(node, Silence):
+            return result
+        if node.primitive.name == "silence":
             return node
-        if isinstance(node, Cat):
-            return Cat(tuple(_replace(c) for c in node.children))  # type: ignore[misc]
-        if hasattr(node, "child"):
-            from dataclasses import replace as _dc_replace
-            return _dc_replace(node, child=_replace(node.child))  # type: ignore[type-var,misc]
-        if hasattr(node, "children"):
-            from dataclasses import replace as _dc_replace
-            return _dc_replace(node, children=tuple(_replace(c) for c in node.children))  # type: ignore[type-var,misc]
-        return node
+        new_children = tuple(_replace(c) for c in node.children)
+        return PatternNode(node.primitive, new_children, node.params)
 
-    new_ir: IrNode = _replace(rhythm.node)  # type: ignore[assignment]
-    return Pattern(new_ir)
+    return Pattern(_replace(rhythm.node))
 
 
 # ── Voice-bound builders (used by Mixer internally) ──────────────────────

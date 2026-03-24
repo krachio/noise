@@ -21,152 +21,152 @@ from krach.patterns.pattern import cc, note, rest
 class TestAtomConstructors:
     def test_note_defaults(self) -> None:
         p = note(60)
-        assert p.node == Atom(Note(channel=0, note=60, velocity=100, dur=1.0))
+        assert p.ir_node == Atom(Note(channel=0, note=60, velocity=100, dur=1.0))
 
     def test_note_custom(self) -> None:
         p = note(36, velocity=80, channel=9, duration=0.5)
-        assert p.node == Atom(Note(channel=9, note=36, velocity=80, dur=0.5))
+        assert p.ir_node == Atom(Note(channel=9, note=36, velocity=80, dur=0.5))
 
     def test_rest(self) -> None:
         p = rest()
-        assert p.node == Silence()
+        assert p.ir_node == Silence()
 
     def test_cc(self) -> None:
         from krach.patterns.ir import Cc
 
         p = cc(74, 127, channel=1)
-        assert p.node == Atom(Cc(channel=1, controller=74, value=127))
+        assert p.ir_node == Atom(Cc(channel=1, controller=74, value=127))
 
 
 class TestSequenceOperator:
     def test_add_two(self) -> None:
         a, b = note(60), note(64)
         result = a + b
-        assert isinstance(result.node, Cat)
-        assert len(result.node.children) == 2
+        assert isinstance(result.ir_node, Cat)
+        assert len(result.ir_node.children) == 2
 
     def test_add_three_flattens(self) -> None:
         a, b, c = note(60), note(64), note(67)
         result = (a + b) + c
-        assert isinstance(result.node, Cat)
-        assert len(result.node.children) == 3
+        assert isinstance(result.ir_node, Cat)
+        assert len(result.ir_node.children) == 3
 
     def test_add_left_and_right_flatten(self) -> None:
         a, b, c, d = note(60), note(64), note(67), note(72)
         result = (a + b) + (c + d)
-        assert isinstance(result.node, Cat)
-        assert len(result.node.children) == 4
+        assert isinstance(result.ir_node, Cat)
+        assert len(result.ir_node.children) == 4
 
 
 class TestLayerOperator:
     def test_or_two(self) -> None:
         a, b = note(60), note(64)
         result = a | b
-        assert isinstance(result.node, Stack)
-        assert len(result.node.children) == 2
+        assert isinstance(result.ir_node, Stack)
+        assert len(result.ir_node.children) == 2
 
     def test_or_three_flattens(self) -> None:
         a, b, c = note(60), note(64), note(67)
         result = (a | b) | c
-        assert isinstance(result.node, Stack)
-        assert len(result.node.children) == 3
+        assert isinstance(result.ir_node, Stack)
+        assert len(result.ir_node.children) == 3
 
 
 class TestRepeatOperator:
     def test_mul(self) -> None:
         p = note(42) * 4
-        assert isinstance(p.node, Cat)
-        assert len(p.node.children) == 4
-        assert all(c == Atom(Note(0, 42, 100, 1.0)) for c in p.node.children)
+        assert isinstance(p.ir_node, Cat)
+        assert len(p.ir_node.children) == 4
+        assert all(c == Atom(Note(0, 42, 100, 1.0)) for c in p.ir_node.children)
 
 
 class TestOverMethod:
     def test_over_gt_1_produces_slow(self) -> None:
         p = note(60).over(2)
-        assert isinstance(p.node, Slow)
-        assert p.node.factor == (2, 1)
+        assert isinstance(p.ir_node, Slow)
+        assert p.ir_node.factor == (2, 1)
 
     def test_over_lt_1_produces_fast(self) -> None:
         p = note(60).over(0.5)
-        assert isinstance(p.node, Fast)
-        assert p.node.factor == (2, 1)
+        assert isinstance(p.ir_node, Fast)
+        assert p.ir_node.factor == (2, 1)
 
     def test_over_float_rational(self) -> None:
         p = note(60).over(1.5)
-        assert isinstance(p.node, Slow)
-        assert p.node.factor == (3, 2)
+        assert isinstance(p.ir_node, Slow)
+        assert p.ir_node.factor == (3, 2)
 
     def test_over_non_dyadic_float_produces_bounded_rational(self) -> None:
         """0.9 must produce (9, 10), not a huge binary fraction."""
         p = note(60).over(0.9)
-        assert isinstance(p.node, Fast)
-        # Inverted: over(0.9) → Fast(10/9) because 0.9 < 1
-        assert p.node.factor == (10, 9)
+        assert isinstance(p.ir_node, Fast)
+        # Inverted: over(0.9) -> Fast(10/9) because 0.9 < 1
+        assert p.ir_node.factor == (10, 9)
 
     def test_over_third_produces_bounded_rational(self) -> None:
         p = note(60).over(1 / 3)
-        assert isinstance(p.node, Fast)
-        assert p.node.factor == (3, 1)
+        assert isinstance(p.ir_node, Fast)
+        assert p.ir_node.factor == (3, 1)
 
 
 class TestFastMethod:
     def test_fast_gt_1_produces_fast(self) -> None:
         p = note(60).fast(2)
-        assert isinstance(p.node, Fast)
-        assert p.node.factor == (2, 1)
+        assert isinstance(p.ir_node, Fast)
+        assert p.ir_node.factor == (2, 1)
 
     def test_fast_lt_1_produces_slow(self) -> None:
         p = note(60).fast(0.5)
-        assert isinstance(p.node, Slow)
-        assert p.node.factor == (2, 1)
+        assert isinstance(p.ir_node, Slow)
+        assert p.ir_node.factor == (2, 1)
 
     def test_fast_float(self) -> None:
         p = note(60).fast(1.5)
-        assert isinstance(p.node, Fast)
-        assert p.node.factor == (3, 2)
+        assert isinstance(p.ir_node, Fast)
+        assert p.ir_node.factor == (3, 2)
 
 
 class TestShiftMethod:
     def test_positive_shift_late(self) -> None:
         p = note(60).shift(0.25)
-        assert isinstance(p.node, Late)
-        assert p.node.offset == (1, 4)
+        assert isinstance(p.ir_node, Late)
+        assert p.ir_node.offset == (1, 4)
 
     def test_negative_shift_early(self) -> None:
         p = note(60).shift(-0.25)
-        assert isinstance(p.node, Early)
-        assert p.node.offset == (1, 4)
+        assert isinstance(p.ir_node, Early)
+        assert p.ir_node.offset == (1, 4)
 
 
 class TestTransformMethods:
     def test_reverse(self) -> None:
         p = note(60).reverse()
-        assert isinstance(p.node, Rev)
+        assert isinstance(p.ir_node, Rev)
 
     def test_every(self) -> None:
         p = note(60)
         result = p.every(4, lambda x: x.reverse())
-        assert isinstance(result.node, Every)
-        assert result.node.n == 4
-        assert isinstance(result.node.transform, Rev)
-        assert result.node.child == p.node
+        assert isinstance(result.ir_node, Every)
+        assert result.ir_node.n == 4
+        assert isinstance(result.ir_node.transform, Rev)
+        assert result.ir_node.child == p.ir_node
 
     def test_spread(self) -> None:
         p = note(36).spread(3, 8)
-        assert isinstance(p.node, Euclid)
-        assert p.node.pulses == 3
-        assert p.node.steps == 8
-        assert p.node.rotation == 0
+        assert isinstance(p.ir_node, Euclid)
+        assert p.ir_node.pulses == 3
+        assert p.ir_node.steps == 8
+        assert p.ir_node.rotation == 0
 
     def test_spread_with_rotation(self) -> None:
         p = note(36).spread(3, 8, rotation=2)
-        assert isinstance(p.node, Euclid)
-        assert p.node.rotation == 2
+        assert isinstance(p.ir_node, Euclid)
+        assert p.ir_node.rotation == 2
 
     def test_thin(self) -> None:
         p = note(60).thin(0.3)
-        assert isinstance(p.node, Degrade)
-        assert p.node.prob == 0.3
+        assert isinstance(p.ir_node, Degrade)
+        assert p.ir_node.prob == 0.3
 
 
 class TestImmutability:
@@ -209,14 +209,14 @@ class TestOverZeroValidation:
 class TestChaining:
     def test_chain_builds_nested_tree(self) -> None:
         p = note(60).fast(2).reverse().thin(0.1)
-        assert isinstance(p.node, Degrade)
-        assert isinstance(p.node.child, Rev)
-        rev_child = p.node.child
+        assert isinstance(p.ir_node, Degrade)
+        assert isinstance(p.ir_node.child, Rev)
+        rev_child = p.ir_node.child
         assert isinstance(rev_child, Rev)
         assert isinstance(rev_child.child, Fast)
 
 
-# ── Sprint 12 adversarial: fast()/over() with inf/nan ────────────────────────
+# -- Sprint 12 adversarial: fast()/over() with inf/nan --------------------
 
 
 class TestFastInfNan:
@@ -224,7 +224,7 @@ class TestFastInfNan:
     raises ValueError with confusing Fraction internals messages. These should
     raise ValueError with a clear message before reaching _to_rational().
 
-    Root cause: pattern.py:76-82 — fast() checks `factor <= 0` which passes
+    Root cause: pattern.py:76-82 -- fast() checks `factor <= 0` which passes
     for inf and nan, then Fraction(value) crashes with internal errors.
     """
 
@@ -253,30 +253,30 @@ class TestFastInfNan:
             note(60).over(float("nan"))
 
 
-# ── Swing ────────────────────────────────────────────────────────────────
+# -- Swing -----------------------------------------------------------------
 
 
 class TestSwing:
     def test_swing_produces_warp_node(self) -> None:
         from krach.patterns.ir import Warp
         pat = note(60).swing(0.67)
-        assert isinstance(pat.node, Warp)
-        assert pat.node.kind == "swing"
-        assert pat.node.amount == 0.67
-        assert pat.node.grid == 8
+        assert isinstance(pat.ir_node, Warp)
+        assert pat.ir_node.kind == "swing"
+        assert pat.ir_node.amount == 0.67
+        assert pat.ir_node.grid == 8
 
     def test_swing_default_args(self) -> None:
         from krach.patterns.ir import Warp
         pat = note(60).swing()
-        assert isinstance(pat.node, Warp)
-        assert pat.node.amount == 0.67
-        assert pat.node.grid == 8
+        assert isinstance(pat.ir_node, Warp)
+        assert pat.ir_node.amount == 0.67
+        assert pat.ir_node.grid == 8
 
     def test_swing_custom_grid(self) -> None:
         from krach.patterns.ir import Warp
         pat = note(60).swing(0.6, grid=4)
-        assert isinstance(pat.node, Warp)
-        assert pat.node.grid == 4
+        assert isinstance(pat.ir_node, Warp)
+        assert pat.ir_node.grid == 4
 
     def test_swing_invalid_amount_raises(self) -> None:
         import pytest

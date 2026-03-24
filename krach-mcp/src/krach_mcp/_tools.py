@@ -256,7 +256,7 @@ def register_tools(mcp: FastMCP) -> None:
             for slot, state in slots.items():
                 label = "playing" if state.playing else "stopped"
                 try:
-                    summary = _summarize(state.pattern.node)
+                    summary = _summarize(state.pattern.ir_node)
                     lines.append(f"  {slot}: {label} — {summary}")
                 except (ValueError, TypeError, KeyError):
                     lines.append(f"  {slot}: {label}")

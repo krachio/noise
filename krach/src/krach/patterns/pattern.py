@@ -1,30 +1,39 @@
+"""Pattern — composable temporal structures built from PatternNode.
+
+Pattern wraps a PatternNode tree. Operators (+, |, *, .over(), etc.)
+produce new PatternNode trees. `.ir_node` lowers to old IrNode at the
+engine boundary via backends/pattern_backend.to_ir_node().
+"""
+
 from __future__ import annotations
 
+import functools
 import math
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field as dataclass_field
 from fractions import Fraction
 
-from krach.patterns.ir import (
-    Atom,
-    Cat,
-    Cc,
-    Control,
-    Degrade,
-    Early,
-    Euclid,
-    Every,
-    Fast,
-    IrNode,
-    Late,
-    Note,
-    Osc,
-    OscArg,
-    Rev,
-    Silence,
-    Slow,
-    Stack,
-    Warp,
+from krach.ir.pattern import (
+    AtomParams,
+    CatParams,
+    DegradeParams,
+    EarlyParams,
+    EuclidParams,
+    EveryParams,
+    FastParams,
+    FreezeParams,
+    LateParams,
+    PatternNode,
+    RevParams,
+    SilenceParams,
+    SlowParams,
+    StackParams,
+    WarpParams,
+)
+from krach.patterns.ir import Cc, Control, IrNode, Note, Osc, OscArg
+from krach.patterns.primitives import (
+    atom_p, cat_p, degrade_p, early_p, euclid_p, every_p,
+    fast_p, freeze_p, late_p, rev_p, silence_p, slow_p, stack_p, warp_p,
 )
 
 
@@ -39,32 +48,52 @@ def _invert_rational(r: tuple[int, int]) -> tuple[int, int]:
     return (r[1], r[0])
 
 
-def _flatten_cat(left: IrNode, right: IrNode) -> tuple[IrNode, ...]:
-    left_children = left.children if isinstance(left, Cat) else (left,)
-    right_children = right.children if isinstance(right, Cat) else (right,)
-    return (*left_children, *right_children)
+def _flatten_cat(left: PatternNode, right: PatternNode) -> tuple[PatternNode, ...]:
+    left_c = left.children if left.primitive == cat_p else (left,)
+    right_c = right.children if right.primitive == cat_p else (right,)
+    return (*left_c, *right_c)
 
 
-def _flatten_stack(left: IrNode, right: IrNode) -> tuple[IrNode, ...]:
-    left_children = left.children if isinstance(left, Stack) else (left,)
-    right_children = right.children if isinstance(right, Stack) else (right,)
-    return (*left_children, *right_children)
+def _flatten_stack(left: PatternNode, right: PatternNode) -> tuple[PatternNode, ...]:
+    left_c = left.children if left.primitive == stack_p else (left,)
+    right_c = right.children if right.primitive == stack_p else (right,)
+    return (*left_c, *right_c)
 
 
 @dataclass(frozen=True)
 class Pattern:
-    node: IrNode
+    node: PatternNode
+    _bound_ir: IrNode | None = dataclass_field(default=None, repr=False, compare=False)
+
+    @functools.cached_property
+    def ir_node(self) -> IrNode:
+        """Lower to IrNode for the Rust engine. Cached on first access."""
+        if self._bound_ir is not None:
+            return self._bound_ir
+        from krach.backends.pattern_backend import to_ir_node
+        return to_ir_node(self.node)
+
+    @staticmethod
+    def from_bound_ir(ir: IrNode) -> Pattern:
+        """Create a Pattern from an already-bound IrNode (from bind system).
+
+        The PatternNode is a placeholder — the real data is the bound IrNode.
+        This exists because bind still operates on IrNode. Once bind migrates
+        to PatternNode (commit 2f-ii), this method is deleted.
+        """
+        placeholder = PatternNode(atom_p, (), SilenceParams())
+        return Pattern(node=placeholder, _bound_ir=ir)
 
     # ── Operators ────────────────────────────────────────────────────────
 
     def __add__(self, other: Pattern) -> Pattern:
-        return Pattern(Cat(_flatten_cat(self.node, other.node)))
+        return Pattern(PatternNode(cat_p, _flatten_cat(self.node, other.node), CatParams()))
 
     def __or__(self, other: Pattern) -> Pattern:
-        return Pattern(Stack(_flatten_stack(self.node, other.node)))
+        return Pattern(PatternNode(stack_p, _flatten_stack(self.node, other.node), StackParams()))
 
     def __mul__(self, n: int) -> Pattern:
-        return Pattern(Cat(tuple(self.node for _ in range(n))))
+        return Pattern(PatternNode(cat_p, tuple(self.node for _ in range(n)), CatParams()))
 
     # ── Time transforms ──────────────────────────────────────────────────
 
@@ -75,8 +104,8 @@ class Pattern:
             raise ValueError(f"over() requires positive cycles, got {cycles}")
         r = _to_rational(cycles)
         if r[0] * r[1] > 0 and r[0] >= r[1]:
-            return Pattern(Slow(factor=r, child=self.node))
-        return Pattern(Fast(factor=_invert_rational(r), child=self.node))
+            return Pattern(PatternNode(slow_p, (self.node,), SlowParams(factor=r)))
+        return Pattern(PatternNode(fast_p, (self.node,), FastParams(factor=_invert_rational(r))))
 
     def fast(self, factor: int | float) -> Pattern:
         if not isinstance(factor, int) and not math.isfinite(factor):
@@ -85,69 +114,53 @@ class Pattern:
             raise ValueError(f"fast() requires a positive factor, got {factor}")
         r = _to_rational(factor)
         if r[0] * r[1] > 0 and r[0] >= r[1]:
-            return Pattern(Fast(factor=r, child=self.node))
-        return Pattern(Slow(factor=_invert_rational(r), child=self.node))
+            return Pattern(PatternNode(fast_p, (self.node,), FastParams(factor=r)))
+        return Pattern(PatternNode(slow_p, (self.node,), SlowParams(factor=_invert_rational(r))))
 
     def shift(self, offset: int | float) -> Pattern:
         r = _to_rational(offset)
         if r[0] >= 0:
-            return Pattern(Late(offset=r, child=self.node))
-        return Pattern(Early(offset=(abs(r[0]), r[1]), child=self.node))
+            return Pattern(PatternNode(late_p, (self.node,), LateParams(offset=r)))
+        return Pattern(PatternNode(early_p, (self.node,), EarlyParams(offset=(abs(r[0]), r[1]))))
 
     # ── Structural transforms ────────────────────────────────────────────
 
     def reverse(self) -> Pattern:
-        return Pattern(Rev(child=self.node))
+        return Pattern(PatternNode(rev_p, (self.node,), RevParams()))
 
     def every(self, n: int, fn: Callable[[Pattern], Pattern]) -> Pattern:
         transformed = fn(self)
-        return Pattern(Every(n=n, transform=transformed.node, child=self.node))
+        return Pattern(PatternNode(every_p, (transformed.node, self.node), EveryParams(n=n)))
 
     def spread(self, pulses: int, steps: int, rotation: int = 0) -> Pattern:
-        return Pattern(
-            Euclid(pulses=pulses, steps=steps, rotation=rotation, child=self.node)
-        )
+        return Pattern(PatternNode(euclid_p, (self.node,), EuclidParams(pulses, steps, rotation)))
 
     def thin(self, prob: float, seed: int = 0) -> Pattern:
-        """Drop events with probability prob (0.0 = keep all, 1.0 = drop all)."""
-        return Pattern(Degrade(prob=prob, seed=seed, child=self.node))
+        return Pattern(PatternNode(degrade_p, (self.node,), DegradeParams(prob, seed)))
 
     def swing(self, amount: float = 0.67, grid: int = 8) -> Pattern:
-        """Apply swing. amount=0.5 is straight, 0.67 is standard, 0.75 is heavy."""
-        return Pattern(Warp(kind="swing", amount=amount, grid=grid, child=self.node))
+        return Pattern(PatternNode(warp_p, (self.node,), WarpParams("swing", amount, grid)))
 
     def mask(self, mask_str: str) -> Pattern:
-        """Suppress events where mask has gaps.
-
-        ``kr.seq("A2", "D3", "E2").mask("1 1 0")`` silences the third event.
-        Mask tokens: ``1``/``x`` = keep, ``0``/``.``/``~`` = silence.
-        """
         tokens = mask_str.split()
         keep = [t in ("1", "x", "X") for t in tokens]
-        # Walk the Cat children and replace masked positions with Silence
         node = self.node
-        if isinstance(node, Cat):
-            new_children: list[IrNode] = []
+        if node.primitive == cat_p:
+            new_children: list[PatternNode] = []
             for i, child in enumerate(node.children):
                 if i < len(keep) and not keep[i]:
-                    new_children.append(Silence())
+                    new_children.append(PatternNode(silence_p, (), SilenceParams()))
                 else:
                     new_children.append(child)
-            return Pattern(Cat(tuple(new_children)))
+            return Pattern(PatternNode(cat_p, tuple(new_children), CatParams()))
         return self
 
     def sometimes(self, prob: float, fn: Callable[[Pattern], Pattern], seed: int = 0) -> Pattern:
-        """Apply transform with probability ``prob`` each cycle.
-
-        ``p.sometimes(0.3, reverse)`` reverses 30% of cycles.
-        Uses ``Degrade`` internally for deterministic randomness.
-        """
         transformed = fn(self)
-        # Interleave: degrade the original, reverse-degrade the transform
-        return Pattern(Stack((
-            Degrade(prob=1.0 - prob, seed=seed, child=transformed.node),
-            Degrade(prob=prob, seed=seed + 1, child=self.node),
-        )))
+        return Pattern(PatternNode(stack_p, (
+            PatternNode(degrade_p, (transformed.node,), DegradeParams(1.0 - prob, seed)),
+            PatternNode(degrade_p, (self.node,), DegradeParams(prob, seed + 1)),
+        ), StackParams()))
 
 
 # ── Atom constructors ────────────────────────────────────────────────────
@@ -156,26 +169,24 @@ class Pattern:
 def note(
     pitch: int, velocity: int = 100, channel: int = 0, duration: float = 1.0
 ) -> Pattern:
-    return Pattern(Atom(Note(channel=channel, note=pitch, velocity=velocity, dur=duration)))
+    return Pattern(PatternNode(atom_p, (), AtomParams(Note(channel, pitch, velocity, duration))))
 
 
 def rest() -> Pattern:
-    return Pattern(Silence())
+    return Pattern(PatternNode(silence_p, (), SilenceParams()))
 
 
 def cc(controller: int, value: int, channel: int = 0) -> Pattern:
-    return Pattern(Atom(Cc(channel=channel, controller=controller, value=value)))
+    return Pattern(PatternNode(atom_p, (), AtomParams(Cc(channel, controller, value))))
 
 
 def osc(address: str, *args: OscArg) -> Pattern:
-    return Pattern(Atom(Osc(address=address, args=tuple(args))))
+    return Pattern(PatternNode(atom_p, (), AtomParams(Osc(address, tuple(args)))))
 
 
 def ctrl(label: str, value: float) -> Pattern:
-    return Pattern(Atom(Control(label=label, value=value)))
+    return Pattern(PatternNode(atom_p, (), AtomParams(Control(label, value))))
 
 
 def freeze(pat: Pattern) -> Pattern:
-    """Mark a pattern as an indivisible unit — transforms won't descend."""
-    from krach.patterns.ir import Freeze
-    return Pattern(Freeze(child=pat.node))
+    return Pattern(PatternNode(freeze_p, (pat.node,), FreezeParams()))

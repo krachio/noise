@@ -1,5 +1,5 @@
 import pytest
-from krach.patterns.ir import Atom, Cat, Control, Freeze, IrNode, Silence, Slow, Stack
+from krach.patterns.ir import Control
 
 from krach._mininotation import p
 
@@ -7,11 +7,11 @@ from krach._mininotation import p
 def test_single_hit() -> None:
     pat = p("x")
     # hit() produces Freeze(Cat([Control(gate, 1), Control(gate, 0)]))
-    assert isinstance(pat.node, Freeze)
-    inner = pat.node.child
-    assert isinstance(inner, Cat)
+    assert pat.node.primitive.name == "freeze"
+    inner = pat.node.children[0]
+    assert inner.primitive.name == "cat"
     assert any(
-        isinstance(c, Atom) and isinstance(c.value, Control) and c.value.label == "gate"
+        c.primitive.name == "atom" and hasattr(c.params, "value") and isinstance(c.params.value, Control) and c.params.value.label == "gate"
         for c in inner.children
     )
 
@@ -19,81 +19,79 @@ def test_single_hit() -> None:
 def test_single_note() -> None:
     pat = p("C4")
     # note("C4") -> Freeze(Cat([Stack(freq, gate=1), gate=0]))
-    assert isinstance(pat.node, Freeze)
-    inner = pat.node.child
-    assert isinstance(inner, Cat)
+    assert pat.node.primitive.name == "freeze"
+    inner = pat.node.children[0]
+    assert inner.primitive.name == "cat"
     # Collect all Control labels recursively
     labels = _collect_labels(inner)
     assert "freq" in labels
     assert "gate" in labels
 
 
-def _collect_labels(node: IrNode) -> set[str]:
-    """Recursively collect Control labels from an IR tree."""
+def _collect_labels(node: object) -> set[str]:
+    """Recursively collect Control labels from a PatternNode tree."""
+    from krach.ir.pattern import PatternNode, AtomParams
+    from krach.patterns.ir import Control
     labels: set[str] = set()
-    match node:
-        case Atom(value=Control(label=label)):
-            labels.add(label)
-        case Freeze(child=child):
-            labels |= _collect_labels(child)
-        case Cat(children=children) | Stack(children=children):
-            for c in children:
-                labels |= _collect_labels(c)
-        case _:
-            pass
+    if not isinstance(node, PatternNode):
+        return labels
+    if isinstance(node.params, AtomParams) and isinstance(node.params.value, Control):
+        labels.add(node.params.value.label)
+    for child in node.children:
+        labels |= _collect_labels(child)
     return labels
 
 
 def test_rest_dot() -> None:
     pat = p(".")
-    assert isinstance(pat.node, Silence)
+    assert pat.node.primitive.name == "silence"
 
 
 def test_rest_tilde() -> None:
     pat = p("~")
-    assert isinstance(pat.node, Silence)
+    assert pat.node.primitive.name == "silence"
 
 
 def test_rest_dash() -> None:
     pat = p("-")
-    assert isinstance(pat.node, Silence)
+    assert pat.node.primitive.name == "silence"
 
 
 def test_sequence() -> None:
     pat = p("C4 E4 G4")
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 3
 
 
 def test_mixed_hits_and_rests() -> None:
     pat = p("x . x . x . . x")
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 8
 
 
 def test_repeat() -> None:
     pat = p("x*4")
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 4
 
 
 def test_stack() -> None:
     pat = p("[C4 E4 G4]")
-    assert isinstance(pat.node, Stack)
+    assert pat.node.primitive.name == "stack"
     assert len(pat.node.children) == 3
 
 
 def test_stack_in_sequence() -> None:
     pat = p("[C4 E4] G4 B4")
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 3
-    assert isinstance(pat.node.children[0], Stack)
+    assert pat.node.children[0].primitive.name == "stack"
 
 
 def test_kwargs_passed_to_notes() -> None:
     pat = p("C4 E4", vel=0.5)
     # vel kwarg should appear as a Control in the IR
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     labels = _collect_labels(pat.node.children[0])
     assert "vel" in labels
 
@@ -110,18 +108,18 @@ def test_whitespace_only_raises() -> None:
 
 def test_composable_with_over() -> None:
     pat = p("C4 E4 G4").over(2)
-    assert isinstance(pat.node, Slow)
+    assert pat.node.primitive.name == "slow"
 
 
 def test_repeat_note() -> None:
     pat = p("C4*2 E4 G4")
-    assert isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 4  # C4 C4 E4 G4 flattened
 
 
 def test_sharp_note() -> None:
     pat = p("C#4")
-    assert isinstance(pat.node, Freeze)
+    assert pat.node.primitive.name == "freeze"
     labels = _collect_labels(pat.node)
     assert "freq" in labels
     # C#4 = MIDI 61, verify the freq value is correct (≈ 277.18 Hz)
@@ -130,25 +128,24 @@ def test_sharp_note() -> None:
     assert abs(freq_val - 277.18) < 1.0
 
 
-def _find_control_value(node: IrNode, target: str) -> float | None:
-    """Find the value of a specific Control label in an IR tree."""
-    match node:
-        case Atom(value=Control(label=label, value=value)) if label == target:
-            return value
-        case Freeze(child=child):
-            return _find_control_value(child, target)
-        case Cat(children=children) | Stack(children=children):
-            for c in children:
-                result = _find_control_value(c, target)
-                if result is not None:
-                    return result
-        case _:
-            pass
+def _find_control_value(node: object, target: str) -> float | None:
+    """Find the value of a specific Control label in a PatternNode tree."""
+    from krach.ir.pattern import PatternNode, AtomParams
+    from krach.patterns.ir import Control
+    if not isinstance(node, PatternNode):
+        return None
+    if isinstance(node.params, AtomParams) and isinstance(node.params.value, Control):
+        if node.params.value.label == target:
+            return node.params.value.value
+    for child in node.children:
+        result = _find_control_value(child, target)
+        if result is not None:
+            return result
     return None
 
 
 def test_single_rest_no_cat() -> None:
     """A single token should not be wrapped in Cat."""
     pat = p("~")
-    assert isinstance(pat.node, Silence)
-    assert not isinstance(pat.node, Cat)
+    assert pat.node.primitive.name == "silence"
+    assert not pat.node.primitive.name == "cat"

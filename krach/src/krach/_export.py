@@ -86,7 +86,7 @@ def export_session(
 
     # Patterns as JSON
     if patterns:
-        pat_dict = {slot: ir_to_dict(pat.node) for slot, pat in patterns.items()}
+        pat_dict = {slot: ir_to_dict(pat.ir_node) for slot, pat in patterns.items()}
         pat_json = json.dumps(pat_dict, separators=(",", ":"))
         lines.append("")
         lines.append(f"_patterns = json.loads('{pat_json}')")

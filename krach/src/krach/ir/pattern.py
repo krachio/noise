@@ -110,12 +110,22 @@ class EuclidParams:
     steps: int
     rotation: int
 
+    def __post_init__(self) -> None:
+        if self.steps <= 0:
+            raise ValueError("steps must be > 0")
+        if self.pulses > self.steps:
+            raise ValueError("pulses must be <= steps")
+
 
 @dataclass(frozen=True, slots=True)
 class DegradeParams:
     """Probabilistic event dropout."""
     prob: float
     seed: int
+
+    def __post_init__(self) -> None:
+        if not (0.0 <= self.prob <= 1.0):
+            raise ValueError(f"prob must be in [0, 1], got {self.prob}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,6 +134,12 @@ class WarpParams:
     kind: str
     amount: float
     grid: int
+
+    def __post_init__(self) -> None:
+        if not (0.0 < self.amount < 1.0):
+            raise ValueError(f"amount must be in (0, 1), got {self.amount}")
+        if self.grid <= 0 or self.grid % 2 != 0:
+            raise ValueError(f"grid must be even and > 0, got {self.grid}")
 
 
 PatternParams = Union[

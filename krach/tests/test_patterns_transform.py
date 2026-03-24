@@ -25,15 +25,15 @@ class TestTransformComposition:
         fx = fast(2) >> thin(0.1)
         result = fx(p)
         expected = p.fast(2).thin(0.1)
-        assert result.node == expected.node
+        assert result.ir_node == expected.ir_node
 
     def test_triple_compose(self) -> None:
         p = note(60)
         fx = fast(2) >> reverse >> thin(0.1)
         result = fx(p)
-        assert isinstance(result.node, Degrade)
-        assert isinstance(result.node.child, Rev)
-        inner = result.node.child
+        assert isinstance(result.ir_node, Degrade)
+        assert isinstance(result.ir_node.child, Rev)
+        inner = result.ir_node.child
         assert isinstance(inner, Rev)
         assert isinstance(inner.child, Fast)
 
