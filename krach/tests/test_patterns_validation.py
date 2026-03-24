@@ -3,113 +3,66 @@ from __future__ import annotations
 import pytest
 
 from krach.backends.pattern_protocol import (
-    Atom,
     Batch,
-    Cat,
-    Degrade,
-    Early,
-    Euclid,
-    Every,
-    Fast,
-    Late,
     Ping,
     SetBpm,
-    Slow,
-    Stack,
 )
-from krach.patterns.values import Note
+from krach.ir.pattern import (
+    DegradeParams,
+    EuclidParams,
+    WarpParams,
+)
 from krach.patterns.pattern import note
 
 
-_ATOM = Atom(Note(channel=0, note=60, velocity=100, dur=1.0))
-
-
-class TestCatValidation:
-    def test_empty_children_raises(self) -> None:
-        with pytest.raises(ValueError, match="at least one child"):
-            Cat(children=())
-
-
-class TestStackValidation:
-    def test_empty_children_raises(self) -> None:
-        with pytest.raises(ValueError, match="at least one child"):
-            Stack(children=())
-
-
-class TestFastValidation:
-    def test_zero_numerator_raises(self) -> None:
-        with pytest.raises(ValueError, match="positive"):
-            Fast(factor=(0, 1), child=_ATOM)
-
-    def test_negative_numerator_raises(self) -> None:
-        with pytest.raises(ValueError, match="positive"):
-            Fast(factor=(-1, 1), child=_ATOM)
-
-    def test_zero_denominator_raises(self) -> None:
-        with pytest.raises(ValueError, match="positive"):
-            Fast(factor=(1, 0), child=_ATOM)
-
-    def test_valid_factor_ok(self) -> None:
-        node = Fast(factor=(2, 1), child=_ATOM)
-        assert node.factor == (2, 1)
-
-
-class TestSlowValidation:
-    def test_zero_numerator_raises(self) -> None:
-        with pytest.raises(ValueError, match="positive"):
-            Slow(factor=(0, 1), child=_ATOM)
-
-    def test_zero_denominator_raises(self) -> None:
-        with pytest.raises(ValueError, match="positive"):
-            Slow(factor=(1, 0), child=_ATOM)
-
-
-class TestEarlyLateValidation:
-    def test_early_zero_denominator_raises(self) -> None:
-        with pytest.raises(ValueError, match="denominator"):
-            Early(offset=(1, 0), child=_ATOM)
-
-    def test_late_zero_denominator_raises(self) -> None:
-        with pytest.raises(ValueError, match="denominator"):
-            Late(offset=(1, 0), child=_ATOM)
-
-    def test_valid_offset_ok(self) -> None:
-        node = Late(offset=(1, 4), child=_ATOM)
-        assert node.offset == (1, 4)
-
-
-class TestEveryValidation:
-    def test_zero_n_raises(self) -> None:
-        with pytest.raises(ValueError, match="n must be > 0"):
-            Every(n=0, transform=_ATOM, child=_ATOM)
-
-
-class TestEuclidValidation:
+class TestEuclidParamsValidation:
     def test_zero_steps_raises(self) -> None:
         with pytest.raises(ValueError, match="steps must be > 0"):
-            Euclid(pulses=3, steps=0, rotation=0, child=_ATOM)
+            EuclidParams(pulses=3, steps=0, rotation=0)
 
     def test_pulses_exceed_steps_raises(self) -> None:
         with pytest.raises(ValueError, match="pulses must be <= steps"):
-            Euclid(pulses=9, steps=8, rotation=0, child=_ATOM)
+            EuclidParams(pulses=9, steps=8, rotation=0)
 
     def test_valid_euclid_ok(self) -> None:
-        node = Euclid(pulses=3, steps=8, rotation=0, child=_ATOM)
-        assert node.pulses == 3
+        p = EuclidParams(pulses=3, steps=8, rotation=0)
+        assert p.pulses == 3
 
 
-class TestDegradeValidation:
+class TestDegradeParamsValidation:
     def test_prob_below_zero_raises(self) -> None:
         with pytest.raises(ValueError, match="prob must be in"):
-            Degrade(prob=-0.1, seed=0, child=_ATOM)
+            DegradeParams(prob=-0.1, seed=0)
 
     def test_prob_above_one_raises(self) -> None:
         with pytest.raises(ValueError, match="prob must be in"):
-            Degrade(prob=1.1, seed=0, child=_ATOM)
+            DegradeParams(prob=1.1, seed=0)
 
     def test_boundary_values_ok(self) -> None:
-        Degrade(prob=0.0, seed=0, child=_ATOM)
-        Degrade(prob=1.0, seed=0, child=_ATOM)
+        DegradeParams(prob=0.0, seed=0)
+        DegradeParams(prob=1.0, seed=0)
+
+
+class TestWarpParamsValidation:
+    def test_amount_zero_raises(self) -> None:
+        with pytest.raises(ValueError, match="amount must be in"):
+            WarpParams(kind="swing", amount=0.0, grid=8)
+
+    def test_amount_one_raises(self) -> None:
+        with pytest.raises(ValueError, match="amount must be in"):
+            WarpParams(kind="swing", amount=1.0, grid=8)
+
+    def test_odd_grid_raises(self) -> None:
+        with pytest.raises(ValueError, match="grid must be even"):
+            WarpParams(kind="swing", amount=0.5, grid=3)
+
+    def test_zero_grid_raises(self) -> None:
+        with pytest.raises(ValueError, match="grid must be even"):
+            WarpParams(kind="swing", amount=0.5, grid=0)
+
+    def test_valid_warp_ok(self) -> None:
+        p = WarpParams(kind="swing", amount=0.67, grid=8)
+        assert p.amount == 0.67
 
 
 class TestBatchValidation:
