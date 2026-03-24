@@ -179,7 +179,8 @@ class Mixer(MixerInfra):
                 self.set(path, value)
             case GroupPath(prefix=prefix):
                 self.gain(prefix, value)
-            case UnknownPath():
+            case UnknownPath(raw):
+                warnings.warn(f"kr['{raw}'] = {value}: no node named '{raw}'", stacklevel=2)
                 self.gain(path, value)
 
     def input(self, name: str = "mic", channel: int = 0, gain: float = 0.5) -> NodeHandle:
@@ -396,7 +397,12 @@ class Mixer(MixerInfra):
                 for m in members:
                     send(m, Pattern(bind_voice(pattern.node, m)))
             case UnknownPath(raw):
-                send(raw, Pattern(bind_voice(pattern.node, raw)))
+                if "/" in raw:
+                    # Engine-internal label (e.g. bass_send_verb/gain)
+                    slot = f"_ctrl_{raw.replace('/', '_')}"
+                    send(slot, Pattern(bind_ctrl(pattern.node, raw)))
+                else:
+                    send(raw, Pattern(bind_voice(pattern.node, raw)))
 
     def pattern(self, name: str) -> Pattern | None:
         """Retrieve the last unbound pattern played on a target. None if unplayed."""

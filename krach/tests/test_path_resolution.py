@@ -112,14 +112,11 @@ def test_unknown_node() -> None:
     assert result == UnknownPath("nonexistent")
 
 
-def test_unknown_slashed_path_is_control() -> None:
-    """'foo/bar' where 'foo' is not a node → ControlPath (engine-internal label passthrough)."""
+def test_unknown_slashed_path_is_unknown() -> None:
+    """'foo/bar' where 'foo' is not a node → UnknownPath (not a fabricated ControlPath)."""
     nodes = _nodes("bass")
     result = resolve_path("foo/bar", nodes)
-    assert isinstance(result, ControlPath)
-    assert result.node == "foo"
-    assert result.param == "bar"
-    assert result.label == "foo/bar"
+    assert result == UnknownPath("foo/bar")
 
 
 # ── Edge cases ───────────────────────────────────────────────────────────

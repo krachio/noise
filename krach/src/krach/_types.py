@@ -213,12 +213,7 @@ def resolve_path(path: str, nodes: Mapping[str, object]) -> ResolvedPath:
     if members:
         return GroupPath(path, members)
 
-    # 4. Has "/" but no node match → treat as a control path (engine-internal label)
-    if "/" in path:
-        node_part, param_part = path.rsplit("/", 1)
-        return ControlPath(node_part, param_part, _make_label(node_part, param_part))
-
-    # 5. Not found
+    # 4. Not found
     return UnknownPath(path)
 
 

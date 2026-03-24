@@ -7,6 +7,7 @@ These are pure read/delegate operations with no orchestration logic.
 from __future__ import annotations
 
 import time
+import warnings
 from collections.abc import Generator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING
@@ -97,6 +98,8 @@ class MixerInfra:
     @master.setter
     def master(self, value: float) -> None:
         _check_finite(value, "master gain")
+        if value > 2.0:
+            warnings.warn(f"master gain {value} is very high (>2.0) — risk of clipping", stacklevel=2)
         self._master_gain = value
         self._session.master_gain(value)
 
@@ -232,6 +235,8 @@ class MixerInfra:
     def gain(self, name: str, value: float) -> None:
         """Update a node or group gain. Instant — no graph rebuild."""
         _check_finite(value, f"gain for '{name}'")
+        if value > 2.0:
+            warnings.warn(f"gain('{name}', {value}): very high (>2.0) — risk of clipping", stacklevel=2)
         for t in self._resolve_node_targets(name):
             self._gain_single(t, value)
 
@@ -301,7 +306,6 @@ class MixerInfra:
 
     def _warn_if_outside_range(self, path: str, value: float) -> None:
         """Warn if value is outside the control's declared range."""
-        import warnings
         match resolve_path(path, self._nodes):
             case ControlPath(node=node_name, param=param):
                 n = self._nodes.get(node_name)
@@ -322,7 +326,6 @@ class MixerInfra:
 
     def _warn_unknown_controls(self, name: str, node: Node, pattern: Pattern) -> None:
         """Warn if a pattern references controls not present on the node."""
-        import warnings
         from krach._bind import collect_control_labels
         labels = collect_control_labels(pattern.node)
         if not labels:
@@ -338,7 +341,6 @@ class MixerInfra:
 
     def _warn_pattern_range(self, node_name: str, param: str, pattern: Pattern) -> None:
         """Warn if a control pattern's values fall outside the declared range."""
-        import warnings
         from krach._bind import collect_control_values
         n = self._nodes.get(node_name)
         if n is None:
