@@ -5,7 +5,6 @@ on:
     branches: [main]
     paths:
       - 'docs/**'
-      - 'web/**'
       - 'README.md'
       - '.github/workflows/docs.yml'
       - '**/*.rs'
@@ -43,14 +42,6 @@ jobs:
           cargo doc --workspace --no-deps
           cp -r target/doc site/rust
           echo '<meta http-equiv="refresh" content="0;url=pattern_engine/index.html">' > site/rust/index.html
-
-      # Web REPL (static — no build step)
-      - name: Copy web REPL
-        run: |
-          mkdir -p site/try
-          cp web/index.html site/try/
-          cp web/krach_web.py site/try/
-          cp -r web/pypi site/try/pypi
 
       # Upload combined site
       - uses: actions/upload-pages-artifact@v3

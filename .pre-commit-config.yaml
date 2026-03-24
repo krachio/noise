@@ -1,0 +1,54 @@
+repos:
+  - repo: local
+    hooks:
+      # ── Rust ──────────────────────────────────────────────────
+      - id: cargo-check
+        name: cargo check
+        entry: cargo check --workspace
+        language: system
+        pass_filenames: false
+        files: '\.rs$|Cargo\.toml$'
+
+      - id: cargo-test
+        name: cargo test (audio-engine + pattern-engine)
+        entry: cargo test -p audio-engine -p pattern-engine
+        language: system
+        pass_filenames: false
+        files: '\.rs$'
+
+      - id: cargo-clippy
+        name: cargo clippy
+        entry: cargo clippy --workspace -- -D warnings
+        language: system
+        pass_filenames: false
+        files: '\.rs$'
+
+      # ── Python: krach ─────────────────────────────────────────
+      - id: krach-ruff
+        name: ruff check (krach)
+        entry: bash -c 'cd krach && uv run ruff check src/ tests/'
+        language: system
+        pass_filenames: false
+        files: '^krach/.*\.py$'
+
+      - id: krach-pyright
+        name: pyright (krach)
+        entry: bash -c 'cd krach && uv run pyright src/krach/'
+        language: system
+        pass_filenames: false
+        files: '^krach/.*\.py$'
+
+      - id: krach-pytest
+        name: pytest (krach)
+        entry: bash -c 'cd krach && uv run pytest -x -q'
+        language: system
+        pass_filenames: false
+        files: '^krach/.*\.py$'
+
+      # ── Python: faust-dsl ─────────────────────────────────────
+      - id: faust-dsl-pytest
+        name: pytest (faust-dsl)
+        entry: bash -c 'cd faust-dsl && uv run pytest -x -q'
+        language: system
+        pass_filenames: false
+        files: '^faust-dsl/.*\.py$'

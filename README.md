@@ -3,9 +3,7 @@
 Live coding audio system. Define synths in Python, sequence them with composable patterns, hear them instantly.
 
 ```python
-import krach.dsp as krs
-
-@kr.dsp
+# Define a synth — just a Python function
 def acid_bass() -> krs.Signal:
     freq = krs.control("freq", 55.0, 20.0, 800.0)
     gate = krs.control("gate", 0.0, 0.0, 1.0)
@@ -13,8 +11,14 @@ def acid_bass() -> krs.Signal:
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
+# Define an effect — takes audio input
+def reverb(inp: krs.Signal) -> krs.Signal:
+    room = krs.control("room", 0.7, 0.0, 1.0)
+    return krs.reverb(inp, room) * 0.8
+
+# Create nodes, route, play
 bass = kr.node("bass", acid_bass, gain=0.3)
-verb = kr.node("verb", reverb_fn, gain=0.3)
+verb = kr.node("verb", reverb, gain=0.3)
 bass >> (verb, 0.4)                                # route with send level
 bass @ kr.seq("A2", "D3", None, "E2").over(2)     # play pattern
 bass @ ("cutoff", kr.sine(200, 2000).over(4))      # modulate control
@@ -78,16 +82,15 @@ bass @ kr.seq("A2", "D3", None, "E2").over(2)
 bass @ ("cutoff", kr.sine(200, 2000).over(4))
 
 # Chords need poly nodes (count > 1)
-pad = kr.node("pad", pad_fn, gain=0.2, count=4)
+pad = kr.node("pad", acid_bass, gain=0.2, count=4)
 pad @ kr.note("A4", "C5", "E5") + kr.rest()
 ```
 
 ### Effect routing with `>>`
 
 ```python
-verb = kr.node("verb", reverb_fn, gain=0.3)  # auto-detected as effect
-bass >> (verb, 0.4)                            # send at 40%
-pad >> verb                                    # send at unity
+verb = kr.node("verb", reverb, gain=0.3)   # auto-detected as effect
+bass >> (verb, 0.4)                          # send at 40%
 ```
 
 ### Control access with `[]`

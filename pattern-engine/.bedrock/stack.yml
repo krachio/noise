@@ -1,7 +1,0 @@
-language: rust
-type_checker: cargo check
-test_runner: cargo test
-package_manager: cargo
-pre_commit_hooks:
-  - cargo check
-  - cargo test

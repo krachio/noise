@@ -1,6 +1,5 @@
 # Rust
 target/
-Cargo.lock.bak
 
 # Python
 .venv/
@@ -12,15 +11,30 @@ dist/
 .pytest_cache/
 .mypy_cache/
 
-# Claude / bedrock (local settings only)
+# Subcrate scaffolding (only top-level .bedrock/ and .claude/ are tracked)
+*/.bedrock/
+*/.claude/
+*/.pre-commit-config.yaml
+*/Cargo.lock
+
+# Web REPL (separate deployment, not part of the engine monorepo)
+web/
+
+# Build outputs
+docs/site/
+
+# Planning / iteration artifacts
+.bedrock/plan.md
+.bedrock/reviewers.md
+plan.md
+CODING_STYLE.md
+
+# Claude local state
 .claude/settings.local.json
+.claude/ralph-loop.local.md
+*/.claude/ralph-loop.local.md
+.ralph-review/
 
 # OS
 .DS_Store
-krach/.claude/ralph-loop.local.md
-.claude/ralph-loop.local.md
-.ralph-review/
 *.swp
-docs/site/
-docs/hello.py
-docs/.python-version
