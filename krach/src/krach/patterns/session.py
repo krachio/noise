@@ -92,12 +92,12 @@ class Session:
 
     def play(self, slot: str, pattern: Pattern) -> None:
         self._slots[slot] = SlotState(pattern=pattern, playing=True)
-        self.send(SetPattern(slot=slot, pattern=pattern.ir_node))
+        self.send(SetPattern(slot=slot, pattern=pattern.node))
 
     def play_from_zero(self, slot: str, pattern: Pattern) -> None:
         """Like play(), but resets phase so the pattern starts from cycle 0."""
         self._slots[slot] = SlotState(pattern=pattern, playing=True)
-        self.send(SetPatternFromZero(slot=slot, pattern=pattern.ir_node))
+        self.send(SetPatternFromZero(slot=slot, pattern=pattern.node))
 
     def hush(self, slot: str) -> None:
         if slot in self._slots:
@@ -109,7 +109,7 @@ class Session:
         state = self._slots[slot]  # raises KeyError if unknown
         if not state.playing:
             self._slots[slot] = SlotState(pattern=state.pattern, playing=True)
-            self.send(SetPattern(slot=slot, pattern=state.pattern.ir_node))
+            self.send(SetPattern(slot=slot, pattern=state.pattern.node))
 
     def remove(self, slot: str) -> None:
         self._slots.pop(slot, None)
@@ -126,7 +126,7 @@ class Session:
         commands: list[SetPattern] = []
         for slot, pattern in patterns.items():
             self._slots[slot] = SlotState(pattern=pattern, playing=True)
-            commands.append(SetPattern(slot=slot, pattern=pattern.ir_node))
+            commands.append(SetPattern(slot=slot, pattern=pattern.node))
         self.send(Batch(commands=tuple(commands)))
 
     # ── State visibility ────────────────────────────────────────────────

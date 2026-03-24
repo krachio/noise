@@ -1,13 +1,12 @@
 """Pattern — composable temporal structures built from PatternNode.
 
 Pattern wraps a PatternNode tree. Operators (+, |, *, .over(), etc.)
-produce new PatternNode trees. `.ir_node` lowers to old IrNode at the
-engine boundary via backends/pattern_backend.to_ir_node().
+produce new PatternNode trees. Session sends PatternNode directly to
+the engine via pattern_node_to_dict serialization.
 """
 
 from __future__ import annotations
 
-import functools
 import math
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -30,7 +29,6 @@ from krach.ir.pattern import (
     StackParams,
     WarpParams,
 )
-from krach.backends.pattern_protocol import IrNode
 from krach.patterns.values import Cc, Control, Note, Osc, OscArg
 from krach.patterns.primitives import (
     atom_p, cat_p, degrade_p, early_p, euclid_p, every_p,
@@ -64,12 +62,6 @@ def _flatten_stack(left: PatternNode, right: PatternNode) -> tuple[PatternNode, 
 @dataclass(frozen=True)
 class Pattern:
     node: PatternNode
-
-    @functools.cached_property
-    def ir_node(self) -> IrNode:
-        """Lower to IrNode for the Rust engine. Cached on first access."""
-        from krach.backends.pattern_backend import to_ir_node
-        return to_ir_node(self.node)
 
     def __repr__(self) -> str:
         from krach._ir_summary import summarize

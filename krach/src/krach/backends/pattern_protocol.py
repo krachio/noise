@@ -11,6 +11,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
+from krach.ir.pattern import PatternNode
 from krach.patterns.values import (
     Value,
     value_to_dict,
@@ -174,13 +175,13 @@ IrNode = (
 @dataclass(frozen=True)
 class SetPattern:
     slot: str
-    pattern: IrNode
+    pattern: PatternNode
 
 
 @dataclass(frozen=True)
 class SetPatternFromZero:
     slot: str
-    pattern: IrNode
+    pattern: PatternNode
 
 
 @dataclass(frozen=True)
@@ -288,11 +289,12 @@ def ir_to_dict(node: IrNode) -> dict[str, Any]:
 
 
 def _command_to_dict(msg: ClientMessage) -> dict[str, Any]:
+    from krach.patterns.serialize import pattern_node_to_dict
     match msg:
         case SetPattern(slot, pattern):
-            return {"cmd": "SetPattern", "slot": slot, "pattern": ir_to_dict(pattern)}
+            return {"cmd": "SetPattern", "slot": slot, "pattern": pattern_node_to_dict(pattern)}
         case SetPatternFromZero(slot, pattern):
-            return {"cmd": "SetPatternFromZero", "slot": slot, "pattern": ir_to_dict(pattern)}
+            return {"cmd": "SetPatternFromZero", "slot": slot, "pattern": pattern_node_to_dict(pattern)}
         case Hush(slot):
             return {"cmd": "Hush", "slot": slot}
         case HushAll():
