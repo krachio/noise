@@ -320,6 +320,28 @@ class MixerInfra:
             case _:
                 pass
 
+    def _warn_pattern_range(self, node_name: str, param: str, pattern: Pattern) -> None:
+        """Warn if a control pattern's values fall outside the declared range."""
+        import warnings
+        from krach._bind import collect_control_values
+        n = self._nodes.get(node_name)
+        if n is None:
+            return
+        rng = n.control_ranges.get(param)
+        if rng is None:
+            return
+        lo, hi = rng
+        values = collect_control_values(pattern.node)
+        if not values:
+            return
+        v_min, v_max = min(values), max(values)
+        if v_min < lo or v_max > hi:
+            warnings.warn(
+                f"play('{node_name}/{param}', ...): pattern values [{v_min}, {v_max}] "
+                f"outside declared range [{lo}, {hi}] — Faust will clamp",
+                stacklevel=3,
+            )
+
     def _expand_poly_labels(self, path: str) -> list[str]:
         """Expand a control path to per-instance labels for poly nodes.
 

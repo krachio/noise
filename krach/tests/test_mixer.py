@@ -4077,6 +4077,50 @@ def test_set_no_warning_without_ranges() -> None:
         assert len(range_warnings) == 0
 
 
+def test_play_control_path_warns_mod_outside_range() -> None:
+    """kr.play('bass/freq', mod_sine(0.5, 1.5)) warns when freq range is [20, 2000]."""
+    import warnings
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+    from krach._patterns import mod_sine
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer._nodes["bass"].control_ranges = {"freq": (20.0, 2000.0), "gate": (0.0, 1.0)}
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        mixer.play("bass/freq", mod_sine(0.5, 1.5))
+        range_warnings = [x for x in w if "outside" in str(x.message).lower()]
+        assert len(range_warnings) == 1
+        assert "freq" in str(range_warnings[0].message)
+        assert "[20.0, 2000.0]" in str(range_warnings[0].message)
+
+
+def test_play_control_path_no_warn_when_in_range() -> None:
+    """kr.play('bass/freq', mod_sine(100, 800)) should not warn."""
+    import warnings
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+    from krach._patterns import mod_sine
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+    mixer._nodes["bass"].control_ranges = {"freq": (20.0, 2000.0)}
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        mixer.play("bass/freq", mod_sine(100.0, 800.0))
+        range_warnings = [x for x in w if "outside" in str(x.message).lower()]
+        assert len(range_warnings) == 0
+
+
 def test_save_recall_preserves_source_text() -> None:
     """save/recall round-trip must preserve source_text."""
     from unittest.mock import MagicMock

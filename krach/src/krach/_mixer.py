@@ -380,6 +380,7 @@ class Mixer(MixerInfra):
                 else:
                     send(name, Pattern(bind_voice(pattern.node, name)))
             case ControlPath(node=node_name, param=param):
+                self._warn_pattern_range(node_name, param, pattern)
                 n = self._nodes.get(node_name)
                 if n is not None and n.count > 1:
                     for i in range(n.count):

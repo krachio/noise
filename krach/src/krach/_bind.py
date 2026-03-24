@@ -32,6 +32,22 @@ from krach.patterns.ir import (
 )
 
 
+def collect_control_values(node: IrNode) -> list[float]:
+    """Extract all Control.value floats from an IR tree."""
+    values: list[float] = []
+
+    def _visit(n: IrNode) -> IrNode:
+        match n:
+            case Atom(Control(value=v)):
+                values.append(v)
+            case _:
+                pass
+        return n
+
+    map_atoms(node, _visit)
+    return values
+
+
 def map_atoms(node: IrNode, fn: Callable[[IrNode], IrNode]) -> IrNode:
     """Walk an IR tree, applying ``fn`` to every Atom and Silence leaf.
 
