@@ -427,3 +427,69 @@ def register_tools(mcp: FastMCP) -> None:
         kr = get_session()
         kr.mod(path, shape, lo=lo, hi=hi, bars=bars)
         return f"Modulating {path} with {shape} [{lo}, {hi}] over {bars} bars"
+
+    @mcp.tool()
+    def capture(name: str | None = None) -> str:
+        """Capture the current session as a frozen ModuleIr.
+
+        If name is given, also saves it as a named scene.
+        Returns the JSON representation of the captured module.
+
+        Example: capture("verse1")
+
+        Args:
+            name: Optional scene name to save as.
+        """
+        import json
+        kr = get_session()
+        ir = kr.capture()
+        if name:
+            kr.save(name)
+        return json.dumps(ir.to_dict(), indent=2)
+
+    @mcp.tool()
+    def export_module(name: str, path: str) -> str:
+        """Export a saved module/scene to a JSON file.
+
+        Example: export_module("verse1", "~/.krach/modules/verse1.json")
+
+        Args:
+            name: Name of the saved scene/module.
+            path: File path to write.
+        """
+        import json
+        import os
+        kr = get_session()
+        try:
+            ir = kr.module(name)
+        except ValueError as e:
+            return f"Error: {e}"
+        resolved = os.path.expanduser(path)
+        os.makedirs(os.path.dirname(resolved), exist_ok=True)
+        with open(resolved, "w") as f:
+            json.dump(ir.to_dict(), f, indent=2)
+        return f"Exported module '{name}' to {resolved}"
+
+    @mcp.tool()
+    def load_module(path: str, name: str | None = None) -> str:
+        """Load a module from a JSON file and optionally instantiate it.
+
+        Example: load_module("~/.krach/modules/verse1.json", name="verse1")
+
+        Args:
+            path: JSON file path.
+            name: If given, save the loaded module under this name.
+        """
+        import json
+        import os
+        from krach._module_ir import ModuleIr
+        kr = get_session()
+        resolved = os.path.expanduser(path)
+        try:
+            with open(resolved) as f:
+                d = json.load(f)
+            ir = ModuleIr.from_dict(d)
+            kr.instantiate(ir)
+            return f"Loaded and instantiated module from {resolved}"
+        except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
+            return f"Error: {e}"
