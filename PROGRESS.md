@@ -30,8 +30,8 @@ Pattern primitives use per-primitive rule registration (serialize). Generic `fol
 - audio-faust: 29 Rust tests
 - pattern-engine: 172 Rust tests
 - krach-engine: 25 Rust tests
-- krach: 707 Python tests
-- **Total: 1096 tests**, all green. Pyright strict clean.
+- krach: 710 Python tests
+- **Total: 1099 tests**, all green. Pyright strict clean.
 
 ## Usage
 
