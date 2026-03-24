@@ -16,7 +16,6 @@ build-backend = "hatchling.build"
 
 [tool.uv.sources]
 krach = { path = "../krach", editable = true }
-faust-dsl = { path = "../faust-dsl", editable = true }
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/krach_mcp"]

@@ -173,21 +173,6 @@ wheels = [
 ]
 
 [[package]]
-name = "faust-dsl"
-version = "0.1.0"
-source = { editable = "../faust-dsl" }
-
-[package.metadata]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "hatchling", specifier = ">=1.0" },
-    { name = "pre-commit", specifier = ">=4.0" },
-    { name = "pyright", specifier = ">=1.1" },
-    { name = "pytest", specifier = ">=8.0" },
-]
-
-[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -282,15 +267,9 @@ wheels = [
 name = "krach"
 version = "0.1.0"
 source = { editable = "../krach" }
-dependencies = [
-    { name = "faust-dsl" },
-]
 
 [package.metadata]
-requires-dist = [
-    { name = "faust-dsl", editable = "../faust-dsl" },
-    { name = "ipython", marker = "extra == 'repl'", specifier = ">=8" },
-]
+requires-dist = [{ name = "ipython", marker = "extra == 'repl'", specifier = ">=8" }]
 
 [package.metadata.requires-dev]
 dev = [
