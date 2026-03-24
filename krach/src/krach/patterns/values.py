@@ -1,8 +1,8 @@
 """Value types — the leaf data carried by pattern atoms.
 
 Note, Cc, Osc, Control are the four kinds of musical event a pattern can emit.
-Value codec functions (to/from dict) live here so both IrNode and PatternNode
-serializers can share them without circular imports.
+Value codec functions (to/from dict) live here as the single source of truth
+for value serialization, used by both PatternNode and engine protocol codecs.
 """
 
 from __future__ import annotations

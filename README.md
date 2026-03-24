@@ -163,8 +163,8 @@ noise/
 ├── audio-faust/       Rust — FAUST LLVM JIT, hot reload
 ├── pattern-engine/    Rust — pattern sequencer, rational time, curve compiler
 ├── krach-engine/      Rust — unified binary (one process, one socket)
-├── faust-dsl/         Python — Python → FAUST transpiler
-└── krach/             Python — live coding REPL, graph API, patterns
+├── krach/             Python — live coding REPL, graph API, IR, DSP transpiler, patterns
+└── krach-mcp/         Python — MCP server (25 tools for Claude Code)
 ```
 
 Single process architecture. Python sends pattern IR over a Unix socket. The Rust engine compiles patterns to block-rate automation curves — no per-event IPC during playback. FAUST DSPs hot-reload from `~/.krach/dsp/`.
@@ -188,8 +188,7 @@ Single process architecture. Python sends pattern IR over a Unix socket. The Rus
 
 ```bash
 cargo test --workspace                    # Rust tests
-cd krach && uv run pyright && uv run pytest  # Python tests
-cd faust-dsl && uv run pytest             # Transpiler tests
+cd krach && uv run pyright && uv run pytest  # Python tests (includes DSP transpiler)
 ```
 
 ## License

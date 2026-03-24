@@ -17,9 +17,8 @@ cd noise
 # Build all Rust crates
 cargo build --workspace
 
-# Set up Python environments
+# Set up Python environment
 cd krach && uv sync && cd ..
-cd faust-dsl && uv sync && cd ..
 ```
 
 ## Running tests
@@ -40,19 +39,11 @@ uv run pyright    # type checking (strict mode)
 uv run pytest     # unit tests
 ```
 
-### Python — faust-dsl
-
-```bash
-cd faust-dsl
-uv run pytest
-```
-
 ### Quick check before committing
 
 ```bash
 cargo check --workspace && cargo test --workspace
 cd krach && uv run pyright && uv run pytest && cd ..
-cd faust-dsl && uv run pytest && cd ..
 ```
 
 ## Code style
@@ -102,8 +93,8 @@ noise/
 ├── audio-faust/        Rust lib  — FAUST LLVM JIT plugin + hot reload
 ├── pattern-engine/     Rust lib  — pattern sequencer
 ├── krach-engine/       Rust bin  — unified process
-├── faust-dsl/          Python    — Python → Faust transpiler
-└── krach/              Python    — live coding REPL
+├── krach/              Python    — live coding REPL, IR layer, DSP transpiler
+└── krach-mcp/          Python    — MCP server for Claude Code
 ```
 
 See the [architecture documentation](architecture.md) for detailed data flow and design decisions.
@@ -118,16 +109,18 @@ See the [architecture documentation](architecture.md) for detailed data flow and
 | Pattern combinator | `pattern-engine/src/ir.rs` + `pattern-engine/src/pattern.rs` |
 | Python pattern API | `krach/src/krach/patterns/` |
 | IPC protocol | `krach-engine/src/ipc.rs` + `audio-engine/src/protocol.rs` + `pattern-engine/src/ipc/` |
-| FAUST transpiler | `faust-dsl/` |
+| DSP transpiler | `krach/src/krach/dsl/` + `krach/src/krach/ir/signal.py` |
 | REPL commands | `krach/src/krach/` |
 
 ### Adding a new pattern combinator
 
 1. Add the variant to `IrNode` in `pattern-engine/src/ir.rs`
 2. Add compile logic in `pattern-engine/src/pattern.rs`
-3. Add the Python IR dataclass in `krach/src/krach/patterns/ir.py`
-4. Add serialization in `krach/src/krach/patterns/serialize.py`
-5. Write tests in both Rust and Python
+3. Add a `PatternPrimitive` + `*Params` in `krach/src/krach/ir/pattern.py`
+4. Register it in `krach/src/krach/patterns/primitives.py`
+5. Add a serialize rule in `krach/src/krach/patterns/serialize.py`
+6. Add a summary handler in `krach/src/krach/_ir_summary.py`
+7. Import-time completeness checks enforce steps 5-6 — missing rules fail at import
 
 ### Adding a new audio node type
 

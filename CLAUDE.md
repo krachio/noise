@@ -8,8 +8,8 @@ noise/
 ├── audio-faust/        Rust — FAUST LLVM JIT plugin library for audio-engine
 ├── pattern-engine/     Rust lib — pattern sequencer (engine, IPC protocol, MIDI/OSC output)
 ├── krach-engine/       Rust binary — unified process (pattern-engine + audio-engine + audio-faust)
-├── faust-dsl/          Python 3.13 — Python → Faust .dsp transpiler
-└── krach/              Python 3.13 — live coding REPL (starts krach-engine, patterns, one socket)
+├── krach/              Python 3.13 — live coding REPL (IR, DSP transpiler, patterns, graph API)
+└── krach-mcp/          Python 3.13 — MCP server (25 tools for Claude Code to drive krach)
 ```
 
 ## Rust workspace
@@ -17,11 +17,11 @@ noise/
 `cargo test --workspace` from root runs all Rust tests.
 Individual `cargo test` still works from within any Rust subproject.
 
-## Python subprojects
+## Python
 
-Each Python project has its own `uv` venv and `pyproject.toml`.
-Run `uv run pytest` from within each subproject directory.
-Do not use `pip install` — all deps managed through `uv`.
+krach and krach-mcp each have their own `uv` venv and `pyproject.toml`.
+Run `uv run pytest` from within krach/. Do not use `pip install` — deps managed through `uv`.
+The DSP transpiler (formerly faust-dsl) lives inside krach as `krach.ir.signal`, `krach.dsl.*`, `krach.backends.faust*`.
 
 ## Design Philosophy
 

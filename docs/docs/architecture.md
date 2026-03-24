@@ -10,8 +10,8 @@ noise/
 ├── audio-faust/        Rust lib  — FAUST LLVM JIT plugin, hot reload via file watcher
 ├── pattern-engine/     Rust lib  — pattern sequencer (IR compiler, scheduler, MIDI/OSC output)
 ├── krach-engine/       Rust bin  — unified process (pattern-engine + audio-engine + audio-faust)
-├── faust-dsl/          Python    — Python → Faust .dsp transpiler
-└── krach/              Python    — live coding REPL (starts krach-engine, sends commands)
+├── krach/              Python    — live coding REPL, IR layer, DSP transpiler, graph API
+└── krach-mcp/          Python    — MCP server (25 tools for Claude Code to drive krach)
 ```
 
 **audio-engine** is DSP-agnostic. It provides a graph of `DspNode` instances wired together, processed in topological order, with lock-free graph swaps and linear crossfades. No synthesis code lives here — just wiring, mixing, and control routing.
@@ -22,9 +22,9 @@ noise/
 
 **krach-engine** links all three into one process. Pattern events that target the audio engine are dispatched directly via function calls — no network hop.
 
-**faust-dsl** transpiles a Python DSL into FAUST `.dsp` source files.
+**krach** is the user-facing Python REPL and the IR layer. It contains three typed IRs (Signal, Pattern, Module), a Python-to-FAUST DSP transpiler (`krach.dsl`), pattern builders and transforms, and the graph management API. Starts `krach-engine` as a subprocess, connects over a Unix socket.
 
-**krach** is the user-facing Python REPL. It starts `krach-engine` as a subprocess, connects over a Unix socket, and exposes a concise API for live coding.
+**krach-mcp** is an MCP server that exposes krach operations as tools for Claude Code — node creation, pattern playback, session capture/export, and introspection.
 
 ## Data flow
 
