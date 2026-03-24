@@ -64,6 +64,24 @@ def test_transpile_with_inputs() -> None:
     assert result.num_inputs == 1
 
 
+def test_control_smoo_parenthesized_in_arithmetic() -> None:
+    """Regression: si.smoo must be parenthesized so it doesn't capture audio signals.
+
+    Without parens, `audio * hslider(...) : si.smoo` is parsed by Faust as
+    `(audio * hslider(...)) : si.smoo` which smooths the AUDIO signal (~4Hz
+    lowpass), producing silence.
+    """
+    def dsp(audio: Signal) -> Signal:
+        gain = control("gain", 0.5, 0.0, 1.0)
+        return audio * gain
+
+    result = transpile(dsp)
+    # The control must be parenthesized: (hslider(...) : si.smoo)
+    # so when used in multiplication, the : doesn't leak
+    assert "(hslider" in result.source
+    assert ": si.smoo)" in result.source
+
+
 def test_transpile_returns_source_string() -> None:
     def dsp() -> Signal:
         return control("freq", 440.0, 20.0, 20000.0)

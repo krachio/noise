@@ -286,7 +286,7 @@ def _lower_control(_ctx: LoweringContext, eqn: Equation) -> str:
     # preserving fast response for musical control changes.
     if any(g in p.name.lower() for g in _GATE_NAMES):
         return hslider
-    return f"{hslider} : si.smoo"
+    return f"({hslider} : si.smoo)"
 
 
 control_p.def_lowering(_lower_control)
