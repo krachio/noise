@@ -165,3 +165,13 @@ def test_invalid_repeat_count_raises() -> None:
 def test_repeat_zero_raises() -> None:
     with pytest.raises(ValueError, match="repeat count must be >= 1"):
         p("C4*0")
+
+
+def test_invalid_note_token_raises() -> None:
+    with pytest.raises(ValueError, match="invalid token"):
+        p("G$4")
+
+
+def test_invalid_token_gibberish_raises() -> None:
+    with pytest.raises(ValueError, match="invalid token"):
+        p("hello")

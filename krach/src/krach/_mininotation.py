@@ -82,5 +82,11 @@ def _parse_token(token: str | list[str], **kwargs: float) -> Pattern:
     if token in ("x", "X"):
         return hit("gate", **kwargs)
 
-    # Note name
+    # Note name — validate before delegating to pitch parser
+    import re
+    if not re.match(r"^[A-G][#sb]?\d$", token):
+        raise ValueError(
+            f"invalid token {token!r} in mini-notation — "
+            f"expected note (e.g. 'C4', 'Db3'), rest ('.', '~', '-'), or hit ('x')"
+        )
     return note(token, **kwargs)

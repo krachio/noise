@@ -170,3 +170,78 @@ def test_end_to_end_mininotation_to_engine_json() -> None:
     assert parsed["cmd"] == "SetPattern"
     assert parsed["slot"] == "lead"
     assert parsed["pattern"]["op"] == "Warp"
+
+
+# ── Builder edge cases (Maria) ───────────────────────────────────────
+
+
+def test_ramp_steps_1() -> None:
+    pat = ramp(0.0, 1.0, steps=1)
+    assert pat.node.primitive.name == "atom"  # single step, no cat
+
+
+def test_ramp_lo_equals_hi() -> None:
+    pat = ramp(0.5, 0.5, steps=4)
+    assert pat.node.primitive.name == "cat"
+    # All values should be 0.5
+    from krach.patterns.bind import collect_control_values
+    vals = collect_control_values(pat.node)
+    assert all(v == 0.5 for v in vals)
+
+
+def test_mod_sine_returns_pattern() -> None:
+    from krach._patterns import mod_sine
+    pat = mod_sine(0.0, 1.0, steps=8)
+    assert pat.node.primitive.name == "cat"
+    assert len(pat.node.children) == 8
+
+
+def test_mod_tri_returns_pattern() -> None:
+    from krach._patterns import mod_tri
+    pat = mod_tri(0.0, 1.0, steps=8)
+    assert pat.node.primitive.name == "cat"
+
+
+def test_mod_ramp_down_first_is_hi() -> None:
+    from krach._patterns import mod_ramp_down
+    pat = mod_ramp_down(0.0, 1.0, steps=4)
+    # First value should be 1.0 (starts at hi, ramps to lo)
+    first = pat.node.children[0]
+    assert isinstance(first.params, AtomParams)
+    assert isinstance(first.params.value, Control)
+    assert first.params.value.value == 1.0
+
+
+def test_mod_square_two_levels() -> None:
+    from krach._patterns import mod_square
+    pat = mod_square(0.0, 1.0, steps=4)
+    from krach.patterns.bind import collect_control_values
+    vals = collect_control_values(pat.node)
+    # First half should be hi (1.0), second half lo (0.0)
+    assert vals[:2] == [1.0, 1.0]
+    assert vals[2:] == [0.0, 0.0]
+
+
+def test_mod_exp_starts_at_lo() -> None:
+    from krach._patterns import mod_exp
+    pat = mod_exp(0.0, 1.0, steps=4)
+    first = pat.node.children[0]
+    assert isinstance(first.params, AtomParams)
+    assert isinstance(first.params.value, Control)
+    assert first.params.value.value == 0.0  # t^2 at t=0
+
+
+def test_rand_values_in_range() -> None:
+    from krach._patterns import rand as rand_pat
+    pat = rand_pat(10.0, 20.0, steps=16)
+    from krach.patterns.bind import collect_control_values
+    vals = collect_control_values(pat.node)
+    assert len(vals) == 16
+    assert all(10.0 <= v <= 20.0 for v in vals)
+
+
+def test_struct_single_hit_rhythm() -> None:
+    rhythm = hit()
+    melody = mixer_note("C4")
+    result = struct(rhythm, melody)
+    assert result.node.primitive.name == "freeze"  # single onset replaced
