@@ -73,10 +73,10 @@ def export_session(
         lines.append(f'    kr.node("{name}", {src}, gain={node.gain})')
 
     # Sends and wires
-    for (voice, bus), level in sends.items():
-        lines.append(f'kr.send("{voice}", "{bus}", level={level})')
-    for (voice, bus), port in wires.items():
-        lines.append(f'kr.wire("{voice}", "{bus}", port="{port}")')
+    for (src, tgt), level in sends.items():
+        lines.append(f'kr.send("{src}", "{tgt}", level={level})')
+    for (src, tgt), port in wires.items():
+        lines.append(f'kr.wire("{src}", "{tgt}", port="{port}")')
 
     # Transport
     lines.append(f"kr.tempo = {tempo}")

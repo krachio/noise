@@ -1,8 +1,8 @@
-"""IR tree rewriting — bind bare parameters to voice/control paths.
+"""IR tree rewriting — bind bare parameters to node/control paths.
 
 Provides a generic ``map_atoms`` walker and concrete binders:
-- ``bind_voice``: prepend ``voice/`` to bare Control/Osc labels
-- ``bind_voice_poly``: round-robin bind to poly voice instances
+- ``bind_voice``: prepend ``node_name/`` to bare Control/Osc labels
+- ``bind_voice_poly``: round-robin bind to poly node instances
 - ``bind_ctrl``: replace ``"ctrl"`` placeholder with a concrete label
 """
 
