@@ -150,3 +150,18 @@ def test_single_rest_no_cat() -> None:
     pat = p("~")
     assert pat.node.primitive.name == "silence"
     assert not pat.node.primitive.name == "cat"
+
+
+def test_unmatched_bracket_raises() -> None:
+    with pytest.raises(ValueError, match="unmatched '\\['"):
+        p("[C4 E4")
+
+
+def test_invalid_repeat_count_raises() -> None:
+    with pytest.raises(ValueError, match="invalid repeat count"):
+        p("C4*abc")
+
+
+def test_repeat_zero_raises() -> None:
+    with pytest.raises(ValueError, match="repeat count must be >= 1"):
+        p("C4*0")

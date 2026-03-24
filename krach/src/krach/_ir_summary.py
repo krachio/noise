@@ -59,7 +59,7 @@ def summarize(node: PatternNode, max_items: int = 8) -> str:
         if p == "warp":
             assert isinstance(nd.params, WarpParams)
             return f"{_go(nd.children[0])} {nd.params.kind}({nd.params.amount:.2f})"
-        return "?"
+        raise RuntimeError(f"no summary for pattern primitive {p!r}")
 
     def _join(parts: tuple[str, ...], sep: str) -> str:
         if len(parts) <= max_items:

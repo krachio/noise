@@ -67,8 +67,8 @@ class ModuleProxy:
         """Record a wire route."""
         self._routing.append(RouteDef(source=source, target=target, kind="wire", port=port))
 
-    def connect(self, source: str, target: str, *, level: float = 1.0, port: str = "in0") -> None:
-        """Record a connection (send if level specified, wire if port)."""
+    def connect(self, source: str, target: str, *, level: float = 1.0) -> None:
+        """Record a send connection."""
         self.send(source, target, level=level)
 
     def play(self, target: str, pattern: Pattern, **_kwargs: object) -> None:

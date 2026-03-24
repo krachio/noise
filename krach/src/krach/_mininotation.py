@@ -38,7 +38,10 @@ def _tokenize(s: str) -> list[str | list[str]]:
         if c.isspace():
             i += 1
         elif c == "[":
-            j = s.index("]", i)
+            try:
+                j = s.index("]", i)
+            except ValueError:
+                raise ValueError(f"unmatched '[' in pattern at position {i}") from None
             inner = s[i + 1 : j].split()
             tokens.append(inner)
             i = j + 1
@@ -63,7 +66,12 @@ def _parse_token(token: str | list[str], **kwargs: float) -> Pattern:
     # *N repeat suffix
     if "*" in token:
         base, count_str = token.rsplit("*", 1)
-        count = int(count_str)
+        try:
+            count = int(count_str)
+        except ValueError:
+            raise ValueError(f"invalid repeat count '{count_str}' in '{token}'") from None
+        if count < 1:
+            raise ValueError(f"repeat count must be >= 1, got {count} in '{token}'")
         return _parse_token(base, **kwargs) * count
 
     # Rest tokens
