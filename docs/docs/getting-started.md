@@ -47,16 +47,17 @@ tail -f ~/.krach/engine.log
 ### 1. Define a kick drum
 
 ```python
-@kr.dsp
 def kick() -> krs.Signal:
     gate = krs.control("gate", 0.0, 0.0, 1.0)
     env = krs.adsr(0.001, 0.25, 0.0, 0.05, gate)
     return krs.sine_osc(55.0 + env * 200.0) * env * 0.9
 ```
 
-The `@kr.dsp` decorator transpiles your Python function to FAUST, compiles it via LLVM, and registers it as an audio node. The `krs.control()` calls define parameters that patterns can drive.
+The `krs.control()` calls define parameters that patterns can drive.
 
 ### 2. Create a voice and play it
+
+Pass Python DSP functions directly to `kr.node()` — transpilation to FAUST happens automatically:
 
 ```python
 kr.node("kick", kick, gain=0.8)
@@ -78,7 +79,6 @@ The kick immediately speeds up. No restart, no rebuild.
 ### 4. Add a bass synth
 
 ```python
-@kr.dsp
 def bass() -> krs.Signal:
     freq = krs.control("freq", 55.0, 20.0, 800.0)
     gate = krs.control("gate", 0.0, 0.0, 1.0)
@@ -113,11 +113,9 @@ The cutoff sweeps between 200 Hz and 2000 Hz over 4 cycles with a sine wave.
 ### 7. Create a reverb and route the bass
 
 ```python
-@kr.dsp
-def verb() -> krs.Signal:
-    sig = krs.control("in", 0.0, -1.0, 1.0)
+def verb(inp: krs.Signal) -> krs.Signal:
     room = krs.control("room", 0.6, 0.0, 1.0)
-    return krs.reverb(sig, room)
+    return krs.reverb(inp, room)
 
 reverb = kr.node("verb", verb, gain=0.3)
 ```
@@ -174,6 +172,6 @@ All operators have explicit equivalents: `kr.connect()`, `kr.play()`, `kr.set()`
 
 ## Next steps
 
-- [Synth Design](synth-design.md) — deep dive into `@kr.dsp` and `krs` primitives
+- [Synth Design](synth-design.md) — deep dive into DSP functions and `krs` primitives
 - [Patterns](patterns.md) — pattern algebra, combinators, composition
 - [Effect Routing](effect-routing.md) — node routing, `>>` operator, sends, wires

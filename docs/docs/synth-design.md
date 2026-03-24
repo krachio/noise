@@ -1,32 +1,27 @@
 # Synth Design
 
-krach lets you define synthesizers as plain Python functions. The `@kr.dsp`
-decorator transpiles your code to FAUST, which compiles to native audio via
-LLVM JIT. You write Python, you hear audio -- no manual compilation step.
+krach lets you define synthesizers as plain Python functions. Pass them to
+`kr.node()` and transpilation to FAUST + LLVM JIT compilation happens
+automatically. You write Python, you hear audio -- no manual compilation step.
 
-## The `@kr.dsp` decorator
+## Defining a DSP function
 
 The pipeline: **Python function --> FAUST .dsp --> LLVM JIT --> audio node**.
 
 ```python
-@kr.dsp
 def acid_bass() -> krs.Signal:
     freq = krs.control("freq", 55.0, 20.0, 800.0)
     gate = krs.control("gate", 0.0, 0.0, 1.0)
     cutoff = krs.control("cutoff", 800.0, 100.0, 4000.0)
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
-```
 
-After decoration, `acid_bass` is a `DspDef` object. Pass it directly to
-`kr.node()`:
-
-```python
 kr.node("bass", acid_bass, gain=0.3)
 ```
 
-The decorator saves both the Python source (`.py`) and the generated FAUST
-code (`.dsp`) to `~/.krach/dsp/`.
+`kr.node()` takes care of everything: it transpiles the Python function to
+FAUST, compiles it via LLVM, and registers the audio node. The generated FAUST
+code (`.dsp`) is saved to `~/.krach/dsp/`.
 
 ## `krs` primitives reference
 
@@ -139,18 +134,16 @@ See [Effect Routing](effect-routing.md) for the full send/wire system.
 
 ## Hot reload
 
-Edit your `.py` synth file, and the system picks up changes automatically:
+Just redefine the function and call `kr.node()` again:
 
-1. The `@kr.dsp` decorator re-transpiles Python to FAUST
-2. The FAUST file watcher detects the updated `.dsp`
-3. LLVM recompiles the DSP to native code
-4. The audio graph hot-swaps the node with a crossfade
+1. `kr.node()` re-transpiles the Python function to FAUST
+2. LLVM recompiles the DSP to native code
+3. The audio graph hot-swaps the node with a crossfade
 
-No restart needed. Just redefine the function and call `kr.node()` again:
+No restart needed:
 
 ```python
 # Change the synth -- hear the difference immediately
-@kr.dsp
 def acid_bass() -> krs.Signal:
     freq = krs.control("freq", 55.0, 20.0, 800.0)
     gate = krs.control("gate", 0.0, 0.0, 1.0)
@@ -170,7 +163,6 @@ kr.node("bass", acid_bass, gain=0.3)  # hot-swaps, patterns keep playing
 A classic 303-style bass with filter envelope:
 
 ```python
-@kr.dsp
 def acid_bass() -> krs.Signal:
     freq = krs.control("freq", 55.0, 20.0, 800.0)
     gate = krs.control("gate", 0.0, 0.0, 1.0)
@@ -185,7 +177,6 @@ def acid_bass() -> krs.Signal:
 Sine wave with pitch envelope for the characteristic thump:
 
 ```python
-@kr.dsp
 def kick() -> krs.Signal:
     gate = krs.control("gate", 0.0, 0.0, 1.0)
     env = krs.adsr(0.001, 0.25, 0.0, 0.05, gate)
@@ -197,7 +188,6 @@ def kick() -> krs.Signal:
 Filtered white noise with a sharp envelope:
 
 ```python
-@kr.dsp
 def hat() -> krs.Signal:
     gate = krs.control("gate", 0.0, 0.0, 1.0)
     env = krs.adsr(0.001, 0.04, 0.0, 0.02, gate)
@@ -209,7 +199,6 @@ def hat() -> krs.Signal:
 A detuned saw pair with slow attack for ambient textures:
 
 ```python
-@kr.dsp
 def pad() -> krs.Signal:
     freq = krs.control("freq", 220.0, 20.0, 2000.0)
     gate = krs.control("gate", 0.0, 0.0, 1.0)
@@ -229,16 +218,28 @@ def simple_reverb(inp: krs.Signal) -> krs.Signal:
     return krs.reverb(inp, room)
 ```
 
+## Pre-transpiling with `kr.dsp()`
+
+By default, `kr.node()` transpiles on every call. If you're iterating on
+routing but not changing the DSP function, you can pre-transpile once with
+`kr.dsp()` to skip redundant work:
+
+```python
+acid_bass_dsp = kr.dsp(acid_bass)       # transpile once
+kr.node("bass", acid_bass_dsp, gain=0.3)  # reuse the DspDef
+kr.node("bass", acid_bass_dsp, gain=0.5)  # no re-transpile
+```
+
+This is purely an optimization -- the result is identical.
+
 ## Putting it together
 
 ```python
-@kr.dsp
 def kick() -> krs.Signal:
     gate = krs.control("gate", 0.0, 0.0, 1.0)
     env = krs.adsr(0.001, 0.25, 0.0, 0.05, gate)
     return krs.sine_osc(55.0 + env * 200.0) * env * 0.9
 
-@kr.dsp
 def acid_bass() -> krs.Signal:
     freq = krs.control("freq", 55.0, 20.0, 800.0)
     gate = krs.control("gate", 0.0, 0.0, 1.0)
