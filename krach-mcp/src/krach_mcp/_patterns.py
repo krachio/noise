@@ -14,7 +14,7 @@ from krach._patterns import (
 )
 from krach.patterns.pattern import Pattern, rest
 
-# Namespace for eval — only safe pattern builders, no I/O
+# Namespace for eval — only safe pattern builders, no I/O, no internal types
 _EVAL_NS: dict[str, object] = {
     "note": note,
     "hit": hit,
@@ -33,7 +33,7 @@ _EVAL_NS: dict[str, object] = {
     "mod_ramp_down": mod_ramp_down,
     "mod_square": mod_square,
     "mod_exp": mod_exp,
-    "Pattern": Pattern,
+    "None": None,
 }
 
 
