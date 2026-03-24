@@ -11,8 +11,8 @@ on its own line. The user steps through each section one cell at a time.
 
 Rules (MUST follow):
 - Never write import statements. All symbols are listed under "Available symbols".
-- Use ONLY node types listed under "Node controls" or "Active voices".
-- When modifying: KEEP existing voice names. Use kr.node() to ADD new ones.
+- Use ONLY node types listed under "Node controls" or "Active nodes".
+- When modifying: KEEP existing node names. Use kr.node() to ADD new ones.
 - All comments must use Python syntax (# prefix). No prose outside code.
 - Use at most 2 x `# ---` dividers (3 cells maximum).
 
@@ -57,7 +57,7 @@ kr.hush("bass")
 
 ---
 
-## Nodes -- `kr` (VoiceMixer)
+## Nodes -- `kr` (Mixer)
 
 Nodes are named audio elements (sources or effects) with stable control labels.
 Adding or removing a node never breaks other nodes' patterns.
@@ -76,10 +76,10 @@ kr.gain("bass", 0.15)
 # Set any control by path:
 kr.set("bass/cutoff", 1200.0)
 
-# Remove a voice:
+# Remove a node:
 kr.remove("bass")
 
-# Batch multiple voices (one rebuild instead of N -- use for initial setup):
+# Batch multiple nodes (one rebuild instead of N -- use for initial setup):
 with kr.batch():
     kr.node("kick", kick_fn, gain=0.8)
     kr.node("bass", bass_fn, gain=0.3)
@@ -111,7 +111,7 @@ If a type is not listed, define it as a Python function instead.
 ### Building patterns with kr.note(), kr.hit(), kr.seq()
 ```python
 # These produce patterns with bare param names.
-# Bind to a voice at play time via kr.play("voice_name", pattern).
+# Bind to a node at play time via kr.play("node_name", pattern).
 
 # Melodic trigger (set freq + gate trig/reset):
 kr.note(440.0)                              # float Hz
@@ -127,8 +127,8 @@ kr.note(220.0, 330.0, 440.0)
 # For CHORDS (simultaneous notes), use EITHER:
 #   kr.note("A4", "C5", "E5")           ← multiple pitches in one call
 #   kr.note("A4") | kr.note("C5")       ← pipe operator (stack)
-# AND the voice MUST have count >= number of simultaneous notes:
-#   kr.node("rhodes", rhodes_fn, count=4)  ← poly voice for chords
+# AND the node MUST have count >= number of simultaneous notes:
+#   kr.node("rhodes", rhodes_fn, count=4)  ← poly node for chords
 
 # Percussive trigger (trig + reset on a control):
 kr.hit()                # default: gate
@@ -162,7 +162,7 @@ kr.play("rhodes", kr.note("A4", "C5", "E5") + kr.rest())
 
 ### Playing patterns
 ```python
-# Play a pattern on a voice -- binds bare params to voice/param:
+# Play a pattern on a node -- binds bare params to node/param:
 kr.play("bass", kr.note(55.0) * 4)
 kr.play("kick", kr.hit() * 4)
 kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
@@ -177,7 +177,7 @@ kr.play("bass/cutoff", kr.mod_sine(200.0, 2000.0).over(8))
 ```
 
 ### Control naming convention
-Labels are always `{voice_name}/{param}`. Example:
+Labels are always `{node_name}/{param}`. Example:
 - `kr.node("bass", my_bass_fn)` with controls (freq, gate, cutoff) ->
   labels: bass/freq, bass/gate, bass/cutoff
 
@@ -195,7 +195,7 @@ kr.send("bass", "verb", level=0.4)
 # Update send level instantly (no rebuild):
 kr.send("bass", "verb", level=0.7)
 
-# Wire a voice directly to a bus port (no gain stage):
+# Wire a node directly to a bus port (no gain stage):
 kr.wire("kick", "comp", port="in0")
 kr.wire("snare", "comp", port="in1")
 
@@ -228,11 +228,11 @@ All return Pattern objects. Optional `steps=64` controls resolution.
 
 ### Group operations
 ```python
-# Voice names with / act as groups:
+# Node names with / act as groups:
 kr.node("drums/kick", kick_fn, gain=0.8)
 kr.node("drums/hat", hat_fn, gain=0.6)
 
-# Group operations apply to all voices matching the prefix:
+# Group operations apply to all nodes matching the prefix:
 kr.gain("drums", 0.4)    # sets both drums/kick and drums/hat
 kr.mute("drums")
 kr.solo("drums")          # mutes everything except drums/*
@@ -245,7 +245,7 @@ kr.mute("bass")          # store gain, set to 0
 kr.unmute("bass")         # restore saved gain
 kr.solo("bass")           # mute all others
 kr.unsolo()               # unmute everything
-kr.stop()                 # hush all voices
+kr.stop()                 # hush all nodes
 ```
 
 ### Scenes and persistence
@@ -260,7 +260,7 @@ kr.load("songs/verse.py") # exec a Python file with kr in scope
 ### Live audio input
 ```python
 mic = kr.input("mic", channel=0, gain=0.5)  # ADC input from CoreAudio
-mic.send(verb, 0.4)                          # route to effects like any voice
+mic.send(verb, 0.4)                          # route to effects like any node
 ```
 
 ### MIDI controller mapping
@@ -282,7 +282,7 @@ kr.hush("kick")       # silence slot (resumable)
 kr.stop()             # hush all slots
 ```
 
-### Voice handles (eliminates name repetition)
+### Node handles (eliminates name repetition)
 ```python
 kick = kr.node("drums/kick", kick_fn, gain=0.8)
 bass = kr.node("bass", bass_fn, gain=0.5)
@@ -384,7 +384,7 @@ def acid_bass() -> krs.Signal:
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
-# --- Set up voices (all Python functions -- no dependency on pre-existing DSPs)
+# --- Set up nodes (all Python functions -- no dependency on pre-existing DSPs)
 with kr.batch():
     kr.node("kick", my_kick,   gain=0.8)
     kr.node("hat",  my_hat,    gain=0.5)
@@ -405,8 +405,8 @@ kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
 - ONLY use properties and methods documented above. Do NOT invent features.
 - `kr.node()` accepts Python functions -- no separate dsp() step needed
 - `kr.gain("bass", 0.15)` is instant (no graph rebuild)
-- Adding a voice with `kr.node("lead", ...)` never breaks kick/bass patterns
-- `kr.note()`, `kr.hit()`, `kr.seq()` are pattern builders -- bind to voice via `kr.play()`
+- Adding a node with `kr.node("lead", ...)` never breaks kick/bass patterns
+- `kr.note()`, `kr.hit()`, `kr.seq()` are pattern builders -- bind to node via `kr.play()`
 - `kr.mod_sine(lo, hi)` etc. return Patterns -- compose with `.over()`, `+`, etc.
 - Pattern `+` divides the cycle equally -- 4 atoms = 4 beats per cycle
 - Use `.over(2)` for patterns spanning multiple bars
@@ -414,4 +414,4 @@ kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
 - Use `kr.parse_note("C4")` or pass strings directly to `kr.note("C4")`
 - Note constants: C0-B8 (C4=60, A4=69). Sharps: Cs4, Ds4, Fs4, etc.
 - A minor pentatonic: A2, C3, D3, E3, A3 (kr.mtof converts to Hz)
-- Group voices with `/`: `"drums/kick"`, `"drums/hat"` -- then `kr.gain("drums", 0.5)`
+- Group nodes with `/`: `"drums/kick"`, `"drums/hat"` -- then `kr.gain("drums", 0.5)`

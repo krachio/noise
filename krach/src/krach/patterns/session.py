@@ -209,7 +209,7 @@ class Session:
         controls: tuple[str, ...],
         gain: float,
     ) -> None:
-        """Add a voice to the existing graph without full rebuild.
+        """Add a node to the existing graph without full rebuild.
 
         Sends a GraphBatch of AddNode + Connect + ExposeControl — one
         recompile, one SwapGraph, existing nodes reused.
