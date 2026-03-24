@@ -52,7 +52,8 @@ class MixerInfra:
     mtof = staticmethod(_mtof)
     ftom = staticmethod(_ftom)
     parse_note = staticmethod(_parse_note)
-    from krach._mininotation import p as p
+    from krach._mininotation import p as _p
+    p = staticmethod(_p)
 
     # Methods implemented by Mixer — declared here so NodeHandle can type-check against MixerInfra
     def connect(self, source: str, target: str, level: float = 1.0, port: str | None = None) -> None:
