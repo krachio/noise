@@ -371,6 +371,7 @@ class Mixer(MixerInfra):
         match resolve_path(target, self._nodes):
             case NodePath(name):
                 node = self._nodes[name]
+                self._warn_unknown_controls(name, node, pattern)
                 if node.count > 1:
                     bound_node, new_alloc = bind_voice_poly(
                         pattern.node, name, node.count, node.alloc

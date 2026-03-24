@@ -320,6 +320,22 @@ class MixerInfra:
             case _:
                 pass
 
+    def _warn_unknown_controls(self, name: str, node: Node, pattern: Pattern) -> None:
+        """Warn if a pattern references controls not present on the node."""
+        import warnings
+        from krach._bind import collect_control_labels
+        labels = collect_control_labels(pattern.node)
+        if not labels:
+            return
+        known = set(node.controls) | {"gain"}
+        unknown = {lab for lab in labels if lab not in known}
+        if unknown:
+            warnings.warn(
+                f"play('{name}', ...): unknown control(s) {sorted(unknown)} "
+                f"— available: {sorted(known)}",
+                stacklevel=4,
+            )
+
     def _warn_pattern_range(self, node_name: str, param: str, pattern: Pattern) -> None:
         """Warn if a control pattern's values fall outside the declared range."""
         import warnings

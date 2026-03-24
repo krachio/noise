@@ -4100,6 +4100,48 @@ def test_play_control_path_warns_mod_outside_range() -> None:
         assert "[20.0, 2000.0]" in str(range_warnings[0].message)
 
 
+def test_play_warns_unknown_control_name() -> None:
+    """kr.play('bass', note('C4', volume=1.0)) warns when bass has no 'volume' control."""
+    import warnings
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+    from krach._patterns import note
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate", "cutoff"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        mixer.play("bass", note("C4", volume=1.0))
+        ctrl_warnings = [x for x in w if "unknown control" in str(x.message).lower()]
+        assert len(ctrl_warnings) == 1
+        assert "volume" in str(ctrl_warnings[0].message)
+        assert "freq" in str(ctrl_warnings[0].message) or "available" in str(ctrl_warnings[0].message).lower()
+
+
+def test_play_no_warn_known_controls() -> None:
+    """kr.play('bass', note('C4')) should not warn — freq and gate are known."""
+    import warnings
+    from unittest.mock import MagicMock
+    from krach._mixer import Mixer
+    from krach._patterns import note
+
+    session = MagicMock()
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:bass": ("freq", "gate"),
+    })
+    mixer.voice("bass", "faust:bass", gain=0.5)
+
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        mixer.play("bass", note("C4"))
+        ctrl_warnings = [x for x in w if "unknown control" in str(x.message).lower()]
+        assert len(ctrl_warnings) == 0
+
+
 def test_play_control_path_no_warn_when_in_range() -> None:
     """kr.play('bass/freq', mod_sine(100, 800)) should not warn."""
     import warnings

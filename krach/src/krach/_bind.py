@@ -32,6 +32,22 @@ from krach.patterns.ir import (
 )
 
 
+def collect_control_labels(node: IrNode) -> set[str]:
+    """Extract all Control.label strings from an IR tree."""
+    labels: set[str] = set()
+
+    def _visit(n: IrNode) -> IrNode:
+        match n:
+            case Atom(Control(label=label)):
+                labels.add(label)
+            case _:
+                pass
+        return n
+
+    map_atoms(node, _visit)
+    return labels
+
+
 def collect_control_values(node: IrNode) -> list[float]:
     """Extract all Control.value floats from an IR tree."""
     values: list[float] = []
