@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import inspect
 import textwrap
+import warnings
 from pathlib import Path
 from typing import Callable, Literal
 
@@ -30,11 +31,6 @@ from krach._patterns import (  # noqa: F401 — re-exported for tests/namespace
 from krach._patterns import check_finite as _check_finite
 from krach.patterns import Session
 from krach.patterns.pattern import Pattern
-
-
-
-
-
 
 
 
@@ -455,7 +451,6 @@ class VoiceMixer(MixerInfra):
         _check_finite(level, f"send level for '{source}' → '{target}'")
         if source not in self._nodes or target not in self._nodes:
             missing = [n for n in (source, target) if n not in self._nodes]
-            import warnings
             warnings.warn(f"send: skipped — node(s) not found: {missing}", stacklevel=2)
             return
 
@@ -478,7 +473,6 @@ class VoiceMixer(MixerInfra):
         """Wire a source node directly to a target node port (no gain stage)."""
         if source not in self._nodes or target not in self._nodes:
             missing = [n for n in (source, target) if n not in self._nodes]
-            import warnings
             warnings.warn(f"wire: skipped — node(s) not found: {missing}", stacklevel=2)
             return
 
@@ -509,8 +503,3 @@ class VoiceMixer(MixerInfra):
             self._session.set_automation(label, pattern_or_shape, lo, hi, period_secs)
         else:
             self.play(path, pattern_or_shape.over(bars), from_zero=True)
-
-
-
-
-
