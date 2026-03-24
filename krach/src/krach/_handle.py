@@ -1,7 +1,7 @@
 """NodeHandle — proxy for a named node in the audio graph.
 
 Supports operator DSL: ``>>`` (routing), ``@`` (patterns), ``[]`` (controls).
-All operators delegate to VoiceMixer methods.
+All operators delegate to Mixer methods.
 """
 
 from __future__ import annotations
@@ -11,13 +11,13 @@ from typing import TYPE_CHECKING
 from krach.patterns.pattern import Pattern
 
 if TYPE_CHECKING:
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
 
 class NodeHandle:
     """Proxy for a named node in the audio graph."""
 
-    def __init__(self, mixer: VoiceMixer, name: str) -> None:
+    def __init__(self, mixer: Mixer, name: str) -> None:
         self._mixer = mixer
         self._name = name
 

@@ -1,6 +1,6 @@
-"""VoiceMixer infrastructure — properties, accessors, graph rebuild.
+"""Mixer infrastructure — properties, accessors, graph rebuild.
 
-Separated from _mixer.py to keep VoiceMixer under 500 lines.
+Separated from _mixer.py to keep Mixer under 500 lines.
 These are pure read/delegate operations with no orchestration logic.
 """
 
@@ -19,6 +19,7 @@ from krach._patterns import (
 )
 from krach._pitch import ftom as _ftom, mtof as _mtof, parse_note as _parse_note
 from krach._types import Node, dsp
+from krach.patterns.session import SlotState
 from krach.patterns.pattern import rest as _rest
 
 if TYPE_CHECKING:
@@ -52,7 +53,7 @@ class MixerInfra:
     parse_note = staticmethod(_parse_note)
     from krach._mininotation import p as p
 
-    # These fields are defined on VoiceMixer.__init__ — declared here for type checking
+    # These fields are defined on Mixer.__init__ — declared here for type checking
     _session: Session
     _master_gain: float
     _nodes: dict[str, Node]
@@ -108,9 +109,9 @@ class MixerInfra:
     # ── State accessors ───────────────────────────────────────────────
 
     @property
-    def slots(self) -> dict[str, object]:
+    def slots(self) -> dict[str, SlotState]:
         """Read-only snapshot of session slots."""
-        return self._session.slots  # type: ignore[return-value]
+        return self._session.slots
 
     def get_node(self, name: str) -> Node | None:
         """Look up a node by name, or None if not found."""
@@ -337,7 +338,7 @@ class MixerInfra:
 
     def __repr__(self) -> str:
         count = len(self._nodes)
-        lines = [f"VoiceMixer({count} nodes)"]
+        lines = [f"Mixer({count} nodes)"]
         if not self._nodes:
             return lines[0]
         max_name = max(len(n) for n in self._nodes)

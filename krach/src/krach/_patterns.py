@@ -166,7 +166,7 @@ def struct(rhythm: Pattern, melody: Pattern) -> Pattern:
     return Pattern(new_ir)
 
 
-# ── Voice-bound builders (used by VoiceMixer internally) ──────────────────────
+# ── Voice-bound builders (used by Mixer internally) ──────────────────────
 
 
 def build_note(

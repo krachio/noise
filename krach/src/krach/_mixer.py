@@ -1,4 +1,4 @@
-"""VoiceMixer — graph-based audio node manager.
+"""Mixer — graph-based audio node manager.
 
 Manages FAUST DSP nodes (sources and effects), per-node gain, and the
 underlying audio graph. Control labels: ``{node_name}/{param}``.
@@ -66,10 +66,10 @@ def _resolve_dsp_source(
     return type_id, controls, source_text
 
 
-# ── VoiceMixer ────────────────────────────────────────────────────────────────
+# ── Mixer ────────────────────────────────────────────────────────────────
 
 
-class VoiceMixer(MixerInfra):
+class Mixer(MixerInfra):
     """Manages named audio nodes with stable control labels.
 
     Each node is a FAUST DSP source or effect (string type_id or Python function)

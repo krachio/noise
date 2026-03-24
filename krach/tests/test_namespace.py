@@ -1,126 +1,126 @@
 """Tests for the kr/krs namespace refactor.
 
 Verifies that pattern builders, pitch utilities, and DSP primitives
-are accessible through VoiceMixer (kr) and krach.dsp (krs).
+are accessible through Mixer (kr) and krach.dsp (krs).
 """
 
-from krach._mixer import VoiceMixer, note, hit, seq, ramp, mod_sine, mod_tri
+from krach._mixer import Mixer, note, hit, seq, ramp, mod_sine, mod_tri
 from krach._mixer import mod_ramp, mod_ramp_down, mod_square, mod_exp, dsp
 from krach._pitch import mtof, ftom, parse_note
 from krach.patterns.pattern import Pattern, rest
 
 
-# ── Pattern builders on VoiceMixer ────────────────────────────────────────────
+# ── Pattern builders on Mixer ────────────────────────────────────────────
 
 
 def test_note_is_same_function() -> None:
-    assert VoiceMixer.note is note
+    assert Mixer.note is note
 
 
 def test_hit_is_same_function() -> None:
-    assert VoiceMixer.hit is hit
+    assert Mixer.hit is hit
 
 
 def test_seq_is_same_function() -> None:
-    assert VoiceMixer.seq is seq
+    assert Mixer.seq is seq
 
 
 def test_rest_is_same_function() -> None:
-    assert VoiceMixer.rest is rest
+    assert Mixer.rest is rest
 
 
 def test_ramp_is_same_function() -> None:
-    assert VoiceMixer.ramp is ramp
+    assert Mixer.ramp is ramp
 
 
 def test_mod_sine_is_same_function() -> None:
-    assert VoiceMixer.mod_sine is mod_sine
+    assert Mixer.mod_sine is mod_sine
 
 
 def test_mod_tri_is_same_function() -> None:
-    assert VoiceMixer.mod_tri is mod_tri
+    assert Mixer.mod_tri is mod_tri
 
 
 def test_mod_ramp_is_same_function() -> None:
-    assert VoiceMixer.mod_ramp is mod_ramp
+    assert Mixer.mod_ramp is mod_ramp
 
 
 def test_mod_ramp_down_is_same_function() -> None:
-    assert VoiceMixer.mod_ramp_down is mod_ramp_down
+    assert Mixer.mod_ramp_down is mod_ramp_down
 
 
 def test_mod_square_is_same_function() -> None:
-    assert VoiceMixer.mod_square is mod_square
+    assert Mixer.mod_square is mod_square
 
 
 def test_mod_exp_is_same_function() -> None:
-    assert VoiceMixer.mod_exp is mod_exp
+    assert Mixer.mod_exp is mod_exp
 
 
 def test_dsp_is_same_function() -> None:
-    assert VoiceMixer.dsp is dsp
+    assert Mixer.dsp is dsp
 
 
-# ── Pitch utilities on VoiceMixer ─────────────────────────────────────────────
+# ── Pitch utilities on Mixer ─────────────────────────────────────────────
 
 
 def test_mtof_is_same_function() -> None:
-    assert VoiceMixer.mtof is mtof
+    assert Mixer.mtof is mtof
 
 
 def test_ftom_is_same_function() -> None:
-    assert VoiceMixer.ftom is ftom
+    assert Mixer.ftom is ftom
 
 
 def test_parse_note_is_same_function() -> None:
-    assert VoiceMixer.parse_note is parse_note
+    assert Mixer.parse_note is parse_note
 
 
 # ── Static methods produce correct results ────────────────────────────────────
 
 
 def test_voicemixer_note_produces_pattern() -> None:
-    pat = VoiceMixer.note("C4")
+    pat = Mixer.note("C4")
     assert pat is not None
     # Should produce the same pattern as the free function
     assert pat.node == note("C4").node
 
 
 def test_voicemixer_hit_produces_pattern() -> None:
-    pat = VoiceMixer.hit()
+    pat = Mixer.hit()
     assert pat.node == hit().node
 
 
 def test_voicemixer_seq_produces_pattern() -> None:
-    pat = VoiceMixer.seq("A2", "D3", None, "E2")
+    pat = Mixer.seq("A2", "D3", None, "E2")
     assert pat.node == seq("A2", "D3", None, "E2").node
 
 
 def test_voicemixer_mtof_converts() -> None:
-    assert VoiceMixer.mtof(69) == 440.0
+    assert Mixer.mtof(69) == 440.0
 
 
 def test_voicemixer_ftom_converts() -> None:
-    assert VoiceMixer.ftom(440.0) == 69
+    assert Mixer.ftom(440.0) == 69
 
 
 def test_voicemixer_parse_note_converts() -> None:
-    hz = VoiceMixer.parse_note("A4")
+    hz = Mixer.parse_note("A4")
     assert hz == 440.0
 
 
 def test_voicemixer_rest_produces_silence() -> None:
-    r = VoiceMixer.rest()
+    r = Mixer.rest()
     assert r.node == rest().node
 
 
 def test_voicemixer_ramp_produces_pattern() -> None:
-    pat = VoiceMixer.ramp(0.0, 1.0, steps=4)
+    pat = Mixer.ramp(0.0, 1.0, steps=4)
     assert pat.node == ramp(0.0, 1.0, steps=4).node
 
 
 def test_voicemixer_mod_sine_produces_pattern() -> None:
-    pat = VoiceMixer.mod_sine(0.0, 1.0, steps=4)
+    pat = Mixer.mod_sine(0.0, 1.0, steps=4)
     assert pat.node == mod_sine(0.0, 1.0, steps=4).node
 
 
@@ -129,12 +129,12 @@ def test_voicemixer_mod_sine_produces_pattern() -> None:
 
 def test_p_is_same_function() -> None:
     from krach._mininotation import p
-    assert VoiceMixer.p is p  # type: ignore[attr-defined]
+    assert Mixer.p is p  # type: ignore[attr-defined]
 
 
 def test_voicemixer_p_produces_pattern() -> None:
     from krach._mininotation import p
-    pat: Pattern = VoiceMixer.p("x . x .")  # type: ignore[attr-defined]
+    pat: Pattern = Mixer.p("x . x .")  # type: ignore[attr-defined]
     assert pat.node == p("x . x .").node  # type: ignore[reportUnknownMemberType]
 
 
@@ -187,7 +187,7 @@ def test_setattr_rejects_unknown_property() -> None:
     from pathlib import Path
     from unittest.mock import MagicMock
     import pytest
-    mixer = VoiceMixer(session=MagicMock(), dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=MagicMock(), dsp_dir=Path("/tmp"))
     with pytest.raises(AttributeError, match="kr has no property 'swing'"):
         mixer.swing = 0.67  # type: ignore[attr-defined]
 
@@ -195,7 +195,7 @@ def test_setattr_rejects_unknown_property() -> None:
 def test_setattr_allows_known_properties() -> None:
     from pathlib import Path
     from unittest.mock import MagicMock
-    mixer = VoiceMixer(session=MagicMock(), dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=MagicMock(), dsp_dir=Path("/tmp"))
     mixer.master = 0.5  # should not raise
     mixer.tempo = 140.0
     mixer.bpm = 128.0

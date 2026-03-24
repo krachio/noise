@@ -5,7 +5,7 @@ import tempfile
 import time
 from pathlib import Path
 
-from krach._mixer import VoiceMixer
+from krach._mixer import Mixer
 
 
 def _repo_root() -> Path:
@@ -27,8 +27,8 @@ def _wait_for_socket(path: Path, timeout: float = 5.0) -> bool:
     return False
 
 
-def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> VoiceMixer:
-    """Start krach-engine and return a connected VoiceMixer.
+def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> Mixer:
+    """Start krach-engine and return a connected Mixer.
 
     ``bpm``: initial tempo.
     ``master``: master output gain (0.0-1.0).
@@ -100,7 +100,7 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> VoiceM
             _rel = _p.relative_to(dsp_dir).with_suffix("")
             node_controls[f"faust:{_rel}"] = controls
 
-    kr = VoiceMixer(session=mm, dsp_dir=dsp_dir, node_controls=node_controls)
+    kr = Mixer(session=mm, dsp_dir=dsp_dir, node_controls=node_controls)
     kr.tempo = bpm
     kr.master = master
 
@@ -196,7 +196,7 @@ def main() -> None:
     print("  \u2588\u2588\u2551  \u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2551  \u2588\u2588\u2551\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2557\u2588\u2588\u2551  \u2588\u2588\u2551")
     print("  \u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d")
     print()
-    print(f"  kr    VoiceMixer — kr.node(), kr.play(), kr.note(), kr.hit(), ...")
+    print(f"  kr    Mixer — kr.node(), kr.play(), kr.note(), kr.hit(), ...")
     print(f"  krs   krach.dsp  — krs.Signal, krs.control(), krs.saw(), krs.lowpass(), ...")
     print()
 

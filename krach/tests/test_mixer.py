@@ -262,7 +262,7 @@ def test_dsp_decorator_captures_source_and_transpiles() -> None:
     assert 'import("stdfaust.lib")' in my_synth.faust
 
 
-# ── VoiceMixer.batch ─────────────────────────────────────────────────────────
+# ── Mixer.batch ─────────────────────────────────────────────────────────
 
 
 def test_batch_defers_rebuild() -> None:
@@ -272,9 +272,9 @@ def test_batch_defers_rebuild() -> None:
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:kick", "faust:bass", "dac", "gain"]
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:kick": ("gate",),
         "faust:bass": ("freq", "gate"),
     })
@@ -295,9 +295,9 @@ def test_voice_outside_batch_rebuilds_immediately() -> None:
     from unittest.mock import MagicMock
 
     session = MagicMock()
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:kick": ("gate",),
     })
 
@@ -316,9 +316,9 @@ def test_stop_hushes_poly_parent_slots() -> None:
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
 
@@ -340,9 +340,9 @@ def test_stop_does_not_skip_mono_voice_with_poly_like_prefix() -> None:
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "faust:pad_vinyl", "dac", "gain"]
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
         "faust:pad_vinyl": ("freq", "gate"),
     })
@@ -367,9 +367,9 @@ def test_remove_hushes_fade_pattern() -> None:
     from unittest.mock import MagicMock
 
     session = MagicMock()
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -398,9 +398,9 @@ def test_revoice_hushes_old_instance_patterns() -> None:
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=4, gain=0.5)
@@ -423,9 +423,9 @@ def test_stop_hushes_fade_patterns() -> None:
     from unittest.mock import MagicMock
 
     session = MagicMock()
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -446,9 +446,9 @@ def test_remove_poly_hushes_instance_fades() -> None:
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=2, gain=0.5)
@@ -471,9 +471,9 @@ def test_revoice_hushes_old_instance_fades() -> None:
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=3, gain=0.5)
@@ -496,9 +496,9 @@ def test_fade_poly_parent_fades_all_instances() -> None:
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=2, gain=0.6)
@@ -514,9 +514,9 @@ def test_fade_zero_bars_raises() -> None:
     import pytest
 
     session = MagicMock()
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -534,9 +534,9 @@ def test_hush_poly_stops_instance_patterns() -> None:
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=2, gain=0.5)
@@ -562,9 +562,9 @@ def test_gain_poly_parent_updates_all_instances() -> None:
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=2, gain=0.6)
@@ -589,9 +589,9 @@ def test_remove_missing_voice_is_noop() -> None:
     from unittest.mock import MagicMock
 
     session = MagicMock()
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     mixer.remove("nope")  # must not raise
 
 
@@ -612,9 +612,9 @@ def test_voice_over_poly_cleans_up_poly() -> None:
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "faust:mono", "dac", "gain"]
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
         "faust:mono": ("freq", "gate"),
     })
@@ -694,10 +694,10 @@ def test_seq_produces_bare_params() -> None:
 def test_gain_nonexistent_voice_is_noop() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     mixer.gain("nope", 0.5)  # must not raise
 
 
@@ -707,10 +707,10 @@ def test_gain_nonexistent_voice_is_noop() -> None:
 def test_voice_replace_mono_hushes_old_fade() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:bass2": ("freq", "gate"),
     })
@@ -735,10 +735,10 @@ def test_gain_nan_raises_valueerror() -> None:
 
     import pytest
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -752,10 +752,10 @@ def test_gain_inf_raises_valueerror() -> None:
 
     import pytest
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -770,10 +770,10 @@ def test_gain_inf_raises_valueerror() -> None:
 def test_mute_sets_gain_to_zero() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -787,10 +787,10 @@ def test_mute_sets_gain_to_zero() -> None:
 def test_unmute_restores_gain() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.7)
@@ -805,10 +805,10 @@ def test_unmute_restores_gain() -> None:
 def test_unmute_without_mute_is_noop() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -823,10 +823,10 @@ def test_unmute_without_mute_is_noop() -> None:
 def test_solo_mutes_others() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:pad": ("freq", "gate"),
         "faust:kit": ("gate",),
@@ -847,11 +847,11 @@ def test_solo_poly_voice() -> None:
     """solo() on a poly voice mutes all others, keeps target unmuted."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "faust:bass", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
         "faust:bass": ("freq", "gate"),
     })
@@ -869,10 +869,10 @@ def test_solo_poly_voice() -> None:
 def test_mute_nonexistent_is_noop() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     mixer.mute("nope")  # must not raise
 
 
@@ -883,10 +883,10 @@ def test_fade_cancels_existing_fade() -> None:
     """Starting a new fade replaces the existing automation."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -906,10 +906,10 @@ def test_batch_skips_flush_on_exception() -> None:
 
     import pytest
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:kick": ("gate",),
     })
 
@@ -926,11 +926,11 @@ def test_batch_skips_flush_on_exception() -> None:
 def test_batch_flushes_on_success() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:kick", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:kick": ("gate",),
     })
 
@@ -943,10 +943,10 @@ def test_batch_flushes_on_success() -> None:
 def test_fade_nonexistent_voice_is_noop() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     mixer.fade("nope", target=0.5, bars=4)  # must not raise
 
 
@@ -1000,10 +1000,10 @@ def test_note_vel_default_not_sent() -> None:
 def test_play_delegates_to_session() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, hit
+    from krach._mixer import Mixer, hit
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:kick": ("gate",),
     })
     mixer.voice("kick", "faust:kick", gain=0.8)
@@ -1021,10 +1021,10 @@ def test_play_delegates_to_session() -> None:
 def test_double_mute_preserves_original_gain() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -1041,10 +1041,10 @@ def test_double_mute_preserves_original_gain() -> None:
 def test_solo_does_not_clobber_previously_muted_voice() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:pad": ("freq", "gate"),
         "faust:lead": ("freq", "gate"),
@@ -1067,10 +1067,10 @@ def test_solo_does_not_clobber_previously_muted_voice() -> None:
 def test_batch_exception_rolls_back_voices() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:pad": ("freq", "gate"),
     })
@@ -1093,10 +1093,10 @@ def test_batch_exception_rolls_back_voices() -> None:
 def test_remove_cleans_muted_state() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -1111,10 +1111,10 @@ def test_remove_cleans_muted_state() -> None:
 def test_voice_replace_cleans_muted_state() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:bass2": ("freq", "gate"),
     })
@@ -1130,11 +1130,11 @@ def test_poly_replace_cleans_muted_state() -> None:
     """voice() replacement with count changes must pop old muted state."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=2, gain=0.6)
@@ -1151,10 +1151,10 @@ def test_poly_replace_cleans_muted_state() -> None:
 def test_unsolo_restores_all_muted_voices() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:pad": ("freq", "gate"),
         "faust:kit": ("gate",),
@@ -1175,10 +1175,10 @@ def test_unsolo_restores_all_muted_voices() -> None:
 def test_unsolo_with_nothing_muted_is_noop() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -1194,10 +1194,10 @@ def test_unsolo_with_nothing_muted_is_noop() -> None:
 def test_repr_shows_voices_and_gains() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:kick": ("gate",),
         "faust:bass": ("freq", "gate"),
     })
@@ -1205,7 +1205,7 @@ def test_repr_shows_voices_and_gains() -> None:
     mixer.voice("bass", "faust:bass", gain=0.3)
 
     r = repr(mixer)
-    assert "VoiceMixer(2 nodes)" in r
+    assert "Mixer(2 nodes)" in r
     assert "kick" in r
     assert "faust:kick" in r
     assert "0.80" in r
@@ -1217,10 +1217,10 @@ def test_repr_shows_voices_and_gains() -> None:
 def test_repr_shows_muted() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
@@ -1234,11 +1234,11 @@ def test_repr_shows_poly() -> None:
     """__repr__ shows poly(N) for voices with count>1."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=4, gain=0.5)
@@ -1250,13 +1250,13 @@ def test_repr_shows_poly() -> None:
 def test_repr_empty() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     r = repr(mixer)
-    assert "VoiceMixer(0 nodes)" in r
+    assert "Mixer(0 nodes)" in r
 
 
 # ── Sprint 13 adversarial: _muted leak on poly instance removal ──────────
@@ -1266,11 +1266,11 @@ def test_remove_poly_cleans_instance_muted_entries() -> None:
     """remove() on a poly voice must clean up instance-level _muted entries."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=2, gain=0.6)
@@ -1289,11 +1289,11 @@ def test_remove_poly_cleans_instance_muted_entries() -> None:
 def test_unsolo_after_remove_muted_poly_no_crash() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "faust:bass", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
         "faust:bass": ("freq", "gate"),
     })
@@ -1311,11 +1311,11 @@ def test_revoice_cleans_instance_muted_entries() -> None:
     """re-voice with count change cleans old muted state."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=2, gain=0.6)
@@ -1334,11 +1334,11 @@ def test_revoice_fewer_voices_no_crash() -> None:
     """re-voice from count=4 to count=2 should not crash on unsolo."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=4, gain=0.8)
@@ -1356,11 +1356,11 @@ def test_voice_over_poly_cleans_instance_muted_entries() -> None:
     """voice() replacing a poly cleans muted state."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "faust:mono", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
         "faust:mono": ("freq", "gate"),
     })
@@ -1467,10 +1467,10 @@ def test_build_graph_ir_no_buses_backward_compatible() -> None:
 def test_bus_creates_bus_and_rebuilds() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -1489,10 +1489,10 @@ def test_bus_creates_bus_and_rebuilds() -> None:
 def test_send_new_rebuilds() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -1511,10 +1511,10 @@ def test_send_new_rebuilds() -> None:
 def test_send_update_instant() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -1532,10 +1532,10 @@ def test_send_update_instant() -> None:
 def test_send_missing_source_is_noop_old() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("room",),
     })
     mixer.bus("verb", "faust:verb", gain=0.3)
@@ -1545,10 +1545,10 @@ def test_send_missing_source_is_noop_old() -> None:
 def test_send_missing_target_is_noop_old() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -1558,10 +1558,10 @@ def test_send_missing_target_is_noop_old() -> None:
 def test_remove_voice_cleans_sends() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -1579,10 +1579,10 @@ def test_remove_voice_cleans_sends() -> None:
 def test_remove_bus_cleans_sends_and_wires() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -1602,10 +1602,10 @@ def test_bus_replaces_voice_with_same_name() -> None:
     """bus() replaces a voice with an effect node (unified model)."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -1620,11 +1620,11 @@ def test_bus_replaces_poly_voice() -> None:
     """bus() replaces a poly voice, cleaning up instances."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=2, gain=0.5)
@@ -1638,10 +1638,10 @@ def test_bus_replaces_poly_voice() -> None:
 def test_gain_works_for_bus() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("room",),
     })
     mixer.bus("verb", "faust:verb", gain=0.3)
@@ -1655,11 +1655,11 @@ def test_gain_works_for_bus() -> None:
 def test_send_poly_parent_instant_update() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -1677,10 +1677,10 @@ def test_send_poly_parent_instant_update() -> None:
 def test_repr_shows_buses() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -1695,10 +1695,10 @@ def test_repr_shows_buses() -> None:
 def test_voice_replace_cleans_sends() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:bass2": ("freq", "gate"),
         "faust:verb": ("room",),
@@ -1718,11 +1718,11 @@ def test_poly_replace_cleans_sends() -> None:
     """voice() replacement with count change cleans up sends."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -1744,10 +1744,10 @@ def test_poly_replace_cleans_sends() -> None:
 def test_wire_rebuilds() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
         "faust:comp": ("threshold",),
     })
@@ -1770,10 +1770,10 @@ def test_wire_and_send_same_pair_raises() -> None:
 
     import pytest
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -1790,10 +1790,10 @@ def test_send_and_wire_same_pair_raises() -> None:
 
     import pytest
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -1808,10 +1808,10 @@ def test_send_and_wire_same_pair_raises() -> None:
 def test_remove_voice_cleans_wires() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
         "faust:comp": ("threshold",),
     })
@@ -1852,10 +1852,10 @@ def test_mod_sine_values() -> None:
 def test_mod_plays_pattern() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, mod_sine
+    from krach._mixer import Mixer, mod_sine
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -1871,10 +1871,10 @@ def test_mod_plays_pattern() -> None:
 def test_hush_mod() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, mod_sine
+    from krach._mixer import Mixer, mod_sine
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -1890,10 +1890,10 @@ def test_hush_mod() -> None:
 def test_remove_voice_hushes_mods() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, mod_sine
+    from krach._mixer import Mixer, mod_sine
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -1909,10 +1909,10 @@ def test_remove_voice_hushes_mods() -> None:
 def test_mod_send_param_label() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, mod_sine
+    from krach._mixer import Mixer, mod_sine
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -2084,10 +2084,10 @@ def test_play_voice_binds_pattern() -> None:
 
     from krach.patterns.ir import ir_to_dict
 
-    from krach._mixer import VoiceMixer, note
+    from krach._mixer import Mixer, note
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -2110,10 +2110,10 @@ def test_play_control_path_binds_ctrl() -> None:
     from krach.patterns.ir import OscFloat, OscStr, ir_to_dict
     from krach.patterns.pattern import osc
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -2135,10 +2135,10 @@ def test_play_control_path_binds_ctrl() -> None:
 def test_set_delegates_to_set_ctrl() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -2153,10 +2153,10 @@ def test_set_validates_finite() -> None:
 
     import pytest
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     with pytest.raises(ValueError, match="finite"):
         mixer.set("bass/cutoff", float("nan"))
@@ -2256,12 +2256,12 @@ def test_mod_exp_returns_pattern() -> None:
 def test_fade_path_gain() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
     session.meter = 4.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -2278,12 +2278,12 @@ def test_fade_path_gain() -> None:
 def test_fade_path_cutoff() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
     session.meter = 4.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -2296,12 +2296,12 @@ def test_fade_oneshot_hold() -> None:
     """fade() sends a one-shot ramp automation (holds at target)."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
     session.meter = 4.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -2324,10 +2324,10 @@ def test_voice_count_1_is_mono() -> None:
     """voice() with count=1 (default) creates a mono voice."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -2341,11 +2341,11 @@ def test_voice_count_gt1_is_poly() -> None:
     """voice() with count>1 creates a polyphonic voice."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=4, gain=0.5)
@@ -2361,10 +2361,10 @@ def test_voice_count_lt1_raises() -> None:
 
     import pytest
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
 
@@ -2376,10 +2376,10 @@ def test_no_poly_method() -> None:
     """poly() method no longer exists."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     assert not hasattr(mixer, "poly")
 
 
@@ -2393,11 +2393,11 @@ def test_voice_dict_has_no_instances() -> None:
     """The voices dict stores parent names, not instance names."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=4, gain=0.5)
@@ -2413,11 +2413,11 @@ def test_play_poly_voice_round_robin() -> None:
     """play() on a poly voice does round-robin allocation."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, note
+    from krach._mixer import Mixer, note
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=2, gain=0.6)
@@ -2431,18 +2431,18 @@ def test_play_poly_voice_round_robin() -> None:
     assert call_args.args[0] == "pad"
 
 
-# ── Commit 5: tempo/slots properties on VoiceMixer ──────────────────────────
+# ── Commit 5: tempo/slots properties on Mixer ──────────────────────────
 
 
 def test_tempo_property_read() -> None:
     """mix.tempo reads from session.tempo."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 140.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     assert mixer.tempo == 140.0
 
@@ -2451,11 +2451,11 @@ def test_tempo_property_write() -> None:
     """mix.tempo = X sets session.tempo and sends command."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     mixer.tempo = 180.0
     assert session.tempo == 180.0
@@ -2468,10 +2468,10 @@ def test_voice_returns_handle() -> None:
     """voice() returns a VoiceHandle."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import NodeHandle, VoiceMixer
+    from krach._mixer import NodeHandle, Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     h = mixer.voice("bass", "faust:bass", gain=0.3)
@@ -2483,10 +2483,10 @@ def test_handle_play_delegates_to_mixer() -> None:
     """handle.play(pattern) delegates to mixer.play(name, pattern)."""
     from unittest.mock import MagicMock, patch
 
-    from krach._mixer import VoiceMixer, hit
+    from krach._mixer import Mixer, hit
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:kick": ("gate",),
     })
     h = mixer.voice("kick", "faust:kick", gain=0.8)
@@ -2501,10 +2501,10 @@ def test_handle_play_control_path() -> None:
     """handle.play('cutoff', pattern) delegates to mixer.play('name/cutoff', pattern)."""
     from unittest.mock import MagicMock, patch
 
-    from krach._mixer import VoiceMixer, mod_sine
+    from krach._mixer import Mixer, mod_sine
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     h = mixer.voice("bass", "faust:bass", gain=0.3)
@@ -2519,10 +2519,10 @@ def test_handle_set_delegates() -> None:
     """handle.set('cutoff', 800.0) delegates to mixer.set('name/cutoff', 800.0)."""
     from unittest.mock import MagicMock, patch
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     h = mixer.voice("bass", "faust:bass", gain=0.3)
@@ -2536,10 +2536,10 @@ def test_handle_fade_delegates() -> None:
     """handle.fade('cutoff', 200.0, bars=8) delegates to mixer.fade(...)."""
     from unittest.mock import MagicMock, patch
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     h = mixer.voice("bass", "faust:bass", gain=0.3)
@@ -2553,10 +2553,10 @@ def test_handle_send_with_bus_handle() -> None:
     """handle.send(bus_handle, 0.3) delegates to mixer.send(name, bus_name, 0.3)."""
     from unittest.mock import MagicMock, patch
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -2572,10 +2572,10 @@ def test_handle_mute_unmute() -> None:
     """handle.mute() / handle.unmute() delegate to mixer."""
     from unittest.mock import MagicMock, patch
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     h = mixer.voice("bass", "faust:bass", gain=0.3)
@@ -2593,10 +2593,10 @@ def test_handle_hush() -> None:
     """handle.hush() delegates to mixer.hush(name)."""
     from unittest.mock import MagicMock, patch
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     h = mixer.voice("bass", "faust:bass", gain=0.3)
@@ -2610,10 +2610,10 @@ def test_handle_repr() -> None:
     """VoiceHandle repr shows voice info."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     h = mixer.voice("bass", "faust:bass", gain=0.3)
@@ -2629,10 +2629,10 @@ def test_bus_returns_handle() -> None:
     """bus() returns a BusHandle."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import NodeHandle, VoiceMixer
+    from krach._mixer import NodeHandle, Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("room",),
     })
     bh = mixer.bus("verb", "faust:verb", gain=0.5)
@@ -2644,10 +2644,10 @@ def test_bus_handle_set() -> None:
     """bus_handle.set('room', 0.8) delegates to mixer.set('verb/room', 0.8)."""
     from unittest.mock import MagicMock, patch
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("room",),
     })
     bh = mixer.bus("verb", "faust:verb", gain=0.5)
@@ -2661,10 +2661,10 @@ def test_bus_handle_repr() -> None:
     """BusHandle repr shows bus info."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("room",),
     })
     bh = mixer.bus("verb", "faust:verb", gain=0.5)
@@ -2680,14 +2680,14 @@ def test_bus_handle_repr() -> None:
 
 
 def test_meter_property() -> None:
-    """VoiceMixer.meter delegates to session meter."""
+    """Mixer.meter delegates to session meter."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.meter = 4.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     # Read: delegates to session.meter
     assert mixer.meter == 4.0
@@ -2704,12 +2704,12 @@ def test_fade_uses_native_automation() -> None:
     """fade() with a path sends a native one-shot ramp automation."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
     session.meter = 4.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -2731,10 +2731,10 @@ def test_mod_uses_play_from_zero() -> None:
     """mod() should use play_from_zero so modulations start from phase 0."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, mod_sine
+    from krach._mixer import Mixer, mod_sine
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -2753,10 +2753,10 @@ def test_pattern_retrieval() -> None:
     """play() stores the unbound pattern and pattern() retrieves it."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, note
+    from krach._mixer import Mixer, note
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -2771,10 +2771,10 @@ def test_pattern_retrieval_unknown_returns_none() -> None:
     """pattern() returns None for unknown names."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     assert mixer.pattern("nope") is None
 
 
@@ -2782,10 +2782,10 @@ def test_handle_pattern_retrieval() -> None:
     """VoiceHandle.pattern() delegates to mixer.pattern()."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, note
+    from krach._mixer import Mixer, note
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     handle = mixer.voice("bass", "faust:bass", gain=0.5)
@@ -2803,10 +2803,10 @@ def test_add_voice_uses_slash_labels() -> None:
     """Incremental add_voice sends /‑separated exposed control labels."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:kick": ("gate",),
         "faust:bass": ("freq", "gate"),
     })
@@ -2831,10 +2831,10 @@ def test_master_property_delegates_to_session() -> None:
     """mix.master = X calls session.master_gain(X)."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     session.reset_mock()
     mixer.master = 0.6
@@ -2842,13 +2842,13 @@ def test_master_property_delegates_to_session() -> None:
 
 
 def test_master_default_value() -> None:
-    """VoiceMixer starts with master=0.7 and sends it on construction."""
+    """Mixer starts with master=0.7 and sends it on construction."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     assert mixer.master == 0.7
     session.master_gain.assert_called_once_with(0.7)
@@ -2860,10 +2860,10 @@ def test_master_nan_raises() -> None:
 
     import pytest
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     with pytest.raises(ValueError, match="finite"):
         mixer.master = float("nan")
@@ -2875,10 +2875,10 @@ def test_master_inf_raises() -> None:
 
     import pytest
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     with pytest.raises(ValueError, match="finite"):
         mixer.master = float("inf")
@@ -2891,12 +2891,12 @@ def test_bpm_alias_for_tempo() -> None:
     """bpm property reads and writes tempo."""
     from unittest.mock import MagicMock, PropertyMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     type(session).tempo = PropertyMock(return_value=128.0)
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     assert mixer.bpm == 128.0
     mixer.bpm = 140.0
@@ -2908,10 +2908,10 @@ def test_voices_returns_handles() -> None:
     """voices property returns dict of VoiceHandles."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import NodeHandle, VoiceMixer
+    from krach._mixer import NodeHandle, Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -2926,10 +2926,10 @@ def test_buses_returns_handles() -> None:
     """buses property returns dict of BusHandles."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import NodeHandle, VoiceMixer
+    from krach._mixer import NodeHandle, Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("room",),
     })
     mixer.bus("verb", "faust:verb", gain=0.3)
@@ -2947,12 +2947,12 @@ def test_mod_string_shape_sends_automation() -> None:
     """mod() with a string shape sends set_automation to the session."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
     session.meter = 4.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
@@ -2973,12 +2973,12 @@ def test_mod_pattern_still_works() -> None:
     """mod() with a Pattern still uses the legacy play path."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, mod_sine
+    from krach._mixer import Mixer, mod_sine
 
     session = MagicMock()
     session.tempo = 120.0
     session.meter = 4.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
@@ -2996,12 +2996,12 @@ def test_fade_path_sends_automation() -> None:
     """fade() with a path sends a one-shot ramp automation."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
     session.meter = 4.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
@@ -3023,12 +3023,12 @@ def test_fade_gain_path_updates_bookkeeping() -> None:
     """fade() on gain path updates Voice.gain."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
     session.meter = 4.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -3046,13 +3046,13 @@ def test_save_captures_state() -> None:
     """save() snapshots voices, buses, sends, patterns, tempo, master."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 130.0
     session.meter = 4.0
     session.list_nodes.return_value = ["faust:bass", "faust:verb", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -3084,13 +3084,13 @@ def test_recall_restores_state() -> None:
     """save, modify, recall — should restore voices/buses/sends/tempo/master."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
     session.meter = 4.0
     session.list_nodes.return_value = ["faust:bass", "faust:pad", "faust:verb", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:pad": ("freq", "gate"),
         "faust:verb": ("room",),
@@ -3124,11 +3124,11 @@ def test_recall_unknown_raises() -> None:
     import pytest
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     with pytest.raises(ValueError, match="scene 'nope' not found"):
         mixer.recall("nope")
@@ -3138,11 +3138,11 @@ def test_scenes_lists_names() -> None:
     """scenes property returns list of saved scene names."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     assert mixer.scenes == []
     mixer.save("a")
@@ -3157,11 +3157,11 @@ def test_load_executes_file(tmp_path: Path) -> None:
     """load() execs a Python file with `mix` in scope."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     # Write a temp file that sets master gain via mix
     scene_file = tmp_path / "my_scene.py"
@@ -3176,11 +3176,11 @@ def test_load_missing_file_raises() -> None:
     import pytest
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.tempo = 120.0
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     with pytest.raises(FileNotFoundError, match="scene file not found"):
         mixer.load("/nonexistent/nope.py")
@@ -3227,7 +3227,7 @@ def test_build_hit_uses_control_not_osc() -> None:
         assert isinstance(v, Control), f"expected Control, got {type(v).__name__}: {v}"
 
 
-# ── VoiceMixer.input() ──────────────────────────────────────────────────────
+# ── Mixer.input() ──────────────────────────────────────────────────────
 
 
 def test_input_calls_start_input_and_creates_voice() -> None:
@@ -3236,9 +3236,9 @@ def test_input_calls_start_input_and_creates_voice() -> None:
 
     session = MagicMock()
     session.list_nodes.return_value = ["adc_input", "dac", "gain"]
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={})
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={})
 
     handle = mixer.input("mic", channel=1, gain=0.4)
 
@@ -3263,9 +3263,9 @@ def test_input_default_name_and_channel() -> None:
 
     session = MagicMock()
     session.list_nodes.return_value = ["adc_input", "dac", "gain"]
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={})
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={})
 
     mixer.input()
 
@@ -3288,7 +3288,7 @@ def test_input_appears_in_graph_ir() -> None:
     assert mic_node.type_id == "adc_input"
 
 
-# ── VoiceMixer.midi_map() ───────────────────────────────────────────────────
+# ── Mixer.midi_map() ───────────────────────────────────────────────────
 
 
 def test_midi_map_sends_to_session() -> None:
@@ -3296,9 +3296,9 @@ def test_midi_map_sends_to_session() -> None:
     from unittest.mock import MagicMock
 
     session = MagicMock()
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -3313,9 +3313,9 @@ def test_midi_map_custom_channel() -> None:
     from unittest.mock import MagicMock
 
     session = MagicMock()
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
@@ -3330,9 +3330,9 @@ def test_midi_map_resolves_send_path() -> None:
     from unittest.mock import MagicMock
 
     session = MagicMock()
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("room",),
     })
@@ -3353,11 +3353,11 @@ def test_export_generates_valid_python() -> None:
     import tempfile
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, hit
+    from krach._mixer import Mixer, hit
 
     session = MagicMock()
     with tempfile.TemporaryDirectory() as tmpdir:
-        mixer = VoiceMixer(session=session, dsp_dir=Path(tmpdir), node_controls={
+        mixer = Mixer(session=session, dsp_dir=Path(tmpdir), node_controls={
             "faust:kick": ("gate",),
         })
         mixer.voice("kick", "faust:kick", gain=0.8)
@@ -3375,13 +3375,13 @@ def test_export_contains_voice_and_tempo() -> None:
     import tempfile
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, hit
+    from krach._mixer import Mixer, hit
 
     session = MagicMock()
     session.tempo = 140.0
     session.meter = 4.0
     with tempfile.TemporaryDirectory() as tmpdir:
-        mixer = VoiceMixer(session=session, dsp_dir=Path(tmpdir), node_controls={
+        mixer = Mixer(session=session, dsp_dir=Path(tmpdir), node_controls={
             "faust:kick": ("gate",),
         })
         mixer.voice("kick", "faust:kick", gain=0.8)
@@ -3402,11 +3402,11 @@ def test_export_contains_pattern_json() -> None:
     import tempfile
     from unittest.mock import MagicMock
 
-    from krach._mixer import VoiceMixer, hit
+    from krach._mixer import Mixer, hit
 
     session = MagicMock()
     with tempfile.TemporaryDirectory() as tmpdir:
-        mixer = VoiceMixer(session=session, dsp_dir=Path(tmpdir), node_controls={
+        mixer = Mixer(session=session, dsp_dir=Path(tmpdir), node_controls={
             "faust:kick": ("gate",),
         })
         mixer.voice("kick", "faust:kick", gain=0.8)
@@ -3426,10 +3426,10 @@ def test_export_contains_pattern_json() -> None:
 def test_node_creates_entry_in_nodes() -> None:
     """node() creates an entry in the unified _nodes dict."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.node("bass", "faust:bass", gain=0.3)
@@ -3440,10 +3440,10 @@ def test_node_creates_entry_in_nodes() -> None:
 def test_connect_voice_to_voice_as_send() -> None:
     """>> between two voices should work as a send (voice used as effect)."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("in", "room"),
     })
@@ -3461,10 +3461,10 @@ def test_connect_voice_to_voice_as_send() -> None:
 def test_unified_node_source_and_effect_in_same_dict() -> None:
     """All nodes live in one dict, regardless of num_inputs."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("in", "room"),
     })
@@ -3479,10 +3479,10 @@ def test_unified_node_source_and_effect_in_same_dict() -> None:
 def test_connect_any_node_to_any_node() -> None:
     """>> works between any two nodes, regardless of type."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("in", "room"),
     })
@@ -3494,10 +3494,10 @@ def test_connect_any_node_to_any_node() -> None:
 def test_remove_works_for_any_node() -> None:
     """remove() works regardless of whether node was source or effect."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.node("bass", "faust:bass", gain=0.3)
@@ -3507,10 +3507,10 @@ def test_remove_works_for_any_node() -> None:
 def test_gain_works_for_any_node() -> None:
     """gain() works on any node."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("in", "room"),
     })
     mixer.node("verb", "faust:verb", gain=0.3)
@@ -3520,10 +3520,10 @@ def test_gain_works_for_any_node() -> None:
 def test_mute_unmute_any_node() -> None:
     """mute/unmute works on any node."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("in", "room"),
     })
     mixer.node("verb", "faust:verb", gain=0.3)
@@ -3536,10 +3536,10 @@ def test_mute_unmute_any_node() -> None:
 def test_replace_node_cleans_up_connections() -> None:
     """Re-creating a node with the same name cleans up old sends."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
         "faust:verb": ("in", "room"),
     })
@@ -3555,10 +3555,10 @@ def test_replace_node_cleans_up_connections() -> None:
 def test_bus_replace_existing_bus() -> None:
     """bus() should allow replacing an existing bus (effect node)."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("in", "room"),
     })
     mixer.bus("verb", "faust:verb", gain=0.3)
@@ -3571,10 +3571,10 @@ def test_bus_replace_existing_bus() -> None:
 def test_bus_replace_voice_with_bus() -> None:
     """bus() should allow replacing a voice with a bus (effect node)."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
@@ -3591,10 +3591,10 @@ def test_bus_replace_voice_with_bus() -> None:
 def test_mute_single_stores_gain_for_any_node() -> None:
     """_mute_single stores gain for nodes (no stale elif branch)."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("room",),
     })
     mixer.bus("verb", "faust:verb", gain=0.3)
@@ -3608,10 +3608,10 @@ def test_mute_single_stores_gain_for_any_node() -> None:
 def test_resolve_targets_no_duplicates() -> None:
     """_resolve_targets returns each match once (not duplicated from stale merge)."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("drums/kick", "faust:bass", gain=0.5)
@@ -3627,70 +3627,70 @@ def test_resolve_targets_no_duplicates() -> None:
 def test_remove_missing_node_is_noop() -> None:
     """remove() on non-existent node is a no-op, not a crash."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     mixer.remove("nonexistent")  # must not raise
 
 
 def test_remove_bus_missing_is_noop() -> None:
     """remove_bus() on non-existent bus is a no-op."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     mixer.remove_bus("nonexistent")  # must not raise
 
 
 def test_gain_missing_node_is_noop() -> None:
     """gain() on non-existent node is a no-op, not a crash."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     mixer.gain("nonexistent", 0.5)  # must not raise
 
 
 def test_mute_missing_node_is_noop() -> None:
     """mute() on non-existent node is a no-op."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     mixer.mute("nonexistent")  # must not raise
 
 
 def test_unmute_missing_node_is_noop() -> None:
     """unmute() on non-existent node is a no-op."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     mixer.unmute("nonexistent")  # must not raise
 
 
 def test_fade_missing_node_is_noop() -> None:
     """fade() on non-existent node is a no-op."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     mixer.fade("nonexistent", 0.5)  # must not raise
 
 
 def test_send_missing_source_is_noop() -> None:
     """send() with missing source is a no-op."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("room",),
     })
     mixer.bus("verb", "faust:verb", gain=0.3)
@@ -3700,10 +3700,10 @@ def test_send_missing_source_is_noop() -> None:
 def test_send_missing_target_is_noop() -> None:
     """send() with missing target is a no-op."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
@@ -3713,10 +3713,10 @@ def test_send_missing_target_is_noop() -> None:
 def test_wire_missing_source_is_noop() -> None:
     """wire() with missing source is a no-op."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("room",),
     })
     mixer.bus("verb", "faust:verb", gain=0.3)
@@ -3726,10 +3726,10 @@ def test_wire_missing_source_is_noop() -> None:
 def test_wire_missing_target_is_noop() -> None:
     """wire() with missing target is a no-op."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
@@ -3739,10 +3739,10 @@ def test_wire_missing_target_is_noop() -> None:
 def test_pattern_missing_returns_none() -> None:
     """pattern() on unplayed slot returns None."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
     result = mixer.pattern("nonexistent")
     assert result is None
 
@@ -3754,7 +3754,7 @@ def test_bus_callable_with_no_audio_inputs_raises() -> None:
     """bus() with a DspDef that has num_inputs=0 raises ValueError."""
     from unittest.mock import MagicMock
     import pytest
-    from krach._mixer import VoiceMixer, DspDef
+    from krach._mixer import Mixer, DspDef
 
     # A generator (0 audio inputs) should not be used as a bus
     source_dsp = DspDef(
@@ -3766,7 +3766,7 @@ def test_bus_callable_with_no_audio_inputs_raises() -> None:
     )
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"))
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     with pytest.raises(ValueError, match="no audio inputs"):
         mixer.bus("verb", source_dsp, gain=0.3)
@@ -3775,13 +3775,13 @@ def test_bus_callable_with_no_audio_inputs_raises() -> None:
 def test_node_with_effect_dspdef_routes_to_bus() -> None:
     """node() with a DspDef that has audio inputs creates an effect node."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer, DspDef
+    from krach._mixer import Mixer, DspDef
     import tempfile
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:verb", "dac", "gain"]
     with tempfile.TemporaryDirectory() as tmpdir:
-        mixer = VoiceMixer(session=session, dsp_dir=Path(tmpdir))
+        mixer = Mixer(session=session, dsp_dir=Path(tmpdir))
 
         effect = DspDef(
             fn=lambda x: x,
@@ -3803,10 +3803,10 @@ def test_send_missing_node_warns() -> None:
     """send() with missing node emits a warning."""
     import warnings
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
@@ -3821,10 +3821,10 @@ def test_wire_missing_node_warns() -> None:
     """wire() with missing node emits a warning."""
     import warnings
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
@@ -3841,11 +3841,11 @@ def test_wire_missing_node_warns() -> None:
 def test_save_recall_preserves_poly_count() -> None:
     """save/recall round-trip must preserve count for poly voices."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:pad": ("freq", "gate"),
     })
     mixer.voice("pad", "faust:pad", count=4, gain=0.5)
@@ -3865,11 +3865,11 @@ def test_save_recall_preserves_poly_count() -> None:
 def test_save_recall_preserves_source_text() -> None:
     """save/recall round-trip must preserve source_text."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:bass", "dac", "gain"]
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate"),
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
@@ -3887,10 +3887,10 @@ def test_save_recall_preserves_source_text() -> None:
 def test_save_recall_preserves_num_inputs() -> None:
     """save/recall round-trip must preserve num_inputs for effects."""
     from unittest.mock import MagicMock
-    from krach._mixer import VoiceMixer
+    from krach._mixer import Mixer
 
     session = MagicMock()
-    mixer = VoiceMixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("room",),
     })
     mixer.bus("verb", "faust:verb", gain=0.3)
