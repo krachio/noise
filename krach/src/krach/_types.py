@@ -12,6 +12,7 @@ from __future__ import annotations
 import inspect
 import textwrap
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Union
 
 from faust_dsl import transpile as _transpile
@@ -86,3 +87,35 @@ def dsp(fn: Callable[..., Any]) -> DspDef:
         controls=tuple(c.name for c in result.schema.controls),
         num_inputs=result.num_inputs,
     )
+
+
+def resolve_dsp_source(
+    name: str,
+    source: DspSource,
+    dsp_dir: Path,
+    node_controls: dict[str, tuple[str, ...]],
+    fallback_controls: tuple[str, ...] = (),
+    wait: Callable[..., None] | None = None,
+) -> tuple[str, tuple[str, ...], str]:
+    """Resolve a DSP source to (type_id, controls, source_text). Writes .dsp/.py files."""
+    if isinstance(source, DspDef):
+        type_id = f"faust:{name}"
+        source_text = source.source
+        faust_code, controls = source.faust, source.controls
+    elif callable(source):
+        type_id = f"faust:{name}"
+        source_text = textwrap.dedent(inspect.getsource(source))
+        result = _transpile(source)  # type: ignore[arg-type]
+        faust_code, controls = result.source, tuple(c.name for c in result.schema.controls)
+    else:
+        return source, node_controls.get(source, fallback_controls), ""
+    py_path = dsp_dir.joinpath(f"{name}.py")
+    py_path.parent.mkdir(parents=True, exist_ok=True)
+    py_path.write_text(source_text)
+    dsp_path = dsp_dir.joinpath(f"{name}.dsp")
+    dsp_path.parent.mkdir(parents=True, exist_ok=True)
+    dsp_path.write_text(faust_code)
+    node_controls[type_id] = controls
+    if wait is not None:
+        wait(type_id)
+    return type_id, controls, source_text

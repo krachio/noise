@@ -8,15 +8,13 @@ Adding or removing a node rebuilds the graph; gain updates are instant.
 from __future__ import annotations
 
 import inspect
-import textwrap
 import warnings
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Literal
 
-from faust_dsl import transpile as _transpile
 from krach._bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
-from krach._types import DspDef, DspSource, Node, Scene, dsp as dsp  # noqa: F401
+from krach._types import DspDef, DspSource, Node, Scene, dsp as dsp, resolve_dsp_source  # noqa: F401
 from krach._graph import build_graph_ir as build_graph_ir  # noqa: F401 re-export
 from krach._graph import inst_name as _inst_name
 from krach._mixer_infra import MixerInfra
@@ -31,38 +29,6 @@ from krach._patterns import (  # noqa: F401 — re-exported for tests/namespace
 from krach._patterns import check_finite as _check_finite
 from krach.patterns import Session
 from krach.patterns.pattern import Pattern
-
-
-def _resolve_dsp_source(
-    name: str,
-    source: DspSource,
-    dsp_dir: Path,
-    node_controls: dict[str, tuple[str, ...]],
-    fallback_controls: tuple[str, ...] = (),
-    wait: Callable[[str], None] | None = None,
-) -> tuple[str, tuple[str, ...], str]:
-    """Resolve a DSP source to (type_id, controls, source_text). Writes .dsp/.py files."""
-    if isinstance(source, DspDef):
-        type_id = f"faust:{name}"
-        source_text = source.source
-        faust_code, controls = source.faust, source.controls
-    elif callable(source):
-        type_id = f"faust:{name}"
-        source_text = textwrap.dedent(inspect.getsource(source))
-        result = _transpile(source)  # type: ignore[arg-type]
-        faust_code, controls = result.source, tuple(c.name for c in result.schema.controls)
-    else:
-        return source, node_controls.get(source, fallback_controls), ""
-    py_path = dsp_dir.joinpath(f"{name}.py")
-    py_path.parent.mkdir(parents=True, exist_ok=True)
-    py_path.write_text(source_text)
-    dsp_path = dsp_dir.joinpath(f"{name}.dsp")
-    dsp_path.parent.mkdir(parents=True, exist_ok=True)
-    dsp_path.write_text(faust_code)
-    node_controls[type_id] = controls
-    if wait is not None:
-        wait(type_id)
-    return type_id, controls, source_text
 
 
 # ── Mixer ────────────────────────────────────────────────────────────────
@@ -142,7 +108,7 @@ class Mixer(MixerInfra):
         self, name: str, source: DspSource, fallback_controls: tuple[str, ...] = (),
     ) -> tuple[str, tuple[str, ...], str]:
         """Resolve a source to (type_id, controls, source_text)."""
-        return _resolve_dsp_source(
+        return resolve_dsp_source(
             name, source, self._dsp_dir, self._node_controls, fallback_controls,
             wait=None if self._batching else self._wait_for_type,
         )
