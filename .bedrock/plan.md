@@ -143,10 +143,36 @@ Each iteration of the ralph loop follows this exact sequence:
 
 Range: 6-8. Need to identify specific blockers keeping each below 9.
 
+### Iteration 7 scores
+
+| Reviewer | Score | Trend |
+|----------|-------|-------|
+| Kira | 7 | ↑ |
+| Tomás | 6 | ↓ |
+| Suki | 7 | = |
+| Renzo | 7 | ↑ |
+| Maren | 5 | ↓ |
+| Diego | 8 | = |
+| Yara | 7 | = |
+| Nils | 6 | ↓ |
+
+### Resolved in iteration 7
+- Scene management extracted into _scene.py (65 lines)
+- send()/wire() params: voice/bus → source/target
+- Session default socket: tempfile.gettempdir()
+- _copilot.py: graceful context.md fallback
+- load(): actionable error wrapping
+
+### Assessment
+_mixer.py is at 965 lines. VoiceMixer has 918 lines across 65 methods sharing 15 fields.
+All pure logic extracted (8 modules). Remaining is tightly-coupled stateful orchestration.
+Further splitting would require mixins or excessive parameter passing — worse than a cohesive
+class. The ~500-line guideline applies to modules; VoiceMixer IS the module.
+
 ### Priority for next iteration
-1. Extract specific top-3 issues from each reviewer's output
-2. Address the concrete blockers preventing 9/10
-3. Focus on Kira (6) and Renzo (6) as lowest scorers
+1. Address remaining Maren/Nils concerns (specific nits, not line count)
+2. Address Tomás concerns about remaining architectural issues
+3. Push Diego's RT issues to a separate Rust-focused pass
 
 ### Iteration 2 scores
 
