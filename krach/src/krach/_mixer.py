@@ -297,10 +297,10 @@ class VoiceMixer:
         return NodeHandle(self, name)
 
     def remove(self, name: str) -> None:
-        """Remove a node. Rebuilds the graph. No-op if not found."""
+        """Remove a node and all its routing. Rebuilds the graph. No-op if not found."""
         if name not in self._nodes:
             return
-        self._cleanup_node(name)
+        self._cleanup_node(name, direction="both")
         del self._nodes[name]
         self._rebuild()
 
@@ -691,13 +691,7 @@ class VoiceMixer:
         if not self._batching:
             self._rebuild()
 
-    def remove_bus(self, name: str) -> None:
-        """Remove an effect node. Alias for remove() with bidirectional cleanup."""
-        if name not in self._nodes:
-            return
-        self._cleanup_node(name, direction="both")
-        del self._nodes[name]
-        self._rebuild()
+    remove_bus = remove  # backward compat alias
 
     def mod(
         self, path: str, pattern_or_shape: Pattern | str,
@@ -850,16 +844,6 @@ class VoiceMixer:
         """Effect nodes (num_inputs>0) as name → NodeHandle."""
         return {n: NodeHandle(self, n) for n, v in self._nodes.items() if v.num_inputs > 0}
 
-    # Backward compat — prefer nodes/sources/effects
-    @property
-    def voices(self) -> dict[str, NodeHandle]:
-        """Alias for sources."""
-        return self.sources
-
-    @property
-    def buses(self) -> dict[str, NodeHandle]:
-        """Alias for effects."""
-        return self.effects
 
     @property
     def node_controls(self) -> dict[str, tuple[str, ...]]:

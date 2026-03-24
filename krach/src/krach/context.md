@@ -181,19 +181,16 @@ Labels are always `{voice_name}/{param}`. Example:
 - `kr.node("bass", my_bass_fn)` with controls (freq, gate, cutoff) ->
   labels: bass/freq, bass/gate, bass/cutoff
 
-### Effect buses, sends, and wires
+### Effects, sends, and wires
 
-IMPORTANT: Effects like reverb/delay that receive audio from other voices MUST use
-`kr.bus()`, NOT `kr.node()`. A bus has audio inputs; a voice does not.
+`kr.node()` auto-detects effects: if the DSP function has audio input parameters
+(e.g. `def verb(inp: Signal) -> Signal`), it creates an effect node that receives sends.
 
 ```python
-# CORRECT: reverb as a bus (has audio input -- receives sends)
-kr.bus("verb", "faust:verb", gain=0.3)
+# Effects are detected automatically by kr.node():
+kr.node("verb", reverb_fn, gain=0.3)  # reverb_fn has audio input → effect
 
-# WRONG: kr.node("verb", "faust:verb") -- this creates a voice, not a bus!
-# Sends won't work if the effect is created with voice() instead of bus().
-
-# Route a voice to a bus via a gain-controlled send:
+# Route audio to the effect:
 kr.send("bass", "verb", level=0.4)
 # Update send level instantly (no rebuild):
 kr.send("bass", "verb", level=0.7)

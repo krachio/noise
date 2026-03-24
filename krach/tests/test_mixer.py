@@ -283,8 +283,8 @@ def test_batch_defers_rebuild() -> None:
         mixer.voice("kick", "faust:kick", gain=0.8)
         mixer.voice("bass", "faust:bass", gain=0.3)
         # Inside batch: voices registered but load_graph not yet called
-        assert "kick" in mixer.voices
-        assert "bass" in mixer.voices
+        assert "kick" in mixer.nodes
+        assert "bass" in mixer.nodes
         assert session.load_graph.call_count == 0
 
     # After batch: exactly one load_graph call
@@ -1082,7 +1082,7 @@ def test_batch_exception_rolls_back_voices() -> None:
     except RuntimeError:
         pass
 
-    assert "bass" not in mixer.voices, (
+    assert "bass" not in mixer.nodes, (
         "failed batch left 'bass' in _voices without loading graph"
     )
 
@@ -2916,7 +2916,7 @@ def test_voices_returns_handles() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
 
-    result = mixer.voices
+    result = mixer.nodes
     assert isinstance(result, dict)
     assert "bass" in result
     assert isinstance(result["bass"], NodeHandle)
@@ -2934,7 +2934,7 @@ def test_buses_returns_handles() -> None:
     })
     mixer.bus("verb", "faust:verb", gain=0.3)
 
-    result = mixer.buses
+    result = mixer.effects
     assert isinstance(result, dict)
     assert "verb" in result
     assert isinstance(result["verb"], NodeHandle)
