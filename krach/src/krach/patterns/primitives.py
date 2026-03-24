@@ -1,0 +1,102 @@
+"""Pattern primitives — registered operations with bind/summary/serialize rules.
+
+Each primitive is a PatternPrimitive singleton. Rules are registered in a
+separate dict (not on the frozen primitive). Import-time completeness check
+asserts every primitive has all required rules.
+"""
+
+from __future__ import annotations
+
+from typing import Any, Callable
+
+from krach.ir.pattern import PatternPrimitive, PatternNode
+
+# ── Primitive instances ──────────────────────────────────────────────────
+
+atom_p = PatternPrimitive("atom")
+silence_p = PatternPrimitive("silence")
+cat_p = PatternPrimitive("cat")
+stack_p = PatternPrimitive("stack")
+freeze_p = PatternPrimitive("freeze")
+fast_p = PatternPrimitive("fast")
+slow_p = PatternPrimitive("slow")
+early_p = PatternPrimitive("early")
+late_p = PatternPrimitive("late")
+rev_p = PatternPrimitive("rev")
+every_p = PatternPrimitive("every")
+euclid_p = PatternPrimitive("euclid")
+degrade_p = PatternPrimitive("degrade")
+warp_p = PatternPrimitive("warp")
+
+ALL_PATTERN_PRIMITIVES: tuple[PatternPrimitive, ...] = (
+    atom_p, silence_p, cat_p, stack_p, freeze_p,
+    fast_p, slow_p, early_p, late_p, rev_p,
+    every_p, euclid_p, degrade_p, warp_p,
+)
+
+# ── Rule registries ──────────────────────────────────────────────────────
+
+# Each rule is a function: (node: PatternNode, child_results: tuple, ...extra) -> result
+# The exact signature depends on the rule type.
+
+SummaryRule = Callable[[PatternNode, tuple[str, ...]], str]
+SerializeRule = Callable[[PatternNode, tuple[Any, ...]], Any]
+
+_summary_rules: dict[str, SummaryRule] = {}
+_serialize_rules: dict[str, SerializeRule] = {}
+
+
+def def_summary(primitive: PatternPrimitive, fn: SummaryRule) -> None:
+    """Register a summary rule for a primitive."""
+    _summary_rules[primitive.name] = fn
+
+
+def def_serialize(primitive: PatternPrimitive, fn: SerializeRule) -> None:
+    """Register a serialize rule for a primitive."""
+    _serialize_rules[primitive.name] = fn
+
+
+def get_summary_rule(primitive: PatternPrimitive) -> SummaryRule:
+    """Get the summary rule for a primitive. Raises if not registered."""
+    rule = _summary_rules.get(primitive.name)
+    if rule is None:
+        raise RuntimeError(f"No summary rule for pattern primitive {primitive.name!r}")
+    return rule
+
+
+def get_serialize_rule(primitive: PatternPrimitive) -> SerializeRule:
+    """Get the serialize rule for a primitive. Raises if not registered."""
+    rule = _serialize_rules.get(primitive.name)
+    if rule is None:
+        raise RuntimeError(f"No serialize rule for pattern primitive {primitive.name!r}")
+    return rule
+
+
+# ── Generic fold ─────────────────────────────────────────────────────────
+
+
+def fold(node: PatternNode, visitor: Callable[[PatternNode, tuple[Any, ...]], Any]) -> Any:
+    """Generic tree fold — process children first, then call visitor on the node.
+
+    visitor(node, child_results) where child_results is the tuple of
+    results from folding each child. Leaf nodes get empty tuple.
+    """
+    child_results = tuple(fold(c, visitor) for c in node.children)
+    return visitor(node, child_results)
+
+
+# ── Import-time completeness check ──────────────────────────────────────
+
+
+def check_completeness() -> None:
+    """Assert every primitive has all required rules. Call at module load time."""
+    missing: list[str] = []
+    for p in ALL_PATTERN_PRIMITIVES:
+        if p.name not in _summary_rules:
+            missing.append(f"{p.name}: missing summary rule")
+        if p.name not in _serialize_rules:
+            missing.append(f"{p.name}: missing serialize rule")
+    if missing:
+        raise RuntimeError(
+            "Pattern primitive rules incomplete:\n  " + "\n  ".join(missing)
+        )
