@@ -12,7 +12,7 @@ import warnings
 from pathlib import Path
 from typing import Literal
 
-from krach._bind import bind_ctrl, bind_voice, bind_voice_poly
+from krach.patterns.bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
 from krach._types import (  # noqa: F401
     ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
@@ -373,18 +373,18 @@ class Mixer(MixerInfra):
         self._patterns[target] = pattern
         send = self._session.play_from_zero if from_zero else self._session.play
 
-        ir = pattern.ir_node  # lower to IrNode for bind (bind still operates on IrNode)
+        pn = pattern.node  # PatternNode — bind operates on this directly
 
         match resolve_path(target, self._nodes):
             case NodePath(name):
                 node = self._nodes[name]
                 self._warn_unknown_controls(name, node, pattern)
                 if node.count > 1:
-                    bound, new_alloc = bind_voice_poly(ir, name, node.count, node.alloc)
+                    bound, new_alloc = bind_voice_poly(pn, name, node.count, node.alloc)
                     node.alloc = new_alloc
-                    send(name, Pattern.from_bound_ir(bound))
+                    send(name, Pattern(bound))
                 else:
-                    send(name, Pattern.from_bound_ir(bind_voice(ir, name)))
+                    send(name, Pattern(bind_voice(pn, name)))
             case ControlPath(node=node_name, param=param):
                 self._warn_pattern_range(node_name, param, pattern)
                 n = self._nodes.get(node_name)
@@ -392,20 +392,20 @@ class Mixer(MixerInfra):
                     for i in range(n.count):
                         inst_label = f"{_inst_name(node_name, i, n.count)}/{param}"
                         slot = f"_ctrl_{inst_label.replace('/', '_')}"
-                        send(slot, Pattern.from_bound_ir(bind_ctrl(ir, inst_label)))
+                        send(slot, Pattern(bind_ctrl(pn, inst_label)))
                 else:
                     inst_label = self._resolve_label(target)
                     slot = f"_ctrl_{target.replace('/', '_')}"
-                    send(slot, Pattern.from_bound_ir(bind_ctrl(ir, inst_label)))
+                    send(slot, Pattern(bind_ctrl(pn, inst_label)))
             case GroupPath(members=members):
                 for m in members:
-                    send(m, Pattern.from_bound_ir(bind_voice(ir, m)))
+                    send(m, Pattern(bind_voice(pn, m)))
             case UnknownPath(raw):
                 if "/" in raw:
                     slot = f"_ctrl_{raw.replace('/', '_')}"
-                    send(slot, Pattern.from_bound_ir(bind_ctrl(ir, raw)))
+                    send(slot, Pattern(bind_ctrl(pn, raw)))
                 else:
-                    send(raw, Pattern.from_bound_ir(bind_voice(ir, raw)))
+                    send(raw, Pattern(bind_voice(pn, raw)))
 
     def pattern(self, name: str) -> Pattern | None:
         """Retrieve the last unbound pattern played on a target. None if unplayed."""

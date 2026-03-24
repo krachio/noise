@@ -10,7 +10,7 @@ from __future__ import annotations
 import functools
 import math
 from collections.abc import Callable
-from dataclasses import dataclass, field as dataclass_field
+from dataclasses import dataclass
 from fractions import Fraction
 
 from krach.ir.pattern import (
@@ -63,26 +63,12 @@ def _flatten_stack(left: PatternNode, right: PatternNode) -> tuple[PatternNode, 
 @dataclass(frozen=True)
 class Pattern:
     node: PatternNode
-    _bound_ir: IrNode | None = dataclass_field(default=None, repr=False, compare=False)
 
     @functools.cached_property
     def ir_node(self) -> IrNode:
         """Lower to IrNode for the Rust engine. Cached on first access."""
-        if self._bound_ir is not None:
-            return self._bound_ir
         from krach.backends.pattern_backend import to_ir_node
         return to_ir_node(self.node)
-
-    @staticmethod
-    def from_bound_ir(ir: IrNode) -> Pattern:
-        """Create a Pattern from an already-bound IrNode (from bind system).
-
-        The PatternNode is a placeholder — the real data is the bound IrNode.
-        This exists because bind still operates on IrNode. Once bind migrates
-        to PatternNode (commit 2f-ii), this method is deleted.
-        """
-        placeholder = PatternNode(atom_p, (), SilenceParams())
-        return Pattern(node=placeholder, _bound_ir=ir)
 
     # ── Operators ────────────────────────────────────────────────────────
 
