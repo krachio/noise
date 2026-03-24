@@ -183,10 +183,22 @@ Labels are always `{node_name}/{param}`. Example:
 
 ### Effects, sends, and wires
 
-`kr.node()` auto-detects effects: if the DSP function has audio input parameters
-(e.g. `def verb(inp: Signal) -> Signal`), it creates an effect node that receives sends.
+IMPORTANT: Effects (reverb, delay, chorus, compressor) MUST take `inp: krs.Signal`
+as their first parameter. This is how `kr.node()` detects that the DSP has an audio
+input and creates a proper effect node. Do NOT use `krs.control("in", ...)` — that
+creates a control slider, not an audio input, and sends will fail silently.
 
 ```python
+# CORRECT: effect with audio input parameter
+def reverb_fn(inp: krs.Signal) -> krs.Signal:
+    room = krs.control("room", 0.7, 0.0, 1.0)
+    return krs.reverb(inp, room) * 0.8
+
+# WRONG — do NOT do this:
+# def reverb_fn() -> krs.Signal:
+#     sig = krs.control("in", 0.0, -1.0, 1.0)  # ← this is a slider, not audio input!
+#     return krs.reverb(sig, 0.7) * 0.8
+
 # Effects are detected automatically by kr.node():
 kr.node("verb", reverb_fn, gain=0.3)  # reverb_fn has audio input → effect
 
