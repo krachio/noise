@@ -15,25 +15,22 @@ from typing import Callable, Literal
 from faust_dsl import transpile as _transpile
 from krach._bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
-from krach._types import DspDef, DspSource, Node, Scene, dsp
-from krach._graph import build_graph_ir as build_graph_ir  # re-export for tests
+from krach._types import DspDef, DspSource, Node, Scene, dsp as dsp  # noqa: F401
+from krach._graph import build_graph_ir as build_graph_ir  # noqa: F401 re-export
 from krach._graph import inst_name as _inst_name
 from krach._mixer_infra import MixerInfra
-from krach._patterns import (  # noqa: F401 — re-exported for backward compat
-    build_hit as build_hit,
-    build_note as build_note,
-    cat, hit, mod_exp, mod_ramp, mod_ramp_down,
-    mod_sine, mod_square, mod_tri, note, rand, ramp, saw, seq, sine,
-    stack, struct,
+from krach._patterns import (  # noqa: F401 — re-exported for tests/namespace
+    build_hit as build_hit, build_note as build_note,
+    cat as cat, hit as hit, mod_exp as mod_exp, mod_ramp as mod_ramp,
+    mod_ramp_down as mod_ramp_down, mod_sine as mod_sine,
+    mod_square as mod_square, mod_tri as mod_tri, note as note,
+    rand as rand, ramp as ramp, saw as saw, seq as seq,
+    sine as sine, stack as stack, struct as struct,
 )
 from krach._patterns import check_finite as _check_finite
 from krach.patterns import Session
 from krach.patterns.pattern import Pattern
-from krach.patterns.pattern import rest as _rest
 
-from krach._pitch import ftom as _ftom
-from krach._pitch import mtof as _mtof
-from krach._pitch import parse_note as _parse_note
 
 
 
@@ -86,36 +83,6 @@ class VoiceMixer(MixerInfra):
     Pattern builders and pitch utilities are exposed as static methods so
     that ``kr.note()``, ``kr.hit()``, etc. work when ``kr`` is an instance.
     """
-
-    # ── Pattern builders (static — no instance state) ─────────────────────
-    note = staticmethod(note)
-    hit = staticmethod(hit)
-    seq = staticmethod(seq)
-    rest = staticmethod(_rest)
-    ramp = staticmethod(ramp)
-    mod_sine = staticmethod(mod_sine)
-    mod_tri = staticmethod(mod_tri)
-    mod_ramp = staticmethod(mod_ramp)
-    mod_ramp_down = staticmethod(mod_ramp_down)
-    mod_square = staticmethod(mod_square)
-    mod_exp = staticmethod(mod_exp)
-    dsp = staticmethod(dsp)
-
-    # ── Continuous pattern values + combinators ─────────────────────────
-    sine = staticmethod(sine)
-    saw = staticmethod(saw)
-    rand = staticmethod(rand)
-    cat = staticmethod(cat)
-    stack = staticmethod(stack)
-    struct = staticmethod(struct)
-
-    # ── Pitch utilities (static) ──────────────────────────────────────────
-    mtof = staticmethod(_mtof)
-    ftom = staticmethod(_ftom)
-    parse_note = staticmethod(_parse_note)
-
-    # ── Mini-notation ─────────────────────────────────────────────────────
-    from krach._mininotation import p as p  # noqa: E301
 
     # Settable public properties — __setattr__ rejects unknown public names.
     _PUBLIC_SETTERS = frozenset({"master", "tempo", "bpm", "meter"})

@@ -13,15 +13,44 @@ from typing import TYPE_CHECKING, Any
 
 from krach._graph import build_graph_ir
 from krach._handle import NodeHandle
-from krach._patterns import check_finite as _check_finite
-from krach._types import Node
+from krach._patterns import (
+    cat, check_finite as _check_finite, hit, mod_exp, mod_ramp, mod_ramp_down,
+    mod_sine, mod_square, mod_tri, note, rand, ramp, saw, seq, sine, stack, struct,
+)
+from krach._pitch import ftom as _ftom, mtof as _mtof, parse_note as _parse_note
+from krach._types import Node, dsp
+from krach.patterns.pattern import rest as _rest
 
 if TYPE_CHECKING:
     from krach.patterns import Session
 
 
 class MixerInfra:
-    """Infrastructure mixin: properties, accessors, graph rebuild."""
+    """Infrastructure mixin: properties, accessors, graph rebuild, static API surface."""
+
+    # ── Pattern builders (static) ─────────────────────────────────────
+    note = staticmethod(note)
+    hit = staticmethod(hit)
+    seq = staticmethod(seq)
+    rest = staticmethod(_rest)
+    ramp = staticmethod(ramp)
+    mod_sine = staticmethod(mod_sine)
+    mod_tri = staticmethod(mod_tri)
+    mod_ramp = staticmethod(mod_ramp)
+    mod_ramp_down = staticmethod(mod_ramp_down)
+    mod_square = staticmethod(mod_square)
+    mod_exp = staticmethod(mod_exp)
+    dsp = staticmethod(dsp)
+    sine = staticmethod(sine)
+    saw = staticmethod(saw)
+    rand = staticmethod(rand)
+    cat = staticmethod(cat)
+    stack = staticmethod(stack)
+    struct = staticmethod(struct)
+    mtof = staticmethod(_mtof)
+    ftom = staticmethod(_ftom)
+    parse_note = staticmethod(_parse_note)
+    from krach._mininotation import p as p
 
     # These fields are defined on VoiceMixer.__init__ — declared here for type checking
     _session: Session
