@@ -11,7 +11,7 @@ from collections.abc import Generator
 from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 
-from krach._graph import build_graph_ir
+from krach._graph import build_graph_ir, inst_name as _inst_name
 from krach._handle import NodeHandle
 from krach._patterns import (
     cat, check_finite as _check_finite, hit, mod_exp, mod_ramp, mod_ramp_down,
@@ -197,6 +197,144 @@ class MixerInfra:
             yield
         finally:
             self._transition_bars = 0
+
+    # ── Gain / mute / solo ─────────────────────────────────────────
+
+    def gain(self, name: str, value: float) -> None:
+        """Update a node or group gain. Instant — no graph rebuild."""
+        _check_finite(value, f"gain for '{name}'")
+        for t in self._resolve_targets_soft(name):
+            self._gain_single(t, value)
+
+    def _gain_single(self, name: str, value: float) -> None:
+        if self._transition_bars > 0:
+            self.fade(f"{name}/gain", value, bars=self._transition_bars)
+            if name in self._nodes:
+                self._nodes[name].gain = value
+            return
+        node = self._nodes[name]
+        node.gain = value
+        if node.count > 1:
+            per_node = value / node.count
+            for i in range(node.count):
+                self._session.set_ctrl(f"{_inst_name(name, i, node.count)}/gain", float(per_node))
+        else:
+            self._session.set_ctrl(f"{name}/gain", float(value))
+
+    def mute(self, name: str) -> None:
+        """Mute a node or group. No-op if not found."""
+        for t in self._resolve_targets_soft(name):
+            if t not in self._muted and t in self._nodes:
+                self._muted[t] = self._nodes[t].gain
+            self._gain_single(t, 0.0)
+
+    def unmute(self, name: str) -> None:
+        """Unmute a node or group — restores gain saved by mute()."""
+        targets = self._resolve_targets_soft(name)
+        if not targets:
+            self._muted.pop(name, None)
+            return
+        for t in targets:
+            if t in self._muted:
+                self._gain_single(t, self._muted.pop(t))
+
+    def solo(self, name: str) -> None:
+        """Solo a node or group — mutes all others. No-op if not found."""
+        targets = set(self._resolve_targets_soft(name))
+        if not targets:
+            return
+        for n in set(self._nodes.keys()):
+            if n not in targets:
+                if n not in self._muted and n in self._nodes:
+                    self._muted[n] = self._nodes[n].gain
+                self._gain_single(n, 0.0)
+        for t in targets:
+            if t in self._muted:
+                self._gain_single(t, self._muted.pop(t))
+
+    def unsolo(self) -> None:
+        """Unmute all muted nodes."""
+        for name in list(self._muted):
+            self.unmute(name)
+
+    # ── Control set ────────────────────────────────────────────────
+
+    def set(self, path: str, value: float) -> None:
+        """Set a control value by path. Instant unless inside ``transition()``."""
+        _check_finite(value, path)
+        if self._transition_bars > 0:
+            self.fade(path, value, bars=self._transition_bars)
+        else:
+            self._session.set_ctrl(path, float(value))
+        self._ctrl_values[path] = value
+
+    def _resolve_targets_soft(self, name: str) -> list[str]:
+        """Resolve name to matching nodes. Exact match first, then prefix."""
+        if name in self._nodes:
+            return [name]
+        prefix = name + "/"
+        return [n for n in self._nodes if n.startswith(prefix)]
+
+    # ── Path resolution ────────────────────────────────────────────
+
+    def _resolve_path(self, path: str) -> str:
+        """Convert user-facing path to exposed control label."""
+        if "/" not in path:
+            return path
+        name, param = path.rsplit("/", 1)
+        if param.endswith("_send"):
+            bus = param[: -len("_send")]
+            return f"{name}_send_{bus}/gain"
+        return path
+
+    # ── Fade / automation ──────────────────────────────────────────
+
+    def fade(
+        self, path: str, target: float, bars: int = 4, steps_per_bar: int = 4
+    ) -> None:
+        """Fade any parameter to target over N bars."""
+        if bars < 1 or steps_per_bar < 1:
+            raise ValueError("bars and steps_per_bar must be >= 1")
+        if "/" in path:
+            self._fade_path(path, target, bars)
+        else:
+            self._fade_node(path, target, bars)
+
+    def _fade_path(self, path: str, target: float, bars: int) -> None:
+        parts = path.split("/", 1)
+        voice_name, param = parts[0], parts[1]
+        if path in self._ctrl_values:
+            current = self._ctrl_values[path]
+        elif param == "gain" and voice_name in self._nodes:
+            current = self._nodes[voice_name].gain
+        else:
+            current = 0.0
+        ctrl_slot = f"_ctrl_{path.replace('/', '_')}"
+        self._session.hush(ctrl_slot)
+        label = self._resolve_path(path)
+        beats = bars * self._session.meter
+        period_secs = beats * 60.0 / max(float(self._session.tempo), 1.0)
+        self._session.set_automation(label, "ramp", current, target, period_secs, one_shot=True)
+        self._ctrl_values[path] = target
+        if param == "gain" and voice_name in self._nodes:
+            self._nodes[voice_name].gain = target
+
+    def _fade_node(self, name: str, target: float, bars: int) -> None:
+        if name not in self._nodes:
+            return
+        node = self._nodes[name]
+        per_gain = node.gain / node.count
+        for i in range(node.count):
+            inst = _inst_name(name, i, node.count)
+            self._fade_instance(inst, per_gain, target / node.count, bars)
+        node.gain = target
+
+    def _fade_instance(self, label: str, current: float, target: float, bars: int) -> None:
+        try:
+            period_secs = bars * float(self._session.meter) * 60.0 / max(float(self._session.tempo), 1.0)
+        except (TypeError, ValueError):
+            period_secs = bars * 2.0
+        self._session.set_automation(f"{label}/gain", "ramp", current, target, period_secs, one_shot=True)
 
     # ── Repr ──────────────────────────────────────────────────────
 

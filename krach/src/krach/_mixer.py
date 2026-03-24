@@ -278,6 +278,8 @@ class VoiceMixer(MixerInfra):
         del self._nodes[name]
         self._rebuild()
 
+    remove_bus = remove
+
     def hush(self, name: str) -> None:
         """Stop the pattern, its fade, and release gates for a node, control path, or group."""
         # Control path: hush the _ctrl_ slot
@@ -319,80 +321,6 @@ class VoiceMixer(MixerInfra):
         for name in self._nodes:
             self.hush(name)
 
-    def gain(self, name: str, value: float) -> None:
-        """Update a node or group gain. Instant — no graph rebuild.
-
-        For poly nodes, distributes gain equally across instances.
-        Prefix matching: ``gain("drums", 0.5)`` applies to all ``drums/*`` nodes.
-        """
-        _check_finite(value, f"gain for '{name}'")
-        targets = self._resolve_targets_soft(name)
-        for t in targets:
-            self._gain_single(t, value)
-
-    def _gain_single(self, name: str, value: float) -> None:
-        """Set gain for a single node. Uses fade inside transition()."""
-        if self._transition_bars > 0:
-            self.fade(f"{name}/gain", value, bars=self._transition_bars)
-            # Update bookkeeping immediately even though audio fades
-            if name in self._nodes:
-                self._nodes[name].gain = value
-            return
-
-        node = self._nodes[name]
-        node.gain = value
-        if node.count > 1:
-            per_node = value / node.count
-            for i in range(node.count):
-                inst = _inst_name(name, i, node.count)
-                self._session.set_ctrl(f"{inst}/gain", float(per_node))
-        else:
-            self._session.set_ctrl(f"{name}/gain", float(value))
-
-    def mute(self, name: str) -> None:
-        """Mute a node or group — stores current gain, sets gain to 0. No-op if not found."""
-        targets = self._resolve_targets_soft(name)
-        for t in targets:
-            self._mute_single(t)
-
-    def _mute_single(self, name: str) -> None:
-        """Mute a single node."""
-        if name in self._muted:
-            return
-        if name in self._nodes:
-            self._muted[name] = self._nodes[name].gain
-        self._gain_single(name, 0.0)
-
-    def unmute(self, name: str) -> None:
-        """Unmute a node or group — restores gain saved by mute()."""
-        targets = self._resolve_targets_soft(name)
-        if not targets:
-            if name not in self._muted:
-                return
-            # Single name not in current voices — just pop muted
-            self._muted.pop(name, None)
-            return
-        for t in targets:
-            if t in self._muted:
-                self._gain_single(t, self._muted.pop(t))
-
-    def solo(self, name: str) -> None:
-        """Solo a node or group — mutes all others, unmutes targets. No-op if not found."""
-        targets = set(self._resolve_targets_soft(name))
-        if not targets:
-            return
-        all_names: set[str] = set(self._nodes.keys())
-        for n in all_names:
-            if n not in targets:
-                self._mute_single(n)
-        for t in targets:
-            if t in self._muted:
-                self._gain_single(t, self._muted.pop(t))
-
-    def unsolo(self) -> None:
-        """Unmute all muted nodes — reverses solo() or manual mutes."""
-        for name in list(self._muted):
-            self.unmute(name)
 
     # ── Scenes ─────────────────────────────────────────────────────────────
 
@@ -490,109 +418,7 @@ class VoiceMixer(MixerInfra):
         """Retrieve the last unbound pattern played on a target. None if unplayed."""
         return self._patterns.get(name)
 
-    def set(self, path: str, value: float) -> None:
-        """Set a control value by path. Instant unless inside ``transition()``."""
-        _check_finite(value, path)
-        if self._transition_bars > 0:
-            self.fade(path, value, bars=self._transition_bars)
-        else:
-            self._session.set_ctrl(path, float(value))
-        self._ctrl_values[path] = value
 
-    def _resolve_path(self, path: str) -> str:
-        """Convert a user-facing ``/``-separated path to the exposed control label.
-
-        Most paths are identity (``bass/cutoff`` → ``bass/cutoff``).
-        Send levels use a special convention:
-        ``bass/verb_send`` → ``bass_send_verb/gain``
-        """
-        if "/" not in path:
-            return path
-        parts = path.rsplit("/", 1)
-        name, param = parts[0], parts[1]
-        # Check if param ends with _send (send level shorthand)
-        if param.endswith("_send"):
-            bus = param[: -len("_send")]
-            return f"{name}_send_{bus}/gain"
-        return path
-
-    def _resolve_targets_soft(self, name: str) -> list[str]:
-        """Resolve name to matching nodes. Exact match first, then prefix. Empty if none."""
-        if name in self._nodes:
-            return [name]
-        prefix = name + "/"
-        return [n for n in self._nodes if n.startswith(prefix)]
-
-    def fade(
-        self, path: str, target: float, bars: int = 4, steps_per_bar: int = 4
-    ) -> None:
-        """Fade any parameter to target over N bars. One-shot (holds at target).
-
-        Accepts either a node name (fades gain) or a ``/``-separated path
-        like ``"bass/gain"``, ``"bass/cutoff"``.
-
-        For node names: poly nodes fade all instances proportionally.
-        """
-        if bars < 1 or steps_per_bar < 1:
-            raise ValueError("bars and steps_per_bar must be >= 1")
-
-        # Path-based fade: "bass/gain", "bass/cutoff", etc.
-        if "/" in path:
-            parts = path.split("/", 1)
-            voice_name, param = parts[0], parts[1]
-
-            # Determine current value
-            if path in self._ctrl_values:
-                current = self._ctrl_values[path]
-            elif param == "gain" and voice_name in self._nodes:
-                current = self._nodes[voice_name].gain
-            else:
-                current = 0.0
-
-            # Clear any existing pattern-based control on this path
-            ctrl_slot = f"_ctrl_{path.replace('/', '_')}"
-            self._session.hush(ctrl_slot)
-
-            # Use native automation (one-shot ramp)
-            label = self._resolve_path(path)
-            beats = bars * self._session.meter
-            period_secs = beats * 60.0 / self.tempo
-            self._session.set_automation(
-                label, "ramp", current, target, period_secs, one_shot=True
-            )
-            self._ctrl_values[path] = target
-
-            # Update gain bookkeeping if applicable
-            if param == "gain":
-                self._update_gain_bookkeeping(voice_name, target)
-            return
-
-        # Plain node name → fade gain
-        name = path
-        if name not in self._nodes:
-            return
-
-        voice = self._nodes[name]
-        per_gain = voice.gain / voice.count
-        for i in range(voice.count):
-            inst = _inst_name(name, i, voice.count)
-            self._fade_instance(inst, per_gain, target / voice.count, bars)
-        voice.gain = target
-
-    def _fade_instance(self, label: str, current: float, target: float, bars: int) -> None:
-        """Schedule a gain fade for a single node instance using native automation."""
-        try:
-            period_secs = bars * float(self.meter) * 60.0 / max(float(self.tempo), 1.0)
-        except (TypeError, ValueError):
-            period_secs = bars * 2.0
-        self._session.set_automation(
-            f"{label}/gain", "ramp", current, target, period_secs, one_shot=True,
-        )
-
-    def _update_gain_bookkeeping(self, name: str, target: float) -> None:
-        """Update gain bookkeeping after a path-based fade."""
-        if name in self._nodes:
-            self._nodes[name].gain = target
 
     def bus(
         self,
@@ -665,7 +491,6 @@ class VoiceMixer(MixerInfra):
         if not self._batching:
             self._rebuild()
 
-    remove_bus = remove  # backward compat alias
 
     def mod(
         self, path: str, pattern_or_shape: Pattern | str,
