@@ -199,10 +199,10 @@ kr.send("bass", "verb", level=0.7)
 kr.wire("kick", "comp", port="in0")
 kr.wire("snare", "comp", port="in1")
 
-# Remove a bus (cleans up all sends/wires):
-kr.remove_bus("verb")
+# Remove a node (cleans up all sends/wires):
+kr.remove("verb")
 
-# gain() also works on buses:
+# gain() works on any node:
 kr.gain("verb", 0.5)
 ```
 
@@ -286,7 +286,7 @@ kr.stop()             # hush all slots
 ```python
 kick = kr.node("drums/kick", kick_fn, gain=0.8)
 bass = kr.node("bass", bass_fn, gain=0.5)
-verb = kr.bus("verb", reverb_fn, gain=0.3)
+verb = kr.node("verb", reverb_fn, gain=0.3)  # auto-detected as effect
 
 kick.play(kr.hit() * 4)
 bass.play(kr.seq("A2", "D3", None, "E2").over(2))
