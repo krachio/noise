@@ -169,10 +169,16 @@ All pure logic extracted (8 modules). Remaining is tightly-coupled stateful orch
 Further splitting would require mixins or excessive parameter passing — worse than a cohesive
 class. The ~500-line guideline applies to modules; VoiceMixer IS the module.
 
-### Priority for next iteration
-1. Address remaining Maren/Nils concerns (specific nits, not line count)
-2. Address Tomás concerns about remaining architectural issues
-3. Push Diego's RT issues to a separate Rust-focused pass
+### Iteration 8 work done
+- Deduplicated node cleanup: _cleanup_node() shared by voice()/bus()/remove()
+- Replaced pattern-based _fade_voice with native set_automation (fixes Tomás/Maren #2 and #3)
+- Extracted scene management to _scene.py
+- _mixer.py: 965 → 942 lines (50% reduction from 1867, 9 extracted modules)
+
+### Status
+_mixer.py at 942 lines. VoiceMixer is the single stateful orchestrator.
+All pure logic extracted. Cleanup deduplication done. Fade path unified.
+Scores pending from iteration 8 reviewers.
 
 ### Iteration 2 scores
 
