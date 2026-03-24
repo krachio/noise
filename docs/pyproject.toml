@@ -1,7 +1,7 @@
 [project]
 name = "docs"
 version = "0.1.0"
-description = "Add your description here"
+description = "krach documentation site (mkdocs-material)"
 requires-python = ">=3.13"
 dependencies = [
     "mkdocs-material>=9.7.6",

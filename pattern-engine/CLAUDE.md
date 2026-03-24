@@ -1,15 +1,8 @@
-# pattern-engine - Project Instructions
+# pattern-engine
 
-## Commands
+Rust library — pattern sequencer with rational time, min-heap scheduling, curve compiler.
 
-- `/qa` - Run `cargo check && cargo test` + critical QA review of test quality
-- `/progress` - Check if PROGRESS.md needs updating after a commit
-- `/stack` - Configure project stack (language, type checker, test runner, tooling)
-
-## Stack
-
-- Language: Rust stable (edition 2024)
-- Type checker: `cargo check` (strict lints via Cargo.toml)
-- Test runner: `cargo test`
-- Package manager: Cargo
-- Pre-commit hooks: `cargo check`, `cargo test`
+- `cargo check` / `cargo test` from workspace root
+- Edition 2024, strict clippy lints
+- Compiles pattern IR to block-rate wavetables (~172 updates/sec)
+- No audio synthesis — produces Control/OSC events consumed by audio-engine

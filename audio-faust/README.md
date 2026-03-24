@@ -106,7 +106,7 @@ echo '{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Cat","children":[
   {"op":"Atom","value":{"type":"Osc","address":"/audio/set","args":[{"Str":"cutoff"},{"Float":500.0}]}},
   {"op":"Atom","value":{"type":"Osc","address":"/audio/set","args":[{"Str":"cutoff"},{"Float":2000.0}]}},
   {"op":"Atom","value":{"type":"Osc","address":"/audio/set","args":[{"Str":"cutoff"},{"Float":8000.0}]}}
-]}}' | socat - UNIX-CONNECT:/tmp/krach.sock
+]}}' | socat - UNIX-CONNECT:$TMPDIR/krach-engine.sock
 ```
 
 ## Graph IR

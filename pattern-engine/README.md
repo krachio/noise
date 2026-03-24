@@ -31,7 +31,7 @@ Python frontend ──JSON/IPC──▶ pattern-engine kernel
 ## Quick start
 
 ```bash
-cargo run                    # listens on /tmp/krach.sock
+cargo run                    # listens on $TMPDIR/krach-engine.sock
 ```
 
 In another terminal:
@@ -39,10 +39,10 @@ In another terminal:
 ```bash
 # Play middle C
 echo '{"cmd":"SetPattern","slot":"d1","pattern":{"op":"Atom","value":{"type":"Note","channel":0,"note":60,"velocity":100,"dur":0.5}}}' \
-  | socat - UNIX-CONNECT:/tmp/krach.sock
+  | socat - UNIX-CONNECT:$TMPDIR/krach-engine.sock
 
 # Silence it
-echo '{"cmd":"Hush","slot":"d1"}' | socat - UNIX-CONNECT:/tmp/krach.sock
+echo '{"cmd":"Hush","slot":"d1"}' | socat - UNIX-CONNECT:$TMPDIR/krach-engine.sock
 ```
 
 ## Pattern IR reference
@@ -317,7 +317,7 @@ Sequences a C major 7th arpeggio through audio-engine's oscillator.
 
 | Env var | Default | Description |
 |---------|---------|-------------|
-| `PATTERN_ENGINE_SOCKET` | `/tmp/krach.sock` | IPC socket path |
+| `PATTERN_ENGINE_SOCKET` | `$TMPDIR/krach-engine.sock` | IPC socket path |
 | `PATTERN_ENGINE_OSC_TARGET` | `127.0.0.1:57120` | OSC destination |
 | `PATTERN_ENGINE_MIDI_CLOCK` | off | Set to `1` to emit 24 ppqn MIDI clock |
 

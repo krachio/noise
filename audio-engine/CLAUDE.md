@@ -1,17 +1,8 @@
 # audio-engine
 
-## Commands
+Rust library — real-time audio graph runtime. Used by krach-engine (the unified binary).
 
-- `/qa` - Run `cargo check && cargo test` + critical QA review of test quality
-- `/progress` - Check if PROGRESS.md needs updating after a commit
-
-## Stack
-
-- Language: Rust stable (edition 2024)
-- Type checker: `cargo check` (strict lints via Cargo.toml)
-- Test runner: `cargo test`
-- Package manager: Cargo
-
-## Architecture
-
-audio-engine is a library used by krach-engine (the unified binary). pattern-engine (pattern sequencer) and audio-engine run in-process, communicating via channels. External control comes through a single Unix socket (`/tmp/krach.sock`, JSON protocol).
+- `cargo check` / `cargo test` from workspace root
+- Edition 2024, strict clippy lints via Cargo.toml
+- Pattern-engine and audio-engine run in-process, communicating via channels
+- External control via Unix socket (JSON protocol)

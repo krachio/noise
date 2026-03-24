@@ -16,12 +16,18 @@ dist/
 */.claude/
 */.pre-commit-config.yaml
 */Cargo.lock
+*/PROGRESS.md
+
+# Removed crates
+pattern-engine-py/
 
 # Web REPL (separate deployment, not part of the engine monorepo)
 web/
 
-# Build outputs
+# Build outputs / docs scaffolding
 docs/site/
+docs/.python-version
+docs/hello.py
 
 # Planning / iteration artifacts
 .bedrock/plan.md

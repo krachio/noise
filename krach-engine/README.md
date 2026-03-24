@@ -2,7 +2,7 @@
 
 Unified binary merging the pattern sequencer, audio engine, and FAUST JIT compiler into a single process.
 
-This is the Rust binary that `krach` (the Python REPL) starts automatically. It listens on a Unix socket (`/tmp/krach.sock`) for JSON commands from the Python frontend.
+This is the Rust binary that `krach` (the Python REPL) starts automatically. It listens on a Unix socket (`$TMPDIR/krach-engine.sock`) for JSON commands from the Python frontend.
 
 ## Architecture
 
@@ -10,7 +10,7 @@ This is the Rust binary that `krach` (the Python REPL) starts automatically. It 
                     ┌─────────────────────────────────────────┐
                     │              krach-engine                │
 Unix socket ──────▶ │  ┌──────────────┐  ┌──────────────────┐ │
-/tmp/krach.sock     │  │ pattern-     │  │ audio-engine     │ │
+$TMPDIR/krach-engine.sock     │  │ pattern-     │  │ audio-engine     │ │
   JSON commands     │  │ engine       │──▶ graph + swapper  │──▶ CoreAudio
                     │  │ (sequencer)  │  │ + automation     │ │
                     │  └──────────────┘  └──────────────────┘ │
@@ -40,7 +40,7 @@ The main loop runs ~1000 iterations/sec:
 | Env var | Default | Description |
 |---------|---------|-------------|
 | `NOISE_DSP_DIR` | `~/.krach/dsp` | FAUST .dsp file directory |
-| `NOISE_SOCKET` | `/tmp/krach.sock` | IPC socket path |
+| `NOISE_SOCKET` | `$TMPDIR/krach-engine.sock` | IPC socket path |
 | `NOISE_MIDI_CLOCK` | off | Set to `1` for 24 ppqn MIDI clock |
 
 ## Development
