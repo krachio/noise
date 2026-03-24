@@ -1,10 +1,10 @@
 import atexit
 import os
 import subprocess
-import tempfile
 import time
 from pathlib import Path
 
+from krach._config import load_config
 from krach._mixer import Mixer
 
 
@@ -30,15 +30,17 @@ def _wait_for_socket(path: Path, timeout: float = 5.0) -> bool:
 def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> Mixer:
     """Start krach-engine and return a connected Mixer.
 
-    ``bpm``: initial tempo.
-    ``master``: master output gain (0.0-1.0).
-    ``build``: if True, build krach-engine before starting.
+    Reads configuration from ``~/.krach/config.toml`` (if present).
+    Env vars ``NOISE_SOCKET`` and ``NOISE_DSP_DIR`` override config.
     """
     from krach.patterns import Session
     from krach._copilot import parse_dsp_controls
 
+    cfg = load_config()
+    cfg.ensure_dirs()
+
     repo = _repo_root()
-    engine_bin = repo / "target" / "debug" / "krach-engine"
+    engine_bin = repo / "target" / cfg.profile / "krach-engine"
 
     if build:
         print("building krach-engine...")
@@ -48,23 +50,17 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> Mixer:
             check=True,
         )
 
-    engine_sock = Path(tempfile.gettempdir()) / "krach-engine.sock"
-    dsp_dir = Path.home() / ".krach" / "dsp"
-    dsp_dir.mkdir(parents=True, exist_ok=True)
-
-    engine_sock.unlink(missing_ok=True)
+    cfg.socket.unlink(missing_ok=True)
     env = {**os.environ, "RUST_LOG": os.environ.get("RUST_LOG", "info")}
 
-    log_path = Path.home() / ".krach" / "engine.log"
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    _log_file = log_path.open("w")
+    _log_file = cfg.log_file.open("w")
 
     engine_proc = subprocess.Popen(
         [str(engine_bin)],
         env={
             **env,
-            "NOISE_SOCKET": str(engine_sock),
-            "NOISE_DSP_DIR": str(dsp_dir),
+            "NOISE_SOCKET": str(cfg.socket),
+            "NOISE_DSP_DIR": str(cfg.dsp_dir),
         },
         stderr=_log_file,
     )
@@ -76,31 +72,31 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> Mixer:
         except subprocess.TimeoutExpired:
             engine_proc.kill()
             engine_proc.wait()
-        engine_sock.unlink(missing_ok=True)
+        cfg.socket.unlink(missing_ok=True)
         _log_file.close()
 
     atexit.register(_cleanup)
 
-    if not _wait_for_socket(engine_sock):
+    if not _wait_for_socket(cfg.socket):
         raise RuntimeError(
             f"krach-engine socket not ready after 5s.\n"
-            f"  Check engine log: {log_path}\n"
+            f"  Check engine log: {cfg.log_file}\n"
             f"  Binary: {engine_bin}\n"
-            f"  Socket: {engine_sock}"
+            f"  Socket: {cfg.socket}"
         )
 
-    mm = Session(socket_path=str(engine_sock))
+    mm = Session(socket_path=str(cfg.socket))
     mm.connect()
 
     # Pre-populate controls from DSP files already on disk (previous sessions).
     node_controls: dict[str, tuple[str, ...]] = {}
-    for _p in dsp_dir.rglob("*.dsp"):
+    for _p in cfg.dsp_dir.rglob("*.dsp"):
         controls = parse_dsp_controls(_p.read_text())
         if controls:
-            _rel = _p.relative_to(dsp_dir).with_suffix("")
+            _rel = _p.relative_to(cfg.dsp_dir).with_suffix("")
             node_controls[f"faust:{_rel}"] = controls
 
-    kr = Mixer(session=mm, dsp_dir=dsp_dir, node_controls=node_controls)
+    kr = Mixer(session=mm, dsp_dir=cfg.dsp_dir, node_controls=node_controls)
     kr.tempo = bpm
     kr.master = master
 
@@ -115,8 +111,8 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> Mixer:
     else:
         raise RuntimeError(
             f"krach-engine not responding after 10s.\n"
-            f"  Check engine log: {log_path}\n"
-            f"  Socket: {engine_sock}"
+            f"  Check engine log: {cfg.log_file}\n"
+            f"  Socket: {cfg.socket}"
         )
 
     return kr
