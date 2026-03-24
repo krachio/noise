@@ -4408,6 +4408,7 @@ def test_save_recall_preserves_num_inputs() -> None:
     from krach._mixer import Mixer
 
     session = MagicMock()
+    session.list_nodes.return_value = ["faust:verb", "dac", "gain"]
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:verb": ("room",),
     })

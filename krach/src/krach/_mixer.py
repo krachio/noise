@@ -17,7 +17,7 @@ from krach._handle import NodeHandle
 from krach._module_ir import ControlDef, ModuleIr, MutedDef, NodeDef, RouteDef
 from krach._types import (  # noqa: F401
     ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
-    ResolvedSource, Scene, UnknownPath,
+    ResolvedSource, UnknownPath,
     dsp as dsp, resolve_dsp_source, resolve_path,
 )
 from krach._graph import build_graph_ir as build_graph_ir  # noqa: F401 re-export
@@ -82,7 +82,7 @@ class Mixer(MixerInfra):
         self._wires: dict[tuple[str, str], str] = {}    # (source, target) → port
         self._ctrl_values: dict[str, float] = {}  # path → last set value (for fade start)
         self._patterns: dict[str, Pattern] = {}  # target → last unbound pattern
-        self._scenes: dict[str, Scene] = {}
+        self._scenes: dict[str, ModuleIr] = {}
         self._batching: bool = False
         self._graph_loaded: bool = False
         self._master_gain: float = 0.7
@@ -310,31 +310,24 @@ class Mixer(MixerInfra):
     # ── Scenes ─────────────────────────────────────────────────────────────
 
     def save(self, name: str) -> None:
-        """Save current state as a named scene."""
-        from krach._scene import save_scene
-        self._scenes[name] = save_scene(
-            self._nodes, self._sends, self._wires, self._patterns,
-            self._ctrl_values, self.tempo, self._master_gain, self._muted,
-        )
+        """Save current state as a named scene (via ModuleIr)."""
+        self._scenes[name] = self.capture()
 
     def recall(self, name: str) -> None:
-        """Recall a saved scene — rebuilds graph, replays patterns, restores controls."""
+        """Recall a saved scene — clears state, then instantiates the saved ModuleIr."""
         if name not in self._scenes:
             raise ValueError(f"scene '{name}' not found")
-        scene = self._scenes[name]
         self.stop()
-        from krach._scene import restore_scene
-        self._nodes = restore_scene(scene)
-        self._sends = dict(scene.sends)
-        self._wires = dict(scene.wires)
-        self._muted = dict(scene.muted)
-        self._rebuild()
-        self.tempo = scene.tempo
-        self.master = scene.master
-        for path, value in scene.ctrl_values.items():
-            self.set(path, value)
-        for slot, pattern in scene.patterns.items():
-            self.play(slot, pattern)
+        # Clear current state before restoring
+        for n in list(self._nodes):
+            self._cleanup_node(n, direction="both")
+        self._nodes.clear()
+        self._sends.clear()
+        self._wires.clear()
+        self._ctrl_values.clear()
+        self._muted.clear()
+        self._patterns.clear()
+        self.instantiate(self._scenes[name])
 
     @property
     def scenes(self) -> list[str]:
@@ -356,7 +349,9 @@ class Mixer(MixerInfra):
                 source=node.type_id,
                 gain=self._muted.get(name, node.gain),
                 count=node.count,
+                num_inputs=node.num_inputs,
                 init=node.init,
+                source_text=node.source_text,
             )
             for name, node in self._nodes.items()
         )
@@ -398,6 +393,12 @@ class Mixer(MixerInfra):
         with self.batch():
             for nd in ir.nodes:
                 self.voice(nd.name, nd.source, gain=nd.gain, count=nd.count, **dict(nd.init))
+                # Restore metadata that voice() can't infer from type_id alone
+                node = self._nodes[nd.name]
+                if nd.num_inputs:
+                    node.num_inputs = nd.num_inputs
+                if nd.source_text:
+                    node.source_text = nd.source_text
 
         for rd in ir.routing:
             if rd.kind == "send":

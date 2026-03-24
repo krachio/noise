@@ -1,8 +1,6 @@
 """Core data types for the audio graph.
 
 - Node: a source or effect in the graph
-- NodeSnapshot: frozen snapshot for scene storage
-- Scene: complete mixer state snapshot
 - DspDef: pre-transpiled DSP definition
 - dsp(): decorator for pre-transpilation
 - ResolvedPath: sum type for path disambiguation
@@ -20,41 +18,11 @@ from pathlib import Path
 from typing import Any, Callable, Union
 
 from krach.dsl.transpile import transpile as _transpile
-from krach.patterns.pattern import Pattern
 
 # Type alias for DSP source parameters: string type_id, DspDef, or callable DSP function.
 # The callable form accepts 0+ Signal args and returns a Signal.
 # We use Callable[..., Any] because the transpiler handles signature inspection.
 DspSource = Union[str, "DspDef", Callable[..., Any]]
-
-
-@dataclass(frozen=True)
-class NodeSnapshot:
-    """Frozen snapshot of a Node's state for scene storage."""
-
-    type_id: str
-    gain: float
-    controls: tuple[str, ...]
-    num_inputs: int = 0
-    count: int = 1
-    init: tuple[tuple[str, float], ...] = ()
-    control_ranges: dict[str, tuple[float, float]] = field(default_factory=lambda: dict[str, tuple[float, float]]())
-    control_defaults: dict[str, float] = field(default_factory=lambda: dict[str, float]())
-    source_text: str = ""
-
-
-@dataclass(frozen=True)
-class Scene:
-    """Snapshot of the mixer state — nodes, sends, patterns, controls."""
-
-    nodes: dict[str, NodeSnapshot]
-    sends: dict[tuple[str, str], float]
-    wires: dict[tuple[str, str], str]
-    patterns: dict[str, Pattern]
-    ctrl_values: dict[str, float]
-    tempo: float
-    master: float
-    muted: dict[str, float]
 
 
 @dataclass

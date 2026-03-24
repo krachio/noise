@@ -25,7 +25,9 @@ class NodeDef:
     source: Union[DspDef, str]  # DspDef or type_id string
     gain: float = 0.5
     count: int = 1
+    num_inputs: int = 0
     init: tuple[tuple[str, float], ...] = ()
+    source_text: str = ""
 
 
 @dataclass(frozen=True)
@@ -107,7 +109,8 @@ class ModuleIr:
         if self.nodes:
             d["nodes"] = [
                 {"name": n.name, "source": n.source if isinstance(n.source, str) else n.source.faust,
-                 "gain": n.gain, "count": n.count, "init": list(n.init)}
+                 "gain": n.gain, "count": n.count, "num_inputs": n.num_inputs,
+                 "init": list(n.init), "source_text": n.source_text}
                 for n in self.nodes
             ]
         if self.routing:
@@ -152,7 +155,9 @@ class ModuleIr:
         nodes = tuple(
             NodeDef(
                 name=n["name"], source=n["source"], gain=n["gain"],
-                count=n["count"], init=tuple(tuple(x) for x in n["init"]),
+                count=n["count"], num_inputs=n.get("num_inputs", 0),
+                init=tuple(tuple(x) for x in n["init"]),
+                source_text=n.get("source_text", ""),
             )
             for n in d.get("nodes", ())
         )
