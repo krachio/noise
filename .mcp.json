@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "krach": {
+      "command": "uv",
+      "args": ["--directory", "krach-mcp", "run", "krach-mcp"],
+      "env": {}
+    }
+  }
+}
