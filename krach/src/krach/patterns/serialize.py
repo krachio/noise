@@ -206,6 +206,8 @@ def dict_to_pattern_node(d: dict[str, Any]) -> PatternNode:
         return PatternNode(stack_p, children, StackParams())
 
     # Single-child ops
+    if "child" not in d:
+        raise ValueError(f"unknown PatternNode op: {op}")
     child = dict_to_pattern_node(d["child"])
     if op == "Freeze":
         return PatternNode(freeze_p, (child,), FreezeParams())
