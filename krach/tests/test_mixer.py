@@ -5,7 +5,9 @@ from krach.patterns.values import Control, Osc, Value
 from krach.patterns.pattern import Pattern
 from krach.patterns.primitives import atom_p, fold
 
-from krach._mixer import Node, build_graph_ir, build_hit, build_note
+from krach._types import Node
+from krach._graph import build_graph_ir
+from krach._patterns import build_hit, build_note
 
 
 def _collect_values(node: PatternNode) -> list[Value]:
@@ -245,7 +247,7 @@ def test_dsp_decorator_captures_source_and_transpiles() -> None:
     from krach.dsl.lib.oscillators import sine_osc
     from krach.dsl.music.envelopes import adsr
 
-    from krach._mixer import DspDef, dsp
+    from krach._types import DspDef, dsp
 
     @dsp
     def my_synth() -> Signal:
@@ -620,7 +622,7 @@ def test_remove_group_removes_all_prefixed() -> None:
 
 def test_note_free_function_exists() -> None:
     """note() is now a free function, not a mixer method."""
-    from krach._mixer import note
+    from krach._patterns import note
 
     pat = note(440.0)
     assert isinstance(pat, Pattern)
@@ -668,7 +670,7 @@ def test_build_note_raises_when_pitch_but_no_freq() -> None:
 def test_seq_builds_cat_of_steps() -> None:
     """Free seq() returns a Cat pattern with correct number of children."""
 
-    from krach._mixer import seq
+    from krach._patterns import seq
 
     pat = seq(55, 73, 65)
     assert isinstance(pat, Pattern)
@@ -679,7 +681,7 @@ def test_seq_builds_cat_of_steps() -> None:
 def test_seq_with_none_inserts_rest() -> None:
     """None entries in free seq() produce Silence nodes."""
 
-    from krach._mixer import seq
+    from krach._patterns import seq
 
     pat = seq(55, None, 65)
     assert pat.node.primitive.name == "cat"
@@ -690,7 +692,7 @@ def test_seq_raises_on_empty() -> None:
     """Free seq() with no notes raises ValueError."""
     import pytest
 
-    from krach._mixer import seq
+    from krach._patterns import seq
 
     with pytest.raises(ValueError, match="at least one note"):
         seq()
@@ -700,7 +702,7 @@ def test_seq_produces_bare_params() -> None:
     """Free seq() produces notes with bare param names for later binding."""
     from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._mixer import seq
+    from krach._patterns import seq
 
     pat = seq(220.0, 330.0, 440.0)
     assert pat.node.primitive.name == "cat"
@@ -975,7 +977,7 @@ def test_fade_nonexistent_voice_is_noop() -> None:
 
 
 def test_note_single_pitch_returns_freeze() -> None:
-    from krach._mixer import note
+    from krach._patterns import note
 
     pat = note(55.0)
     assert isinstance(pat, Pattern)
@@ -983,7 +985,7 @@ def test_note_single_pitch_returns_freeze() -> None:
 
 
 def test_note_gate_only_returns_freeze() -> None:
-    from krach._mixer import note
+    from krach._patterns import note
 
     pat = note()
     assert pat.node.primitive.name == "freeze"
@@ -991,7 +993,7 @@ def test_note_gate_only_returns_freeze() -> None:
 
 def test_note_chord_returns_frozen_stack() -> None:
 
-    from krach._mixer import note
+    from krach._patterns import note
 
     pat = note(220.0, 330.0, 440.0)
     assert pat.node.primitive.name == "freeze"
@@ -1020,7 +1022,8 @@ def test_note_vel_default_not_sent() -> None:
 def test_play_delegates_to_session() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, hit
+    from krach._mixer import Mixer
+    from krach._patterns import hit
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -1892,7 +1895,7 @@ def test_remove_voice_cleans_wires() -> None:
 
 def test_mod_shapes_range() -> None:
 
-    from krach._mixer import mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square, mod_tri
+    from krach._patterns import mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square, mod_tri
 
     shapes = [mod_sine, mod_tri, mod_ramp, mod_ramp_down, mod_square, mod_exp]
     for shape in shapes:
@@ -1903,7 +1906,7 @@ def test_mod_shapes_range() -> None:
 
 
 def test_mod_sine_values() -> None:
-    from krach._mixer import mod_sine
+    from krach._patterns import mod_sine
 
     pat = mod_sine(0.0, 1.0, steps=4)
     assert isinstance(pat, Pattern)
@@ -1912,7 +1915,8 @@ def test_mod_sine_values() -> None:
 def test_mod_plays_pattern() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, mod_sine
+    from krach._mixer import Mixer
+    from krach._patterns import mod_sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -1931,7 +1935,8 @@ def test_mod_plays_pattern() -> None:
 def test_hush_mod() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, mod_sine
+    from krach._mixer import Mixer
+    from krach._patterns import mod_sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -1950,7 +1955,8 @@ def test_hush_mod() -> None:
 def test_remove_voice_hushes_mods() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, mod_sine
+    from krach._mixer import Mixer
+    from krach._patterns import mod_sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -1969,7 +1975,8 @@ def test_remove_voice_hushes_mods() -> None:
 def test_mod_send_param_label() -> None:
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, mod_sine
+    from krach._mixer import Mixer
+    from krach._patterns import mod_sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -1994,7 +2001,7 @@ def test_mod_send_param_label() -> None:
 def test_free_note_returns_freeze_with_bare_params() -> None:
     from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._mixer import note
+    from krach._patterns import note
 
     pat = note(440.0)
     assert isinstance(pat, Pattern)
@@ -2007,7 +2014,7 @@ def test_free_note_returns_freeze_with_bare_params() -> None:
 def test_free_note_string_pitch() -> None:
     from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._mixer import note
+    from krach._patterns import note
 
     pat = note("C4")
     ir_str = str(pattern_node_to_dict(pat.node))
@@ -2017,7 +2024,7 @@ def test_free_note_string_pitch() -> None:
 def test_free_note_int_pitch() -> None:
     from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._mixer import note
+    from krach._patterns import note
 
     pat = note(60)  # MIDI note 60 = C4
     ir_str = str(pattern_node_to_dict(pat.node))
@@ -2026,7 +2033,7 @@ def test_free_note_int_pitch() -> None:
 
 def test_free_note_chord() -> None:
 
-    from krach._mixer import note
+    from krach._patterns import note
 
     pat = note(220.0, 330.0, 440.0)
     assert pat.node.primitive.name == "freeze"
@@ -2037,7 +2044,7 @@ def test_free_note_chord() -> None:
 def test_free_note_vel() -> None:
     from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._mixer import note
+    from krach._patterns import note
 
     pat = note(440.0, vel=0.7)
     ir_str = str(pattern_node_to_dict(pat.node))
@@ -2047,7 +2054,7 @@ def test_free_note_vel() -> None:
 def test_free_hit_returns_freeze_with_bare_param() -> None:
     from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._mixer import hit
+    from krach._patterns import hit
 
     pat = hit()
     assert isinstance(pat, Pattern)
@@ -2059,7 +2066,7 @@ def test_free_hit_returns_freeze_with_bare_param() -> None:
 def test_free_hit_custom_param() -> None:
     from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._mixer import hit
+    from krach._patterns import hit
 
     pat = hit("kick")
     ir_str = str(pattern_node_to_dict(pat.node))
@@ -2067,7 +2074,7 @@ def test_free_hit_custom_param() -> None:
 
 
 def test_free_seq_returns_cat() -> None:
-    from krach._mixer import seq
+    from krach._patterns import seq
 
     pat = seq(440.0, 330.0, 220.0)
     assert pat.node.primitive.name == "cat"
@@ -2076,7 +2083,7 @@ def test_free_seq_returns_cat() -> None:
 
 def test_free_seq_with_none_rest() -> None:
 
-    from krach._mixer import seq
+    from krach._patterns import seq
 
     pat = seq(440.0, None, 220.0)
     assert pat.node.primitive.name == "cat"
@@ -2084,7 +2091,7 @@ def test_free_seq_with_none_rest() -> None:
 
 
 def test_free_seq_string_pitches() -> None:
-    from krach._mixer import seq
+    from krach._patterns import seq
 
     pat = seq("C4", "E4", "G4")
     assert pat.node.primitive.name == "cat"
@@ -2098,7 +2105,7 @@ def test_bind_voice_rewrites_bare_params() -> None:
     from krach.patterns.bind import bind_voice
     from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._mixer import note
+    from krach._patterns import note
 
     pat = note(440.0)
     bound = bind_voice(pat.node, "bass")
@@ -2126,7 +2133,7 @@ def test_bind_voice_walks_nested_tree() -> None:
     from krach.patterns.bind import bind_voice
     from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._mixer import seq
+    from krach._patterns import seq
 
     pat = seq(440.0, 330.0)
     bound = bind_voice(pat.node, "pad")
@@ -2144,7 +2151,8 @@ def test_play_voice_binds_pattern() -> None:
 
     from krach.patterns.serialize import pattern_node_to_dict
 
-    from krach._mixer import Mixer, note
+    from krach._mixer import Mixer
+    from krach._patterns import note
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -2231,7 +2239,7 @@ def test_set_validates_finite() -> None:
 
 def test_ramp_pattern_values() -> None:
 
-    from krach._mixer import ramp
+    from krach._patterns import ramp
 
     pat = ramp(0.0, 1.0, steps=8)
     assert isinstance(pat, Pattern)
@@ -2241,7 +2249,7 @@ def test_ramp_pattern_values() -> None:
 
 def test_mod_sine_pattern_length() -> None:
 
-    from krach._mixer import mod_sine
+    from krach._patterns import mod_sine
 
     pat = mod_sine(0.0, 1.0, steps=32)
     assert isinstance(pat, Pattern)
@@ -2250,7 +2258,7 @@ def test_mod_sine_pattern_length() -> None:
 
 
 def test_mod_patterns_composable() -> None:
-    from krach._mixer import mod_sine, ramp
+    from krach._patterns import mod_sine, ramp
 
     r = ramp(0.0, 1.0)
     s = mod_sine(200.0, 800.0)
@@ -2260,7 +2268,7 @@ def test_mod_patterns_composable() -> None:
 
 
 def test_ramp_uses_ctrl_placeholder() -> None:
-    from krach._mixer import ramp
+    from krach._patterns import ramp
 
     pat = ramp(0.0, 1.0, steps=4)
     assert pat.node.primitive.name == "cat"
@@ -2272,7 +2280,7 @@ def test_ramp_uses_ctrl_placeholder() -> None:
 
 
 def test_mod_tri_returns_pattern() -> None:
-    from krach._mixer import mod_tri
+    from krach._patterns import mod_tri
 
     pat = mod_tri(0.0, 1.0, steps=16)
     assert isinstance(pat, Pattern)
@@ -2280,7 +2288,7 @@ def test_mod_tri_returns_pattern() -> None:
 
 def test_mod_ramp_same_as_ramp() -> None:
 
-    from krach._mixer import mod_ramp
+    from krach._patterns import mod_ramp
 
     pat = mod_ramp(0.0, 1.0, steps=8)
     assert isinstance(pat, Pattern)
@@ -2289,21 +2297,21 @@ def test_mod_ramp_same_as_ramp() -> None:
 
 
 def test_mod_ramp_down_returns_pattern() -> None:
-    from krach._mixer import mod_ramp_down
+    from krach._patterns import mod_ramp_down
 
     pat = mod_ramp_down(0.0, 1.0, steps=8)
     assert isinstance(pat, Pattern)
 
 
 def test_mod_square_returns_pattern() -> None:
-    from krach._mixer import mod_square
+    from krach._patterns import mod_square
 
     pat = mod_square(0.0, 1.0, steps=8)
     assert isinstance(pat, Pattern)
 
 
 def test_mod_exp_returns_pattern() -> None:
-    from krach._mixer import mod_exp
+    from krach._patterns import mod_exp
 
     pat = mod_exp(0.0, 1.0, steps=8)
     assert isinstance(pat, Pattern)
@@ -2472,7 +2480,8 @@ def test_play_poly_voice_round_robin() -> None:
     """play() on a poly voice does round-robin allocation."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, note
+    from krach._mixer import Mixer
+    from krach._patterns import note
 
     session = MagicMock()
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
@@ -2542,7 +2551,8 @@ def test_handle_play_delegates_to_mixer() -> None:
     """handle.play(pattern) delegates to mixer.play(name, pattern)."""
     from unittest.mock import MagicMock, patch
 
-    from krach._mixer import Mixer, hit
+    from krach._mixer import Mixer
+    from krach._patterns import hit
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -2560,7 +2570,8 @@ def test_handle_play_control_path() -> None:
     """handle.play('cutoff', pattern) delegates to mixer.play('name/cutoff', pattern)."""
     from unittest.mock import MagicMock, patch
 
-    from krach._mixer import Mixer, mod_sine
+    from krach._mixer import Mixer
+    from krach._patterns import mod_sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -2790,7 +2801,8 @@ def test_mod_uses_play_from_zero() -> None:
     """mod() should use play_from_zero so modulations start from phase 0."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, mod_sine
+    from krach._mixer import Mixer
+    from krach._patterns import mod_sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -2812,7 +2824,8 @@ def test_pattern_retrieval() -> None:
     """play() stores the unbound pattern and pattern() retrieves it."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, note
+    from krach._mixer import Mixer
+    from krach._patterns import note
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -2841,7 +2854,8 @@ def test_handle_pattern_retrieval() -> None:
     """NodeHandle.pattern() delegates to mixer.pattern()."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, note
+    from krach._mixer import Mixer
+    from krach._patterns import note
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -3032,7 +3046,8 @@ def test_mod_pattern_still_works() -> None:
     """mod() with a Pattern still uses the legacy play path."""
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, mod_sine
+    from krach._mixer import Mixer
+    from krach._patterns import mod_sine
 
     session = MagicMock()
     session.tempo = 120.0
@@ -3250,7 +3265,7 @@ def test_load_missing_file_raises() -> None:
 
 def test_note_uses_control_not_osc() -> None:
     """note() should produce Control atoms, not Osc atoms."""
-    from krach._mixer import note
+    from krach._patterns import note
 
     pat = note("C4")
     values = _collect_values(pat.node)
@@ -3262,7 +3277,7 @@ def test_note_uses_control_not_osc() -> None:
 
 def test_hit_uses_control_not_osc() -> None:
     """hit() should produce Control atoms, not Osc atoms."""
-    from krach._mixer import hit
+    from krach._patterns import hit
 
     pat = hit("gate")
     values = _collect_values(pat.node)
@@ -3334,7 +3349,7 @@ def test_input_default_name_and_channel() -> None:
 
 def test_input_appears_in_graph_ir() -> None:
     """The adc_input node appears in the built graph IR."""
-    from krach._mixer import build_graph_ir
+    from krach._graph import build_graph_ir
 
     nodes = {
         "mic": Node("adc_input", 0.5, ()),
@@ -3412,7 +3427,8 @@ def test_export_generates_valid_python() -> None:
     import tempfile
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, hit
+    from krach._mixer import Mixer
+    from krach._patterns import hit
 
     session = MagicMock()
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -3434,7 +3450,8 @@ def test_export_contains_voice_and_tempo() -> None:
     import tempfile
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, hit
+    from krach._mixer import Mixer
+    from krach._patterns import hit
 
     session = MagicMock()
     session.tempo = 140.0
@@ -3461,7 +3478,8 @@ def test_export_contains_pattern_json() -> None:
     import tempfile
     from unittest.mock import MagicMock
 
-    from krach._mixer import Mixer, hit
+    from krach._mixer import Mixer
+    from krach._patterns import hit
 
     session = MagicMock()
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -3483,7 +3501,8 @@ def test_export_inlines_dsp_function() -> None:
     """export() inlines DSP source text and references function by name."""
     import tempfile
     from unittest.mock import MagicMock
-    from krach._mixer import Mixer, hit
+    from krach._mixer import Mixer
+    from krach._patterns import hit
 
     session = MagicMock()
     session.tempo = 120.0
@@ -3910,7 +3929,8 @@ def test_bus_callable_with_no_audio_inputs_raises() -> None:
     """bus() with a DspDef that has num_inputs=0 raises ValueError."""
     from unittest.mock import MagicMock
     import pytest
-    from krach._mixer import Mixer, DspDef
+    from krach._mixer import Mixer
+    from krach._types import DspDef
 
     # A generator (0 audio inputs) should not be used as a bus
     source_dsp = DspDef(
@@ -3931,7 +3951,8 @@ def test_bus_callable_with_no_audio_inputs_raises() -> None:
 def test_node_with_effect_dspdef_routes_to_bus() -> None:
     """node() with a DspDef that has audio inputs creates an effect node."""
     from unittest.mock import MagicMock
-    from krach._mixer import Mixer, DspDef
+    from krach._mixer import Mixer
+    from krach._types import DspDef
     import tempfile
 
     session = MagicMock()

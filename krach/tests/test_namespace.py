@@ -4,8 +4,10 @@ Verifies that pattern builders, pitch utilities, and DSP primitives
 are accessible through Mixer (kr) and krach.dsp (krs).
 """
 
-from krach._mixer import Mixer, note, hit, seq, ramp, mod_sine, mod_tri
-from krach._mixer import mod_ramp, mod_ramp_down, mod_square, mod_exp, dsp
+from krach._mixer import Mixer
+from krach._patterns import note, hit, seq, ramp, mod_sine, mod_tri
+from krach._patterns import mod_ramp, mod_ramp_down, mod_square, mod_exp
+from krach._types import dsp
 from krach._pitch import mtof, ftom, parse_note
 from krach.patterns.pattern import Pattern, rest
 

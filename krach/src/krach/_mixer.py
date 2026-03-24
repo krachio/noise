@@ -16,22 +16,12 @@ from krach.patterns.bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
 from krach._module_ir import ControlDef, ModuleIr, MutedDef, NodeDef, PatternDef, RouteDef
 from krach._module_proxy import ModuleProxy
-from krach._types import (  # noqa: F401
+from krach._types import (
     ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
-    ResolvedSource, UnknownPath,
-    dsp as dsp, resolve_dsp_source, resolve_path,
+    ResolvedSource, UnknownPath, resolve_dsp_source, resolve_path,
 )
-from krach._graph import build_graph_ir as build_graph_ir  # noqa: F401 re-export
 from krach._graph import inst_name as _inst_name
 from krach._mixer_infra import MixerInfra
-from krach._patterns import (  # noqa: F401 — re-exported for tests/namespace
-    build_hit as build_hit, build_note as build_note,
-    cat as cat, hit as hit, mod_exp as mod_exp, mod_ramp as mod_ramp,
-    mod_ramp_down as mod_ramp_down, mod_sine as mod_sine,
-    mod_square as mod_square, mod_tri as mod_tri, note as note,
-    rand as rand, ramp as ramp, saw as saw, seq as seq,
-    sine as sine, stack as stack, struct as struct,
-)
 from krach._patterns import check_finite as _check_finite
 from krach.patterns import Session
 from krach.patterns.pattern import Pattern
