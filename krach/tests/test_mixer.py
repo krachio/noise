@@ -3944,6 +3944,34 @@ def test_set_mono_sends_direct() -> None:
     session.set_ctrl.assert_called_once_with("bass/cutoff", 1200.0)
 
 
+def test_callable_with_default_none_is_source() -> None:
+    """def f(inp=None) should count as 0 audio inputs — routed to voice, not bus."""
+    from unittest.mock import MagicMock, patch
+    from krach._mixer import Mixer
+
+    session = MagicMock()
+
+    def fake_synth(inp=None):  # type: ignore
+        pass
+
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+
+    with patch("krach._types._transpile") as mock_transpile:
+        mock_result = MagicMock()
+        mock_result.source = "process = 0;"
+        mock_result.schema.controls = []
+        mock_result.num_inputs = 0
+        mock_transpile.return_value = mock_result
+
+        import tempfile
+        with tempfile.TemporaryDirectory() as tmpdir:
+            mixer = Mixer(session=session, dsp_dir=Path(tmpdir))
+            mixer.node("pad", fake_synth, gain=0.5, count=4)
+            node = mixer.get_node("pad")
+            assert node is not None
+            assert node.count == 4  # voice, not bus
+
+
 def test_play_poly_control_fans_out() -> None:
     """kr.play('pad/cutoff', pattern) must fan out to per-instance control slots."""
     from unittest.mock import MagicMock

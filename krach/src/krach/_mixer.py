@@ -133,7 +133,11 @@ class Mixer(MixerInfra):
         if isinstance(source, DspDef):
             num_inputs = source.num_inputs
         elif callable(source) and not isinstance(source, str):
-            num_inputs = len(inspect.signature(source).parameters)
+            sig = inspect.signature(source)
+            num_inputs = sum(
+                1 for p in sig.parameters.values()
+                if p.default is inspect.Parameter.empty
+            )
         if num_inputs > 0:
             return self.bus(name, source, gain=gain)
         return self.voice(name, source, gain=gain, count=count, **init)
