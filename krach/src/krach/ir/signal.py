@@ -141,7 +141,7 @@ class Signal:
     def __bool__(self) -> bool:
         raise TypeError(
             "Cannot use a Signal in a Python if/while/and/or. "
-            "Use faust_dsl select2() for conditional signal routing."
+            "Use krs.select2() for conditional signal routing."
         )
 
 
@@ -268,7 +268,7 @@ type LoweringRule = Callable[[FaustLoweringContext, Equation], str]
 
 
 class Primitive:
-    """A registered operation in the faust_dsl IR.
+    """A registered operation in the Signal IR.
 
     Equality and hashing are structural, based on (name, stateful).
     This is required for DspGraph canonicalization and caching.

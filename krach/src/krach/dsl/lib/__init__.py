@@ -1,4 +1,4 @@
-"""faust_dsl standard library: oscillators, filters, noise, utilities."""
+"""krach DSP standard library: oscillators, filters, noise, utilities."""
 
 from krach.dsl.lib.filters import bandpass, dcblock, highpass, lowpass, onepole, resonant
 from krach.dsl.lib.noise import pink_noise, white_noise

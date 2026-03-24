@@ -1,4 +1,4 @@
-"""faust_dsl music library: envelopes, effects, spatial, scales."""
+"""krach DSP music library: envelopes, effects, spatial, scales."""
 
 from krach.dsl.music.effects import chorus, echo, flanger, reverb
 from krach.dsl.music.envelopes import adsr, ar, decay, edge_trigger, latch, trigger
