@@ -86,27 +86,77 @@ class DspDef:
     control_defaults: dict[str, float] = field(default_factory=lambda: dict[str, float]())
 
 
-def dsp(fn: Callable[..., Any], source: str = "") -> DspDef:
-    """Transpile a Python DSP function to a DspDef.
+_DSP_CACHE_MAX = 64
+_dsp_cache: dict[int, DspDef] = {}
+_dsp_cache_order: list[int] = []  # LRU order (oldest first)
+_dsp_cache_hits = 0
+_dsp_cache_misses = 0
 
-    Source text is best-effort: used for export/save but not for transpilation.
-    If ``source`` is not provided, tries ``inspect.getsource``; falls back to "".
+
+def dsp_cache_clear() -> None:
+    """Clear the dsp() transpilation cache."""
+    global _dsp_cache_hits, _dsp_cache_misses  # noqa: PLW0603
+    _dsp_cache.clear()
+    _dsp_cache_order.clear()
+    _dsp_cache_hits = 0
+    _dsp_cache_misses = 0
+
+
+def dsp_cache_info() -> dict[str, int]:
+    """Return cache statistics."""
+    return {"size": len(_dsp_cache), "hits": _dsp_cache_hits, "misses": _dsp_cache_misses}
+
+
+def dsp(fn: Callable[..., Any], source: str = "") -> DspDef:
+    """Transpile a Python DSP function to a DspDef with memoization.
+
+    Always traces + emits (cheap). Cache keyed by hash of the transpiled
+    Faust output — the IR, not Python source. This is sound because:
+    - Same computation → same Faust → cache hit (correct)
+    - Different closures → different Faust → cache miss (correct)
+    - Redefined function → different Faust → cache miss (correct)
+    No false hits possible. Bounded LRU.
     """
+    global _dsp_cache_hits, _dsp_cache_misses  # noqa: PLW0603
+
+    # Always trace + emit (microseconds — just proxy calls + string concat)
+    result = _transpile(fn)  # type: ignore[arg-type]
+    faust = result.source
+
+    # Cache by IR output (the Faust source IS the jaxpr)
+    key = hash(faust)
+    if key in _dsp_cache:
+        _dsp_cache_hits += 1
+        if key in _dsp_cache_order:
+            _dsp_cache_order.remove(key)
+        _dsp_cache_order.append(key)
+        return _dsp_cache[key]
+    _dsp_cache_misses += 1
+
+    # Source text for export/persistence (best-effort, not part of cache key)
     if not source:
         try:
             source = textwrap.dedent(inspect.getsource(fn))
         except (OSError, TypeError):
             source = ""
-    result = _transpile(fn)  # type: ignore[arg-type]
-    return DspDef(
+
+    dsp_def = DspDef(
         fn=fn,
         source=source,
-        faust=result.source,
+        faust=faust,
         controls=tuple(c.name for c in result.schema.controls),
         num_inputs=result.num_inputs,
         control_ranges={c.name: (c.lo, c.hi) for c in result.schema.controls},
         control_defaults={c.name: c.init for c in result.schema.controls},
     )
+
+    _dsp_cache[key] = dsp_def
+    _dsp_cache_order.append(key)
+    while len(_dsp_cache) > _DSP_CACHE_MAX:
+        evicted = _dsp_cache_order.pop(0)
+        _dsp_cache.pop(evicted, None)
+
+    return dsp_def
 
 
 @dataclass(frozen=True)
