@@ -12,10 +12,15 @@ from __future__ import annotations
 import inspect
 import textwrap
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Union
 
 from faust_dsl import transpile as _transpile
 from krach.patterns.pattern import Pattern
+
+# Type alias for DSP source parameters: string type_id, DspDef, or callable DSP function.
+# The callable form accepts 0+ Signal args and returns a Signal.
+# We use Callable[..., Any] because the transpiler handles signature inspection.
+DspSource = Union[str, "DspDef", Callable[..., Any]]
 
 
 @dataclass(frozen=True)

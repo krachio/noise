@@ -12,12 +12,12 @@ import textwrap
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable, Literal
+from typing import Any, Literal
 
 from faust_dsl import transpile as _transpile
 from krach._bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
-from krach._types import DspDef, Node, Scene, dsp
+from krach._types import DspDef, DspSource, Node, Scene, dsp
 from krach._graph import inst_name as _inst_name, build_graph_ir
 from krach._patterns import (  # noqa: F401 — re-exported for backward compat
     build_hit as build_hit,
@@ -147,7 +147,7 @@ class VoiceMixer:
     def _resolve_source(
         self,
         name: str,
-        source: str | DspDef | Callable[..., Any],
+        source: DspSource,
         fallback_controls: tuple[str, ...] = (),
     ) -> tuple[str, tuple[str, ...], str]:
         """Resolve a source to (type_id, controls, source_text).
@@ -181,7 +181,7 @@ class VoiceMixer:
     def node(
         self,
         name: str,
-        source: str | DspDef | Callable[..., Any],
+        source: DspSource,
         gain: float = 0.5,
         count: int = 1,
         **init: float,
@@ -195,8 +195,7 @@ class VoiceMixer:
         if isinstance(source, DspDef):
             num_inputs = source.num_inputs
         elif callable(source) and not isinstance(source, str):
-            result = _transpile(source)  # type: ignore[arg-type]
-            num_inputs = result.num_inputs
+            num_inputs = len(inspect.signature(source).parameters)
         if num_inputs > 0:
             return self.bus(name, source, gain=gain)
         return self.voice(name, source, gain=gain, count=count, **init)
@@ -265,7 +264,7 @@ class VoiceMixer:
     def voice(
         self,
         name: str,
-        source: str | DspDef | Callable[..., Any],
+        source: DspSource,
         gain: float = 0.5,
         count: int = 1,
         **init: float,
@@ -484,10 +483,6 @@ class VoiceMixer:
             self._patterns, self._ctrl_values, tempo, meter, self._master_gain,
         )
 
-    def _is_voice_or_bus(self, name: str) -> bool:
-        """Check if name is a known node."""
-        return name in self._nodes
-
     def play(
         self, target: str, pattern: Pattern, *,
         from_zero: bool = False, swing: float | None = None,
@@ -513,7 +508,7 @@ class VoiceMixer:
             )
             voice.alloc = new_alloc
             send(target, Pattern(bound_node))
-        elif self._is_voice_or_bus(target):
+        elif target in self._nodes:
             bound = Pattern(bind_voice(pattern.node, target))
             send(target, bound)
         elif "/" in target:
@@ -636,7 +631,7 @@ class VoiceMixer:
     def bus(
         self,
         name: str,
-        source: str | DspDef | Callable[..., Any],
+        source: DspSource,
         gain: float = 0.5,
     ) -> NodeHandle:
         """Add or replace an effect bus. Rebuilds the graph."""
@@ -705,14 +700,11 @@ class VoiceMixer:
             self._rebuild()
 
     def remove_bus(self, name: str) -> None:
-        """Remove a bus and all sends/wires targeting it. No-op if not found."""
+        """Remove an effect node. Alias for remove() with bidirectional cleanup."""
         if name not in self._nodes:
             return
+        self._cleanup_node(name, direction="both")
         del self._nodes[name]
-        for key in [k for k in self._sends if k[1] == name]:
-            del self._sends[key]
-        for key in [k for k in self._wires if k[1] == name]:
-            del self._wires[key]
         self._rebuild()
 
     def mod(
