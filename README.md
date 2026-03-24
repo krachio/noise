@@ -68,7 +68,7 @@ def kick() -> krs.Signal:
 
 ```python
 k = kr.node("kick", kick, gain=0.8)
-k @ kr.hit() * 4                          # 4-on-the-floor
+k @ (kr.hit() * 4)                        # 4-on-the-floor
 k @ (kr.hit() * 8).swing(0.67)            # swung 8ths
 ```
 
@@ -83,7 +83,7 @@ bass @ ("cutoff", kr.sine(200, 2000).over(4))
 
 # Chords need poly nodes (count > 1)
 pad = kr.node("pad", acid_bass, gain=0.2, count=4)
-pad @ kr.note("A4", "C5", "E5") + kr.rest()
+pad @ (kr.note("A4", "C5", "E5") + kr.rest())
 ```
 
 ### Effect routing with `>>`
@@ -110,8 +110,8 @@ kr.fade("bass/gain", 0.0, bars=4)
 kr.mute("bass")
 kr.save("verse")
 kr.recall("verse")
-kr.export("my_session.py")  # save to file
-kr.load("my_session.py")    # reload later
+kr.export("my_session.py")  # save to reloadable Python file
+# kr.load("my_session.py")  # reload in a fresh session
 
 # Transition: all changes inside fade over N bars
 with kr.transition(bars=8):
@@ -122,6 +122,11 @@ with kr.transition(bars=8):
 ## Pattern algebra
 
 ```python
+# Pattern algebra (a, b, p are patterns — e.g. kr.hit(), kr.note("C4"))
+a = kr.hit()
+b = kr.note("C4")
+p = kr.seq("A2", "D3", "E2")
+
 a + b           # sequence (equal time share)
 a | b           # layer (simultaneous)
 p * 4           # repeat 4 times
@@ -137,8 +142,11 @@ p.sometimes(0.3, lambda p: p.reverse())  # probabilistic transform
 kr.p("x . x . x . . x")  # mini-notation
 
 # Multi-pattern combinators
+c = kr.rest()
 kr.cat(a, b, c)             # play a, b, c one cycle each, loop
 kr.stack(a, b)              # layer (same as a | b)
+rhythm = kr.p("x . x x")
+melody = kr.seq("A2", "D3")
 kr.struct(rhythm, melody)   # impose rhythm onto melody values
 
 # Continuous patterns

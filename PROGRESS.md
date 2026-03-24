@@ -59,7 +59,7 @@ verb = kr.node("verb", reverb_fn, gain=0.3)
 # Operator DSL: >> routes, @ plays, [] controls
 bass >> (verb, 0.4)
 bass @ kr.seq("A2", "D3", None, "E2").over(2)
-kick @ kr.hit() * 4
+kick @ (kr.hit() * 4)
 bass @ ("cutoff", kr.sine(400, 2000).over(4))
 bass["cutoff"] = 1200
 
