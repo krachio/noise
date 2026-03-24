@@ -106,6 +106,18 @@ class Signal:
         from faust_dsl._primitives import mod_p
         return mod_p.bind(other, self)
 
+    def __pow__(self, other: SignalLike) -> Signal:
+        from faust_dsl._primitives import pow_p
+        return pow_p.bind(self, other)
+
+    def __rpow__(self, other: SignalLike) -> Signal:
+        from faust_dsl._primitives import pow_p
+        return pow_p.bind(other, self)
+
+    def __abs__(self) -> Signal:
+        from faust_dsl._primitives import abs_p
+        return abs_p.bind(self)
+
     def __neg__(self) -> Signal:
         from faust_dsl._primitives import mul_p
         return mul_p.bind(self, -1.0)

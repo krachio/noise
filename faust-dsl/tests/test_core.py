@@ -11,7 +11,7 @@ from faust_dsl._core import (
     pop_trace,
     push_trace,
 )
-from faust_dsl._primitives import add_p, const_p, feedback_p, mul_p
+from faust_dsl._primitives import abs_p, add_p, const_p, feedback_p, mul_p, pow_p
 from faust_dsl._dsp import feedback
 from faust_dsl.transpile import make_graph
 
@@ -59,6 +59,40 @@ def test_signal_mul_records_equation() -> None:
     assert ctx.equations[0].params.value == 2.0
     # Second equation is mul_p
     assert ctx.equations[1].primitive is mul_p
+
+
+def test_signal_pow_records_equation() -> None:
+    ctx = _make_ctx()
+    with _with_ctx(ctx):  # type: ignore[union-attr]
+        a = ctx.new_input()
+        _out = a ** 2.0
+
+    # a ** 2.0 => const_p(2.0) + pow_p(a, const)
+    assert len(ctx.equations) == 2
+    assert ctx.equations[0].primitive is const_p
+    assert ctx.equations[1].primitive is pow_p
+
+
+def test_signal_rpow_records_equation() -> None:
+    ctx = _make_ctx()
+    with _with_ctx(ctx):  # type: ignore[union-attr]
+        a = ctx.new_input()
+        _out = 2.0 ** a
+
+    # 2.0 ** a => const_p(2.0) + pow_p(const, a)
+    assert len(ctx.equations) == 2
+    assert ctx.equations[0].primitive is const_p
+    assert ctx.equations[1].primitive is pow_p
+
+
+def test_signal_abs_records_equation() -> None:
+    ctx = _make_ctx()
+    with _with_ctx(ctx):  # type: ignore[union-attr]
+        a = ctx.new_input()
+        _out = abs(a)
+
+    assert len(ctx.equations) == 1
+    assert ctx.equations[0].primitive is abs_p
 
 
 def test_feedback_records_feedback_equation() -> None:
