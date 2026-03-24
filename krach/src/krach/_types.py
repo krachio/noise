@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Union
 
-from faust_dsl import transpile as _transpile
+from krach.dsl.transpile import transpile as _transpile
 from krach.patterns.pattern import Pattern
 
 # Type alias for DSP source parameters: string type_id, DspDef, or callable DSP function.

@@ -140,43 +140,43 @@ def test_voicemixer_p_produces_pattern() -> None:
 
 def test_dsp_module_exports_signal() -> None:
     import krach.dsp as krs
-    from faust_dsl import Signal
+    from krach.ir.signal import Signal
     assert krs.Signal is Signal
 
 
 def test_dsp_module_exports_control() -> None:
     import krach.dsp as krs
-    from faust_dsl import control
+    from krach.dsl.transpile import control
     assert krs.control is control
 
 
 def test_dsp_module_exports_saw() -> None:
     import krach.dsp as krs
-    from faust_dsl.lib.oscillators import saw
+    from krach.dsl.lib.oscillators import saw
     assert krs.saw is saw
 
 
 def test_dsp_module_exports_lowpass() -> None:
     import krach.dsp as krs
-    from faust_dsl.lib.filters import lowpass
+    from krach.dsl.lib.filters import lowpass
     assert krs.lowpass is lowpass
 
 
 def test_dsp_module_exports_adsr() -> None:
     import krach.dsp as krs
-    from faust_dsl.music.envelopes import adsr
+    from krach.dsl.music.envelopes import adsr
     assert krs.adsr is adsr
 
 
 def test_dsp_module_exports_reverb() -> None:
     import krach.dsp as krs
-    from faust_dsl.music.effects import reverb
+    from krach.dsl.music.effects import reverb
     assert krs.reverb is reverb
 
 
 def test_dsp_module_exports_white_noise() -> None:
     import krach.dsp as krs
-    from faust_dsl.lib.noise import white_noise
+    from krach.dsl.lib.noise import white_noise
     assert krs.white_noise is white_noise
 
 

@@ -1,10 +1,11 @@
 """krach.dsp — synthesis primitives. Import as: import krach.dsp as krs"""
 
 # Core types
-from faust_dsl import Signal as Signal, control as control, transpile as transpile
+from krach.ir.signal import Signal as Signal
+from krach.dsl.transpile import control as control, transpile as transpile
 
 # Oscillators
-from faust_dsl.lib.oscillators import (
+from krach.dsl.lib.oscillators import (
     sine_osc as sine_osc,
     saw as saw,
     square as square,
@@ -12,21 +13,21 @@ from faust_dsl.lib.oscillators import (
 )
 
 # Filters
-from faust_dsl.lib.filters import (
+from krach.dsl.lib.filters import (
     lowpass as lowpass,
     highpass as highpass,
     bandpass as bandpass,
 )
 
 # Noise
-from faust_dsl.lib.noise import white_noise as white_noise
+from krach.dsl.lib.noise import white_noise as white_noise
 
 # Envelopes + effects
-from faust_dsl.music.envelopes import adsr as adsr
-from faust_dsl.music.effects import reverb as reverb
+from krach.dsl.music.envelopes import adsr as adsr
+from krach.dsl.music.effects import reverb as reverb
 
 # DSP primitives: delay, memory, feedback, sample rate
-from faust_dsl import (
+from krach.dsl.core import (
     delay as delay,
     mem as mem,
     feedback as feedback,
@@ -38,7 +39,7 @@ from faust_dsl import (
 )
 
 # Math (unary)
-from faust_dsl import (
+from krach.dsl.core import (
     sin as sin,
     cos as cos,
     tan as tan,
@@ -56,7 +57,7 @@ from faust_dsl import (
 )
 
 # Math (binary)
-from faust_dsl import (
+from krach.dsl.core import (
     min_ as min_,
     max_ as max_,
     pow_ as pow_,

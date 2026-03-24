@@ -243,9 +243,10 @@ def test_hit_usable_with_over() -> None:
 
 
 def test_dsp_decorator_captures_source_and_transpiles() -> None:
-    from faust_dsl import Signal, control
-    from faust_dsl.lib.oscillators import sine_osc
-    from faust_dsl.music.envelopes import adsr
+    from krach.ir.signal import Signal
+    from krach.dsl.transpile import control
+    from krach.dsl.lib.oscillators import sine_osc
+    from krach.dsl.music.envelopes import adsr
 
     from krach._mixer import DspDef, dsp
 

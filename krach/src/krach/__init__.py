@@ -136,7 +136,7 @@ def main() -> None:
     print("  krs   krach.dsp \u2014 krs.Signal, krs.control(), krs.saw(), krs.lowpass(), ...")
     print()
 
-    import IPython
+    import IPython  # type: ignore[import-not-found]  # optional dep (repl extra)
 
     user_ns: dict[str, object] = {
         "kr": kr,
