@@ -12,7 +12,7 @@ import textwrap
 from collections.abc import Generator
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Callable  # Any still used for DspDef.fn
+from typing import Any, Callable, Literal
 
 from faust_dsl import transpile as _transpile
 from krach._bind import bind_ctrl, bind_voice, bind_voice_poly
@@ -125,24 +125,24 @@ class VoiceMixer:
         self._flush_scheduled: bool = False
         self._session.master_gain(self._master_gain)
 
-    def _cleanup_node(self, name: str, both_sides: bool = False) -> None:
-        """Clean up state for a node being replaced or removed."""
+    def _cleanup_node(self, name: str, direction: Literal["source", "both"] = "source") -> None:
+        """Clean up state for a node being replaced or removed.
+
+        direction="source": clean sends/wires where this node is the source.
+        direction="both": clean sends/wires where this node is source OR target.
+        """
         if name in self._nodes:
             old = self._nodes[name]
             self.hush(name)
             self._muted.pop(name, None)
             for i in range(old.count):
                 self._muted.pop(_inst_name(name, i, old.count), None)
-        if both_sides:
-            for key in [k for k in self._sends if k[0] == name or k[1] == name]:
-                del self._sends[key]
-            for key in [k for k in self._wires if k[0] == name or k[1] == name]:
-                del self._wires[key]
-        else:
-            for key in [k for k in self._sends if k[0] == name]:
-                del self._sends[key]
-            for key in [k for k in self._wires if k[0] == name]:
-                del self._wires[key]
+        def _matches(k: tuple[str, str]) -> bool:
+            return k[0] == name or (direction == "both" and k[1] == name)
+        for key in [k for k in self._sends if _matches(k)]:
+            del self._sends[key]
+        for key in [k for k in self._wires if _matches(k)]:
+            del self._wires[key]
 
     def _resolve_source(
         self,
@@ -612,34 +612,20 @@ class VoiceMixer:
             return
 
         voice = self._nodes[name]
+        per_gain = voice.gain / voice.count
         for i in range(voice.count):
             inst = _inst_name(name, i, voice.count)
-            self._fade_voice(inst, target / voice.count, bars, steps_per_bar)
+            self._fade_instance(inst, per_gain, target / voice.count, bars)
         voice.gain = target
 
-    def _fade_voice(
-        self, name: str, target: float, bars: int, steps_per_bar: int
-    ) -> None:
-        """Schedule a gain fade for a single voice instance using native automation."""
-        # Find current gain for this instance
-        current = target  # fallback
-        for vname, voice in self._nodes.items():
-            if voice.count == 1 and vname == name:
-                current = voice.gain
-                break
-            if voice.count > 1:
-                for i in range(voice.count):
-                    if _inst_name(vname, i, voice.count) == name:
-                        current = voice.gain / voice.count
-                        break
-
+    def _fade_instance(self, label: str, current: float, target: float, bars: int) -> None:
+        """Schedule a gain fade for a single node instance using native automation."""
         try:
-            beats = bars * float(self.meter)
-            period_secs = beats * 60.0 / max(float(self.tempo), 1.0)
+            period_secs = bars * float(self.meter) * 60.0 / max(float(self.tempo), 1.0)
         except (TypeError, ValueError):
-            period_secs = bars * 2.0  # fallback: 2s per bar at 120bpm
+            period_secs = bars * 2.0
         self._session.set_automation(
-            f"{name}/gain", "ramp", current, target, period_secs, one_shot=True,
+            f"{label}/gain", "ramp", current, target, period_secs, one_shot=True,
         )
 
     def _update_gain_bookkeeping(self, name: str, target: float) -> None:
@@ -667,7 +653,7 @@ class VoiceMixer:
                 f"bus '{name}': DSP has no audio inputs — effects need function "
                 f"parameters for audio input, e.g. def verb(inp: Signal) -> Signal"
             )
-        self._cleanup_node(name, both_sides=True)
+        self._cleanup_node(name, direction="both")
         type_id, controls, _source_text = self._resolve_source(name, source)
         self._nodes[name] = Node(type_id=type_id, gain=gain, controls=controls, num_inputs=num_inputs)
         if not self._batching:
