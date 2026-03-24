@@ -191,9 +191,21 @@ class. The ~500-line guideline applies to modules; VoiceMixer IS the module.
 Range: 7-8. Scores stabilized. Major structural work complete.
 _mixer.py at 928 lines (50% reduction). 9 extracted modules.
 
-Remaining gap to 9: each reviewer has domain-specific nits that
-shift between iterations. The architecture is sound; reaching 9/10
-across all 8 simultaneously requires a final polishing pass.
+### Iteration 10 scores
+
+| Reviewer | Score | Verdict |
+|----------|-------|---------|
+| Kira | 7 | FIX |
+| Tomás | 8 | PASS |
+| Suki | 7 | FIX |
+| Renzo | 8 | PASS |
+| Maren | 7 | FIX |
+| Diego | 9 | PASS |
+| Yara | 7 | FIX |
+| Nils | 7 | FIX |
+
+Range: 7-9. Floor risen to 7. 3 reviewers PASS (Tomás, Renzo, Diego).
+_mixer.py at 912 lines. DspSource type, no double-transpile, stale compat removed.
 
 ### Iteration 2 scores
 
