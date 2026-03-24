@@ -11,13 +11,13 @@ from typing import TYPE_CHECKING
 from krach.patterns.pattern import Pattern
 
 if TYPE_CHECKING:
-    from krach._mixer import Mixer
+    from krach._mixer_infra import MixerInfra
 
 
 class NodeHandle:
     """Proxy for a named node in the audio graph."""
 
-    def __init__(self, mixer: Mixer, name: str) -> None:
+    def __init__(self, mixer: MixerInfra, name: str) -> None:
         self._mixer = mixer
         self._name = name
 

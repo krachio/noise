@@ -19,6 +19,7 @@ from krach._patterns import (
 )
 from krach._pitch import ftom as _ftom, mtof as _mtof, parse_note as _parse_note
 from krach._types import Node, dsp
+from krach.patterns.pattern import Pattern
 from krach.patterns.session import SlotState
 from krach.patterns.pattern import rest as _rest
 
@@ -53,7 +54,26 @@ class MixerInfra:
     parse_note = staticmethod(_parse_note)
     from krach._mininotation import p as p
 
-    # These fields are defined on Mixer.__init__ — declared here for type checking
+    # Methods implemented by Mixer — declared here so NodeHandle can type-check against MixerInfra
+    def connect(self, source: str, target: str, level: float = 1.0, port: str | None = None) -> None:
+        raise NotImplementedError
+
+    def play(self, target: str, pattern: Pattern, *, from_zero: bool = False, swing: float | None = None) -> None:
+        raise NotImplementedError
+
+    def hush(self, name: str) -> None:
+        raise NotImplementedError
+
+    def send(self, source: str, target: str, level: float = 0.5) -> None:
+        raise NotImplementedError
+
+    def pattern(self, name: str) -> Pattern | None:
+        raise NotImplementedError
+
+    def remove(self, name: str) -> None:
+        raise NotImplementedError
+
+    # Fields defined on Mixer.__init__ — declared here for type checking
     _session: Session
     _master_gain: float
     _nodes: dict[str, Node]
@@ -133,18 +153,15 @@ class MixerInfra:
     @property
     def nodes(self) -> dict[str, NodeHandle]:
         """All nodes as name → NodeHandle."""
-        return {name: NodeHandle(self, name) for name in self._nodes}  # type: ignore[arg-type]
-
+        return {name: NodeHandle(self, name) for name in self._nodes}
     @property
     def sources(self) -> dict[str, NodeHandle]:
         """Source nodes (num_inputs=0) as name → NodeHandle."""
-        return {n: NodeHandle(self, n) for n, v in self._nodes.items() if v.num_inputs == 0}  # type: ignore[arg-type]
-
+        return {n: NodeHandle(self, n) for n, v in self._nodes.items() if v.num_inputs == 0}
     @property
     def effects(self) -> dict[str, NodeHandle]:
         """Effect nodes (num_inputs>0) as name → NodeHandle."""
-        return {n: NodeHandle(self, n) for n, v in self._nodes.items() if v.num_inputs > 0}  # type: ignore[arg-type]
-
+        return {n: NodeHandle(self, n) for n, v in self._nodes.items() if v.num_inputs > 0}
     @property
     def node_controls(self) -> dict[str, tuple[str, ...]]:
         """Read-only snapshot of known node type controls."""
