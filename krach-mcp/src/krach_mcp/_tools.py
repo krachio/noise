@@ -53,13 +53,25 @@ def register_tools(mcp: FastMCP) -> None:
         if source.startswith("faust:") or "def " not in source:
             handle = kr.node(name, source, gain=gain, count=count)
         else:
+            # Compile source → function → transpile → DspDef
             import krach.dsp as krs
+            from krach._types import DspDef
+            from faust_dsl import transpile as _transpile
             ns: dict[str, object] = {"__builtins__": {}, "krs": krs}
             exec(compile(source, f"<dsp:{name}>", "exec"), ns)  # noqa: S102
             fn = next((v for v in ns.values() if callable(v) and v is not krs), None)
             if fn is None:
                 return f"Error: no function found in source code for '{name}'"
-            handle = kr.node(name, fn, gain=gain, count=count)
+            result = _transpile(fn)
+            dsp_def = DspDef(
+                fn=fn,
+                source=source,
+                faust=result.source,
+                controls=tuple(c.name for c in result.schema.controls),
+                num_inputs=result.num_inputs,
+                control_ranges={c.name: (c.lo, c.hi) for c in result.schema.controls},
+            )
+            handle = kr.node(name, dsp_def, gain=gain, count=count)
         return str(handle)
 
     @mcp.tool()
