@@ -55,8 +55,8 @@ class DspDef:
 
 
 _DSP_CACHE_MAX = 64
-_dsp_cache: dict[int, DspDef] = {}
-_dsp_cache_order: list[int] = []  # LRU order (oldest first)
+_dsp_cache: dict[str, DspDef] = {}
+_dsp_cache_order: list[str] = []  # LRU order (oldest first)
 _dsp_cache_hits = 0
 _dsp_cache_misses = 0
 
@@ -91,8 +91,8 @@ def dsp(fn: Callable[..., Any], source: str = "") -> DspDef:
     result = _transpile(fn)  # type: ignore[arg-type]
     faust = result.source
 
-    # Cache by IR output (the Faust source IS the jaxpr)
-    key = hash(faust)
+    # Cache by Faust source string (the IR output, not Python source)
+    key = faust
     if key in _dsp_cache:
         _dsp_cache_hits += 1
         if key in _dsp_cache_order:

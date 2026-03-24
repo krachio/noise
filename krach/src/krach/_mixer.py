@@ -14,7 +14,7 @@ from typing import Literal
 
 from krach.patterns.bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
-from krach._module_ir import ControlDef, ModuleIr, MutedDef, NodeDef, RouteDef
+from krach._module_ir import ControlDef, ModuleIr, MutedDef, NodeDef, PatternDef, RouteDef
 from krach._module_proxy import ModuleProxy
 from krach._types import (  # noqa: F401
     ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
@@ -398,9 +398,15 @@ class Mixer(MixerInfra):
         except (TypeError, ValueError):
             meter = None
 
+        patterns = tuple(
+            PatternDef(target=target, pattern=pat.node)
+            for target, pat in self._patterns.items()
+        )
+
         return ModuleIr(
             nodes=nodes,
             routing=tuple(routing),
+            patterns=patterns,
             controls=controls,
             muted=muted,
             tempo=tempo,
@@ -435,6 +441,9 @@ class Mixer(MixerInfra):
 
         for cd in ir.controls:
             self.set(cd.path, cd.value)
+
+        for pd in ir.patterns:
+            self.play(pd.target, Pattern(pd.pattern))
 
         for md in ir.muted:
             self.mute(md.name)

@@ -201,7 +201,7 @@ def test_module_ir_round_trip_full() -> None:
             RouteDef(source="bass", target="verb", kind="send", level=0.4),
         ),
         patterns=(
-            PatternDef(target="bass", pattern=freeze(ctrl("gate", 1.0) + ctrl("gate", 0.0))),
+            PatternDef(target="bass", pattern=freeze(ctrl("gate", 1.0) + ctrl("gate", 0.0)).node),
         ),
         controls=(
             ControlDef(path="bass/freq", value=220.0),
@@ -330,3 +330,62 @@ def test_instantiate_applies_mutes() -> None:
     )
     mixer.instantiate(ir)
     assert mixer.is_muted("bass")
+
+
+# ── P0: capture() must include patterns ──────────────────────────
+
+
+def test_capture_includes_patterns() -> None:
+    """capture() must record running patterns in the ModuleIr."""
+    from krach._patterns import hit
+
+    mixer = _make_mixer()
+    with mixer.batch():
+        mixer.voice("kick", "faust:kick", gain=0.8)
+    pat = hit()
+    mixer.play("kick", pat)
+
+    ir = mixer.capture()
+    assert len(ir.patterns) == 1
+    assert ir.patterns[0].target == "kick"
+
+
+def test_instantiate_replays_patterns() -> None:
+    """instantiate() must call play() for each PatternDef."""
+    from krach.ir.pattern import PatternNode, AtomParams, CatParams, FreezeParams
+    from krach.patterns.values import Control
+    from krach.patterns.primitives import atom_p, cat_p, freeze_p
+
+    mixer = _make_mixer()
+    # Build a simple gate trigger pattern as PatternNode
+    gate_on = PatternNode(atom_p, (), AtomParams(Control("gate", 1.0)))
+    gate_off = PatternNode(atom_p, (), AtomParams(Control("gate", 0.0)))
+    pat_node = PatternNode(freeze_p, (
+        PatternNode(cat_p, (gate_on, gate_off), CatParams()),
+    ), FreezeParams())
+
+    ir = ModuleIr(
+        nodes=(NodeDef(name="kick", source="faust:kick", gain=0.8),),
+        patterns=(PatternDef(target="kick", pattern=pat_node),),
+    )
+    mixer.instantiate(ir)
+    # play() should have been called on the session
+    mixer._session.play.assert_called()  # type: ignore[reportPrivateUsage]
+
+
+def test_capture_instantiate_round_trip_with_patterns() -> None:
+    """Full round-trip: capture with patterns → instantiate restores them."""
+    from krach._patterns import hit
+
+    mixer1 = _make_mixer()
+    with mixer1.batch():
+        mixer1.voice("kick", "faust:kick", gain=0.8)
+    mixer1.play("kick", hit() * 4)
+
+    ir = mixer1.capture()
+    assert len(ir.patterns) >= 1
+
+    mixer2 = _make_mixer()
+    mixer2.instantiate(ir)
+    # Pattern should have been played on the new mixer
+    mixer2._session.play.assert_called()  # type: ignore[reportPrivateUsage]

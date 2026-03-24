@@ -73,7 +73,7 @@ class ModuleProxy:
 
     def play(self, target: str, pattern: Pattern, **_kwargs: object) -> None:
         """Record a pattern assignment."""
-        self._patterns.append(PatternDef(target=target, pattern=pattern))
+        self._patterns.append(PatternDef(target=target, pattern=pattern.node))
 
     def set(self, path: str, value: float) -> None:
         """Record a control value."""

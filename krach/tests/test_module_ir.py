@@ -60,9 +60,9 @@ def test_route_def_wire() -> None:
     assert rd.port == "sidechain"
 
 
-def test_pattern_def_with_pattern() -> None:
+def test_pattern_def_with_pattern_node() -> None:
     pat = freeze(ctrl("gate", 1.0) + ctrl("gate", 0.0))
-    pd = PatternDef(target="kick", pattern=pat)
+    pd = PatternDef(target="kick", pattern=pat.node)
     assert pd.swing is None
 
 

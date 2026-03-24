@@ -14,10 +14,10 @@ from dataclasses import dataclass
 from typing import Any, Literal, Union
 
 from krach._types import DspDef
-from krach.patterns.pattern import Pattern
+from krach.ir.pattern import PatternNode
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class NodeDef:
     """Specification of an audio node."""
 
@@ -30,7 +30,7 @@ class NodeDef:
     source_text: str = ""
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class RouteDef:
     """Specification of an audio route between nodes.
 
@@ -46,16 +46,16 @@ class RouteDef:
     port: str = "in0"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PatternDef:
     """Specification of a pattern assignment."""
 
     target: str
-    pattern: Pattern
+    pattern: PatternNode
     swing: float | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ControlDef:
     """Specification of a control value."""
 
@@ -63,7 +63,7 @@ class ControlDef:
     value: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class AutomationDef:
     """Specification of a native engine automation."""
 
@@ -74,7 +74,7 @@ class AutomationDef:
     bars: int
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class MutedDef:
     """Specification of a muted node with its saved gain."""
 
@@ -82,7 +82,7 @@ class MutedDef:
     saved_gain: float
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class ModuleIr:
     """Frozen specification of a complete audio setup.
 
@@ -121,7 +121,7 @@ class ModuleIr:
             ]
         if self.patterns:
             d["patterns"] = [
-                {"target": p.target, "pattern": pattern_node_to_dict(p.pattern.node),
+                {"target": p.target, "pattern": pattern_node_to_dict(p.pattern),
                  **({"swing": p.swing} if p.swing is not None else {})}
                 for p in self.patterns
             ]
@@ -171,7 +171,7 @@ class ModuleIr:
         patterns = tuple(
             PatternDef(
                 target=p["target"],
-                pattern=Pattern(dict_to_pattern_node(p["pattern"])),
+                pattern=dict_to_pattern_node(p["pattern"]),
                 swing=p.get("swing"),
             )
             for p in d.get("patterns", ())
