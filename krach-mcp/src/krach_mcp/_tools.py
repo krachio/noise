@@ -14,8 +14,7 @@ def _node_from_file(
     """Load a DSP function from a .py file and create a node."""
     import os
     import krach.dsp as krs
-    from krach._types import DspDef
-    from faust_dsl import transpile as _transpile
+    from krach._types import dsp as _dsp
 
     resolved = os.path.expanduser(path)
     if not os.path.isfile(resolved):
@@ -29,17 +28,8 @@ def _node_from_file(
     if fn is None:
         raise ValueError(f"no function found in {resolved}")
 
-    result = _transpile(fn)
-    dsp_def = DspDef(
-        fn=fn,
-        source=source_text,
-        faust=result.source,
-        controls=tuple(c.name for c in result.schema.controls),
-        num_inputs=result.num_inputs,
-        control_ranges={c.name: (c.lo, c.hi) for c in result.schema.controls},
-        control_defaults={c.name: c.init for c in result.schema.controls},
-    )
-    return kr.node(name, dsp_def, gain=gain, count=count)
+    dsp_def = _dsp(fn, source=source_text)
+    return kr.node(name, dsp_def, gain=gain, count=count)  # type: ignore[union-attr]
 
 
 def register_tools(mcp: FastMCP) -> None:

@@ -86,9 +86,17 @@ class DspDef:
     control_defaults: dict[str, float] = field(default_factory=lambda: dict[str, float]())
 
 
-def dsp(fn: Callable[..., Any]) -> DspDef:
-    """Decorator: captures Python source + pre-transpiles to FAUST."""
-    source = textwrap.dedent(inspect.getsource(fn))
+def dsp(fn: Callable[..., Any], source: str = "") -> DspDef:
+    """Transpile a Python DSP function to a DspDef.
+
+    Source text is best-effort: used for export/save but not for transpilation.
+    If ``source`` is not provided, tries ``inspect.getsource``; falls back to "".
+    """
+    if not source:
+        try:
+            source = textwrap.dedent(inspect.getsource(fn))
+        except (OSError, TypeError):
+            source = ""
     result = _transpile(fn)  # type: ignore[arg-type]
     return DspDef(
         fn=fn,
@@ -120,36 +128,29 @@ def resolve_dsp_source(
     wait: Callable[..., None] | None = None,
 ) -> ResolvedSource:
     """Resolve a DSP source to type_id, controls, source_text, and control ranges."""
-    ranges: dict[str, tuple[float, float]] = {}
-    defaults: dict[str, float] = {}
     if isinstance(source, DspDef):
-        type_id = f"faust:{name}"
-        source_text = source.source
-        faust_code, controls = source.faust, source.controls
-        ranges = source.control_ranges
-        defaults = source.control_defaults
+        dsp_def = source
     elif callable(source):
-        type_id = f"faust:{name}"
-        source_text = textwrap.dedent(inspect.getsource(source))
-        result = _transpile(source)  # type: ignore[arg-type]
-        faust_code = result.source
-        controls = tuple(c.name for c in result.schema.controls)
-        ranges = {c.name: (c.lo, c.hi) for c in result.schema.controls}
-        defaults = {c.name: c.init for c in result.schema.controls}
+        dsp_def = dsp(source)
     else:
         return ResolvedSource(
             source, node_controls.get(source, fallback_controls), "", {},
         )
-    py_path = dsp_dir.joinpath(f"{name}.py")
-    py_path.parent.mkdir(parents=True, exist_ok=True)
-    py_path.write_text(source_text)
+    type_id = f"faust:{name}"
+    if dsp_def.source:
+        py_path = dsp_dir.joinpath(f"{name}.py")
+        py_path.parent.mkdir(parents=True, exist_ok=True)
+        py_path.write_text(dsp_def.source)
     dsp_path = dsp_dir.joinpath(f"{name}.dsp")
     dsp_path.parent.mkdir(parents=True, exist_ok=True)
-    dsp_path.write_text(faust_code)
-    node_controls[type_id] = controls
+    dsp_path.write_text(dsp_def.faust)
+    node_controls[type_id] = dsp_def.controls
     if wait is not None:
         wait(type_id)
-    return ResolvedSource(type_id, controls, source_text, ranges, defaults)
+    return ResolvedSource(
+        type_id, dsp_def.controls, dsp_def.source,
+        dsp_def.control_ranges, dsp_def.control_defaults,
+    )
 
 
 # ── Path resolution ───────────────────────────────────────────────────────
