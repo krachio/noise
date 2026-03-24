@@ -3035,8 +3035,8 @@ def test_fade_gain_path_updates_bookkeeping() -> None:
 
     mixer.fade("bass/gain", 0.8, bars=2)
 
-    assert mixer.get_voice("bass") is not None
-    assert mixer.get_voice("bass").gain == 0.8  # type: ignore[union-attr]
+    assert mixer.get_node("bass") is not None
+    assert mixer.get_node("bass").gain == 0.8  # type: ignore[union-attr]
 
 
 # ── Scene save/recall ─────────────────────────────────────────────────────────
@@ -3076,7 +3076,7 @@ def test_save_captures_state() -> None:
     assert mixer.voice_data["bass"].gain == 0.4
     assert mixer.voice_data["bass"].type_id == "faust:bass"
     assert mixer.voice_data["bass"].controls == ("freq", "gate")
-    assert mixer.get_bus("verb") is not None
+    assert mixer.get_node("verb") is not None
     assert mixer.master == 0.8
 
 
@@ -3114,7 +3114,7 @@ def test_recall_restores_state() -> None:
     assert "pad" not in mixer.voice_data
     assert mixer.voice_data["bass"].gain == 0.4
     # Buses restored
-    assert mixer.get_bus("verb") is not None
+    assert mixer.get_node("verb") is not None
     # Master restored
     assert mixer.master == 0.8
 
@@ -3246,7 +3246,7 @@ def test_input_calls_start_input_and_creates_voice() -> None:
     session.start_input.assert_called_once_with(1)
 
     # A voice named "mic" exists with type_id "adc_input"
-    voice = mixer.get_voice("mic")
+    voice = mixer.get_node("mic")
     assert voice is not None
     assert voice.type_id == "adc_input"
     assert voice.gain == 0.4
@@ -3270,7 +3270,7 @@ def test_input_default_name_and_channel() -> None:
     mixer.input()
 
     session.start_input.assert_called_once_with(0)
-    assert mixer.get_voice("mic") is not None
+    assert mixer.get_node("mic") is not None
 
 
 def test_input_appears_in_graph_ir() -> None:
@@ -3472,8 +3472,8 @@ def test_unified_node_source_and_effect_in_same_dict() -> None:
     mixer.node("verb", "faust:verb", gain=0.3)
 
     # Both should be findable as nodes
-    assert mixer.get_voice("bass") is not None or mixer.get_bus("bass") is not None
-    assert mixer.get_voice("verb") is not None or mixer.get_bus("verb") is not None
+    assert mixer.get_node("bass") is not None or mixer.get_node("bass") is not None
+    assert mixer.get_node("verb") is not None or mixer.get_node("verb") is not None
 
 
 def test_connect_any_node_to_any_node() -> None:

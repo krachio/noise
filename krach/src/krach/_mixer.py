@@ -830,10 +830,6 @@ class VoiceMixer:
         """Look up a node by name, or None if not found."""
         return self._nodes.get(name)
 
-    def get_voice(self, name: str) -> Node | None:
-        """Backward compat — same as get_node."""
-        return self._nodes.get(name)
-
     def get_ctrl(self, node: str, param: str) -> float:
         """Get the last-set value for a node's control parameter."""
         return self._ctrl_values.get(f"{node}/{param}", 0.0)
@@ -841,10 +837,6 @@ class VoiceMixer:
     def is_muted(self, name: str) -> bool:
         """Check if a node is currently muted."""
         return name in self._muted
-
-    def get_bus(self, name: str) -> Node | None:
-        """Backward compat — same as get_node."""
-        return self._nodes.get(name)
 
     @property
     def voice_data(self) -> dict[str, Node]:
