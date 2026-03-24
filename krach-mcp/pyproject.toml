@@ -1,0 +1,41 @@
+[project]
+name = "krach-mcp"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "mcp",
+    "krach",
+]
+
+[project.scripts]
+krach-mcp = "krach_mcp:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.uv.sources]
+krach = { path = "../krach", editable = true }
+faust-dsl = { path = "../faust-dsl", editable = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/krach_mcp"]
+
+[tool.pyright]
+pythonVersion = "3.13"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1",
+    "pytest>=8",
+    "ruff>=0.15.7",
+]
+
+[tool.ruff]
+line-length = 120
