@@ -91,7 +91,7 @@ def saw(lo: float, hi: float, steps: int = 64) -> Pattern:
 
 
 def rand(lo: float, hi: float, steps: int = 64) -> Pattern:
-    """Random values between lo and hi. Different each cycle."""
+    """Random values between lo and hi. Fixed at build time — same values every cycle."""
     import random as _rng
     atoms = [_ctrl("ctrl", lo + _rng.random() * (hi - lo)) for _ in range(steps)]
     result = atoms[0]

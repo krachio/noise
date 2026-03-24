@@ -183,7 +183,6 @@ class Mixer(MixerInfra):
                 self.gain(prefix, value)
             case UnknownPath(raw):
                 warnings.warn(f"kr['{raw}'] = {value}: no node named '{raw}'", stacklevel=2)
-                self.gain(path, value)
 
     def input(self, name: str = "mic", channel: int = 0, gain: float = 0.5) -> NodeHandle:
         """Add an audio input node (ADC).
@@ -511,6 +510,10 @@ class Mixer(MixerInfra):
                 for m in members:
                     send(m, Pattern(bind_voice(pn, m)))
             case UnknownPath(raw):
+                warnings.warn(
+                    f"play('{raw}', ...): no node named '{raw}' — pattern sent but may produce no audio",
+                    stacklevel=2,
+                )
                 if "/" in raw:
                     slot = f"_ctrl_{raw.replace('/', '_')}"
                     send(slot, Pattern(bind_ctrl(pn, raw)))

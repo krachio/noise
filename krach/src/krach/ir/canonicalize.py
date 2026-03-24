@@ -127,4 +127,4 @@ def _params_key(params: PrimitiveParams) -> tuple[object, ...]:
         case FeedbackParams(body_graph=bg, feedback_input_index=idx, free_var_signals=fvs):
             return ("feedback", _structural_key(bg), idx, tuple(s.id for s in fvs))
         case _:
-            return ("unknown", str(params))
+            raise TypeError(f"unhandled PrimitiveParams in _params_key: {type(params).__name__}")
