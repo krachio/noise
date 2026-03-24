@@ -268,7 +268,11 @@ type LoweringRule = Callable[[LoweringContext, Equation], str]
 
 
 class Primitive:
-    """A registered operation in the faust_dsl IR."""
+    """A registered operation in the faust_dsl IR.
+
+    Equality and hashing are structural, based on (name, stateful).
+    This is required for DspGraph canonicalization and caching.
+    """
 
     __slots__ = ("name", "stateful", "_abstract_eval", "_lowering_rule")
 
@@ -277,6 +281,14 @@ class Primitive:
         self.stateful = stateful
         self._abstract_eval: AbstractEvalRule | None = None
         self._lowering_rule: LoweringRule | None = None
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Primitive):
+            return NotImplemented
+        return self.name == other.name and self.stateful == other.stateful
+
+    def __hash__(self) -> int:
+        return hash((self.name, self.stateful))
 
     def def_abstract_eval[F: AbstractEvalRule](self, fn: F) -> F:
         self._abstract_eval = fn
