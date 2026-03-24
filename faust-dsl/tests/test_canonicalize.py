@@ -1,0 +1,82 @@
+"""Tests for DspGraph canonicalization — alpha-renaming Signal IDs."""
+
+from __future__ import annotations
+
+from faust_dsl._core import Signal, DspGraph, Precision
+from faust_dsl.transpile import make_graph, control
+from faust_dsl._dsp import sin, delay, feedback
+from faust_dsl._canonicalize import canonicalize, graph_key
+
+
+def test_same_fn_same_canonical_hash() -> None:
+    """Two traces of the same function produce the same canonical hash."""
+    def osc(x: Signal) -> Signal:
+        return sin(x * 440.0)
+
+    g1 = make_graph(osc, num_inputs=1)
+    g2 = make_graph(osc, num_inputs=1)
+    # Raw signal IDs differ between traces
+    assert g1.inputs[0].id != g2.inputs[0].id
+    # Canonical hashes are equal
+    assert graph_key(g1) == graph_key(g2)
+
+
+def test_different_fn_different_hash() -> None:
+    """Different computations produce different hashes."""
+    g1 = make_graph(lambda x: x * 2.0, num_inputs=1)
+    g2 = make_graph(lambda x: x + 2.0, num_inputs=1)
+    assert graph_key(g1) != graph_key(g2)
+
+
+def test_canonical_ids_sequential() -> None:
+    """After canonicalization, signal IDs are sequential starting from 0."""
+    g = make_graph(lambda x: x * 2.0 + 1.0, num_inputs=1)
+    c = canonicalize(g)
+    all_ids: set[int] = set()
+    for s in c.inputs:
+        all_ids.add(s.id)
+    for eqn in c.equations:
+        for s in eqn.inputs:
+            all_ids.add(s.id)
+        for s in eqn.outputs:
+            all_ids.add(s.id)
+    assert all_ids == set(range(len(all_ids)))
+
+
+def test_idempotent() -> None:
+    """Canonicalizing a canonical graph produces the same result."""
+    g = make_graph(lambda x: x * x + 1.0, num_inputs=1)
+    c1 = canonicalize(g)
+    c2 = canonicalize(c1)
+    assert graph_key(c1) == graph_key(c2)
+
+
+def test_control_params_in_hash() -> None:
+    """Controls with different params produce different hashes."""
+    def synth_a() -> Signal:
+        return control("freq", 440.0, 20.0, 20000.0)
+
+    def synth_b() -> Signal:
+        return control("freq", 880.0, 20.0, 20000.0)
+
+    g1 = make_graph(synth_a)
+    g2 = make_graph(synth_b)
+    assert graph_key(g1) != graph_key(g2)
+
+
+def test_same_control_same_hash() -> None:
+    """Same control spec produces same hash across traces."""
+    def synth() -> Signal:
+        return control("freq", 440.0, 20.0, 20000.0)
+
+    g1 = make_graph(synth)
+    g2 = make_graph(synth)
+    assert graph_key(g1) == graph_key(g2)
+
+
+def test_precision_matters() -> None:
+    """Different precision produces different hash."""
+    fn = lambda x: x * 2.0  # noqa: E731
+    g32 = make_graph(fn, num_inputs=1, precision=Precision.FLOAT32)
+    g64 = make_graph(fn, num_inputs=1, precision=Precision.FLOAT64)
+    assert graph_key(g32) != graph_key(g64)
