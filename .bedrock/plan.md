@@ -204,8 +204,21 @@ _mixer.py at 928 lines (50% reduction). 9 extracted modules.
 | Yara | 7 | FIX |
 | Nils | 7 | FIX |
 
-Range: 7-9. Floor risen to 7. 3 reviewers PASS (Tomás, Renzo, Diego).
-_mixer.py at 912 lines. DspSource type, no double-transpile, stale compat removed.
+### Iteration 11 scores
+
+| Reviewer | Score | Verdict |
+|----------|-------|---------|
+| Kira | 8 | FIX |
+| Tomás | 9 | PASS |
+| Suki | 9 | PASS |
+| Renzo | 9 | PASS |
+| Maren | 7 | FIX |
+| Diego | 9 | PASS |
+| Yara | 8 | PASS |
+| Nils | 7 | FIX |
+
+4 at 9 PASS! _mixer.py at 904 lines. Terminology fully updated.
+Remaining: Maren (7, line count) and Nils (7, stale docs).
 
 ### Iteration 2 scores
 
