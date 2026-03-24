@@ -623,7 +623,7 @@ def test_voice_over_poly_cleans_up_poly() -> None:
     # Replace poly with mono voice
     mixer.voice("pad", "faust:mono", gain=0.3)
 
-    v = mixer.voice_data
+    v = mixer.node_data
     assert "pad" in v
     assert v["pad"].count == 1
 
@@ -780,7 +780,7 @@ def test_mute_sets_gain_to_zero() -> None:
 
     mixer.mute("bass")
 
-    assert mixer.voice_data["bass"].gain == 0.0
+    assert mixer.node_data["bass"].gain == 0.0
     session.set_ctrl.assert_called_with("bass/gain", 0.0)
 
 
@@ -798,7 +798,7 @@ def test_unmute_restores_gain() -> None:
     mixer.mute("bass")
     mixer.unmute("bass")
 
-    assert mixer.voice_data["bass"].gain == 0.7
+    assert mixer.node_data["bass"].gain == 0.7
     session.set_ctrl.assert_called_with("bass/gain", 0.7)
 
 
@@ -837,7 +837,7 @@ def test_solo_mutes_others() -> None:
 
     mixer.solo("bass")
 
-    v = mixer.voice_data
+    v = mixer.node_data
     assert v["bass"].gain == 0.5  # unchanged
     assert v["pad"].gain == 0.0   # muted
     assert v["kit"].gain == 0.0   # muted
@@ -860,7 +860,7 @@ def test_solo_poly_voice() -> None:
 
     mixer.solo("pad")
 
-    v = mixer.voice_data
+    v = mixer.node_data
     assert v["bass"].gain == 0.0  # muted
     # Poly parent gain should remain
     assert v["pad"].gain > 0.0
@@ -1033,8 +1033,8 @@ def test_double_mute_preserves_original_gain() -> None:
     mixer.mute("bass")  # second mute should be no-op
     mixer.unmute("bass")
 
-    assert mixer.voice_data["bass"].gain == 0.5, (
-        f"double mute lost original gain: got {mixer.voice_data['bass'].gain}"
+    assert mixer.node_data["bass"].gain == 0.5, (
+        f"double mute lost original gain: got {mixer.node_data['bass'].gain}"
     )
 
 
@@ -1056,8 +1056,8 @@ def test_solo_does_not_clobber_previously_muted_voice() -> None:
     mixer.mute("pad")
     mixer.solo("bass")
     mixer.unmute("pad")
-    assert mixer.voice_data["pad"].gain == 0.4, (
-        f"solo clobbered pad's saved gain: got {mixer.voice_data['pad'].gain}"
+    assert mixer.node_data["pad"].gain == 0.4, (
+        f"solo clobbered pad's saved gain: got {mixer.node_data['pad'].gain}"
     )
 
 
@@ -1105,7 +1105,7 @@ def test_remove_cleans_muted_state() -> None:
 
     mixer.voice("bass", "faust:bass", gain=0.8)
     mixer.unmute("bass")
-    assert mixer.voice_data["bass"].gain == 0.8
+    assert mixer.node_data["bass"].gain == 0.8
 
 
 def test_voice_replace_cleans_muted_state() -> None:
@@ -1123,7 +1123,7 @@ def test_voice_replace_cleans_muted_state() -> None:
     mixer.voice("bass", "faust:bass2", gain=0.7)
 
     mixer.unmute("bass")
-    assert mixer.voice_data["bass"].gain == 0.7
+    assert mixer.node_data["bass"].gain == 0.7
 
 
 def test_poly_replace_cleans_muted_state() -> None:
@@ -1142,7 +1142,7 @@ def test_poly_replace_cleans_muted_state() -> None:
     mixer.voice("pad", "faust:pad", count=3, gain=0.9)
 
     mixer.unmute("pad")
-    assert mixer.voice_data["pad"].gain == 0.9
+    assert mixer.node_data["pad"].gain == 0.9
 
 
 # ── Sprint 13: UNSOLO ─────────────────────────────────────────────────────
@@ -1166,7 +1166,7 @@ def test_unsolo_restores_all_muted_voices() -> None:
     mixer.solo("bass")
     mixer.unsolo()
 
-    v = mixer.voice_data
+    v = mixer.node_data
     assert v["bass"].gain == 0.5
     assert v["pad"].gain == 0.3
     assert v["kit"].gain == 0.8
@@ -1327,7 +1327,7 @@ def test_revoice_cleans_instance_muted_entries() -> None:
 
     # unsolo() should NOT restore stale muted state
     mixer.unsolo()
-    assert mixer.voice_data["pad"].gain == 0.9
+    assert mixer.node_data["pad"].gain == 0.9
 
 
 def test_revoice_fewer_voices_no_crash() -> None:
@@ -2272,7 +2272,7 @@ def test_fade_path_gain() -> None:
     args = session.set_automation.call_args
     assert args[0][1] == "ramp"  # shape
     assert args[1]["one_shot"] is True
-    assert mixer.voice_data["bass"].gain == 0.1
+    assert mixer.node_data["bass"].gain == 0.1
 
 
 def test_fade_path_cutoff() -> None:
@@ -2332,7 +2332,7 @@ def test_voice_count_1_is_mono() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
 
-    v = mixer.voice_data
+    v = mixer.node_data
     assert "bass" in v
     assert v["bass"].count == 1
 
@@ -2350,7 +2350,7 @@ def test_voice_count_gt1_is_poly() -> None:
     })
     mixer.voice("pad", "faust:pad", count=4, gain=0.5)
 
-    v = mixer.voice_data
+    v = mixer.node_data
     assert "pad" in v
     assert v["pad"].count == 4
 
@@ -2402,7 +2402,7 @@ def test_voice_dict_has_no_instances() -> None:
     })
     mixer.voice("pad", "faust:pad", count=4, gain=0.5)
 
-    v = mixer.voice_data
+    v = mixer.node_data
     # Only "pad" — no "pad_v0", "pad_v1", etc.
     assert "pad" in v
     assert "pad_v0" not in v
@@ -3071,11 +3071,11 @@ def test_save_captures_state() -> None:
     mixer.recall("drop")
 
     # After recall, only original voices should exist
-    assert "bass" in mixer.voice_data
-    assert "pad" not in mixer.voice_data
-    assert mixer.voice_data["bass"].gain == 0.4
-    assert mixer.voice_data["bass"].type_id == "faust:bass"
-    assert mixer.voice_data["bass"].controls == ("freq", "gate")
+    assert "bass" in mixer.node_data
+    assert "pad" not in mixer.node_data
+    assert mixer.node_data["bass"].gain == 0.4
+    assert mixer.node_data["bass"].type_id == "faust:bass"
+    assert mixer.node_data["bass"].controls == ("freq", "gate")
     assert mixer.get_node("verb") is not None
     assert mixer.master == 0.8
 
@@ -3110,9 +3110,9 @@ def test_recall_restores_state() -> None:
     mixer.recall("intro")
 
     # Voices restored
-    assert "bass" in mixer.voice_data
-    assert "pad" not in mixer.voice_data
-    assert mixer.voice_data["bass"].gain == 0.4
+    assert "bass" in mixer.node_data
+    assert "pad" not in mixer.node_data
+    assert mixer.node_data["bass"].gain == 0.4
     # Buses restored
     assert mixer.get_node("verb") is not None
     # Master restored

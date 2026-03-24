@@ -170,7 +170,7 @@ def struct(rhythm: Pattern, melody: Pattern) -> Pattern:
 
 
 def build_note(
-    voice_name: str,
+    node_name: str,
     controls: tuple[str, ...],
     pitch: float | None = None,
     vel: float = 1.0,
@@ -178,38 +178,38 @@ def build_note(
 ) -> Pattern:
     """Build a frozen trigger compound for a specific voice."""
     if pitch is not None and "freq" not in controls:
-        raise ValueError(f"voice '{voice_name}' has no 'freq' control — pitch argument ignored")
+        raise ValueError(f"voice '{node_name}' has no 'freq' control — pitch argument ignored")
     if pitch is not None:
-        check_finite(pitch, f"pitch for '{voice_name}'")
+        check_finite(pitch, f"pitch for '{node_name}'")
     if vel != 1.0:
-        check_finite(vel, f"vel for '{voice_name}'")
+        check_finite(vel, f"vel for '{node_name}'")
 
     onset_atoms: list[Pattern] = []
     if pitch is not None and "freq" in controls:
-        onset_atoms.append(_ctrl(f"{voice_name}/freq", pitch))
+        onset_atoms.append(_ctrl(f"{node_name}/freq", pitch))
     if vel != 1.0 and "vel" in controls:
-        onset_atoms.append(_ctrl(f"{voice_name}/vel", vel))
+        onset_atoms.append(_ctrl(f"{node_name}/vel", vel))
     for param, value in params.items():
         if param in controls:
-            onset_atoms.append(_ctrl(f"{voice_name}/{param}", value))
+            onset_atoms.append(_ctrl(f"{node_name}/{param}", value))
     if "gate" in controls:
-        onset_atoms.append(_ctrl(f"{voice_name}/gate", 1.0))
+        onset_atoms.append(_ctrl(f"{node_name}/gate", 1.0))
     if not onset_atoms:
-        raise ValueError(f"voice '{voice_name}' has no triggerable controls")
+        raise ValueError(f"voice '{node_name}' has no triggerable controls")
 
     onset = onset_atoms[0]
     for a in onset_atoms[1:]:
         onset = onset | a
 
     if "gate" in controls:
-        reset = _ctrl(f"{voice_name}/gate", 0.0)
+        reset = _ctrl(f"{node_name}/gate", 0.0)
         return _freeze(onset + reset)
     return _freeze(onset)
 
 
-def build_hit(voice_name: str, param: str) -> Pattern:
+def build_hit(node_name: str, param: str) -> Pattern:
     """Build a frozen trigger compound: trig + reset with guaranteed gap."""
-    label = f"{voice_name}/{param}"
+    label = f"{node_name}/{param}"
     trig = _ctrl(label, 1.0)
     reset = _ctrl(label, 0.0)
     return _freeze(trig + reset)

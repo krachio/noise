@@ -11,7 +11,7 @@ def make_state(**kwargs: object) -> SessionState:
         "nodes": ("oscillator", "dac", "faust:kit"),
         "node_controls": (),
         "in_scope": (),
-        "active_voices": (),
+        "active_nodes": (),
     }
     return SessionState(**{**defaults, **kwargs})  # type: ignore[arg-type]
 

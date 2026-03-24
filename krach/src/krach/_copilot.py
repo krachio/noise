@@ -15,8 +15,8 @@ class SessionState:
     nodes: tuple[str, ...]
     node_controls: tuple[tuple[str, tuple[str, ...]], ...]
     in_scope: tuple[str, ...]
-    active_voices: tuple[tuple[str, str, float, tuple[str, ...]], ...] = ()
-    # (voice_name, type_id, gain, (param1, param2, ...))
+    active_nodes: tuple[tuple[str, str, float, tuple[str, ...]], ...] = ()
+    # (node_name, type_id, gain, (param1, param2, ...))
 
 
 def _load_context() -> str:
@@ -74,9 +74,9 @@ def build_context(state: SessionState) -> str:
         f"- Stopped slots: {list(state.stopped) or 'none'}",
         f"- Loaded nodes: {list(state.nodes)}",
     ]
-    if state.active_voices:
+    if state.active_nodes:
         lines.append("- Active voices (use kr.note/kr.hit/kr.seq with these):")
-        for vname, type_id, gain, params in state.active_voices:
+        for vname, type_id, gain, params in state.active_nodes:
             labels = ", ".join(f"{vname}/{p}" for p in params)
             lines.append(f"  - {vname} ({type_id}, gain={gain}): {labels}")
     if state.node_controls:

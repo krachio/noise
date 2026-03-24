@@ -126,7 +126,7 @@ class MixerInfra:
         return name in self._muted
 
     @property
-    def voice_data(self) -> dict[str, Node]:
+    def node_data(self) -> dict[str, Node]:
         """Read-only snapshot of all nodes as raw Node structs."""
         return dict(self._nodes)
 
@@ -300,11 +300,11 @@ class MixerInfra:
 
     def _fade_path(self, path: str, target: float, bars: int) -> None:
         parts = path.split("/", 1)
-        voice_name, param = parts[0], parts[1]
+        node_name, param = parts[0], parts[1]
         if path in self._ctrl_values:
             current = self._ctrl_values[path]
-        elif param == "gain" and voice_name in self._nodes:
-            current = self._nodes[voice_name].gain
+        elif param == "gain" and node_name in self._nodes:
+            current = self._nodes[node_name].gain
         else:
             current = 0.0
         ctrl_slot = f"_ctrl_{path.replace('/', '_')}"
@@ -314,8 +314,8 @@ class MixerInfra:
         period_secs = beats * 60.0 / max(float(self._session.tempo), 1.0)
         self._session.set_automation(label, "ramp", current, target, period_secs, one_shot=True)
         self._ctrl_values[path] = target
-        if param == "gain" and voice_name in self._nodes:
-            self._nodes[voice_name].gain = target
+        if param == "gain" and node_name in self._nodes:
+            self._nodes[node_name].gain = target
 
     def _fade_node(self, name: str, target: float, bars: int) -> None:
         if name not in self._nodes:

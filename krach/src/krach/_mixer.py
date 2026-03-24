@@ -33,7 +33,6 @@ from krach.patterns import Session
 from krach.patterns.pattern import Pattern
 
 
-
 def _resolve_dsp_source(
     name: str,
     source: DspSource,
@@ -413,7 +412,6 @@ class Mixer(MixerInfra):
     def pattern(self, name: str) -> Pattern | None:
         """Retrieve the last unbound pattern played on a target. None if unplayed."""
         return self._patterns.get(name)
-
 
 
     def bus(

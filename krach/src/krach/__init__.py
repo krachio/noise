@@ -141,8 +141,8 @@ def main() -> None:
             nodes=tuple(kr.node_controls.keys()),
             node_controls=tuple(kr.node_controls.items()),
             in_scope=_user_ns_keys,
-            active_voices=tuple(
-                (name, v.type_id, v.gain, v.controls) for name, v in kr.voice_data.items()
+            active_nodes=tuple(
+                (name, v.type_id, v.gain, v.controls) for name, v in kr.node_data.items()
             ),
         )
 
