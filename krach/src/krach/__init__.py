@@ -5,7 +5,7 @@ import time
 from pathlib import Path
 
 from krach._config import load_config
-from krach._mixer import Mixer
+from krach.mixer import Mixer
 
 
 def _repo_root() -> Path:

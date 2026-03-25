@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from krach._mixer import Mixer
+from krach.mixer import Mixer
 from krach.ir.module import (
     ControlDef,
     ModuleIr,

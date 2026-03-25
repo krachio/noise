@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from krach._mixer import Mixer
+from krach.mixer import Mixer
 
 _session: Mixer | None = None
 
