@@ -97,11 +97,11 @@ kr.mute("drums")
 
 ## Next
 
-### IR consolidation: 10/10 purity (priority: high)
+### IR consolidation: unified graph IR (priority: high)
 
-Unify the two primitive models, make ir/ pure frozen data, fix file
-locations, resolve naming inconsistencies. SignalPrimitive + unified
-RuleRegistry. Extract tracing from ir/signal.py to dsl/trace.py.
+ModuleIr is the top-level jaxpr. NodeDef holds DspGraph (not string).
+Rename dsl/ → signal/, unify Primitive type, extract tracing from ir/.
+DspGraph cached by graph_key — change a pattern, zero DSP recompilation.
 See plan: `~/.claude/plans/ir-consolidation.md`
 
 ### Engine state sync: multi-client support (priority: high)
