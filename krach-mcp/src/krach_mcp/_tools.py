@@ -210,7 +210,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         Call this before making changes to understand the current session.
         """
-        from krach._ir_summary import summarize as _summarize
+        from krach.pattern.summary import summarize as _summarize
 
         kr = get_session()
         lines = [f"tempo={kr.tempo} bpm, meter={kr.meter}, master={kr.master:.2f}"]
@@ -482,7 +482,7 @@ def register_tools(mcp: FastMCP) -> None:
         """
         import json
         import os
-        from krach._module_ir import ModuleIr
+        from krach.ir.module import ModuleIr
         kr = get_session()
         resolved = os.path.expanduser(path)
         try:

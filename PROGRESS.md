@@ -14,24 +14,28 @@ noise/
 └── krach-mcp/         Python — MCP server (22 tools for Claude Code to drive krach)
 ```
 
-faust-dsl merged into krach as `krach.ir.signal`, `krach.dsl.*`, `krach.backends.faust*`.
+### IR architecture (consolidated)
 
-### IR architecture (unified)
+Pure `ir/` layer (7 files + __init__): frozen data, zero runtime imports.
+- **Primitive** (`ir/primitive.py`): shared frozen dataclass, both domains
+- **Signal IR** (`ir/signal.py`): `Signal`, `Equation`, `DspGraph`, typed params
+- **Pattern IR** (`ir/pattern.py`): `PatternPrimitive` (= Primitive alias), `PatternNode`
+- **Module IR** (`ir/module.py`): `ModuleIr`, `NodeDef(source: DspGraph | str)`, `RouteDef`
+- **Values** (`ir/values.py`): `Note`, `Cc`, `Osc`, `Control`, `Value`
+- **Canonicalize** (`ir/canonicalize.py`): `canonicalize()`, `graph_key()`, `module_key()`
+- **Registry** (`ir/registry.py`): generic `RuleRegistry[P, R]`
 
-Three typed IRs, each domain-specific:
-- **Signal IR** (`krach.ir.signal`): `SignalPrimitive`, `SignalEqn`, `DspGraph` — flat DAG, data flows forward
-- **Pattern IR** (`krach.ir.pattern`): `PatternPrimitive`, `PatternNode` — tree, nesting IS temporal semantics
-- **Module IR** (`krach._module_ir`): `ModuleIr`, `NodeDef`, `RouteDef`, `PatternDef` — flat record
-
-Pattern primitives use per-primitive rule registration (serialize). Generic `fold`/`fold_with_state` for tree traversal. `DspGraph` has canonicalization + structural hashing for cache keys.
+Tracing runtime in `signal/trace.py` (TraceContext, bind, coerce_to_signal).
+Rules registered via RuleRegistry: abstract_eval in `signal/primitives.py`, lowering in `backends/faust_lowering.py`.
+DspGraph cached by `graph_key` (structural hash). `NodeDef.source` holds `DspGraph` directly — Faust is derived, not canonical.
 
 ### Test counts
 - audio-engine: 163 Rust tests
 - audio-faust: 29 Rust tests
 - pattern-engine: 172 Rust tests
 - krach-engine: 25 Rust tests
-- krach: 710 Python tests
-- **Total: 1099 tests**, all green. Pyright strict clean.
+- krach: 729 Python tests
+- **Total: 1118 tests**, all green. Pyright strict clean.
 
 ## Usage
 
@@ -90,19 +94,12 @@ kr.mute("drums")
 - **Scenes**: `kr.save("verse")` / `kr.recall("chorus")` — snapshot + restore
 - **MCP server**: 25 tools for Claude Code to drive krach (node, play, status, capture, export, etc.)
 - **Pattern IR**: PatternNode tree with per-primitive rules, generic fold, structural `__repr__`
-- **DspGraph caching**: `dsp()` LRU keyed by hash of transpiled Faust IR (canonicalized)
+- **DspGraph caching**: `dsp()` LRU keyed by `graph_key` (structural hash of DspGraph)
 - **Module system**: `kr.capture()` → ModuleIr, `kr.instantiate(ir)`, `kr.trace()` proxy
 - **ModuleIr serialization**: `to_dict()` / `from_dict()` — JSON round-trip for persistence
 - **Batch rollback**: all 6 state dicts restored on failed `with kr.batch():`
 
 ## Next
-
-### IR consolidation: unified graph IR (priority: high)
-
-ModuleIr is the top-level jaxpr. NodeDef holds DspGraph (not string).
-Rename dsl/ → signal/, unify Primitive type, extract tracing from ir/.
-DspGraph cached by graph_key — change a pattern, zero DSP recompilation.
-See plan: `~/.claude/plans/ir-consolidation.md`
 
 ### Engine state sync: multi-client support (priority: high)
 
