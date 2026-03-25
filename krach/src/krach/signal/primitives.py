@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from krach.ir.primitive import Primitive
 from krach.ir.signal import (
     ConstParams,
     ControlParams,
@@ -9,10 +10,10 @@ from krach.ir.signal import (
     FaustExprParams,
     FeedbackParams,
     NoParams,
-    Primitive,
     PrimitiveParams,
     SignalType,
 )
+from krach.signal.trace import abstract_eval, active_precision
 
 # ---------------------------------------------------------------------------
 # Primitive instances — arithmetic
@@ -142,7 +143,13 @@ select2_p = Primitive("select2")
 control_p = Primitive("control")
 
 # ---------------------------------------------------------------------------
-# Abstract eval rules
+# faust_expr — inline Faust expression
+# ---------------------------------------------------------------------------
+
+faust_expr_p = Primitive("faust_expr")
+
+# ---------------------------------------------------------------------------
+# Abstract eval rules (registered via RuleRegistry)
 # ---------------------------------------------------------------------------
 
 
@@ -159,24 +166,23 @@ def _binop_eval(a: SignalType, b: SignalType, *, params: PrimitiveParams) -> Sig
     return SignalType(channels=channels, precision=a.precision)
 
 
-add_p.def_abstract_eval(_binop_eval)
-sub_p.def_abstract_eval(_binop_eval)
-mul_p.def_abstract_eval(_binop_eval)
-div_p.def_abstract_eval(_binop_eval)
-mod_p.def_abstract_eval(_binop_eval)
+abstract_eval.register(add_p, _binop_eval)
+abstract_eval.register(sub_p, _binop_eval)
+abstract_eval.register(mul_p, _binop_eval)
+abstract_eval.register(div_p, _binop_eval)
+abstract_eval.register(mod_p, _binop_eval)
 
 for _prim in BINARY_MATH_PRIMS.values():
-    _prim.def_abstract_eval(_binop_eval)
+    abstract_eval.register(_prim, _binop_eval)
 
 
 def _const_eval(*, params: PrimitiveParams) -> SignalType:
     if not isinstance(params, ConstParams):
         raise TypeError(f"Expected ConstParams, got {type(params).__name__}")
-    from krach.ir.signal import active_precision
     return SignalType(precision=active_precision())
 
 
-const_p.def_abstract_eval(_const_eval)
+abstract_eval.register(const_p, _const_eval)
 
 
 def _unary_eval(a: SignalType, *, params: PrimitiveParams) -> SignalType:
@@ -186,7 +192,7 @@ def _unary_eval(a: SignalType, *, params: PrimitiveParams) -> SignalType:
 
 
 for _prim in UNARY_MATH_PRIMS.values():
-    _prim.def_abstract_eval(_unary_eval)
+    abstract_eval.register(_prim, _unary_eval)
 
 
 def _mem_eval(a: SignalType, *, params: PrimitiveParams) -> SignalType:
@@ -195,7 +201,7 @@ def _mem_eval(a: SignalType, *, params: PrimitiveParams) -> SignalType:
     return SignalType(channels=a.channels, precision=a.precision)
 
 
-mem_p.def_abstract_eval(_mem_eval)
+abstract_eval.register(mem_p, _mem_eval)
 
 
 def _delay_eval(
@@ -206,7 +212,7 @@ def _delay_eval(
     return SignalType(channels=sig.channels, precision=sig.precision)
 
 
-delay_p.def_abstract_eval(_delay_eval)
+abstract_eval.register(delay_p, _delay_eval)
 
 
 def _comparison_eval(
@@ -219,7 +225,7 @@ def _comparison_eval(
 
 
 for _prim in COMPARISON_PRIMS.values():
-    _prim.def_abstract_eval(_comparison_eval)
+    abstract_eval.register(_prim, _comparison_eval)
 
 
 def _select2_eval(
@@ -232,7 +238,7 @@ def _select2_eval(
     return SignalType(channels=a.channels, precision=a.precision)
 
 
-select2_p.def_abstract_eval(_select2_eval)
+abstract_eval.register(select2_p, _select2_eval)
 
 
 def _feedback_eval(*, params: PrimitiveParams) -> SignalType:
@@ -242,46 +248,31 @@ def _feedback_eval(*, params: PrimitiveParams) -> SignalType:
     return out_sig.aval
 
 
-feedback_p.def_abstract_eval(_feedback_eval)
+abstract_eval.register(feedback_p, _feedback_eval)
 
 
 def _sr_eval(*, params: PrimitiveParams) -> SignalType:
     if not isinstance(params, NoParams):
         raise TypeError(f"Expected NoParams, got {type(params).__name__}")
-    from krach.ir.signal import active_precision
     return SignalType(precision=active_precision())
 
 
-sr_p.def_abstract_eval(_sr_eval)
-
-
-# ---------------------------------------------------------------------------
-# faust_expr — inline Faust expression
-# ---------------------------------------------------------------------------
-
-faust_expr_p = Primitive("faust_expr")
+abstract_eval.register(sr_p, _sr_eval)
 
 
 def _faust_expr_eval(*args: SignalType, params: PrimitiveParams) -> SignalType:
     if not isinstance(params, FaustExprParams):
         raise TypeError(f"Expected FaustExprParams, got {type(params).__name__}")
-    from krach.ir.signal import active_precision
     return SignalType(precision=active_precision())
 
 
-faust_expr_p.def_abstract_eval(_faust_expr_eval)
-
-
-# ---------------------------------------------------------------------------
-# control — hslider
-# ---------------------------------------------------------------------------
+abstract_eval.register(faust_expr_p, _faust_expr_eval)
 
 
 def _control_eval(*, params: PrimitiveParams) -> SignalType:
     if not isinstance(params, ControlParams):
         raise TypeError(f"Expected ControlParams, got {type(params).__name__}")
-    from krach.ir.signal import active_precision
     return SignalType(precision=active_precision())
 
 
-control_p.def_abstract_eval(_control_eval)
+abstract_eval.register(control_p, _control_eval)

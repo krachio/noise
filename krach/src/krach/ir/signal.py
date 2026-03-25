@@ -1,15 +1,15 @@
-"""Foundation types: Signal, Equation, DspGraph, TraceContext, Primitive."""
+"""Signal IR — pure data types for the DSP computation graph.
+
+Signal, Equation, DspGraph, and typed params. No runtime logic,
+no tracing, no threading. Those live in signal/trace.py.
+"""
 
 from __future__ import annotations
 
-import threading
-from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from krach.backends.faust_lowering import FaustLoweringContext
+from krach.ir.primitive import Primitive as Primitive  # re-export
 
 # ---------------------------------------------------------------------------
 # Precision
@@ -46,7 +46,7 @@ class Signal:
     """Proxy object during tracing.
 
     Represents a signal in the computation graph. Operator overloads
-    dispatch to Primitive.bind() via deferred imports.
+    dispatch to bind() via deferred imports from signal/trace.py.
 
     Attributes:
         aval: Abstract type information (channels, precision).
@@ -67,76 +67,94 @@ class Signal:
         return hash(self.id)
 
     def __add__(self, other: SignalLike) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import add_p
-        return add_p.bind(self, other)
+        return bind(add_p, self, other)
 
     def __radd__(self, other: SignalLike) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import add_p
-        return add_p.bind(other, self)
+        return bind(add_p, other, self)
 
     def __sub__(self, other: SignalLike) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import sub_p
-        return sub_p.bind(self, other)
+        return bind(sub_p, self, other)
 
     def __rsub__(self, other: SignalLike) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import sub_p
-        return sub_p.bind(other, self)
+        return bind(sub_p, other, self)
 
     def __mul__(self, other: SignalLike) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import mul_p
-        return mul_p.bind(self, other)
+        return bind(mul_p, self, other)
 
     def __rmul__(self, other: SignalLike) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import mul_p
-        return mul_p.bind(other, self)
+        return bind(mul_p, other, self)
 
     def __truediv__(self, other: SignalLike) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import div_p
-        return div_p.bind(self, other)
+        return bind(div_p, self, other)
 
     def __rtruediv__(self, other: SignalLike) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import div_p
-        return div_p.bind(other, self)
+        return bind(div_p, other, self)
 
     def __mod__(self, other: SignalLike) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import mod_p
-        return mod_p.bind(self, other)
+        return bind(mod_p, self, other)
 
     def __rmod__(self, other: SignalLike) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import mod_p
-        return mod_p.bind(other, self)
+        return bind(mod_p, other, self)
 
     def __pow__(self, other: SignalLike) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import pow_p
-        return pow_p.bind(self, other)
+        return bind(pow_p, self, other)
 
     def __rpow__(self, other: SignalLike) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import pow_p
-        return pow_p.bind(other, self)
+        return bind(pow_p, other, self)
 
     def __abs__(self) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import abs_p
-        return abs_p.bind(self)
+        return bind(abs_p, self)
 
     def __neg__(self) -> Signal:
+        from krach.signal.trace import bind
         from krach.signal.primitives import mul_p
-        return mul_p.bind(self, -1.0)
+        return bind(mul_p, self, -1.0)
 
     def __gt__(self, other: SignalLike) -> Signal:  # type: ignore[override]
+        from krach.signal.trace import bind
         from krach.signal.primitives import gt_p
-        return gt_p.bind(self, other)
+        return bind(gt_p, self, other)
 
     def __lt__(self, other: SignalLike) -> Signal:  # type: ignore[override]
+        from krach.signal.trace import bind
         from krach.signal.primitives import lt_p
-        return lt_p.bind(self, other)
+        return bind(lt_p, self, other)
 
     def __ge__(self, other: SignalLike) -> Signal:  # type: ignore[override]
+        from krach.signal.trace import bind
         from krach.signal.primitives import ge_p
-        return ge_p.bind(self, other)
+        return bind(ge_p, self, other)
 
     def __le__(self, other: SignalLike) -> Signal:  # type: ignore[override]
+        from krach.signal.trace import bind
         from krach.signal.primitives import le_p
-        return le_p.bind(self, other)
+        return bind(le_p, self, other)
 
     def __bool__(self) -> bool:
         raise TypeError(
@@ -252,200 +270,3 @@ class DspGraph:
             )
         lines.append(f"  in ({out_ids}) }}")
         return "\n".join(lines)
-
-
-# ---------------------------------------------------------------------------
-# Callback types for abstract_eval and lowering
-# ---------------------------------------------------------------------------
-
-type AbstractEvalRule = Callable[..., SignalType]
-type LoweringRule = Callable[[FaustLoweringContext, Equation], str]
-
-
-# ---------------------------------------------------------------------------
-# Primitive — registered operation
-# ---------------------------------------------------------------------------
-
-
-class Primitive:
-    """A registered operation in the Signal IR.
-
-    Equality and hashing are structural, based on (name, stateful).
-    This is required for DspGraph canonicalization and caching.
-    """
-
-    __slots__ = ("name", "stateful", "_abstract_eval", "_lowering_rule")
-
-    def __init__(self, name: str, *, stateful: bool = False) -> None:
-        self.name = name
-        self.stateful = stateful
-        self._abstract_eval: AbstractEvalRule | None = None
-        self._lowering_rule: LoweringRule | None = None
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, Primitive):
-            return NotImplemented
-        return self.name == other.name and self.stateful == other.stateful
-
-    def __hash__(self) -> int:
-        return hash((self.name, self.stateful))
-
-    def def_abstract_eval[F: AbstractEvalRule](self, fn: F) -> F:
-        self._abstract_eval = fn
-        return fn
-
-    def def_lowering[F: LoweringRule](self, fn: F) -> F:
-        self._lowering_rule = fn
-        return fn
-
-    def bind(self, *args: SignalLike, params: PrimitiveParams | None = None) -> Signal:
-        ctx = current_trace()
-        if params is None:
-            params = NoParams()
-
-        coerced = tuple(coerce_to_signal(a) for a in args)
-        avals = tuple(s.aval for s in coerced)
-
-        if self._abstract_eval is None:
-            raise RuntimeError(f"No abstract_eval rule for primitive {self.name!r}")
-        out_aval = self._abstract_eval(*avals, params=params)
-
-        out_signal = ctx.new_signal(out_aval)
-        eqn = Equation(
-            primitive=self,
-            inputs=coerced,
-            outputs=(out_signal,),
-            params=params,
-        )
-        ctx.record(eqn)
-        return out_signal
-
-    def lower(self, ctx: FaustLoweringContext, eqn: Equation) -> str:
-        if self._lowering_rule is None:
-            raise RuntimeError(f"No lowering rule for primitive {self.name!r}")
-        return self._lowering_rule(ctx, eqn)
-
-    def __repr__(self) -> str:
-        return f"Primitive({self.name!r})"
-
-
-# ---------------------------------------------------------------------------
-# TraceContext — thread-safe tracing state
-# ---------------------------------------------------------------------------
-
-_local = threading.local()
-_next_ctx_id = 0
-_next_signal_id = 0
-_id_lock = threading.Lock()
-
-
-def _get_next_ctx_id() -> int:
-    global _next_ctx_id
-    with _id_lock:
-        cid = _next_ctx_id
-        _next_ctx_id += 1
-    return cid
-
-
-def _get_next_signal_id() -> int:
-    global _next_signal_id
-    with _id_lock:
-        sid = _next_signal_id
-        _next_signal_id += 1
-    return sid
-
-
-class TraceContext:
-    """Manages tracing state for one make_graph or feedback invocation."""
-
-    __slots__ = ("ctx_id", "precision", "inputs", "equations")
-
-    def __init__(self, precision: Precision = Precision.FLOAT32) -> None:
-        self.ctx_id = _get_next_ctx_id()
-        self.precision = precision
-        self.inputs: list[Signal] = []
-        self.equations: list[Equation] = []
-
-    def new_signal(self, aval: SignalType | None = None) -> Signal:
-        if aval is None:
-            aval = SignalType(precision=self.precision)
-        return Signal(aval=aval, id=_get_next_signal_id(), owner_id=self.ctx_id)
-
-    def new_input(self, aval: SignalType | None = None) -> Signal:
-        sig = self.new_signal(aval)
-        self.inputs.append(sig)
-        return sig
-
-    def record(self, eqn: Equation) -> None:
-        self.equations.append(eqn)
-
-    def to_graph(self, outputs: tuple[Signal, ...]) -> DspGraph:
-        return DspGraph(
-            inputs=tuple(self.inputs),
-            outputs=outputs,
-            equations=tuple(self.equations),
-            precision=self.precision,
-        )
-
-
-# ---------------------------------------------------------------------------
-# Trace stack management (thread-safe)
-# ---------------------------------------------------------------------------
-
-
-class TraceStackToken:
-    """Opaque token returned by push_trace."""
-    __slots__ = ("prev",)
-
-    def __init__(self, prev: list[TraceContext]) -> None:
-        self.prev = prev
-
-
-def _trace_stack() -> list[TraceContext]:
-    stack: list[TraceContext] | None = getattr(_local, "trace_stack", None)
-    if stack is None:
-        stack = []
-        _local.trace_stack = stack
-    return stack
-
-
-def active_precision() -> Precision:
-    """Return the precision of the active TraceContext, or FLOAT32 if none active."""
-    stack = _trace_stack()
-    if stack:
-        return stack[-1].precision
-    return Precision.FLOAT32
-
-
-def current_trace() -> TraceContext:
-    """Return the active TraceContext."""
-    stack = _trace_stack()
-    if not stack:
-        raise RuntimeError("No active TraceContext. Are you inside transpile()?")
-    return stack[-1]
-
-
-def push_trace(ctx: TraceContext) -> TraceStackToken:
-    """Push a TraceContext onto the thread-local stack."""
-    stack = _trace_stack()
-    token = TraceStackToken(list(stack))
-    stack.append(ctx)
-    return token
-
-
-def pop_trace(token: TraceStackToken) -> None:
-    """Restore the trace stack to the state captured in token."""
-    _local.trace_stack = token.prev
-
-
-# ---------------------------------------------------------------------------
-# Coerce scalars to const Signals
-# ---------------------------------------------------------------------------
-
-
-def coerce_to_signal(val: SignalLike) -> Signal:
-    """Convert a scalar to a const signal, or pass through a Signal."""
-    if isinstance(val, Signal):
-        return val
-    from krach.signal.primitives import const_p
-    return const_p.bind(params=ConstParams(value=float(val)))

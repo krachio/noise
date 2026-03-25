@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from krach.ir.primitive import Primitive
-from krach.pattern.values import Value
+from krach.ir.values import Value
 
 # ── Primitive ────────────────────────────────────────────────────────────
 

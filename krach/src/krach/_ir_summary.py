@@ -19,7 +19,7 @@ from krach.ir.pattern import (
     SlowParams,
     WarpParams,
 )
-from krach.pattern.values import Cc, Control, Note
+from krach.ir.values import Cc, Control, Note
 
 
 def _atom(params: AtomParams) -> str:

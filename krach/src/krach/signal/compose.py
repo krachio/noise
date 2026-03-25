@@ -7,7 +7,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from functools import reduce
 
-from krach.ir.signal import Signal, coerce_to_signal
+from krach.signal.trace import coerce_to_signal
+from krach.ir.signal import Signal
 
 # ---------------------------------------------------------------------------
 # DspFunc — callable wrapper with num_inputs metadata

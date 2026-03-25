@@ -16,15 +16,18 @@ import math
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from krach.ir.primitive import Primitive
 from krach.ir.signal import (
     ConstParams,
     DspGraph,
     Precision,
-    Primitive,
     PrimitiveParams,
     Signal,
     SignalType,
+)
+from krach.signal.trace import (
     TraceContext,
+    bind as _bind,
     pop_trace,
     push_trace,
 )
@@ -62,7 +65,7 @@ def tangent_add(a: Tangent, b: Tangent) -> Tangent:
         return a
     from krach.signal.primitives import add_p
     assert isinstance(a, Signal) and isinstance(b, Signal)
-    return add_p.bind(a, b)
+    return _bind(add_p, a, b)
 
 
 def tangent_mul(primal: Signal, tangent: Tangent) -> Tangent:
@@ -71,7 +74,7 @@ def tangent_mul(primal: Signal, tangent: Tangent) -> Tangent:
         return tangent
     from krach.signal.primitives import mul_p
     assert isinstance(tangent, Signal)
-    return mul_p.bind(primal, tangent)
+    return _bind(mul_p, primal, tangent)
 
 
 def tangent_neg(t: Tangent) -> Tangent:
@@ -80,7 +83,7 @@ def tangent_neg(t: Tangent) -> Tangent:
         return t
     from krach.signal.primitives import mul_p
     assert isinstance(t, Signal)
-    return mul_p.bind(t, -1.0)
+    return _bind(mul_p, t, -1.0)
 
 
 def materialize(t: Tangent) -> Signal:
@@ -88,7 +91,7 @@ def materialize(t: Tangent) -> Signal:
     if isinstance(t, Signal):
         return t
     from krach.signal.primitives import const_p
-    return const_p.bind(params=ConstParams(value=0.0))
+    return _bind(const_p, params=ConstParams(value=0.0))
 
 
 # ---------------------------------------------------------------------------
@@ -252,7 +255,7 @@ def _register_all() -> None:
         tangents: tuple[Tangent, ...],
         params: PrimitiveParams,
     ) -> tuple[Signal, Tangent]:
-        out = prim.bind(params=params)
+        out = _bind(prim, params=params)
         return out, ZeroTangent(aval=out.aval)
 
     register_jvp(const_p, _jvp_const)
@@ -264,7 +267,7 @@ def _register_all() -> None:
         tangents: tuple[Tangent, ...],
         params: PrimitiveParams,
     ) -> tuple[Signal, Tangent]:
-        out = prim.bind(*primals, params=params)
+        out = _bind(prim, *primals, params=params)
         return out, ZeroTangent(aval=out.aval)
 
     register_jvp(sr_p, _jvp_zero_output)
@@ -278,7 +281,7 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         a, b = primals
         da, db = tangents
-        return add_p.bind(a, b), tangent_add(da, db)
+        return _bind(add_p, a, b), tangent_add(da, db)
 
     register_jvp(add_p, _jvp_add)
 
@@ -291,7 +294,7 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         a, b = primals
         da, db = tangents
-        return sub_p.bind(a, b), tangent_add(da, tangent_neg(db))
+        return _bind(sub_p, a, b), tangent_add(da, tangent_neg(db))
 
     register_jvp(sub_p, _jvp_sub)
 
@@ -304,7 +307,7 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         a, b = primals
         da, db = tangents
-        return mul_p.bind(a, b), tangent_add(tangent_mul(b, da), tangent_mul(a, db))
+        return _bind(mul_p, a, b), tangent_add(tangent_mul(b, da), tangent_mul(a, db))
 
     register_jvp(mul_p, _jvp_mul)
 
@@ -317,14 +320,14 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         a, b = primals
         da, db = tangents
-        out = div_p.bind(a, b)
+        out = _bind(div_p, a, b)
         # d(a/b) = (b*da - a*db) / b^2
         num = tangent_add(tangent_mul(b, da), tangent_neg(tangent_mul(a, db)))
         if is_zero(num):
             return out, num
-        b_sq = mul_p.bind(b, b)
+        b_sq = _bind(mul_p, b, b)
         assert isinstance(num, Signal)
-        return out, div_p.bind(num, b_sq)
+        return out, _bind(div_p, num, b_sq)
 
     register_jvp(div_p, _jvp_div)
 
@@ -338,9 +341,9 @@ def _register_all() -> None:
         from krach.signal.primitives import floor_p
         a, b = primals
         da, db = tangents
-        out = prim.bind(a, b)
+        out = _bind(prim, a, b)
         # d(a mod b) = da - floor(a/b) * db
-        floored = floor_p.bind(div_p.bind(a, b))
+        floored = _bind(floor_p, _bind(div_p, a, b))
         t = tangent_add(da, tangent_neg(tangent_mul(floored, db)))
         return out, t
 
@@ -357,8 +360,8 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         (x,) = primals
         (dx,) = tangents
-        out = sin_p.bind(x)
-        return out, tangent_mul(cos_p.bind(x), dx)
+        out = _bind(sin_p, x)
+        return out, tangent_mul(_bind(cos_p, x), dx)
 
     register_jvp(sin_p, _jvp_sin)
 
@@ -371,8 +374,8 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         (x,) = primals
         (dx,) = tangents
-        out = cos_p.bind(x)
-        return out, tangent_neg(tangent_mul(sin_p.bind(x), dx))
+        out = _bind(cos_p, x)
+        return out, tangent_neg(tangent_mul(_bind(sin_p, x), dx))
 
     register_jvp(cos_p, _jvp_cos)
 
@@ -385,14 +388,14 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         (x,) = primals
         (dx,) = tangents
-        out = tan_p.bind(x)
+        out = _bind(tan_p, x)
         # d(tan x) = dx / cos(x)^2
-        cos_x = cos_p.bind(x)
-        cos_sq = mul_p.bind(cos_x, cos_x)
+        cos_x = _bind(cos_p, x)
+        cos_sq = _bind(mul_p, cos_x, cos_x)
         if is_zero(dx):
             return out, dx
         assert isinstance(dx, Signal)
-        return out, div_p.bind(dx, cos_sq)
+        return out, _bind(div_p, dx, cos_sq)
 
     register_jvp(tan_p, _jvp_tan)
 
@@ -405,13 +408,13 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         (x,) = primals
         (dx,) = tangents
-        out = asin_p.bind(x)
+        out = _bind(sin_p, x)
         if is_zero(dx):
             return out, dx
         # d(asin x) = dx / sqrt(1 - x^2)
-        denom = sqrt_p.bind(sub_p.bind(1.0, mul_p.bind(x, x)))
+        denom = _bind(sqrt_p, _bind(sub_p, 1.0, _bind(mul_p, x, x)))
         assert isinstance(dx, Signal)
-        return out, div_p.bind(dx, denom)
+        return out, _bind(div_p, dx, denom)
 
     register_jvp(asin_p, _jvp_asin)
 
@@ -424,13 +427,13 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         (x,) = primals
         (dx,) = tangents
-        out = acos_p.bind(x)
+        out = _bind(cos_p, x)
         if is_zero(dx):
             return out, dx
         # d(acos x) = -dx / sqrt(1 - x^2)
-        denom = sqrt_p.bind(sub_p.bind(1.0, mul_p.bind(x, x)))
+        denom = _bind(sqrt_p, _bind(sub_p, 1.0, _bind(mul_p, x, x)))
         assert isinstance(dx, Signal)
-        return out, mul_p.bind(div_p.bind(dx, denom), -1.0)
+        return out, _bind(mul_p, _bind(div_p, dx, denom), -1.0)
 
     register_jvp(acos_p, _jvp_acos)
 
@@ -443,13 +446,13 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         (x,) = primals
         (dx,) = tangents
-        out = atan_p.bind(x)
+        out = _bind(tan_p, x)
         if is_zero(dx):
             return out, dx
         # d(atan x) = dx / (1 + x^2)
-        denom = add_p.bind(1.0, mul_p.bind(x, x))
+        denom = _bind(add_p, 1.0, _bind(mul_p, x, x))
         assert isinstance(dx, Signal)
-        return out, div_p.bind(dx, denom)
+        return out, _bind(div_p, dx, denom)
 
     register_jvp(atan_p, _jvp_atan)
 
@@ -462,14 +465,14 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         y, x = primals
         dy, dx = tangents
-        out = atan2_p.bind(y, x)
+        out = _bind(atan2_p, y, x)
         # d(atan2(y,x)) = (x*dy - y*dx) / (x^2 + y^2)
         num = tangent_add(tangent_mul(x, dy), tangent_neg(tangent_mul(y, dx)))
         if is_zero(num):
             return out, num
-        denom = add_p.bind(mul_p.bind(x, x), mul_p.bind(y, y))
+        denom = _bind(add_p, _bind(mul_p, x, x), _bind(mul_p, y, y))
         assert isinstance(num, Signal)
-        return out, div_p.bind(num, denom)
+        return out, _bind(div_p, num, denom)
 
     register_jvp(atan2_p, _jvp_atan2)
 
@@ -482,7 +485,7 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         (x,) = primals
         (dx,) = tangents
-        out = exp_p.bind(x)
+        out = _bind(exp_p, x)
         return out, tangent_mul(out, dx)
 
     register_jvp(exp_p, _jvp_exp)
@@ -496,11 +499,11 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         (x,) = primals
         (dx,) = tangents
-        out = log_p.bind(x)
+        out = _bind(log_p, x)
         if is_zero(dx):
             return out, dx
         assert isinstance(dx, Signal)
-        return out, div_p.bind(dx, x)
+        return out, _bind(div_p, dx, x)
 
     register_jvp(log_p, _jvp_log)
 
@@ -513,13 +516,13 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         (x,) = primals
         (dx,) = tangents
-        out = log10_p.bind(x)
+        out = _bind(log10_p, x)
         if is_zero(dx):
             return out, dx
         # d(log10 x) = dx / (x * ln(10))
-        ln10 = const_p.bind(params=ConstParams(value=math.log(10.0)))
+        ln10 = _bind(const_p, params=ConstParams(value=math.log(10.0)))
         assert isinstance(dx, Signal)
-        return out, div_p.bind(dx, mul_p.bind(x, ln10))
+        return out, _bind(div_p, dx, _bind(mul_p, x, ln10))
 
     register_jvp(log10_p, _jvp_log10)
 
@@ -532,12 +535,12 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         (x,) = primals
         (dx,) = tangents
-        out = sqrt_p.bind(x)
+        out = _bind(sqrt_p, x)
         if is_zero(dx):
             return out, dx
         # d(sqrt x) = dx / (2 * sqrt(x))
         assert isinstance(dx, Signal)
-        return out, div_p.bind(dx, mul_p.bind(2.0, out))
+        return out, _bind(div_p, dx, _bind(mul_p, 2.0, out))
 
     register_jvp(sqrt_p, _jvp_sqrt)
 
@@ -550,17 +553,17 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         (x,) = primals
         (dx,) = tangents
-        out = abs_p.bind(x)
+        out = _bind(abs_p, x)
         if is_zero(dx):
             return out, dx
         # sign(x): +1 if x>0, -1 if x<0, 0 if x==0
-        zero = const_p.bind(params=ConstParams(value=0.0))
-        one = const_p.bind(params=ConstParams(value=1.0))
-        neg_one = const_p.bind(params=ConstParams(value=-1.0))
-        sign = select2_p.bind(gt_p.bind(x, zero), neg_one, one)
-        sign = select2_p.bind(lt_p.bind(x, zero), sign, neg_one)
+        zero = _bind(const_p, params=ConstParams(value=0.0))
+        one = _bind(const_p, params=ConstParams(value=1.0))
+        neg_one = _bind(const_p, params=ConstParams(value=-1.0))
+        sign = _bind(select2_p, _bind(gt_p, x, zero), neg_one, one)
+        sign = _bind(select2_p, _bind(lt_p, x, zero), sign, neg_one)
         assert isinstance(dx, Signal)
-        return out, mul_p.bind(sign, dx)
+        return out, _bind(mul_p, sign, dx)
 
     register_jvp(abs_p, _jvp_abs)
 
@@ -583,8 +586,8 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         sel, a, b = primals
         _dsel, da, db = tangents
-        out = select2_p.bind(sel, a, b)
-        t = select2_p.bind(sel, materialize(da), materialize(db))
+        out = _bind(select2_p, sel, a, b)
+        t = _bind(select2_p, sel, materialize(da), materialize(db))
         return out, t
 
     register_jvp(select2_p, _jvp_select2)
@@ -598,9 +601,9 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         a, b = primals
         da, db = tangents
-        out = min_p.bind(a, b)
+        out = _bind(min_p, a, b)
         # tangent comes from the smaller operand
-        t = select2_p.bind(lt_p.bind(a, b), materialize(db), materialize(da))
+        t = _bind(select2_p, _bind(lt_p, a, b), materialize(db), materialize(da))
         return out, t
 
     register_jvp(min_p, _jvp_min)
@@ -614,9 +617,9 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         a, b = primals
         da, db = tangents
-        out = max_p.bind(a, b)
+        out = _bind(max_p, a, b)
         # tangent comes from the larger operand
-        t = select2_p.bind(gt_p.bind(a, b), materialize(db), materialize(da))
+        t = _bind(select2_p, _bind(gt_p, a, b), materialize(db), materialize(da))
         return out, t
 
     register_jvp(max_p, _jvp_max)
@@ -630,10 +633,10 @@ def _register_all() -> None:
     ) -> tuple[Signal, Tangent]:
         a, b = primals
         da, db = tangents
-        out = pow_p.bind(a, b)
+        out = _bind(pow_p, a, b)
         # d(a^b) = b*a^(b-1)*da + a^b*log(a)*db
-        t1 = tangent_mul(mul_p.bind(b, pow_p.bind(a, sub_p.bind(b, 1.0))), da)
-        t2 = tangent_mul(mul_p.bind(out, log_p.bind(a)), db)
+        t1 = tangent_mul(_bind(mul_p, b, _bind(pow_p, a, _bind(sub_p, b, 1.0))), da)
+        t2 = tangent_mul(_bind(mul_p, out, _bind(log_p, a)), db)
         return out, tangent_add(t1, t2)
 
     register_jvp(pow_p, _jvp_pow)

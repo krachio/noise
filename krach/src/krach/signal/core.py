@@ -14,7 +14,10 @@ from krach.ir.signal import (
     NoParams,
     Signal,
     SignalLike,
+)
+from krach.signal.trace import (
     TraceContext,
+    bind,
     current_trace,
     pop_trace,
     push_trace,
@@ -61,7 +64,7 @@ from krach.signal.primitives import (
 
 def sr() -> Signal:
     """Sample rate signal (lowers to ma.SR)."""
-    return sr_p.bind(params=NoParams())
+    return bind(sr_p, params=NoParams())
 
 
 # ---------------------------------------------------------------------------
@@ -81,7 +84,7 @@ def faust_expr(template: str, *inputs: SignalLike) -> Signal:
             f"faust_expr template has placeholder {{{max(placeholders)}}} "
             f"but only {len(inputs)} input(s) provided"
         )
-    return faust_expr_p.bind(*inputs, params=FaustExprParams(template=template))
+    return bind(faust_expr_p, *inputs, params=FaustExprParams(template=template))
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +94,7 @@ def faust_expr(template: str, *inputs: SignalLike) -> Signal:
 
 def mem(sig: Signal) -> Signal:
     """Single-sample delay (z^-1)."""
-    return mem_p.bind(sig, params=NoParams())
+    return bind(mem_p, sig, params=NoParams())
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +104,7 @@ def mem(sig: Signal) -> Signal:
 
 def delay(sig: Signal, n: SignalLike) -> Signal:
     """Variable-length delay line."""
-    return delay_p.bind(sig, n, params=DelayParams())
+    return bind(delay_p, sig, n, params=DelayParams())
 
 
 # ---------------------------------------------------------------------------
@@ -110,59 +113,59 @@ def delay(sig: Signal, n: SignalLike) -> Signal:
 
 
 def sin(sig: Signal) -> Signal:
-    return sin_p.bind(sig, params=NoParams())
+    return bind(sin_p, sig, params=NoParams())
 
 
 def cos(sig: Signal) -> Signal:
-    return cos_p.bind(sig, params=NoParams())
+    return bind(cos_p, sig, params=NoParams())
 
 
 def tan(sig: Signal) -> Signal:
-    return tan_p.bind(sig, params=NoParams())
+    return bind(tan_p, sig, params=NoParams())
 
 
 def asin(sig: Signal) -> Signal:
-    return asin_p.bind(sig, params=NoParams())
+    return bind(asin_p, sig, params=NoParams())
 
 
 def acos(sig: Signal) -> Signal:
-    return acos_p.bind(sig, params=NoParams())
+    return bind(acos_p, sig, params=NoParams())
 
 
 def atan(sig: Signal) -> Signal:
-    return atan_p.bind(sig, params=NoParams())
+    return bind(atan_p, sig, params=NoParams())
 
 
 def exp(sig: Signal) -> Signal:
-    return exp_p.bind(sig, params=NoParams())
+    return bind(exp_p, sig, params=NoParams())
 
 
 def log(sig: Signal) -> Signal:
-    return log_p.bind(sig, params=NoParams())
+    return bind(log_p, sig, params=NoParams())
 
 
 def log10(sig: Signal) -> Signal:
-    return log10_p.bind(sig, params=NoParams())
+    return bind(log10_p, sig, params=NoParams())
 
 
 def sqrt(sig: Signal) -> Signal:
-    return sqrt_p.bind(sig, params=NoParams())
+    return bind(sqrt_p, sig, params=NoParams())
 
 
 def abs_(sig: Signal) -> Signal:
-    return abs_p.bind(sig, params=NoParams())
+    return bind(abs_p, sig, params=NoParams())
 
 
 def floor(sig: Signal) -> Signal:
-    return floor_p.bind(sig, params=NoParams())
+    return bind(floor_p, sig, params=NoParams())
 
 
 def ceil(sig: Signal) -> Signal:
-    return ceil_p.bind(sig, params=NoParams())
+    return bind(ceil_p, sig, params=NoParams())
 
 
 def round_(sig: Signal) -> Signal:
-    return round_p.bind(sig, params=NoParams())
+    return bind(round_p, sig, params=NoParams())
 
 
 # ---------------------------------------------------------------------------
@@ -171,27 +174,27 @@ def round_(sig: Signal) -> Signal:
 
 
 def min_(a: SignalLike, b: SignalLike) -> Signal:
-    return min_p.bind(a, b, params=NoParams())
+    return bind(min_p, a, b, params=NoParams())
 
 
 def max_(a: SignalLike, b: SignalLike) -> Signal:
-    return max_p.bind(a, b, params=NoParams())
+    return bind(max_p, a, b, params=NoParams())
 
 
 def pow_(base: SignalLike, exponent: SignalLike) -> Signal:
-    return pow_p.bind(base, exponent, params=NoParams())
+    return bind(pow_p, base, exponent, params=NoParams())
 
 
 def fmod(a: SignalLike, b: SignalLike) -> Signal:
-    return fmod_p.bind(a, b, params=NoParams())
+    return bind(fmod_p, a, b, params=NoParams())
 
 
 def remainder(a: SignalLike, b: SignalLike) -> Signal:
-    return remainder_p.bind(a, b, params=NoParams())
+    return bind(remainder_p, a, b, params=NoParams())
 
 
 def atan2(y: SignalLike, x: SignalLike) -> Signal:
-    return atan2_p.bind(y, x, params=NoParams())
+    return bind(atan2_p, y, x, params=NoParams())
 
 
 # ---------------------------------------------------------------------------
@@ -200,27 +203,27 @@ def atan2(y: SignalLike, x: SignalLike) -> Signal:
 
 
 def gt(a: SignalLike, b: SignalLike) -> Signal:
-    return gt_p.bind(a, b, params=NoParams())
+    return bind(gt_p, a, b, params=NoParams())
 
 
 def lt(a: SignalLike, b: SignalLike) -> Signal:
-    return lt_p.bind(a, b, params=NoParams())
+    return bind(lt_p, a, b, params=NoParams())
 
 
 def ge(a: SignalLike, b: SignalLike) -> Signal:
-    return ge_p.bind(a, b, params=NoParams())
+    return bind(ge_p, a, b, params=NoParams())
 
 
 def le(a: SignalLike, b: SignalLike) -> Signal:
-    return le_p.bind(a, b, params=NoParams())
+    return bind(le_p, a, b, params=NoParams())
 
 
 def eq(a: SignalLike, b: SignalLike) -> Signal:
-    return eq_p.bind(a, b, params=NoParams())
+    return bind(eq_p, a, b, params=NoParams())
 
 
 def ne(a: SignalLike, b: SignalLike) -> Signal:
-    return ne_p.bind(a, b, params=NoParams())
+    return bind(ne_p, a, b, params=NoParams())
 
 
 # ---------------------------------------------------------------------------
@@ -234,7 +237,7 @@ def select2(
     when_one: SignalLike,
 ) -> Signal:
     """Two-way conditional signal router."""
-    return select2_p.bind(selector, when_zero, when_one, params=NoParams())
+    return bind(select2_p, selector, when_zero, when_one, params=NoParams())
 
 
 # ---------------------------------------------------------------------------

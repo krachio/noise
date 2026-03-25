@@ -21,7 +21,7 @@ from krach.ir.pattern import (
     StackParams,
     WarpParams,
 )
-from krach.pattern.values import dict_to_value, value_to_dict
+from krach.ir.values import dict_to_value, value_to_dict
 from krach.pattern.primitives import (
     atom_p, cat_p, degrade_p, def_serialize, early_p, euclid_p, every_p,
     fast_p, fold, freeze_p, late_p, rev_p, silence_p, slow_p, stack_p, warp_p,

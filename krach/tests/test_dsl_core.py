@@ -7,10 +7,8 @@ from krach.ir.signal import (
     FeedbackParams,
     NoParams,
     Signal,
-    TraceContext,
-    pop_trace,
-    push_trace,
 )
+from krach.signal.trace import TraceContext, pop_trace, push_trace
 from krach.signal.primitives import abs_p, add_p, const_p, feedback_p, mul_p, pow_p
 from krach.signal.core import feedback
 from krach.signal.transpile import make_graph

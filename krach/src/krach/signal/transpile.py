@@ -11,7 +11,10 @@ from krach.ir.signal import (
     DspGraph,
     Precision,
     Signal,
+)
+from krach.signal.trace import (
     TraceContext,
+    bind,
     pop_trace,
     push_trace,
 )
@@ -72,7 +75,7 @@ def control(
     Returns:
         A Signal representing the control input.
     """
-    return control_p.bind(params=ControlParams(name=name, init=init, lo=lo, hi=hi, step=step))
+    return bind(control_p, params=ControlParams(name=name, init=init, lo=lo, hi=hi, step=step))
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +96,7 @@ def make_graph(
     ctx = TraceContext(precision=precision)
     inputs = [ctx.new_input() for _ in range(num_inputs)]
 
-    from krach.ir.signal import coerce_to_signal as _coerce
+    from krach.signal.trace import coerce_to_signal as _coerce
 
     token = push_trace(ctx)
     try:

@@ -19,7 +19,8 @@ from krach.signal.core import (
     sin,
     sqrt,
 )
-from krach.ir.signal import ConstParams, Precision, SignalType, TraceContext, pop_trace, push_trace
+from krach.ir.signal import ConstParams, Precision, SignalType
+from krach.signal.trace import TraceContext, pop_trace, push_trace
 from krach.signal.core import feedback
 from krach.signal.ad import ZeroTangent, is_zero, materialize, tangent_add, tangent_mul, tangent_neg
 from krach.signal.transpile import make_graph

@@ -15,7 +15,7 @@ from krach.signal.transpile import make_graph
 
 def test_constant_fold_removes_equation() -> None:
     # const(2) + const(3) should fold to const(5)
-    from krach.ir.signal import coerce_to_signal
+    from krach.signal.trace import coerce_to_signal
 
     def dsp() -> Signal:
         a = coerce_to_signal(2.0)

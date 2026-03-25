@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from krach.ir.signal import DspGraph
 from krach.backends.faust_lowering import FaustLoweringContext
+from krach.signal.trace import lowering
 
 
 def emit_faust(graph: DspGraph, *, optimize: bool = False) -> str:
@@ -27,7 +28,8 @@ def emit_faust(graph: DspGraph, *, optimize: bool = False) -> str:
         ctx.bind(inp, name)
 
     for eqn in graph.equations:
-        expr = eqn.primitive.lower(ctx, eqn)
+        rule = lowering.lookup(eqn.primitive)
+        expr = rule(ctx, eqn)
         ctx.bind(eqn.outputs[0], expr)
 
     output_expr = ", ".join(ctx.expr(o) for o in graph.outputs)

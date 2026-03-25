@@ -12,9 +12,9 @@ from krach.ir.signal import (
     Equation,
     FaustExprParams,
     FeedbackParams,
-    LoweringRule,
     Signal,
 )
+from krach.signal.trace import lowering
 from krach.signal.primitives import (
     BINARY_MATH_PRIMS,
     COMPARISON_PRIMS,
@@ -68,18 +68,18 @@ class FaustLoweringContext:
 # ---------------------------------------------------------------------------
 
 
-def _make_infix_lower(op: str) -> LoweringRule:
+def _make_infix_lower(op: str):  # noqa: ANN202
     def _lower(ctx: FaustLoweringContext, eqn: Equation) -> str:
         a, b = eqn.inputs
         return f"({ctx.expr(a)} {op} {ctx.expr(b)})"
     return _lower
 
 
-add_p.def_lowering(_make_infix_lower("+"))
-sub_p.def_lowering(_make_infix_lower("-"))
-mul_p.def_lowering(_make_infix_lower("*"))
-div_p.def_lowering(_make_infix_lower("/"))
-mod_p.def_lowering(_make_infix_lower("%"))
+lowering.register(add_p, _make_infix_lower("+"))
+lowering.register(sub_p, _make_infix_lower("-"))
+lowering.register(mul_p, _make_infix_lower("*"))
+lowering.register(div_p, _make_infix_lower("/"))
+lowering.register(mod_p, _make_infix_lower("%"))
 
 
 def _lower_const(_ctx: FaustLoweringContext, eqn: Equation) -> str:
@@ -91,7 +91,7 @@ def _lower_const(_ctx: FaustLoweringContext, eqn: Equation) -> str:
     return str(v)
 
 
-const_p.def_lowering(_lower_const)
+lowering.register(const_p, _lower_const)
 
 
 def _lower_mem(ctx: FaustLoweringContext, eqn: Equation) -> str:
@@ -99,7 +99,7 @@ def _lower_mem(ctx: FaustLoweringContext, eqn: Equation) -> str:
     return f"{ctx.expr(a)}'"
 
 
-mem_p.def_lowering(_lower_mem)
+lowering.register(mem_p, _lower_mem)
 
 
 def _lower_delay(ctx: FaustLoweringContext, eqn: Equation) -> str:
@@ -109,7 +109,7 @@ def _lower_delay(ctx: FaustLoweringContext, eqn: Equation) -> str:
     return f"({ctx.expr(sig)}@{ctx.expr(n)})"
 
 
-delay_p.def_lowering(_lower_delay)
+lowering.register(delay_p, _lower_delay)
 
 
 # ---------------------------------------------------------------------------
@@ -117,7 +117,7 @@ delay_p.def_lowering(_lower_delay)
 # ---------------------------------------------------------------------------
 
 
-def _make_unary_lower(name: str) -> LoweringRule:
+def _make_unary_lower(name: str):  # noqa: ANN202
     def _lower(ctx: FaustLoweringContext, eqn: Equation) -> str:
         (a,) = eqn.inputs
         return f"{name}({ctx.expr(a)})"
@@ -125,7 +125,7 @@ def _make_unary_lower(name: str) -> LoweringRule:
 
 
 for _name, _prim in UNARY_MATH_PRIMS.items():
-    _prim.def_lowering(_make_unary_lower(_name))
+    lowering.register(_prim, _make_unary_lower(_name))
 
 
 # ---------------------------------------------------------------------------
@@ -133,7 +133,7 @@ for _name, _prim in UNARY_MATH_PRIMS.items():
 # ---------------------------------------------------------------------------
 
 
-def _make_binary_func_lower(name: str) -> LoweringRule:
+def _make_binary_func_lower(name: str):  # noqa: ANN202
     def _lower(ctx: FaustLoweringContext, eqn: Equation) -> str:
         a, b = eqn.inputs
         return f"{name}({ctx.expr(a)}, {ctx.expr(b)})"
@@ -141,7 +141,7 @@ def _make_binary_func_lower(name: str) -> LoweringRule:
 
 
 for _name, _prim in BINARY_MATH_PRIMS.items():
-    _prim.def_lowering(_make_binary_func_lower(_name))
+    lowering.register(_prim, _make_binary_func_lower(_name))
 
 
 # ---------------------------------------------------------------------------
@@ -158,7 +158,7 @@ _COMPARISON_OPS = {
 }
 
 for _name, _prim in COMPARISON_PRIMS.items():
-    _prim.def_lowering(_make_infix_lower(_COMPARISON_OPS[_name]))
+    lowering.register(_prim, _make_infix_lower(_COMPARISON_OPS[_name]))
 
 
 # ---------------------------------------------------------------------------
@@ -171,7 +171,7 @@ def _lower_select2(ctx: FaustLoweringContext, eqn: Equation) -> str:
     return f"select2({ctx.expr(sel)}, {ctx.expr(a)}, {ctx.expr(b)})"
 
 
-select2_p.def_lowering(_lower_select2)
+lowering.register(select2_p, _lower_select2)
 
 
 # ---------------------------------------------------------------------------
@@ -198,7 +198,8 @@ def _lower_feedback(ctx: FaustLoweringContext, eqn: Equation) -> str:
         body_ctx.bind(inp, pname)
 
     for body_eqn in body_graph.equations:
-        expr = body_eqn.primitive.lower(body_ctx, body_eqn)
+        rule = lowering.lookup(body_eqn.primitive)
+        expr = rule(body_ctx, body_eqn)
         body_ctx.bind(body_eqn.outputs[0], expr)
 
     ctx.body_counter = body_ctx.body_counter
@@ -232,7 +233,7 @@ def _lower_feedback(ctx: FaustLoweringContext, eqn: Equation) -> str:
         return f"(({body_name}({call_args})) ~ _ : (!, _))"
 
 
-feedback_p.def_lowering(_lower_feedback)
+lowering.register(feedback_p, _lower_feedback)
 
 
 # ---------------------------------------------------------------------------
@@ -244,7 +245,7 @@ def _lower_sr(_ctx: FaustLoweringContext, _eqn: Equation) -> str:
     return "ma.SR"
 
 
-sr_p.def_lowering(_lower_sr)
+lowering.register(sr_p, _lower_sr)
 
 
 # ---------------------------------------------------------------------------
@@ -265,7 +266,7 @@ def _lower_faust_expr(ctx: FaustLoweringContext, eqn: Equation) -> str:
     return re.sub(r"\{(\d+)\}", _replace, template)
 
 
-faust_expr_p.def_lowering(_lower_faust_expr)
+lowering.register(faust_expr_p, _lower_faust_expr)
 
 
 # ---------------------------------------------------------------------------
@@ -281,12 +282,9 @@ def _lower_control(_ctx: FaustLoweringContext, eqn: Equation) -> str:
         raise TypeError(f"Expected ControlParams, got {type(eqn.params).__name__}")
     p = eqn.params
     hslider = f'hslider("{p.name}", {p.init}, {p.lo}, {p.hi}, {p.step})'
-    # Auto-smooth non-gate parameters to prevent zipper noise at block-rate control.
-    # si.smoo is a one-pole lowpass (~5ms) — eliminates discontinuities while
-    # preserving fast response for musical control changes.
     if any(g in p.name.lower() for g in _GATE_NAMES):
         return hslider
     return f"({hslider} : si.smoo)"
 
 
-control_p.def_lowering(_lower_control)
+lowering.register(control_p, _lower_control)

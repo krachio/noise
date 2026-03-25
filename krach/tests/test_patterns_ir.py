@@ -13,7 +13,7 @@ from krach.backends.pattern_protocol import (
     SetPatternFromZero,
     command_to_json,
 )
-from krach.pattern.values import Note
+from krach.ir.values import Note
 
 
 class TestCommandSerialization:

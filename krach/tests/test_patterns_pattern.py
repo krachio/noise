@@ -12,7 +12,7 @@ from krach.ir.pattern import (
     SlowParams,
     WarpParams,
 )
-from krach.pattern.values import Note
+from krach.ir.values import Note
 from krach.pattern.pattern import cc, note, rest
 
 
@@ -33,7 +33,7 @@ class TestAtomConstructors:
         assert isinstance(p.node.params, SilenceParams)
 
     def test_cc(self) -> None:
-        from krach.pattern.values import Cc
+        from krach.ir.values import Cc
 
         p = cc(74, 127, channel=1)
         assert p.node.primitive.name == "atom"

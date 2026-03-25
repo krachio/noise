@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from krach.ir.pattern import AtomParams, DegradeParams
 from krach.pattern.pattern import note, rest
-from krach.pattern.values import Control
+from krach.ir.values import Control
 from krach._patterns import hit, seq, note as mixer_note, struct, ramp, cat, stack
 
 

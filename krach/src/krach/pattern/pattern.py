@@ -29,7 +29,7 @@ from krach.ir.pattern import (
     StackParams,
     WarpParams,
 )
-from krach.pattern.values import Cc, Control, Note, Osc, OscArg
+from krach.ir.values import Cc, Control, Note, Osc, OscArg
 from krach.pattern.primitives import (
     atom_p, cat_p, degrade_p, early_p, euclid_p, every_p,
     fast_p, freeze_p, late_p, rev_p, silence_p, slow_p, stack_p, warp_p,
