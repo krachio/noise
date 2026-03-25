@@ -18,10 +18,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Protocol
 
-from krach._graph import build_graph_ir, inst_name as _inst_name
-from krach._mininotation import p as _p
-from krach._module_proxy import ModuleProxy
-from krach._types import (
+from krach.graph_builder import build_graph_ir, inst_name as _inst_name
+from krach.pattern.mininotation import p as _p
+from krach.module_proxy import ModuleProxy
+from krach.node_types import (
     ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
     ResolvedSource, UnknownPath, resolve_dsp_source, resolve_path,
 )
@@ -228,16 +228,7 @@ class Mixer:
         return self._session.tempo
 
     @tempo.setter
-    def tempo(self, bpm: float) -> None:
-        self._session.tempo = bpm
-
-    @property
-    def bpm(self) -> float:
-        """Alias for tempo."""
-        return self._session.tempo
-
-    @bpm.setter
-    def bpm(self, value: float) -> None:
+    def tempo(self, value: float) -> None:
         self._session.tempo = value
 
     @property
@@ -458,8 +449,6 @@ class Mixer:
                 self._rebuild()
             case _:
                 return
-
-    remove_bus = remove
 
     def input(self, name: str = "mic", channel: int = 0, gain: float = 0.5) -> NodeHandle:
         """Add an audio input node (ADC)."""
@@ -1085,7 +1074,7 @@ class Mixer:
 
     def export(self, path: str) -> None:
         """Export current session state to a reloadable Python script."""
-        from krach._export import export_session
+        from krach.export import export_session
         try:
             tempo = float(self.tempo)
         except (TypeError, ValueError):

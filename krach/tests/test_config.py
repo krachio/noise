@@ -4,7 +4,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from krach._config import Config, load_config
+from krach.config import Config, load_config
 
 
 def test_default_config_uses_home_krach() -> None:

@@ -7,7 +7,7 @@ Every user-facing string in krach is one of:
 - UnknownPath: no match
 """
 
-from krach._types import Node, NodePath, ControlPath, GroupPath, UnknownPath, parse_dsp_controls, resolve_path
+from krach.node_types import Node, NodePath, ControlPath, GroupPath, UnknownPath, parse_dsp_controls, resolve_path
 
 
 def _nodes(*names: str) -> dict[str, Node]:

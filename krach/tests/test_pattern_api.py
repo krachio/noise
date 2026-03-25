@@ -146,7 +146,7 @@ def test_seq_with_none_produces_rest() -> None:
 def test_end_to_end_mininotation_to_engine_json() -> None:
     """Full path: mini-notation → bind → serialize → JSON → deserialize."""
     import json
-    from krach._mininotation import p
+    from krach.pattern.mininotation import p
     from krach.pattern.bind import bind_voice
     from krach.pattern.serialize import pattern_node_to_dict, dict_to_pattern_node
     from krach.pattern.bind import collect_control_labels

@@ -2,7 +2,7 @@ import pytest
 from krach.ir.pattern import AtomParams
 from krach.ir.values import Control
 
-from krach._mininotation import p
+from krach.pattern.mininotation import p
 
 
 def test_single_hit() -> None:

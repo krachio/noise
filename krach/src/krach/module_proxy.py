@@ -14,7 +14,7 @@ from krach.ir.module import (
     PatternDef,
     RouteDef,
 )
-from krach._types import DspDef, DspSource, dsp
+from krach.node_types import DspDef, DspSource, dsp
 from krach.pattern.pattern import Pattern
 
 

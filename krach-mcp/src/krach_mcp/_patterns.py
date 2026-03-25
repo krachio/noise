@@ -7,7 +7,7 @@ Supports two formats:
 
 from __future__ import annotations
 
-from krach._mininotation import p as _mini_p
+from krach.pattern.mininotation import p as _mini_p
 from krach.pattern.builders import (
     cat, hit, mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square,
     mod_tri, note, ramp, rand, saw, seq, sine, stack, struct,

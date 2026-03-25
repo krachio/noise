@@ -1,6 +1,6 @@
 import pytest
 
-from krach._pitch import NOTES, ftom, midi_to_name, mtof, parse_note
+from krach.pattern.pitch import NOTES, ftom, midi_to_name, mtof, parse_note
 
 
 class TestMtof:
@@ -47,23 +47,23 @@ class TestFtom:
 
 class TestConstants:
     def test_c4_is_60(self) -> None:
-        from krach._pitch import C4
+        from krach.pattern.pitch import C4
         assert C4 == 60
 
     def test_a4_is_69(self) -> None:
-        from krach._pitch import A4
+        from krach.pattern.pitch import A4
         assert A4 == 69
 
     def test_cs4_is_61(self) -> None:
-        from krach._pitch import Cs4
+        from krach.pattern.pitch import Cs4
         assert Cs4 == 61
 
     def test_c0_is_12(self) -> None:
-        from krach._pitch import C0
+        from krach.pattern.pitch import C0
         assert C0 == 12
 
     def test_b8_is_119(self) -> None:
-        from krach._pitch import B8
+        from krach.pattern.pitch import B8
         assert B8 == 119
 
     def test_notes_dict_has_all_names(self) -> None:

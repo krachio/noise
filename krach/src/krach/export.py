@@ -10,7 +10,7 @@ from krach.pattern.pattern import Pattern
 from krach.pattern.serialize import pattern_node_to_dict
 
 if TYPE_CHECKING:
-    from krach._types import Node
+    from krach.node_types import Node
 
 
 def export_session(

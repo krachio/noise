@@ -32,7 +32,7 @@ class SlotState:
 
 
 def _default_socket_path() -> str:
-    from krach._config import load_config
+    from krach.config import load_config
     return str(load_config().socket)
 
 

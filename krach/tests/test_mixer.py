@@ -5,8 +5,8 @@ from krach.ir.values import Control, Osc, Value
 from krach.pattern.pattern import Pattern
 from krach.pattern.primitives import atom_p, fold
 
-from krach._types import Node
-from krach._graph import build_graph_ir
+from krach.node_types import Node
+from krach.graph_builder import build_graph_ir
 from krach.pattern.builders import build_hit, build_note
 
 
@@ -247,7 +247,7 @@ def test_dsp_decorator_captures_source_and_transpiles() -> None:
     from krach.signal.lib.oscillators import sine_osc
     from krach.signal.music.envelopes import adsr
 
-    from krach._types import DspDef, dsp
+    from krach.node_types import DspDef, dsp
 
     @dsp
     def my_synth() -> Signal:
@@ -1525,7 +1525,7 @@ def test_build_graph_ir_no_buses_backward_compatible() -> None:
     assert ir_old == ir_new
 
 
-# ── Commit 3: bus() + send() + remove_bus() ──────────────────────────────────
+# ── Commit 3: bus() + send() + remove() ──────────────────────────────────
 
 
 def test_bus_creates_bus_and_rebuilds() -> None:
@@ -1640,7 +1640,7 @@ def test_remove_voice_cleans_sends() -> None:
     assert "bass_send_verb" not in node_ids
 
 
-def test_remove_bus_cleans_sends_and_wires() -> None:
+def test_remove_cleans_sends_and_wires() -> None:
     from unittest.mock import MagicMock
 
     from krach.mixer import Mixer
@@ -1654,7 +1654,7 @@ def test_remove_bus_cleans_sends_and_wires() -> None:
     mixer.bus("verb", "faust:verb", gain=0.3)
     mixer.send("bass", "verb", level=0.4)
 
-    mixer.remove_bus("verb")
+    mixer.remove("verb")
 
     ir = session.load_graph.call_args.args[0]
     node_ids = {n.id for n in ir.nodes}
@@ -2960,22 +2960,6 @@ def test_master_inf_raises() -> None:
 # ── Stage 1: convenience properties (1.3) ────────────────────────────────────
 
 
-def test_bpm_alias_for_tempo() -> None:
-    """bpm property reads and writes tempo."""
-    from unittest.mock import MagicMock, PropertyMock
-
-    from krach.mixer import Mixer
-
-    session = MagicMock()
-    type(session).tempo = PropertyMock(return_value=128.0)
-
-    mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
-
-    assert mixer.bpm == 128.0
-    mixer.bpm = 140.0
-    type(session).tempo = PropertyMock(return_value=140.0)
-    assert mixer.bpm == 140.0
-
 
 def test_voices_returns_handles() -> None:
     """voices property returns dict of NodeHandles."""
@@ -3349,7 +3333,7 @@ def test_input_default_name_and_channel() -> None:
 
 def test_input_appears_in_graph_ir() -> None:
     """The adc_input node appears in the built graph IR."""
-    from krach._graph import build_graph_ir
+    from krach.graph_builder import build_graph_ir
 
     nodes = {
         "mic": Node("adc_input", 0.5, ()),
@@ -3740,7 +3724,7 @@ def test_mute_single_stores_gain_for_any_node() -> None:
 
 def test_resolve_targets_no_duplicates() -> None:
     """Group resolution returns each match once."""
-    from krach._types import GroupPath, resolve_path, Node
+    from krach.node_types import GroupPath, resolve_path, Node
 
     nodes = {
         "drums/kick": Node(type_id="faust:kick", gain=0.5, controls=("gate",)),
@@ -3764,14 +3748,14 @@ def test_remove_missing_node_is_noop() -> None:
     mixer.remove("nonexistent")  # must not raise
 
 
-def test_remove_bus_missing_is_noop() -> None:
-    """remove_bus() on non-existent bus is a no-op."""
+def test_remove_missing_is_noop() -> None:
+    """remove() on non-existent bus is a no-op."""
     from unittest.mock import MagicMock
     from krach.mixer import Mixer
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
-    mixer.remove_bus("nonexistent")  # must not raise
+    mixer.remove("nonexistent")  # must not raise
 
 
 def test_gain_missing_node_is_noop() -> None:
@@ -3930,7 +3914,7 @@ def test_bus_callable_with_no_audio_inputs_raises() -> None:
     from unittest.mock import MagicMock
     import pytest
     from krach.mixer import Mixer
-    from krach._types import DspDef
+    from krach.node_types import DspDef
 
     from krach.ir.signal import DspGraph
 
@@ -3955,7 +3939,7 @@ def test_node_with_effect_dspdef_routes_to_bus() -> None:
     """node() with a DspDef that has audio inputs creates an effect node."""
     from unittest.mock import MagicMock
     from krach.mixer import Mixer
-    from krach._types import DspDef
+    from krach.node_types import DspDef
     import tempfile
 
     session = MagicMock()

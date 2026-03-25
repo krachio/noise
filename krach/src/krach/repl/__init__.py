@@ -14,10 +14,10 @@ import subprocess
 import time
 from pathlib import Path
 
-from krach._config import load_config
-from krach._mininotation import p as _p
-from krach._pitch import ftom as _ftom, mtof as _mtof, parse_note as _parse_note
-from krach._types import dsp, parse_dsp_controls
+from krach.config import load_config
+from krach.pattern.mininotation import p as _p
+from krach.pattern.pitch import ftom as _ftom, mtof as _mtof, parse_note as _parse_note
+from krach.node_types import dsp, parse_dsp_controls
 from krach.mixer import Mixer
 from krach.pattern.builders import (
     cat, hit, mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square,
@@ -55,7 +55,7 @@ class LiveMixer(Mixer):
     parse_note = staticmethod(_parse_note)
     p = staticmethod(_p)
 
-    _PUBLIC_SETTERS = frozenset({"master", "tempo", "bpm", "meter"})
+    _PUBLIC_SETTERS = frozenset({"master", "tempo", "meter"})
 
     def __setattr__(self, name: str, value: object) -> None:
         if (name.startswith("_")
@@ -184,7 +184,7 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> LiveMi
 
 
 def main() -> None:
-    from krach._pitch import NOTES as _NOTES
+    from krach.pattern.pitch import NOTES as _NOTES
     import krach.dsp as krs
 
     kr = connect()

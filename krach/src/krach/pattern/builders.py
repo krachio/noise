@@ -9,8 +9,8 @@ from __future__ import annotations
 import math
 from typing import Callable
 
-from krach._pitch import mtof as _mtof
-from krach._pitch import parse_note as _parse_note
+from krach.pattern.pitch import mtof as _mtof
+from krach.pattern.pitch import parse_note as _parse_note
 from krach.pattern.pattern import Pattern
 from krach.pattern.pattern import ctrl as _ctrl
 from krach.pattern.pattern import freeze as _freeze

@@ -8,8 +8,8 @@ Library Mixer is tested separately for core API.
 from krach.repl import LiveMixer
 from krach.pattern.builders import note, hit, seq, ramp, mod_sine, mod_tri
 from krach.pattern.builders import mod_ramp, mod_ramp_down, mod_square, mod_exp
-from krach._types import dsp
-from krach._pitch import mtof, ftom, parse_note
+from krach.node_types import dsp
+from krach.pattern.pitch import mtof, ftom, parse_note
 from krach.pattern.pattern import Pattern, rest
 
 
@@ -130,12 +130,12 @@ def test_voicemixer_mod_sine_produces_pattern() -> None:
 
 
 def test_p_is_same_function() -> None:
-    from krach._mininotation import p
+    from krach.pattern.mininotation import p
     assert LiveMixer.p is p  # type: ignore[attr-defined]
 
 
 def test_voicemixer_p_produces_pattern() -> None:
-    from krach._mininotation import p
+    from krach.pattern.mininotation import p
     pat: Pattern = LiveMixer.p("x . x .")  # type: ignore[attr-defined]
     assert pat.node == p("x . x .").node  # type: ignore[reportUnknownMemberType]
 
@@ -200,5 +200,4 @@ def test_setattr_allows_known_properties() -> None:
     mixer = LiveMixer(session=MagicMock(), dsp_dir=Path("/tmp"))
     mixer.master = 0.5  # should not raise
     mixer.tempo = 140.0
-    mixer.bpm = 128.0
     mixer.meter = 3.0

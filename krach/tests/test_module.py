@@ -246,7 +246,7 @@ def test_module_ir_json_round_trip() -> None:
 
 
 def test_proxy_records_nodes() -> None:
-    from krach._module_proxy import ModuleProxy
+    from krach.module_proxy import ModuleProxy
 
     proxy = ModuleProxy()
     proxy.node("bass", "faust:bass", gain=0.3)
@@ -259,7 +259,7 @@ def test_proxy_records_nodes() -> None:
 
 
 def test_proxy_records_routing() -> None:
-    from krach._module_proxy import ModuleProxy
+    from krach.module_proxy import ModuleProxy
 
     proxy = ModuleProxy()
     proxy.node("bass", "faust:bass")
@@ -272,7 +272,7 @@ def test_proxy_records_routing() -> None:
 
 
 def test_proxy_records_transport() -> None:
-    from krach._module_proxy import ModuleProxy
+    from krach.module_proxy import ModuleProxy
 
     proxy = ModuleProxy()
     proxy.tempo = 140
@@ -286,7 +286,7 @@ def test_proxy_records_transport() -> None:
 
 
 def test_proxy_records_controls_and_patterns() -> None:
-    from krach._module_proxy import ModuleProxy
+    from krach.module_proxy import ModuleProxy
     from krach.pattern.pattern import ctrl, freeze
 
     proxy = ModuleProxy()
@@ -303,7 +303,7 @@ def test_proxy_records_controls_and_patterns() -> None:
 
 def test_proxy_to_instantiate_round_trip() -> None:
     """Proxy → ModuleIr → instantiate on a live mixer."""
-    from krach._module_proxy import ModuleProxy
+    from krach.module_proxy import ModuleProxy
 
     proxy = ModuleProxy()
     proxy.node("kick", "faust:kick", gain=0.8)

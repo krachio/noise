@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
-from krach._pitch import midi_to_name
+from krach.pattern.pitch import midi_to_name
 from krach.ir.pattern import (
     AtomParams,
     DegradeParams,
