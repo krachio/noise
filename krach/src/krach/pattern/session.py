@@ -67,16 +67,15 @@ class Session:
         try:
             version_line = self._reader.readline()
             if version_line:
-                import json as _json
-                info = _json.loads(version_line)
-                self._engine_protocol = info.get("protocol", 0)
-        except Exception:
-            self._engine_protocol = 0  # pre-handshake engine
+                info = json.loads(version_line)
+                self._engine_protocol: int = info.get("protocol", 0)
+        except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+            self._engine_protocol = 0
         # Sync transport state from the engine.
         try:
             self.pull()
-        except Exception:
-            pass  # Engine may not support Status yet (older protocol).
+        except (KernelError, ConnectionError, socket.timeout, TypeError):
+            pass  # Engine may not support Status yet.
 
     def disconnect(self) -> None:
         if self._reader is not None:
