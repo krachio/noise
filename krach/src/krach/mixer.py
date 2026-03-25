@@ -21,19 +21,14 @@ from typing import TYPE_CHECKING, Literal, Protocol
 from krach._graph import build_graph_ir, inst_name as _inst_name
 from krach._mininotation import p as _p
 from krach._module_proxy import ModuleProxy
-from krach._pitch import ftom as _ftom, mtof as _mtof, parse_note as _parse_note
 from krach._types import (
     ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
-    ResolvedSource, UnknownPath, dsp, resolve_dsp_source, resolve_path,
+    ResolvedSource, UnknownPath, resolve_dsp_source, resolve_path,
 )
 from krach.ir.module import ControlDef, ModuleIr, MutedDef, NodeDef, PatternDef, RouteDef
 from krach.pattern.bind import bind_ctrl, bind_voice, bind_voice_poly
-from krach.pattern.builders import (
-    cat, check_finite as _check_finite, hit, mod_exp, mod_ramp, mod_ramp_down,
-    mod_sine, mod_square, mod_tri, note, rand, ramp, saw, seq, sine, stack, struct,
-)
+from krach.pattern.builders import check_finite as _check_finite
 from krach.pattern.pattern import Pattern
-from krach.pattern.pattern import rest as _rest
 from krach.pattern.session import SlotState
 
 if TYPE_CHECKING:
@@ -184,48 +179,10 @@ class Mixer:
     with an independent gain stage. Adding/removing nodes rebuilds the audio
     graph transparently. ``gain()`` updates are instant (no rebuild).
 
-    Pattern builders and pitch utilities are exposed as static methods so
-    that ``kr.note()``, ``kr.hit()``, etc. work when ``kr`` is an instance.
+    For REPL convenience (``kr.note()``, ``kr.seq()``, etc.) use
+    ``LiveMixer`` from ``krach.repl`` — it adds static builders and a
+    ``__setattr__`` typo guard.
     """
-
-    # ── Pattern builders (static) ─────────────────────────────────
-    note = staticmethod(note)
-    hit = staticmethod(hit)
-    seq = staticmethod(seq)
-    rest = staticmethod(_rest)
-    ramp = staticmethod(ramp)
-    mod_sine = staticmethod(mod_sine)
-    mod_tri = staticmethod(mod_tri)
-    mod_ramp = staticmethod(mod_ramp)
-    mod_ramp_down = staticmethod(mod_ramp_down)
-    mod_square = staticmethod(mod_square)
-    mod_exp = staticmethod(mod_exp)
-    dsp = staticmethod(dsp)
-    sine = staticmethod(sine)
-    saw = staticmethod(saw)
-    rand = staticmethod(rand)
-    cat = staticmethod(cat)
-    stack = staticmethod(stack)
-    struct = staticmethod(struct)
-    mtof = staticmethod(_mtof)
-    ftom = staticmethod(_ftom)
-    parse_note = staticmethod(_parse_note)
-    p = staticmethod(_p)
-
-    # Settable public properties — __setattr__ rejects unknown public names.
-    _PUBLIC_SETTERS = frozenset({"master", "tempo", "bpm", "meter"})
-
-    def __setattr__(self, name: str, value: object) -> None:
-        if (name.startswith("_")
-            or name in self._PUBLIC_SETTERS
-            or hasattr(type(self), name)
-            or callable(value)):
-            super().__setattr__(name, value)
-        else:
-            raise AttributeError(
-                f"kr has no property {name!r}. "
-                f"Settable properties: {', '.join(sorted(self._PUBLIC_SETTERS))}"
-            )
 
     def __init__(
         self,

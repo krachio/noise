@@ -1,10 +1,11 @@
 """Tests for the kr/krs namespace refactor.
 
 Verifies that pattern builders, pitch utilities, and DSP primitives
-are accessible through Mixer (kr) and krach.dsp (krs).
+are accessible through LiveMixer (REPL kr) and krach.dsp (krs).
+Library Mixer is tested separately for core API.
 """
 
-from krach.mixer import Mixer
+from krach.repl import LiveMixer
 from krach.pattern.builders import note, hit, seq, ramp, mod_sine, mod_tri
 from krach.pattern.builders import mod_ramp, mod_ramp_down, mod_square, mod_exp
 from krach._types import dsp
@@ -12,117 +13,116 @@ from krach._pitch import mtof, ftom, parse_note
 from krach.pattern.pattern import Pattern, rest
 
 
-# ── Pattern builders on Mixer ────────────────────────────────────────────
+# ── Pattern builders on LiveMixer ────────────────────────────────────────
 
 
 def test_note_is_same_function() -> None:
-    assert Mixer.note is note
+    assert LiveMixer.note is note
 
 
 def test_hit_is_same_function() -> None:
-    assert Mixer.hit is hit
+    assert LiveMixer.hit is hit
 
 
 def test_seq_is_same_function() -> None:
-    assert Mixer.seq is seq
+    assert LiveMixer.seq is seq
 
 
 def test_rest_is_same_function() -> None:
-    assert Mixer.rest is rest
+    assert LiveMixer.rest is rest
 
 
 def test_ramp_is_same_function() -> None:
-    assert Mixer.ramp is ramp
+    assert LiveMixer.ramp is ramp
 
 
 def test_mod_sine_is_same_function() -> None:
-    assert Mixer.mod_sine is mod_sine
+    assert LiveMixer.mod_sine is mod_sine
 
 
 def test_mod_tri_is_same_function() -> None:
-    assert Mixer.mod_tri is mod_tri
+    assert LiveMixer.mod_tri is mod_tri
 
 
 def test_mod_ramp_is_same_function() -> None:
-    assert Mixer.mod_ramp is mod_ramp
+    assert LiveMixer.mod_ramp is mod_ramp
 
 
 def test_mod_ramp_down_is_same_function() -> None:
-    assert Mixer.mod_ramp_down is mod_ramp_down
+    assert LiveMixer.mod_ramp_down is mod_ramp_down
 
 
 def test_mod_square_is_same_function() -> None:
-    assert Mixer.mod_square is mod_square
+    assert LiveMixer.mod_square is mod_square
 
 
 def test_mod_exp_is_same_function() -> None:
-    assert Mixer.mod_exp is mod_exp
+    assert LiveMixer.mod_exp is mod_exp
 
 
 def test_dsp_is_same_function() -> None:
-    assert Mixer.dsp is dsp
+    assert LiveMixer.dsp is dsp
 
 
-# ── Pitch utilities on Mixer ─────────────────────────────────────────────
+# ── Pitch utilities on LiveMixer ─────────────────────────────────────────
 
 
 def test_mtof_is_same_function() -> None:
-    assert Mixer.mtof is mtof
+    assert LiveMixer.mtof is mtof
 
 
 def test_ftom_is_same_function() -> None:
-    assert Mixer.ftom is ftom
+    assert LiveMixer.ftom is ftom
 
 
 def test_parse_note_is_same_function() -> None:
-    assert Mixer.parse_note is parse_note
+    assert LiveMixer.parse_note is parse_note
 
 
 # ── Static methods produce correct results ────────────────────────────────────
 
 
 def test_voicemixer_note_produces_pattern() -> None:
-    pat = Mixer.note("C4")
+    pat = LiveMixer.note("C4")
     assert pat is not None
-    # Should produce the same pattern as the free function
     assert pat.node == note("C4").node
 
 
 def test_voicemixer_hit_produces_pattern() -> None:
-    pat = Mixer.hit()
+    pat = LiveMixer.hit()
     assert pat.node == hit().node
 
 
 def test_voicemixer_seq_produces_pattern() -> None:
-    pat = Mixer.seq("A2", "D3", None, "E2")
+    pat = LiveMixer.seq("A2", "D3", None, "E2")
     assert pat.node == seq("A2", "D3", None, "E2").node
 
 
 def test_voicemixer_mtof_converts() -> None:
-    assert Mixer.mtof(69) == 440.0
+    assert LiveMixer.mtof(69) == 440.0
 
 
 def test_voicemixer_ftom_converts() -> None:
-    assert Mixer.ftom(440.0) == 69
+    assert LiveMixer.ftom(440.0) == 69
 
 
 def test_voicemixer_parse_note_converts() -> None:
-    hz = Mixer.parse_note("A4")
+    hz = LiveMixer.parse_note("A4")
     assert hz == 440.0
 
 
 def test_voicemixer_rest_produces_silence() -> None:
-    r = Mixer.rest()
+    r = LiveMixer.rest()
     assert r.node == rest().node
 
 
 def test_voicemixer_ramp_produces_pattern() -> None:
-    pat = Mixer.ramp(0.0, 1.0, steps=4)
+    pat = LiveMixer.ramp(0.0, 1.0, steps=4)
     assert pat.node == ramp(0.0, 1.0, steps=4).node
 
 
 def test_voicemixer_mod_sine_produces_pattern() -> None:
-    pat = Mixer.mod_sine(0.0, 1.0, steps=4)
+    pat = LiveMixer.mod_sine(0.0, 1.0, steps=4)
     assert pat.node == mod_sine(0.0, 1.0, steps=4).node
 
 
@@ -131,12 +131,12 @@ def test_voicemixer_mod_sine_produces_pattern() -> None:
 
 def test_p_is_same_function() -> None:
     from krach._mininotation import p
-    assert Mixer.p is p  # type: ignore[attr-defined]
+    assert LiveMixer.p is p  # type: ignore[attr-defined]
 
 
 def test_voicemixer_p_produces_pattern() -> None:
     from krach._mininotation import p
-    pat: Pattern = Mixer.p("x . x .")  # type: ignore[attr-defined]
+    pat: Pattern = LiveMixer.p("x . x .")  # type: ignore[attr-defined]
     assert pat.node == p("x . x .").node  # type: ignore[reportUnknownMemberType]
 
 
@@ -182,14 +182,14 @@ def test_dsp_module_exports_white_noise() -> None:
     assert krs.white_noise is white_noise
 
 
-# ── __setattr__ guard ────────────────────────────────────────────────────────
+# ── __setattr__ guard (on LiveMixer) ────────────────────────────────────────
 
 
 def test_setattr_rejects_unknown_property() -> None:
     from pathlib import Path
     from unittest.mock import MagicMock
     import pytest
-    mixer = Mixer(session=MagicMock(), dsp_dir=Path("/tmp"))
+    mixer = LiveMixer(session=MagicMock(), dsp_dir=Path("/tmp"))
     with pytest.raises(AttributeError, match="kr has no property 'swing'"):
         mixer.swing = 0.67  # type: ignore[attr-defined]
 
@@ -197,7 +197,7 @@ def test_setattr_rejects_unknown_property() -> None:
 def test_setattr_allows_known_properties() -> None:
     from pathlib import Path
     from unittest.mock import MagicMock
-    mixer = Mixer(session=MagicMock(), dsp_dir=Path("/tmp"))
+    mixer = LiveMixer(session=MagicMock(), dsp_dir=Path("/tmp"))
     mixer.master = 0.5  # should not raise
     mixer.tempo = 140.0
     mixer.bpm = 128.0
