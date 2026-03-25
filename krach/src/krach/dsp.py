@@ -2,10 +2,10 @@
 
 # Core types
 from krach.ir.signal import Signal as Signal
-from krach.dsl.transpile import control as control, transpile as transpile
+from krach.signal.transpile import control as control, transpile as transpile
 
 # Oscillators
-from krach.dsl.lib.oscillators import (
+from krach.signal.lib.oscillators import (
     sine_osc as sine_osc,
     saw as saw,
     square as square,
@@ -13,21 +13,21 @@ from krach.dsl.lib.oscillators import (
 )
 
 # Filters
-from krach.dsl.lib.filters import (
+from krach.signal.lib.filters import (
     lowpass as lowpass,
     highpass as highpass,
     bandpass as bandpass,
 )
 
 # Noise
-from krach.dsl.lib.noise import white_noise as white_noise
+from krach.signal.lib.noise import white_noise as white_noise
 
 # Envelopes + effects
-from krach.dsl.music.envelopes import adsr as adsr
-from krach.dsl.music.effects import reverb as reverb
+from krach.signal.music.envelopes import adsr as adsr
+from krach.signal.music.effects import reverb as reverb
 
 # DSP primitives: delay, memory, feedback, sample rate
-from krach.dsl.core import (
+from krach.signal.core import (
     delay as delay,
     mem as mem,
     feedback as feedback,
@@ -39,7 +39,7 @@ from krach.dsl.core import (
 )
 
 # Math (unary)
-from krach.dsl.core import (
+from krach.signal.core import (
     sin as sin,
     cos as cos,
     tan as tan,
@@ -57,7 +57,7 @@ from krach.dsl.core import (
 )
 
 # Math (binary)
-from krach.dsl.core import (
+from krach.signal.core import (
     min_ as min_,
     max_ as max_,
     pow_ as pow_,

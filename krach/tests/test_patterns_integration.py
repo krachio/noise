@@ -4,7 +4,7 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from krach.patterns import Session, note, rest, fast, thin
+from krach.pattern import Session, note, rest, fast, thin
 
 
 def _stub_ok_response(mock_cls: MagicMock) -> None:
@@ -24,7 +24,7 @@ def _parse_sent(mock_sock: MagicMock) -> list[dict[str, Any]]:
 
 class TestPublicImports:
     def test_all_names_importable(self) -> None:
-        from krach.patterns import (
+        from krach.pattern import (
             KernelError,
             Pattern,
             Session,
@@ -49,7 +49,7 @@ class TestPublicImports:
 
 
 class TestEndToEnd:
-    @patch("krach.patterns.session.socket.socket")
+    @patch("krach.pattern.session.socket.socket")
     def test_multi_slot_session(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -92,7 +92,7 @@ class TestEndToEnd:
         assert inner["op"] == "Cat"
         assert len(inner["children"]) == 3
 
-    @patch("krach.patterns.session.socket.socket")
+    @patch("krach.pattern.session.socket.socket")
     def test_composable_transforms(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -107,7 +107,7 @@ class TestEndToEnd:
         assert pat["child"]["op"] == "Fast"
         assert pat["child"]["child"]["op"] == "Cat"
 
-    @patch("krach.patterns.session.socket.socket")
+    @patch("krach.pattern.session.socket.socket")
     def test_atomic_launch(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -123,7 +123,7 @@ class TestEndToEnd:
         slots = {c["slot"] for c in inner}
         assert slots == {"drums", "melody"}
 
-    @patch("krach.patterns.session.socket.socket")
+    @patch("krach.pattern.session.socket.socket")
     def test_hush_resume_cycle(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         pat = note(60) + note(64)

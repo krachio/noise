@@ -49,7 +49,7 @@ def test_usable_in_set() -> None:
 
 def test_singleton_still_equal() -> None:
     """The existing singletons (add_p, etc.) remain equal to themselves."""
-    from krach.dsl.primitives import add_p, mul_p
+    from krach.signal.primitives import add_p, mul_p
     assert add_p == add_p
     assert add_p != mul_p
     assert hash(add_p) == hash(add_p)

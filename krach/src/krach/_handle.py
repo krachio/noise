@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from krach.patterns.pattern import Pattern
+from krach.pattern.pattern import Pattern
 
 if TYPE_CHECKING:
     from krach._mixer_infra import MixerInfra

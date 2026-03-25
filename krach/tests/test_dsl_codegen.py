@@ -6,8 +6,8 @@ import pytest
 
 from krach.ir.signal import Signal
 from krach.backends.faust_codegen import emit_faust
-from krach.dsl.core import faust_expr, feedback
-from krach.dsl.transpile import make_graph
+from krach.signal.core import faust_expr, feedback
+from krach.signal.transpile import make_graph
 
 
 def test_constant_emits_literal() -> None:

@@ -13,7 +13,7 @@ from krach.ir.signal import (
     PrimitiveParams,
     Signal,
 )
-from krach.dsl.primitives import const_p
+from krach.signal.primitives import const_p
 
 # ---------------------------------------------------------------------------
 # Constant folding

@@ -11,10 +11,10 @@ from typing import Callable
 
 from krach._pitch import mtof as _mtof
 from krach._pitch import parse_note as _parse_note
-from krach.patterns.pattern import Pattern
-from krach.patterns.pattern import ctrl as _ctrl
-from krach.patterns.pattern import freeze as _freeze
-from krach.patterns.pattern import rest as _rest
+from krach.pattern.pattern import Pattern
+from krach.pattern.pattern import ctrl as _ctrl
+from krach.pattern.pattern import freeze as _freeze
+from krach.pattern.pattern import rest as _rest
 
 
 # ── Finite check ──────────────────────────────────────────────────────────────

@@ -33,7 +33,7 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> Mixer:
     Reads configuration from ``~/.krach/config.toml`` (if present).
     Env vars ``NOISE_SOCKET`` and ``NOISE_DSP_DIR`` override config.
     """
-    from krach.patterns import Session
+    from krach.pattern import Session
     from krach._types import parse_dsp_controls
 
     cfg = load_config()

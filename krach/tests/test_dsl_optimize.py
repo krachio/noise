@@ -3,14 +3,14 @@
 from __future__ import annotations
 
 from krach.ir.signal import ConstParams, Signal
-from krach.dsl.optimize import (
+from krach.signal.optimize import (
     common_subexpression_elimination,
     constant_fold,
     dead_code_elimination,
 )
-from krach.dsl.primitives import const_p, mem_p
-from krach.dsl.core import mem
-from krach.dsl.transpile import make_graph
+from krach.signal.primitives import const_p, mem_p
+from krach.signal.core import mem
+from krach.signal.transpile import make_graph
 
 
 def test_constant_fold_removes_equation() -> None:

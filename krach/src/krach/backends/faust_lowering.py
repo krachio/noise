@@ -15,7 +15,7 @@ from krach.ir.signal import (
     LoweringRule,
     Signal,
 )
-from krach.dsl.primitives import (
+from krach.signal.primitives import (
     BINARY_MATH_PRIMS,
     COMPARISON_PRIMS,
     UNARY_MATH_PRIMS,

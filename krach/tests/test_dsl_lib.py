@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from krach.dsl.lib.filters import lowpass
-from krach.dsl.lib.noise import white_noise
-from krach.dsl.lib.oscillators import phasor, sine_osc
-from krach.dsl.lib.utilities import smooth
-from krach.dsl.transpile import transpile
-from krach.dsl.primitives import feedback_p
+from krach.signal.lib.filters import lowpass
+from krach.signal.lib.noise import white_noise
+from krach.signal.lib.oscillators import phasor, sine_osc
+from krach.signal.lib.utilities import smooth
+from krach.signal.transpile import transpile
+from krach.signal.primitives import feedback_p
 
 
 def test_sine_osc_contains_sin() -> None:
@@ -16,7 +16,7 @@ def test_sine_osc_contains_sin() -> None:
 
 
 def test_phasor_uses_feedback() -> None:
-    from krach.dsl.transpile import make_graph
+    from krach.signal.transpile import make_graph
     graph = make_graph(lambda: phasor(440.0))  # type: ignore[arg-type]
     fb_eqns = [e for e in graph.equations if e.primitive is feedback_p]
     assert len(fb_eqns) >= 1

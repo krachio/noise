@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from krach.ir.signal import Signal, SignalLike, coerce_to_signal
-from krach.dsl.core import log10, pow_
+from krach.signal.core import log10, pow_
 
 
 def midi_to_freq(note: SignalLike) -> Signal:
@@ -14,6 +14,6 @@ def midi_to_freq(note: SignalLike) -> Signal:
 
 def freq_to_midi(freq: SignalLike) -> Signal:
     """Convert frequency to MIDI note number: 69 + 12 * log2(freq / 440)."""
-    from krach.dsl.core import max_
+    from krach.signal.core import max_
     f = max_(freq, 1e-30)
     return log10(f / 440.0) / log10(coerce_to_signal(2.0)) * 12.0 + 69.0

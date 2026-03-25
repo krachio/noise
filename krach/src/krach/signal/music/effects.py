@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from krach.ir.signal import Signal, SignalLike, coerce_to_signal
-from krach.dsl.core import delay, faust_expr, feedback, sr
-from krach.dsl.lib.oscillators import sine_osc
+from krach.signal.core import delay, faust_expr, feedback, sr
+from krach.signal.lib.oscillators import sine_osc
 
 
 def echo(

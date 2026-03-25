@@ -7,7 +7,7 @@ from collections.abc import Callable
 import pytest
 
 from krach.ir.signal import DspGraph, Signal
-from krach.dsl.core import (
+from krach.signal.core import (
     abs_,
     ceil,
     cos,
@@ -20,9 +20,9 @@ from krach.dsl.core import (
     sqrt,
 )
 from krach.ir.signal import ConstParams, Precision, SignalType, TraceContext, pop_trace, push_trace
-from krach.dsl.core import feedback
-from krach.dsl.ad import ZeroTangent, is_zero, materialize, tangent_add, tangent_mul, tangent_neg
-from krach.dsl.transpile import make_graph
+from krach.signal.core import feedback
+from krach.signal.ad import ZeroTangent, is_zero, materialize, tangent_add, tangent_mul, tangent_neg
+from krach.signal.transpile import make_graph
 
 
 # ---------------------------------------------------------------------------
@@ -132,7 +132,7 @@ def _finite_diff(fn: DspFn1, x: float, dx: float = 1e-5) -> float:
 
 def _jvp_deriv(fn: DspFn1, x: float) -> float:
     """Compute derivative via jvp at x (tangent input = 1.0)."""
-    from krach.dsl.ad import jvp
+    from krach.signal.ad import jvp
     jvp_g = jvp(fn, num_inputs=1)
     # outputs: [primal, tangent]; inputs: [x, dx]
     return _eval_graph(jvp_g, x, 1.0)[1]
@@ -198,7 +198,7 @@ def test_tangent_add_signal_plus_zero_is_signal() -> None:
 
 
 def test_tangent_add_signal_plus_signal_emits_add_node() -> None:
-    from krach.dsl.primitives import add_p
+    from krach.signal.primitives import add_p
 
     ctx = TraceContext()
     token = push_trace(ctx)
@@ -232,7 +232,7 @@ def test_tangent_mul_zero_tangent_is_zero() -> None:
 
 
 def test_tangent_mul_signal_tangent_emits_mul_node() -> None:
-    from krach.dsl.primitives import mul_p
+    from krach.signal.primitives import mul_p
 
     ctx = TraceContext()
     token = push_trace(ctx)
@@ -281,7 +281,7 @@ def test_materialize_signal_is_identity() -> None:
 
 
 def test_materialize_zero_tangent_emits_const_zero() -> None:
-    from krach.dsl.primitives import const_p
+    from krach.signal.primitives import const_p
 
     ctx = TraceContext()
     token = push_trace(ctx)
@@ -434,7 +434,7 @@ def test_jvp_comparison_tangent_is_zero() -> None:
 
 def test_jvp_wrt_second_input() -> None:
     """d/dy (x + y) at y=3 with x=2 should be 1."""
-    from krach.dsl.ad import jvp
+    from krach.signal.ad import jvp
 
     def fn(x: Signal, y: Signal) -> Signal:
         return x + y
@@ -447,7 +447,7 @@ def test_jvp_wrt_second_input() -> None:
 
 def test_jvp_wrt_all_inputs() -> None:
     """jvp with wrt=None computes directional derivative along tangent vector."""
-    from krach.dsl.ad import jvp
+    from krach.signal.ad import jvp
 
     def fn(x: Signal, y: Signal) -> Signal:
         return x * y
@@ -470,7 +470,7 @@ def test_jvp_wrt_all_inputs() -> None:
 
 
 def test_jvp_mem_raises() -> None:
-    from krach.dsl.ad import jvp
+    from krach.signal.ad import jvp
 
     def fn(x: Signal) -> Signal:
         return mem(x)
@@ -480,7 +480,7 @@ def test_jvp_mem_raises() -> None:
 
 
 def test_jvp_feedback_raises() -> None:
-    from krach.dsl.ad import jvp
+    from krach.signal.ad import jvp
 
     def fn(x: Signal) -> Signal:
         return feedback(lambda fb: x + fb)
@@ -495,7 +495,7 @@ def test_jvp_feedback_raises() -> None:
 
 
 def test_jvp_accepts_faust_graph() -> None:
-    from krach.dsl.ad import jvp
+    from krach.signal.ad import jvp
 
     def fn(x: Signal) -> Signal:
         return x * 2.0

@@ -1,7 +1,7 @@
-from krach.patterns.graph import ConnectionIr, Graph, GraphIr, NodeInstance
-from krach.patterns.pattern import Pattern, cc, note, osc, rest
-from krach.patterns.session import KernelError, Session, SlotState
-from krach.patterns.transform import (
+from krach.pattern.graph import ConnectionIr, Graph, GraphIr, NodeInstance
+from krach.pattern.pattern import Pattern, cc, note, osc, rest
+from krach.pattern.session import KernelError, Session, SlotState
+from krach.pattern.transform import (
     Transform,
     every,
     reverse,

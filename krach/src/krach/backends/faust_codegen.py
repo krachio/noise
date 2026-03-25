@@ -17,7 +17,7 @@ def emit_faust(graph: DspGraph, *, optimize: bool = False) -> str:
         A Faust DSP source string ready for compilation.
     """
     if optimize:
-        from krach.dsl.optimize import optimize_graph
+        from krach.signal.optimize import optimize_graph
         graph = optimize_graph(graph)
 
     ctx = FaustLoweringContext()

@@ -21,8 +21,8 @@ from krach.ir.pattern import (
     StackParams,
     WarpParams,
 )
-from krach.patterns.values import dict_to_value, value_to_dict
-from krach.patterns.primitives import (
+from krach.pattern.values import dict_to_value, value_to_dict
+from krach.pattern.primitives import (
     atom_p, cat_p, degrade_p, def_serialize, early_p, euclid_p, every_p,
     fast_p, fold, freeze_p, late_p, rev_p, silence_p, slow_p, stack_p, warp_p,
 )
@@ -125,7 +125,7 @@ def_serialize(warp_p, _warp_ser)
 
 def pattern_node_to_dict(node: PatternNode) -> dict[str, Any]:
     """Serialize a PatternNode tree to a JSON-friendly dict."""
-    from krach.patterns.primitives import get_serialize_rule
+    from krach.pattern.primitives import get_serialize_rule
     return fold(node, lambda nd, children: get_serialize_rule(nd.primitive)(nd, children))
 
 
@@ -178,6 +178,6 @@ def dict_to_pattern_node(d: dict[str, Any]) -> PatternNode:
 
 # ── Import-time completeness check ──────────────────────────────────────
 
-from krach.patterns.primitives import check_completeness  # noqa: E402
+from krach.pattern.primitives import check_completeness  # noqa: E402
 
 check_completeness()

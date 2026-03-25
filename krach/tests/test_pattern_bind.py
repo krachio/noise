@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from krach.ir.pattern import AtomParams, CatParams, FreezeParams, PatternNode, SilenceParams
-from krach.patterns.bind import (
+from krach.pattern.bind import (
     bind_ctrl, bind_voice, bind_voice_poly,
     collect_control_labels, collect_control_values,
 )
-from krach.patterns.values import Control, Osc, OscFloat, OscInt, OscStr
-from krach.patterns.primitives import atom_p, cat_p, freeze_p, silence_p
+from krach.pattern.values import Control, Osc, OscFloat, OscInt, OscStr
+from krach.pattern.primitives import atom_p, cat_p, freeze_p, silence_p
 
 
 def _ctrl(label: str, value: float) -> PatternNode:

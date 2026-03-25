@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Protocol
 
-from krach.patterns import Graph, GraphIr
+from krach.pattern import Graph, GraphIr
 
 
 def inst_name(name: str, i: int, count: int) -> str:

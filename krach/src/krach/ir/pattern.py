@@ -12,25 +12,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from krach.patterns.values import Value
-
+from krach.ir.primitive import Primitive
+from krach.pattern.values import Value
 
 # ── Primitive ────────────────────────────────────────────────────────────
 
-
-@dataclass(frozen=True, slots=True)
-class PatternPrimitive:
-    """A registered pattern operation. Equality by name."""
-
-    name: str
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, PatternPrimitive):
-            return NotImplemented
-        return self.name == other.name
-
-    def __hash__(self) -> int:
-        return hash(self.name)
+PatternPrimitive = Primitive
 
 
 # ── Params ───────────────────────────────────────────────────────────────

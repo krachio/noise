@@ -17,7 +17,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Union
 
-from krach.dsl.transpile import transpile as _transpile
+from krach.signal.transpile import transpile as _transpile
 
 # Type alias for DSP source parameters: string type_id, DspDef, or callable DSP function.
 # The callable form accepts 0+ Signal args and returns a Signal.

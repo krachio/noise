@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from krach.ir.signal import Signal, Precision
-from krach.dsl.transpile import make_graph, control
-from krach.dsl.core import sin, feedback
+from krach.signal.transpile import make_graph, control
+from krach.signal.core import sin, feedback
 from krach.ir.canonicalize import canonicalize, graph_key
 
 

@@ -13,7 +13,7 @@ from krach.ir.pattern import (
     SilenceParams,
     StackParams,
 )
-from krach.patterns.values import Control, Note
+from krach.pattern.values import Control, Note
 
 
 # ── PatternPrimitive ─────────────────────────────────────────────────────

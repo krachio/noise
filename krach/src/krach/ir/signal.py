@@ -67,75 +67,75 @@ class Signal:
         return hash(self.id)
 
     def __add__(self, other: SignalLike) -> Signal:
-        from krach.dsl.primitives import add_p
+        from krach.signal.primitives import add_p
         return add_p.bind(self, other)
 
     def __radd__(self, other: SignalLike) -> Signal:
-        from krach.dsl.primitives import add_p
+        from krach.signal.primitives import add_p
         return add_p.bind(other, self)
 
     def __sub__(self, other: SignalLike) -> Signal:
-        from krach.dsl.primitives import sub_p
+        from krach.signal.primitives import sub_p
         return sub_p.bind(self, other)
 
     def __rsub__(self, other: SignalLike) -> Signal:
-        from krach.dsl.primitives import sub_p
+        from krach.signal.primitives import sub_p
         return sub_p.bind(other, self)
 
     def __mul__(self, other: SignalLike) -> Signal:
-        from krach.dsl.primitives import mul_p
+        from krach.signal.primitives import mul_p
         return mul_p.bind(self, other)
 
     def __rmul__(self, other: SignalLike) -> Signal:
-        from krach.dsl.primitives import mul_p
+        from krach.signal.primitives import mul_p
         return mul_p.bind(other, self)
 
     def __truediv__(self, other: SignalLike) -> Signal:
-        from krach.dsl.primitives import div_p
+        from krach.signal.primitives import div_p
         return div_p.bind(self, other)
 
     def __rtruediv__(self, other: SignalLike) -> Signal:
-        from krach.dsl.primitives import div_p
+        from krach.signal.primitives import div_p
         return div_p.bind(other, self)
 
     def __mod__(self, other: SignalLike) -> Signal:
-        from krach.dsl.primitives import mod_p
+        from krach.signal.primitives import mod_p
         return mod_p.bind(self, other)
 
     def __rmod__(self, other: SignalLike) -> Signal:
-        from krach.dsl.primitives import mod_p
+        from krach.signal.primitives import mod_p
         return mod_p.bind(other, self)
 
     def __pow__(self, other: SignalLike) -> Signal:
-        from krach.dsl.primitives import pow_p
+        from krach.signal.primitives import pow_p
         return pow_p.bind(self, other)
 
     def __rpow__(self, other: SignalLike) -> Signal:
-        from krach.dsl.primitives import pow_p
+        from krach.signal.primitives import pow_p
         return pow_p.bind(other, self)
 
     def __abs__(self) -> Signal:
-        from krach.dsl.primitives import abs_p
+        from krach.signal.primitives import abs_p
         return abs_p.bind(self)
 
     def __neg__(self) -> Signal:
-        from krach.dsl.primitives import mul_p
+        from krach.signal.primitives import mul_p
         return mul_p.bind(self, -1.0)
 
     def __gt__(self, other: SignalLike) -> Signal:  # type: ignore[override]
-        from krach.dsl.primitives import gt_p
+        from krach.signal.primitives import gt_p
         return gt_p.bind(self, other)
 
     def __lt__(self, other: SignalLike) -> Signal:  # type: ignore[override]
-        from krach.dsl.primitives import lt_p
+        from krach.signal.primitives import lt_p
         return lt_p.bind(self, other)
 
     def __ge__(self, other: SignalLike) -> Signal:  # type: ignore[override]
-        from krach.dsl.primitives import ge_p
+        from krach.signal.primitives import ge_p
         return ge_p.bind(self, other)
 
     def __le__(self, other: SignalLike) -> Signal:  # type: ignore[override]
-        from krach.dsl.primitives import le_p
+        from krach.signal.primitives import le_p
         return le_p.bind(self, other)
 
     def __bool__(self) -> bool:
@@ -447,5 +447,5 @@ def coerce_to_signal(val: SignalLike) -> Signal:
     """Convert a scalar to a const signal, or pass through a Signal."""
     if isinstance(val, Signal):
         return val
-    from krach.dsl.primitives import const_p
+    from krach.signal.primitives import const_p
     return const_p.bind(params=ConstParams(value=float(val)))

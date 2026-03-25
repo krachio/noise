@@ -70,7 +70,7 @@ ClientMessage = SimpleCommand | Batch
 
 
 def _command_to_dict(msg: ClientMessage) -> dict[str, Any]:
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.serialize import pattern_node_to_dict
     match msg:
         case SetPattern(slot, pattern):
             return {"cmd": "SetPattern", "slot": slot, "pattern": pattern_node_to_dict(pattern)}

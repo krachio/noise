@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from krach.patterns.pattern import Pattern, rest
+from krach.pattern.pattern import Pattern, rest
 
 from krach._patterns import hit, note
 

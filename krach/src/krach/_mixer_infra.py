@@ -20,12 +20,12 @@ from krach._patterns import (
 )
 from krach._pitch import ftom as _ftom, mtof as _mtof, parse_note as _parse_note
 from krach._types import ControlPath, GroupPath, Node, NodePath, UnknownPath, dsp, resolve_path
-from krach.patterns.pattern import Pattern
-from krach.patterns.session import SlotState
-from krach.patterns.pattern import rest as _rest
+from krach.pattern.pattern import Pattern
+from krach.pattern.session import SlotState
+from krach.pattern.pattern import rest as _rest
 
 if TYPE_CHECKING:
-    from krach.patterns import Session
+    from krach.pattern import Session
 
 
 class MixerInfra:
@@ -356,7 +356,7 @@ class MixerInfra:
 
     def _warn_unknown_controls(self, name: str, node: Node, pattern: Pattern) -> None:
         """Warn if a pattern references controls not present on the node."""
-        from krach.patterns.bind import collect_control_labels
+        from krach.pattern.bind import collect_control_labels
         labels = collect_control_labels(pattern.node)
         if not labels:
             return
@@ -371,7 +371,7 @@ class MixerInfra:
 
     def _warn_pattern_range(self, node_name: str, param: str, pattern: Pattern) -> None:
         """Warn if a control pattern's values fall outside the declared range."""
-        from krach.patterns.bind import collect_control_values
+        from krach.pattern.bind import collect_control_values
         n = self._nodes.get(node_name)
         if n is None:
             return

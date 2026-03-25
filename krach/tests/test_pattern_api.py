@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from krach.ir.pattern import AtomParams, DegradeParams
-from krach.patterns.pattern import note, rest
-from krach.patterns.values import Control
+from krach.pattern.pattern import note, rest
+from krach.pattern.values import Control
 from krach._patterns import hit, seq, note as mixer_note, struct, ramp, cat, stack
 
 
@@ -147,9 +147,9 @@ def test_end_to_end_mininotation_to_engine_json() -> None:
     """Full path: mini-notation → bind → serialize → JSON → deserialize."""
     import json
     from krach._mininotation import p
-    from krach.patterns.bind import bind_voice
-    from krach.patterns.serialize import pattern_node_to_dict, dict_to_pattern_node
-    from krach.patterns.bind import collect_control_labels
+    from krach.pattern.bind import bind_voice
+    from krach.pattern.serialize import pattern_node_to_dict, dict_to_pattern_node
+    from krach.pattern.bind import collect_control_labels
 
     pat = p("C4 E4 G4").swing(0.67)
     bound = bind_voice(pat.node, "lead")
@@ -184,7 +184,7 @@ def test_ramp_lo_equals_hi() -> None:
     pat = ramp(0.5, 0.5, steps=4)
     assert pat.node.primitive.name == "cat"
     # All values should be 0.5
-    from krach.patterns.bind import collect_control_values
+    from krach.pattern.bind import collect_control_values
     vals = collect_control_values(pat.node)
     assert all(v == 0.5 for v in vals)
 
@@ -215,7 +215,7 @@ def test_mod_ramp_down_first_is_hi() -> None:
 def test_mod_square_two_levels() -> None:
     from krach._patterns import mod_square
     pat = mod_square(0.0, 1.0, steps=4)
-    from krach.patterns.bind import collect_control_values
+    from krach.pattern.bind import collect_control_values
     vals = collect_control_values(pat.node)
     # First half should be hi (1.0), second half lo (0.0)
     assert vals[:2] == [1.0, 1.0]
@@ -234,7 +234,7 @@ def test_mod_exp_starts_at_lo() -> None:
 def test_rand_values_in_range() -> None:
     from krach._patterns import rand as rand_pat
     pat = rand_pat(10.0, 20.0, steps=16)
-    from krach.patterns.bind import collect_control_values
+    from krach.pattern.bind import collect_control_values
     vals = collect_control_values(pat.node)
     assert len(vals) == 16
     assert all(10.0 <= v <= 20.0 for v in vals)

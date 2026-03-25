@@ -13,7 +13,7 @@ from krach._module_ir import (
     PatternDef,
     RouteDef,
 )
-from krach.patterns.pattern import ctrl, freeze
+from krach.pattern.pattern import ctrl, freeze
 
 
 # ── Frozen immutability ──────────────────────────────────────────────────

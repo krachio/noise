@@ -2,7 +2,7 @@
 
 Usage::
 
-    from krach.dsl.ad import jvp
+    from krach.signal.ad import jvp
 
     # Differentiate a single-input graph w.r.t. its input
     jvp_graph = jvp(lambda x: x * x, num_inputs=1)
@@ -28,7 +28,7 @@ from krach.ir.signal import (
     pop_trace,
     push_trace,
 )
-from krach.dsl.compose import DspFunc
+from krach.signal.compose import DspFunc
 
 # ---------------------------------------------------------------------------
 # ZeroTangent — symbolic zero, avoids emitting 0*x nodes
@@ -60,7 +60,7 @@ def tangent_add(a: Tangent, b: Tangent) -> Tangent:
         return b
     if is_zero(b):
         return a
-    from krach.dsl.primitives import add_p
+    from krach.signal.primitives import add_p
     assert isinstance(a, Signal) and isinstance(b, Signal)
     return add_p.bind(a, b)
 
@@ -69,7 +69,7 @@ def tangent_mul(primal: Signal, tangent: Tangent) -> Tangent:
     """Multiply a primal signal by a tangent, short-circuiting on zero."""
     if is_zero(tangent):
         return tangent
-    from krach.dsl.primitives import mul_p
+    from krach.signal.primitives import mul_p
     assert isinstance(tangent, Signal)
     return mul_p.bind(primal, tangent)
 
@@ -78,7 +78,7 @@ def tangent_neg(t: Tangent) -> Tangent:
     """Negate a tangent, short-circuiting on zero."""
     if is_zero(t):
         return t
-    from krach.dsl.primitives import mul_p
+    from krach.signal.primitives import mul_p
     assert isinstance(t, Signal)
     return mul_p.bind(t, -1.0)
 
@@ -87,7 +87,7 @@ def materialize(t: Tangent) -> Signal:
     """Convert a ZeroTangent to const(0.0), or pass through a Signal."""
     if isinstance(t, Signal):
         return t
-    from krach.dsl.primitives import const_p
+    from krach.signal.primitives import const_p
     return const_p.bind(params=ConstParams(value=0.0))
 
 
@@ -224,7 +224,7 @@ def jvp(
     if isinstance(fn_or_graph, DspGraph):
         graph = fn_or_graph
     else:
-        from krach.dsl.transpile import make_graph
+        from krach.signal.transpile import make_graph
         n = num_inputs if num_inputs is not None else 1
         graph = make_graph(fn_or_graph, num_inputs=n, precision=precision)
 
@@ -237,7 +237,7 @@ def jvp(
 
 
 def _register_all() -> None:
-    from krach.dsl.primitives import (
+    from krach.signal.primitives import (
         abs_p, acos_p, add_p, asin_p, atan2_p, atan_p, ceil_p, const_p,
         cos_p, div_p, exp_p, floor_p, fmod_p, gt_p, lt_p,
         log10_p, log_p, max_p, mem_p, min_p, mod_p, mul_p,
@@ -335,7 +335,7 @@ def _register_all() -> None:
         tangents: tuple[Tangent, ...],
         params: PrimitiveParams,
     ) -> tuple[Signal, Tangent]:
-        from krach.dsl.primitives import floor_p
+        from krach.signal.primitives import floor_p
         a, b = primals
         da, db = tangents
         out = prim.bind(a, b)
@@ -570,7 +570,7 @@ def _register_all() -> None:
     register_jvp(round_p, _jvp_zero_output)
 
     # -- comparisons — zero tangent -----------------------------------------
-    from krach.dsl.primitives import COMPARISON_PRIMS
+    from krach.signal.primitives import COMPARISON_PRIMS
     for _prim in COMPARISON_PRIMS.values():
         register_jvp(_prim, _jvp_zero_output)
 
@@ -653,11 +653,11 @@ def _register_all() -> None:
         register_jvp(_prim, _jvp_not_implemented)
 
     # faust_expr — not differentiable
-    from krach.dsl.primitives import faust_expr_p
+    from krach.signal.primitives import faust_expr_p
     register_jvp(faust_expr_p, _jvp_not_implemented)
 
     # control — zero tangent (it's a constant from the AD perspective)
-    from krach.dsl.primitives import control_p
+    from krach.signal.primitives import control_p
     register_jvp(control_p, _jvp_zero_output)
 
 

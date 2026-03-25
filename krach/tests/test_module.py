@@ -190,7 +190,7 @@ def test_module_ir_round_trip_empty() -> None:
 
 
 def test_module_ir_round_trip_full() -> None:
-    from krach.patterns.pattern import ctrl, freeze
+    from krach.pattern.pattern import ctrl, freeze
 
     ir = ModuleIr(
         nodes=(
@@ -287,7 +287,7 @@ def test_proxy_records_transport() -> None:
 
 def test_proxy_records_controls_and_patterns() -> None:
     from krach._module_proxy import ModuleProxy
-    from krach.patterns.pattern import ctrl, freeze
+    from krach.pattern.pattern import ctrl, freeze
 
     proxy = ModuleProxy()
     proxy.node("bass", "faust:bass")
@@ -353,8 +353,8 @@ def test_capture_includes_patterns() -> None:
 def test_instantiate_replays_patterns() -> None:
     """instantiate() must call play() for each PatternDef."""
     from krach.ir.pattern import PatternNode, AtomParams, CatParams, FreezeParams
-    from krach.patterns.values import Control
-    from krach.patterns.primitives import atom_p, cat_p, freeze_p
+    from krach.pattern.values import Control
+    from krach.pattern.primitives import atom_p, cat_p, freeze_p
 
     mixer = _make_mixer()
     # Build a simple gate trigger pattern as PatternNode

@@ -15,7 +15,7 @@ from krach._module_ir import (
     RouteDef,
 )
 from krach._types import DspDef, DspSource, dsp
-from krach.patterns.pattern import Pattern
+from krach.pattern.pattern import Pattern
 
 
 class ModuleProxy:

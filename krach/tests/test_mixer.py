@@ -1,9 +1,9 @@
 from pathlib import Path
 
 from krach.ir.pattern import AtomParams, PatternNode
-from krach.patterns.values import Control, Osc, Value
-from krach.patterns.pattern import Pattern
-from krach.patterns.primitives import atom_p, fold
+from krach.pattern.values import Control, Osc, Value
+from krach.pattern.pattern import Pattern
+from krach.pattern.primitives import atom_p, fold
 
 from krach._types import Node
 from krach._graph import build_graph_ir
@@ -226,7 +226,7 @@ def test_step_combinable_with_add() -> None:
 
 def test_rest_plus_hit_is_two_atoms() -> None:
     """rest() + hit() should be 2 atoms — hit fires at 1/2, not 1/3."""
-    from krach.patterns.pattern import rest
+    from krach.pattern.pattern import rest
     pat = rest() + build_hit("kit", "kick")
     assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 2  # Silence + Freeze
@@ -243,9 +243,9 @@ def test_hit_usable_with_over() -> None:
 
 def test_dsp_decorator_captures_source_and_transpiles() -> None:
     from krach.ir.signal import Signal
-    from krach.dsl.transpile import control
-    from krach.dsl.lib.oscillators import sine_osc
-    from krach.dsl.music.envelopes import adsr
+    from krach.signal.transpile import control
+    from krach.signal.lib.oscillators import sine_osc
+    from krach.signal.music.envelopes import adsr
 
     from krach._types import DspDef, dsp
 
@@ -700,7 +700,7 @@ def test_seq_raises_on_empty() -> None:
 
 def test_seq_produces_bare_params() -> None:
     """Free seq() produces notes with bare param names for later binding."""
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.serialize import pattern_node_to_dict
 
     from krach._patterns import seq
 
@@ -1009,7 +1009,7 @@ def test_note_vel_kwarg_sends_vel_control() -> None:
 
 
 def test_note_vel_default_not_sent() -> None:
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.serialize import pattern_node_to_dict
 
     pat = build_note("bass", ("freq", "gate", "vel"), pitch=55.0)
     ir_json = str(pattern_node_to_dict(pat.node))
@@ -1999,7 +1999,7 @@ def test_mod_send_param_label() -> None:
 
 
 def test_free_note_returns_freeze_with_bare_params() -> None:
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.serialize import pattern_node_to_dict
 
     from krach._patterns import note
 
@@ -2012,7 +2012,7 @@ def test_free_note_returns_freeze_with_bare_params() -> None:
 
 
 def test_free_note_string_pitch() -> None:
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.serialize import pattern_node_to_dict
 
     from krach._patterns import note
 
@@ -2022,7 +2022,7 @@ def test_free_note_string_pitch() -> None:
 
 
 def test_free_note_int_pitch() -> None:
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.serialize import pattern_node_to_dict
 
     from krach._patterns import note
 
@@ -2042,7 +2042,7 @@ def test_free_note_chord() -> None:
 
 
 def test_free_note_vel() -> None:
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.serialize import pattern_node_to_dict
 
     from krach._patterns import note
 
@@ -2052,7 +2052,7 @@ def test_free_note_vel() -> None:
 
 
 def test_free_hit_returns_freeze_with_bare_param() -> None:
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.serialize import pattern_node_to_dict
 
     from krach._patterns import hit
 
@@ -2064,7 +2064,7 @@ def test_free_hit_returns_freeze_with_bare_param() -> None:
 
 
 def test_free_hit_custom_param() -> None:
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.serialize import pattern_node_to_dict
 
     from krach._patterns import hit
 
@@ -2102,8 +2102,8 @@ def test_free_seq_string_pitches() -> None:
 
 
 def test_bind_voice_rewrites_bare_params() -> None:
-    from krach.patterns.bind import bind_voice
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.bind import bind_voice
+    from krach.pattern.serialize import pattern_node_to_dict
 
     from krach._patterns import note
 
@@ -2118,10 +2118,10 @@ def test_bind_voice_rewrites_bare_params() -> None:
 
 def test_bind_voice_skips_already_bound() -> None:
     from krach.ir.pattern import AtomParams, PatternNode
-    from krach.patterns.bind import bind_voice
-    from krach.patterns.values import Osc, OscFloat, OscStr
-    from krach.patterns.primitives import atom_p
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.bind import bind_voice
+    from krach.pattern.values import Osc, OscFloat, OscStr
+    from krach.pattern.primitives import atom_p
+    from krach.pattern.serialize import pattern_node_to_dict
 
     node = PatternNode(atom_p, (), AtomParams(Osc("/audio/set", (OscStr("other/freq"), OscFloat(440.0)))))
     bound = bind_voice(node, "bass")
@@ -2130,8 +2130,8 @@ def test_bind_voice_skips_already_bound() -> None:
 
 
 def test_bind_voice_walks_nested_tree() -> None:
-    from krach.patterns.bind import bind_voice
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.bind import bind_voice
+    from krach.pattern.serialize import pattern_node_to_dict
 
     from krach._patterns import seq
 
@@ -2149,7 +2149,7 @@ def test_bind_voice_walks_nested_tree() -> None:
 def test_play_voice_binds_pattern() -> None:
     from unittest.mock import MagicMock
 
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.serialize import pattern_node_to_dict
 
     from krach._mixer import Mixer
     from krach._patterns import note
@@ -2175,9 +2175,9 @@ def test_play_voice_binds_pattern() -> None:
 def test_play_control_path_binds_ctrl() -> None:
     from unittest.mock import MagicMock
 
-    from krach.patterns.values import OscFloat, OscStr
-    from krach.patterns.pattern import osc
-    from krach.patterns.serialize import pattern_node_to_dict
+    from krach.pattern.values import OscFloat, OscStr
+    from krach.pattern.pattern import osc
+    from krach.pattern.serialize import pattern_node_to_dict
 
     from krach._mixer import Mixer
 

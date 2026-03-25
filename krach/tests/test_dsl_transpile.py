@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from krach.ir.signal import Signal
-from krach.dsl.transpile import control, transpile
+from krach.signal.transpile import control, transpile
 
 
 def test_control_emits_hslider() -> None:

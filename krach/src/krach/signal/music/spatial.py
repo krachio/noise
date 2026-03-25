@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 from krach.ir.signal import Signal, coerce_to_signal
-from krach.dsl.core import cos, sin
+from krach.signal.core import cos, sin
 
 
 def pan(sig: Signal | float | int, pos: Signal | float | int) -> tuple[Signal, Signal]:

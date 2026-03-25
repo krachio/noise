@@ -17,8 +17,8 @@ from krach.backends.pattern_protocol import (
     SetPatternFromZero,
     command_to_json,
 )
-from krach.patterns.graph import GraphIr
-from krach.patterns.pattern import Pattern
+from krach.pattern.graph import GraphIr
+from krach.pattern.pattern import Pattern
 
 
 class KernelError(Exception):

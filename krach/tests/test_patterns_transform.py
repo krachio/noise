@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from krach.patterns.pattern import note
-from krach.patterns.transform import reverse, fast, thin
+from krach.pattern.pattern import note
+from krach.pattern.transform import reverse, fast, thin
 
 
 class TestTransformApplication:

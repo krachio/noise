@@ -12,8 +12,8 @@ from krach.ir.pattern import (
     SilenceParams,
     StackParams,
 )
-from krach.patterns.values import Control
-from krach.patterns.primitives import (
+from krach.pattern.values import Control
+from krach.pattern.primitives import (
     atom_p,
     cat_p,
     fold,
@@ -111,7 +111,7 @@ def test_fold_with_state_threads_left_to_right() -> None:
 
 def test_missing_serialize_rule_raises() -> None:
     """Accessing an unregistered serialize rule raises RuntimeError."""
-    from krach.patterns.primitives import get_serialize_rule
+    from krach.pattern.primitives import get_serialize_rule
     fake_p = PatternPrimitive("nonexistent_op")
     with pytest.raises(RuntimeError, match="No serialize rule"):
         get_serialize_rule(fake_p)
@@ -131,9 +131,9 @@ def test_freeze_stack_allocates_separate_voices() -> None:
     from krach.ir.pattern import (
         AtomParams, CatParams, FreezeParams, PatternNode, StackParams,
     )
-    from krach.patterns.bind import bind_voice_poly, collect_control_labels
-    from krach.patterns.values import Control
-    from krach.patterns.primitives import atom_p, cat_p, freeze_p, stack_p
+    from krach.pattern.bind import bind_voice_poly, collect_control_labels
+    from krach.pattern.values import Control
+    from krach.pattern.primitives import atom_p, cat_p, freeze_p, stack_p
 
     def _ctrl(label: str, value: float) -> PatternNode:
         return PatternNode(atom_p, (), AtomParams(Control(label, value)))

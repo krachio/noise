@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from krach.ir.signal import Signal
-from krach.dsl.core import faust_expr
+from krach.signal.core import faust_expr
 
 
 def white_noise() -> Signal:

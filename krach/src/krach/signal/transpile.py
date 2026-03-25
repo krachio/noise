@@ -15,8 +15,8 @@ from krach.ir.signal import (
     pop_trace,
     push_trace,
 )
-from krach.dsl.primitives import control_p
-from krach.dsl.compose import DspFunc, get_num_inputs
+from krach.signal.primitives import control_p
+from krach.signal.compose import DspFunc, get_num_inputs
 
 # ---------------------------------------------------------------------------
 # Public types
@@ -165,8 +165,8 @@ def transpile(
 
     Example::
 
-        from krach.dsl import transpile, control
-        from krach.dsl.lib import sine_osc
+        from krach.signal.transpile import transpile, control
+        from krach.signal.lib import sine_osc
 
         def synth() -> Signal:
             freq = control("freq", init=440.0, lo=20.0, hi=20000.0)

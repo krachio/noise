@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 from krach.ir.signal import Signal
-from krach.dsl.compose import chain, parallel, split
-from krach.dsl.transpile import make_graph
+from krach.signal.compose import chain, parallel, split
+from krach.signal.transpile import make_graph
 
 
 def test_chain_connects_outputs_to_inputs() -> None:

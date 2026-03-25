@@ -9,12 +9,12 @@ from krach.ir.pattern import (
     EveryParams, FastParams, FreezeParams, LateParams, PatternNode,
     RevParams, SilenceParams, SlowParams, StackParams, WarpParams,
 )
-from krach.patterns.values import Cc, Control, Note, Osc, OscFloat, OscInt, OscStr
-from krach.patterns.primitives import (
+from krach.pattern.values import Cc, Control, Note, Osc, OscFloat, OscInt, OscStr
+from krach.pattern.primitives import (
     atom_p, cat_p, degrade_p, early_p, euclid_p, every_p,
     fast_p, freeze_p, late_p, rev_p, silence_p, slow_p, stack_p, warp_p,
 )
-from krach.patterns.serialize import (
+from krach.pattern.serialize import (
     dict_to_pattern_node, pattern_node_to_dict,
 )
 
@@ -151,13 +151,13 @@ def test_unknown_op_raises() -> None:
 
 
 def test_unknown_value_type_raises() -> None:
-    from krach.patterns.values import dict_to_value
+    from krach.pattern.values import dict_to_value
     with pytest.raises(ValueError, match="unknown value type"):
         dict_to_value({"type": "Bogus"})
 
 
 def test_unknown_osc_arg_raises() -> None:
-    from krach.patterns.values import dict_to_osc_arg
+    from krach.pattern.values import dict_to_osc_arg
     with pytest.raises(ValueError, match="unknown OscArg"):
         dict_to_osc_arg({"Bogus": 1})
 

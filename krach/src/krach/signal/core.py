@@ -19,7 +19,7 @@ from krach.ir.signal import (
     pop_trace,
     push_trace,
 )
-from krach.dsl.primitives import (
+from krach.signal.primitives import (
     abs_p,
     acos_p,
     asin_p,

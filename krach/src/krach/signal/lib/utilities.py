@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from krach.ir.signal import Signal, SignalLike, coerce_to_signal
-from krach.dsl.core import exp, faust_expr, feedback, log10, max_, min_, pow_, sr
+from krach.signal.core import exp, faust_expr, feedback, log10, max_, min_, pow_, sr
 
 
 def db_to_linear(db: SignalLike) -> Signal:

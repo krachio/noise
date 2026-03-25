@@ -6,8 +6,8 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from krach.patterns.pattern import Pattern
-from krach.patterns.serialize import pattern_node_to_dict
+from krach.pattern.pattern import Pattern
+from krach.pattern.serialize import pattern_node_to_dict
 
 if TYPE_CHECKING:
     from krach._types import Node
@@ -29,8 +29,8 @@ def export_session(
     lines: list[str] = [
         '"""Exported krach session."""',
         "import json",
-        "from krach.patterns.pattern import Pattern",
-        "from krach.patterns.serialize import dict_to_pattern_node",
+        "from krach.pattern.pattern import Pattern",
+        "from krach.pattern.serialize import dict_to_pattern_node",
         "import krach.dsp as krs",
         "",
     ]

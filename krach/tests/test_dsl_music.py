@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from krach.ir.signal import Signal
-from krach.dsl.music.effects import reverb
-from krach.dsl.music.envelopes import adsr
-from krach.dsl.music.scales import midi_to_freq
-from krach.dsl.music.spatial import pan
-from krach.dsl.transpile import transpile
+from krach.signal.music.effects import reverb
+from krach.signal.music.envelopes import adsr
+from krach.signal.music.scales import midi_to_freq
+from krach.signal.music.spatial import pan
+from krach.signal.transpile import transpile
 
 
 def test_adsr_in_source() -> None:

@@ -12,7 +12,7 @@ import warnings
 from pathlib import Path
 from typing import Literal
 
-from krach.patterns.bind import bind_ctrl, bind_voice, bind_voice_poly
+from krach.pattern.bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
 from krach._module_ir import ControlDef, ModuleIr, MutedDef, NodeDef, PatternDef, RouteDef
 from krach._module_proxy import ModuleProxy
@@ -23,8 +23,8 @@ from krach._types import (
 from krach._graph import inst_name as _inst_name
 from krach._mixer_infra import MixerInfra
 from krach._patterns import check_finite as _check_finite
-from krach.patterns import Session
-from krach.patterns.pattern import Pattern
+from krach.pattern import Session
+from krach.pattern.pattern import Pattern
 
 
 # ── Mixer ────────────────────────────────────────────────────────────────

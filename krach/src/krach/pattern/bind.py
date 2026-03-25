@@ -9,8 +9,8 @@ from krach.ir.pattern import (
     AtomParams,
     PatternNode,
 )
-from krach.patterns.values import Control, Osc, OscStr
-from krach.patterns.primitives import atom_p, freeze_p, fold, fold_with_state, stack_p
+from krach.pattern.values import Control, Osc, OscStr
+from krach.pattern.primitives import atom_p, freeze_p, fold, fold_with_state, stack_p
 
 
 def bind_voice(node: PatternNode, voice: str) -> PatternNode:

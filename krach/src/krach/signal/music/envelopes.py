@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from krach.ir.signal import Signal, SignalLike, coerce_to_signal
-from krach.dsl.core import faust_expr, feedback, mem, select2
+from krach.signal.core import faust_expr, feedback, mem, select2
 
 
 def decay(rate: SignalLike) -> Signal:

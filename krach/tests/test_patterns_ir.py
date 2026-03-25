@@ -13,13 +13,13 @@ from krach.backends.pattern_protocol import (
     SetPatternFromZero,
     command_to_json,
 )
-from krach.patterns.values import Note
+from krach.pattern.values import Note
 
 
 class TestCommandSerialization:
     def test_set_pattern(self) -> None:
         from krach.ir.pattern import AtomParams, PatternNode
-        from krach.patterns.primitives import atom_p
+        from krach.pattern.primitives import atom_p
         pn = PatternNode(atom_p, (), AtomParams(Note(channel=0, note=60, velocity=100, dur=0.5)))
         cmd = SetPattern(slot="drums", pattern=pn)
         parsed = json.loads(command_to_json(cmd))
@@ -29,7 +29,7 @@ class TestCommandSerialization:
 
     def test_set_pattern_from_zero(self) -> None:
         from krach.ir.pattern import AtomParams, PatternNode
-        from krach.patterns.primitives import atom_p
+        from krach.pattern.primitives import atom_p
         pn = PatternNode(atom_p, (), AtomParams(Note(channel=0, note=60, velocity=100, dur=0.5)))
         cmd = SetPatternFromZero(slot="bass", pattern=pn)
         parsed = json.loads(command_to_json(cmd))
@@ -59,7 +59,7 @@ class TestCommandSerialization:
 
     def test_batch(self) -> None:
         from krach.ir.pattern import AtomParams, PatternNode
-        from krach.patterns.primitives import atom_p
+        from krach.pattern.primitives import atom_p
         pn = PatternNode(atom_p, (), AtomParams(Note(channel=0, note=36, velocity=100, dur=1.0)))
         cmd = Batch(commands=(
             SetPattern(slot="drums", pattern=pn),

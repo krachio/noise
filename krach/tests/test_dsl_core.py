@@ -11,9 +11,9 @@ from krach.ir.signal import (
     pop_trace,
     push_trace,
 )
-from krach.dsl.primitives import abs_p, add_p, const_p, feedback_p, mul_p, pow_p
-from krach.dsl.core import feedback
-from krach.dsl.transpile import make_graph
+from krach.signal.primitives import abs_p, add_p, const_p, feedback_p, mul_p, pow_p
+from krach.signal.core import feedback
+from krach.signal.transpile import make_graph
 
 
 def _make_ctx() -> TraceContext:

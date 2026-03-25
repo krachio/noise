@@ -103,7 +103,7 @@ class ModuleIr:
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-friendly dict."""
-        from krach.patterns.serialize import pattern_node_to_dict
+        from krach.pattern.serialize import pattern_node_to_dict
 
         d: dict[str, Any] = {}
         if self.nodes:
@@ -150,7 +150,7 @@ class ModuleIr:
     @staticmethod
     def from_dict(d: dict[str, Any]) -> ModuleIr:
         """Deserialize from a dict (inverse of to_dict)."""
-        from krach.patterns.serialize import dict_to_pattern_node
+        from krach.pattern.serialize import dict_to_pattern_node
 
         nodes = tuple(
             NodeDef(

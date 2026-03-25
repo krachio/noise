@@ -12,7 +12,7 @@ from krach.ir.pattern import (
     EuclidParams,
     WarpParams,
 )
-from krach.patterns.pattern import note
+from krach.pattern.pattern import note
 
 
 class TestEuclidParamsValidation:

@@ -9,7 +9,7 @@ from krach._patterns import note, hit, seq, ramp, mod_sine, mod_tri
 from krach._patterns import mod_ramp, mod_ramp_down, mod_square, mod_exp
 from krach._types import dsp
 from krach._pitch import mtof, ftom, parse_note
-from krach.patterns.pattern import Pattern, rest
+from krach.pattern.pattern import Pattern, rest
 
 
 # ── Pattern builders on Mixer ────────────────────────────────────────────
@@ -148,37 +148,37 @@ def test_dsp_module_exports_signal() -> None:
 
 def test_dsp_module_exports_control() -> None:
     import krach.dsp as krs
-    from krach.dsl.transpile import control
+    from krach.signal.transpile import control
     assert krs.control is control
 
 
 def test_dsp_module_exports_saw() -> None:
     import krach.dsp as krs
-    from krach.dsl.lib.oscillators import saw
+    from krach.signal.lib.oscillators import saw
     assert krs.saw is saw
 
 
 def test_dsp_module_exports_lowpass() -> None:
     import krach.dsp as krs
-    from krach.dsl.lib.filters import lowpass
+    from krach.signal.lib.filters import lowpass
     assert krs.lowpass is lowpass
 
 
 def test_dsp_module_exports_adsr() -> None:
     import krach.dsp as krs
-    from krach.dsl.music.envelopes import adsr
+    from krach.signal.music.envelopes import adsr
     assert krs.adsr is adsr
 
 
 def test_dsp_module_exports_reverb() -> None:
     import krach.dsp as krs
-    from krach.dsl.music.effects import reverb
+    from krach.signal.music.effects import reverb
     assert krs.reverb is reverb
 
 
 def test_dsp_module_exports_white_noise() -> None:
     import krach.dsp as krs
-    from krach.dsl.lib.noise import white_noise
+    from krach.signal.lib.noise import white_noise
     assert krs.white_noise is white_noise
 
 

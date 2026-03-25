@@ -19,7 +19,7 @@ from krach.ir.pattern import (
     SlowParams,
     WarpParams,
 )
-from krach.patterns.values import Cc, Control, Note
+from krach.pattern.values import Cc, Control, Note
 
 
 def _atom(params: AtomParams) -> str:
@@ -69,7 +69,7 @@ _HANDLERS: dict[str, _Handler] = {
 }
 
 # Import-time completeness check — fail loud if a primitive is missing.
-from krach.patterns.primitives import ALL_PATTERN_PRIMITIVES  # noqa: E402
+from krach.pattern.primitives import ALL_PATTERN_PRIMITIVES  # noqa: E402
 
 _expected = {p.name for p in ALL_PATTERN_PRIMITIVES}
 _registered = set(_HANDLERS.keys())
