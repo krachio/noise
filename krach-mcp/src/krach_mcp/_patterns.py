@@ -12,7 +12,7 @@ from krach.pattern.builders import (
     cat, hit, mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square,
     mod_tri, note, ramp, rand, saw, seq, sine, stack, struct,
 )
-from krach.patterns.pattern import Pattern, rest
+from krach.pattern.pattern import Pattern, rest
 
 # Namespace for eval — only safe pattern builders, no I/O, no internal types
 _EVAL_NS: dict[str, object] = {
