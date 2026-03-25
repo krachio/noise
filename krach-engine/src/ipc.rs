@@ -1,20 +1,38 @@
 //! Unified IPC server — accepts both pattern-engine (pattern) and audio-engine (graph)
 //! message formats on a single Unix socket.
 //!
-//! Pattern messages use `"cmd"` tag: SetPattern, Hush, HushAll, SetBpm, Batch, Ping.
-//! Audio messages use `"type"` tag: load_graph, set_control, set_master_gain, list_nodes.
+//! Pattern messages use `"cmd"` tag: `SetPattern`, `Hush`, `HushAll`, `SetBpm`, `Batch`, `Ping`.
+//! Audio messages use `"type"` tag: `load_graph`, `set_control`, `set_master_gain`, `list_nodes`.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+use audio_engine::engine::EngineSnapshot;
+use audio_engine::ir::{ConnectionIr, NodeInstance};
 use audio_engine::protocol::ClientMessage;
 use log::warn;
 use pattern_engine::ipc::protocol::ClientMessage as PatternMsg;
 use pattern_engine::ipc::{compile_command, describe};
 
 use crate::LoopCommand;
+
+/// Timeout for waiting on main loop acknowledgment.
+const ACK_TIMEOUT: Duration = Duration::from_secs(5);
+
+/// Transport state snapshot.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct TransportInfo {
+    pub bpm: f64,
+    pub meter: f64,
+}
+
+/// Slot info from pattern engine.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct SlotInfo {
+    pub name: String,
+}
 
 /// Unified IPC response type.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -24,6 +42,14 @@ pub enum IpcResponse {
     Error { msg: String },
     Pong,
     NodeTypes { types: Vec<String> },
+    State {
+        nodes: Vec<NodeInstance>,
+        connections: Vec<ConnectionIr>,
+        exposed_controls: std::collections::HashMap<String, (String, String)>,
+        control_values: std::collections::HashMap<String, f32>,
+        slots: Vec<SlotInfo>,
+        transport: TransportInfo,
+    },
 }
 
 /// Handle to the IPC server thread.
@@ -50,25 +76,24 @@ pub fn start(
 ) -> Result<IpcHandle, String> {
     // Stale socket detection: check PID lock file.
     let lock_path = socket_path.with_extension("pid");
-    if socket_path.exists() && lock_path.exists() {
-        if let Ok(pid_str) = std::fs::read_to_string(&lock_path) {
-            if let Ok(pid) = pid_str.trim().parse::<u32>() {
-                // Check if /proc/{pid} exists (Linux) or try connecting (macOS).
-                let proc_path = format!("/proc/{pid}");
-                if std::path::Path::new(&proc_path).exists() {
-                    return Err(format!(
-                        "another krach-engine (PID {pid}) owns {}",
-                        socket_path.display()
-                    ));
-                }
-                // macOS: try connecting — if it succeeds, another instance is running.
-                if std::os::unix::net::UnixStream::connect(&socket_path).is_ok() {
-                    return Err(format!(
-                        "another krach-engine (PID {pid}) owns {}",
-                        socket_path.display()
-                    ));
-                }
-            }
+    if socket_path.exists() && lock_path.exists()
+        && let Ok(pid_str) = std::fs::read_to_string(&lock_path)
+        && let Ok(pid) = pid_str.trim().parse::<u32>()
+    {
+        // Check if /proc/{pid} exists (Linux) or try connecting (macOS).
+        let proc_path = format!("/proc/{pid}");
+        if std::path::Path::new(&proc_path).exists() {
+            return Err(format!(
+                "another krach-engine (PID {pid}) owns {}",
+                socket_path.display()
+            ));
+        }
+        // macOS: try connecting — if it succeeds, another instance is running.
+        if std::os::unix::net::UnixStream::connect(&socket_path).is_ok() {
+            return Err(format!(
+                "another krach-engine (PID {pid}) owns {}",
+                socket_path.display()
+            ));
         }
     }
     let _ = std::fs::remove_file(&socket_path);
@@ -80,25 +105,24 @@ pub fn start(
 
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = Arc::clone(&stop);
-    let path = socket_path.clone();
 
     let thread = std::thread::Builder::new()
         .name("noise-ipc".into())
-        .spawn(move || run_server(listener, cmd_tx, node_types, stop_clone))
+        .spawn(move || run_server(&listener, &cmd_tx, &node_types, &stop_clone))
         .expect("failed to spawn IPC thread");
 
     Ok(IpcHandle {
-        socket_path: path,
+        socket_path,
         stop,
         _thread: thread,
     })
 }
 
 fn run_server(
-    listener: std::os::unix::net::UnixListener,
-    cmd_tx: crossbeam_channel::Sender<LoopCommand>,
-    node_types: Arc<RwLock<Vec<String>>>,
-    stop: Arc<AtomicBool>,
+    listener: &std::os::unix::net::UnixListener,
+    cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
+    node_types: &Arc<RwLock<Vec<String>>>,
+    stop: &Arc<AtomicBool>,
 ) {
     for stream in listener.incoming() {
         if stop.load(Ordering::Relaxed) {
@@ -109,7 +133,7 @@ fn run_server(
                 stream
                     .set_read_timeout(Some(Duration::from_millis(100)))
                     .ok();
-                handle_connection(stream, &cmd_tx, &node_types, &stop);
+                handle_connection(stream, cmd_tx, node_types, stop);
             }
             Err(_) => break,
         }
@@ -124,15 +148,15 @@ fn handle_connection(
 ) {
     use std::io::{BufRead, BufReader, Write};
 
+    // Message size limit: 1MB per line.
+    const MAX_LINE_BYTES: usize = 1_048_576;
+
     let reader = BufReader::new(stream.try_clone().expect("clone stream"));
     let mut writer = stream;
 
     // Protocol version handshake: engine announces version on connect.
     let version_line = r#"{"protocol":1,"engine":"krach-engine"}"#;
     let _ = writer.write_all(format!("{version_line}\n").as_bytes());
-
-    // Message size limit: 1MB per line.
-    const MAX_LINE_BYTES: usize = 1_048_576;
 
     for line in reader.lines() {
         if stop.load(Ordering::Relaxed) {
@@ -168,14 +192,38 @@ fn handle_connection(
     }
 }
 
+/// Build an `IpcResponse::State` from an `EngineSnapshot` and slot/transport info.
+pub fn build_state_response(
+    snap: EngineSnapshot,
+    slot_names: Vec<String>,
+    bpm: f64,
+    meter: f64,
+) -> IpcResponse {
+    IpcResponse::State {
+        nodes: snap.nodes,
+        connections: snap.connections,
+        exposed_controls: snap.exposed_controls,
+        control_values: snap.control_values,
+        slots: slot_names.into_iter().map(|name| SlotInfo { name }).collect(),
+        transport: TransportInfo { bpm, meter },
+    }
+}
+
 /// Route a JSON line to the correct handler.
-/// Tries pattern-engine protocol first ("cmd" tag), then audio-engine ("type" tag).
+/// Tries Status first (unified command), then pattern-engine ("cmd" tag),
+/// then audio-engine ("type" tag).
 fn dispatch(
     line: &str,
     cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
     node_types: &Arc<RwLock<Vec<String>>>,
 ) -> IpcResponse {
-    if let Ok(msg) = serde_json::from_str::<PatternMsg>(line) {
+    // Status is a unified command that spans both engines.
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(line)
+        && v.get("cmd").and_then(|c| c.as_str()) == Some("Status")
+    {
+        return handle_status(cmd_tx);
+    }
+    if let Ok(ref msg) = serde_json::from_str::<PatternMsg>(line) {
         return handle_pattern(msg, cmd_tx);
     }
     if let Ok(msg) = serde_json::from_str::<ClientMessage>(line) {
@@ -186,12 +234,24 @@ fn dispatch(
     }
 }
 
-fn handle_pattern(msg: PatternMsg, cmd_tx: &crossbeam_channel::Sender<LoopCommand>) -> IpcResponse {
+fn handle_status(cmd_tx: &crossbeam_channel::Sender<LoopCommand>) -> IpcResponse {
+    let (ack_tx, ack_rx) = crossbeam_channel::bounded::<IpcResponse>(1);
+    if cmd_tx.send(LoopCommand::Status(ack_tx)).is_err() {
+        return IpcResponse::Error {
+            msg: "main loop disconnected".into(),
+        };
+    }
+    ack_rx.recv_timeout(ACK_TIMEOUT).unwrap_or_else(|_| IpcResponse::Error {
+        msg: "main loop did not respond within 5s".into(),
+    })
+}
+
+fn handle_pattern(msg: &PatternMsg, cmd_tx: &crossbeam_channel::Sender<LoopCommand>) -> IpcResponse {
     match msg {
         PatternMsg::Ping => IpcResponse::Pong,
         PatternMsg::Batch { commands } => {
             let mut compiled = Vec::with_capacity(commands.len());
-            for cmd in &commands {
+            for cmd in commands {
                 match compile_command(cmd) {
                     Ok(Some(engine_cmd)) => compiled.push(engine_cmd),
                     Ok(None) => {}
@@ -208,7 +268,7 @@ fn handle_pattern(msg: PatternMsg, cmd_tx: &crossbeam_channel::Sender<LoopComman
                 msg: format!("batch applied ({n} commands)"),
             }
         }
-        other => match compile_command(&other) {
+        other => match compile_command(other) {
             Ok(Some(engine_cmd)) => {
                 let description = describe(&engine_cmd);
                 if cmd_tx.send(LoopCommand::Pattern(engine_cmd)).is_err() {
@@ -221,9 +281,6 @@ fn handle_pattern(msg: PatternMsg, cmd_tx: &crossbeam_channel::Sender<LoopComman
         },
     }
 }
-
-/// Timeout for waiting on main loop acknowledgment.
-const ACK_TIMEOUT: Duration = Duration::from_secs(5);
 
 fn handle_graph(
     msg: ClientMessage,
@@ -338,6 +395,62 @@ mod tests {
     }
 
     #[test]
+    fn ipc_response_state_roundtrip() {
+        use std::collections::HashMap;
+        let resp = IpcResponse::State {
+            nodes: vec![],
+            connections: vec![],
+            exposed_controls: HashMap::new(),
+            control_values: HashMap::new(),
+            slots: vec![SlotInfo { name: "kick".into() }],
+            transport: TransportInfo { bpm: 120.0, meter: 4.0 },
+        };
+        let json = serde_json::to_string(&resp).unwrap();
+        assert!(json.contains(r#""status":"State"#));
+        let parsed: IpcResponse = serde_json::from_str(&json).unwrap();
+        match parsed {
+            IpcResponse::State { slots, transport, .. } => {
+                assert_eq!(slots.len(), 1);
+                assert_eq!(slots[0].name, "kick");
+                assert!((transport.bpm - 120.0).abs() < f64::EPSILON);
+                assert!((transport.meter - 4.0).abs() < f64::EPSILON);
+            }
+            other => panic!("expected State, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn dispatch_routes_status_to_channel() {
+        let (tx, rx) = crossbeam_channel::unbounded();
+        let types = Arc::new(RwLock::new(vec![]));
+        // Spawn responder to handle the Status command.
+        let responder = std::thread::spawn(move || {
+            let cmd = rx.recv().unwrap();
+            if let LoopCommand::Status(reply_tx) = cmd {
+                let snap = audio_engine::engine::EngineSnapshot {
+                    nodes: vec![],
+                    connections: vec![],
+                    exposed_controls: std::collections::HashMap::new(),
+                    control_values: std::collections::HashMap::new(),
+                };
+                let _ = reply_tx.send(build_state_response(snap, vec!["kick".into()], 128.0, 4.0));
+            } else {
+                panic!("expected Status command");
+            }
+        });
+        let resp = dispatch(r#"{"cmd":"Status"}"#, &tx, &types);
+        responder.join().unwrap();
+        match resp {
+            IpcResponse::State { slots, transport, .. } => {
+                assert_eq!(slots.len(), 1);
+                assert_eq!(slots[0].name, "kick");
+                assert!((transport.bpm - 128.0).abs() < f64::EPSILON);
+            }
+            other => panic!("expected State, got {other:?}"),
+        }
+    }
+
+    #[test]
     fn dispatch_routes_set_pattern_to_channel() {
         let (tx, rx) = crossbeam_channel::unbounded();
         let types = Arc::new(RwLock::new(vec![]));
@@ -357,9 +470,8 @@ mod tests {
         let msg = r#"{"type":"load_graph","nodes":[],"connections":[],"exposed_controls":{}}"#;
         // dispatch() sends the command and blocks waiting for ack.
         // Spawn a thread to respond so dispatch doesn't timeout.
-        let rx_clone = rx.clone();
         let responder = std::thread::spawn(move || {
-            let cmd = rx_clone.recv().unwrap();
+            let cmd = rx.recv().unwrap();
             if let LoopCommand::Graph(_, ack_tx) = cmd {
                 let _ = ack_tx.send(Ok("ok".into()));
             }

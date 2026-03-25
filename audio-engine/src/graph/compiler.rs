@@ -53,10 +53,10 @@ pub fn compile(
     compile_with_reuse(ir, registry, None, sample_rate, block_size)
 }
 
-/// Compile a `GraphIr`, reusing node instances from a previous graph when the
-/// node ID, type, and registry version all match. This preserves DSP state
-/// (ADSR phase, filter memory, reverb tails) for unchanged voices across
-/// graph swaps.
+/// Compile a `GraphIr`, reusing nodes from a previous graph when ID/type/version match.
+///
+/// Preserves DSP state (ADSR phase, filter memory, reverb tails) for unchanged
+/// voices across graph swaps.
 ///
 /// # Errors
 /// Returns `CompileError` if validation fails.
@@ -77,14 +77,14 @@ pub fn compile_with_reuse(
     )
 }
 
-/// Like [`compile_with_reuse`] but accepts pre-built nodes that bypass the
-/// factory system. Used for nodes that require external resources (e.g.
-/// `AdcNode` needs a ring buffer consumer from the audio input stream).
+/// Like [`compile_with_reuse`] but accepts pre-built nodes that bypass the factory.
 ///
-/// Injected nodes are consumed (removed from the map) when matched by node ID.
+/// Used for nodes requiring external resources (e.g. `AdcNode` needs a ring
+/// buffer consumer). Injected nodes are consumed when matched by node ID.
 ///
 /// # Errors
 /// Returns `CompileError` if validation fails.
+#[allow(clippy::implicit_hasher)]
 pub fn compile_with_reuse_and_injected(
     ir: &GraphIr,
     registry: &NodeRegistry,

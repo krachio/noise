@@ -338,6 +338,12 @@ impl Engine {
         outputs
     }
 
+    /// All active slot names (including silenced ones).
+    #[must_use]
+    pub fn slot_names(&self) -> Vec<String> {
+        self.names.keys().cloned().collect()
+    }
+
     /// Number of named slots (including silenced ones).
     #[cfg(test)]
     pub fn slot_count(&self) -> usize {
@@ -887,5 +893,38 @@ mod tests {
         });
         assert_eq!(e.slot_idx("bass"), Some(0));
         assert_eq!(e.slot_idx("unknown"), None);
+    }
+
+    #[test]
+    fn slot_names_returns_all_active_names() {
+        let mut e = fast_engine();
+        assert!(e.slot_names().is_empty());
+
+        e.apply(EngineCommand::SetPattern {
+            name: "kick".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+        e.apply(EngineCommand::SetPattern {
+            name: "snare".into(),
+            pattern: CompiledPattern::atom(note(38)),
+        });
+
+        let mut names = e.slot_names();
+        names.sort();
+        assert_eq!(names, vec!["kick", "snare"]);
+    }
+
+    #[test]
+    fn slot_names_includes_hushed_slots() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetPattern {
+            name: "kick".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+        e.apply(EngineCommand::Hush {
+            name: "kick".into(),
+        });
+        // Hushed slots still exist — they're silenced, not removed.
+        assert_eq!(e.slot_names(), vec!["kick"]);
     }
 }

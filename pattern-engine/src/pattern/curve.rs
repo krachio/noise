@@ -51,14 +51,13 @@ use crate::event::{Event, Value};
         let mut current = 0.0_f32;
 
         let mut event_idx = 0;
-        for i in 0..table_len {
+        for (i, sample) in table.iter_mut().enumerate() {
             let t = i as f64 / table_len as f64;
-            // Apply all events at or before this block position.
             while event_idx < events.len() && events[event_idx].0 <= t {
                 current = events[event_idx].1;
                 event_idx += 1;
             }
-            table[i] = current;
+            *sample = current;
         }
 
         tables.insert(label, table);

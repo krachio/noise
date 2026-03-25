@@ -21,9 +21,23 @@ use crate::registry::NodeRegistry;
 use crate::swap::GraphSwapper;
 use crate::swap::command::Command;
 
+use serde::{Deserialize, Serialize};
+
 const COMMAND_QUEUE_CAPACITY: usize = 256;
 /// Capacity for retired graph return channel (audio→control).
 const RETURN_QUEUE_CAPACITY: usize = 4;
+
+/// Read-only snapshot of the audio engine's control-thread state.
+///
+/// Contains everything a remote client needs to reconstruct a view of the
+/// current graph: nodes, connections, exposed controls, and last-set values.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct EngineSnapshot {
+    pub nodes: Vec<NodeInstance>,
+    pub connections: Vec<ConnectionIr>,
+    pub exposed_controls: HashMap<String, (String, String)>,
+    pub control_values: HashMap<String, f32>,
+}
 
 /// Control-thread half of the engine.
 ///
@@ -111,6 +125,7 @@ impl EngineController {
     ///
     /// # Errors
     /// Returns `CompileError` if a graph mutation produces an invalid graph.
+    #[allow(clippy::too_many_lines)]
     pub fn handle_message(&mut self, msg: ClientMessage) -> Result<(), CompileError> {
         match msg {
             ClientMessage::LoadGraph(ir) => {
@@ -432,6 +447,17 @@ impl EngineController {
         self.send_command(Command::ClearAutomation { id });
     }
 
+    /// Snapshot the current engine state for remote clients.
+    #[must_use]
+    pub fn snapshot(&self) -> EngineSnapshot {
+        EngineSnapshot {
+            nodes: self.shadow_graph.nodes.clone(),
+            connections: self.shadow_graph.connections.clone(),
+            exposed_controls: self.exposed_controls.clone(),
+            control_values: self.control_values.clone(),
+        }
+    }
+
     /// Resolve an exposed control label to `(node_id, param_name)`.
     #[must_use]
     pub fn resolve_label(&self, label: &str) -> Option<(&str, &str)> {
@@ -477,7 +503,6 @@ impl AudioProcessor {
 
 fn parse_auto_shape(s: &str) -> AutoShape {
     match s {
-        "sine" => AutoShape::Sine,
         "tri" => AutoShape::Tri,
         "ramp" => AutoShape::Ramp,
         "ramp_down" => AutoShape::RampDown,
@@ -1000,5 +1025,61 @@ mod tests {
         // This is a soft check — crossfade muddies exact continuity.
         // But we at least verify audio is playing (energy > 0).
         let _ = jump;
+    }
+
+    #[test]
+    fn snapshot_empty_engine() {
+        let config = EngineConfig::default();
+        let (ctrl, _proc) = engine(&config);
+        let snap = ctrl.snapshot();
+        assert!(snap.nodes.is_empty());
+        assert!(snap.connections.is_empty());
+        assert!(snap.exposed_controls.is_empty());
+        assert!(snap.control_values.is_empty());
+    }
+
+    #[test]
+    fn snapshot_reflects_loaded_graph() {
+        let config = EngineConfig::default();
+        let (mut ctrl, _proc) = engine(&config);
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir()))
+            .unwrap();
+
+        let snap = ctrl.snapshot();
+        assert_eq!(snap.nodes.len(), 2);
+        assert_eq!(snap.connections.len(), 1);
+        assert_eq!(
+            snap.exposed_controls.get("pitch"),
+            Some(&("osc1".into(), "freq".into()))
+        );
+    }
+
+    #[test]
+    fn snapshot_includes_control_values() {
+        let config = EngineConfig::default();
+        let (mut ctrl, _proc) = engine(&config);
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir()))
+            .unwrap();
+        ctrl.handle_message(ClientMessage::SetControl {
+            label: "pitch".into(),
+            value: 880.0,
+        })
+        .unwrap();
+
+        let snap = ctrl.snapshot();
+        assert_eq!(snap.control_values.get("pitch"), Some(&880.0));
+    }
+
+    #[test]
+    fn snapshot_serde_roundtrip() {
+        let config = EngineConfig::default();
+        let (mut ctrl, _proc) = engine(&config);
+        ctrl.handle_message(ClientMessage::LoadGraph(simple_graph_ir()))
+            .unwrap();
+
+        let snap = ctrl.snapshot();
+        let json = serde_json::to_string(&snap).unwrap();
+        let roundtripped: EngineSnapshot = serde_json::from_str(&json).unwrap();
+        assert_eq!(snap, roundtripped);
     }
 }

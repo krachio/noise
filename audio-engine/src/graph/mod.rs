@@ -101,6 +101,7 @@ impl std::fmt::Debug for ReusableNode {
 
 impl DspGraph {
     #[must_use]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         nodes: Vec<Box<dyn DspNode>>,
         node_ids: Vec<String>,

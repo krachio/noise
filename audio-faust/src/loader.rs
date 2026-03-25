@@ -7,7 +7,7 @@ use audio_engine::registry::NodeRegistry;
 
 use crate::factory::FaustFactory;
 
-/// Load a `.dsp` file, deriving type_id from path relative to base_dir.
+/// Load a `.dsp` file, deriving `type_id` from path relative to `base_dir`.
 ///
 /// `base_dir/drums/kick.dsp` → `("faust:drums/kick", code)`.
 ///

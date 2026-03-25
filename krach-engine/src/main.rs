@@ -52,8 +52,8 @@ fn crossfade_samples(bpm: f64, sample_rate: u32) -> usize {
     clippy::cast_sign_loss,
     clippy::cast_precision_loss
 )]
-fn compute_blocks_per_cycle(bpm: f64, bpc: f64, sample_rate: u32, block_size: usize) -> usize {
-    let cycle_secs = bpc * 60.0 / bpm.max(1.0);
+fn compute_blocks_per_cycle(bpm: f64, beats_per_cycle: f64, sample_rate: u32, block_size: usize) -> usize {
+    let cycle_secs = beats_per_cycle * 60.0 / bpm.max(1.0);
     (cycle_secs * f64::from(sample_rate) / block_size as f64)
         .round()
         .max(1.0) as usize
@@ -117,11 +117,13 @@ fn handle_graph_cmd(
 pub type AckResult = Result<String, String>;
 
 /// Commands routed from the IPC thread to the main loop.
-/// Single channel, single try_recv(), single match.
+/// Single channel, single `try_recv()`, single match.
 enum LoopCommand {
     Pattern(EngineCommand),
     /// Graph command with acknowledgment — IPC thread waits for the result.
     Graph(ClientMessage, crossbeam_channel::Sender<AckResult>),
+    /// Status query — returns combined snapshot of both engines.
+    Status(crossbeam_channel::Sender<ipc::IpcResponse>),
 }
 
 /// A MIDI CC → exposed control mapping. CC values (0–127) are scaled to [lo, hi].
@@ -183,11 +185,10 @@ fn resolve_dsp_dir() -> PathBuf {
 }
 
 fn socket_path() -> PathBuf {
-    if let Ok(path) = std::env::var("NOISE_SOCKET") {
-        PathBuf::from(path)
-    } else {
-        std::env::temp_dir().join("krach.sock")
-    }
+    std::env::var("NOISE_SOCKET").map_or_else(
+        |_| std::env::temp_dir().join("krach.sock"),
+        PathBuf::from,
+    )
 }
 
 fn make_audio_callback(
@@ -215,20 +216,20 @@ fn make_audio_callback(
 
 /// Parse a pattern-engine OSC event into a (label, value) pair for direct dispatch.
 ///
-/// Matches events with address "/audio/set" and args [Str(label), Float(value)].
-/// Returns None for non-SetControl events (MIDI notes, CCs, other OSC addresses).
+/// Matches events with address "/audio/set" and args `[Str(label), Float(value)]`.
+/// Returns `None` for non-`SetControl` events (MIDI notes, CCs, other OSC addresses).
 fn parse_set_control(event: &pattern_engine::engine::TimedEvent) -> Option<(&str, f32)> {
     match &event.event.value {
         Value::Osc { address, args } if address == "/audio/set" => {
             let label = match args.first()? {
                 OscArg::Str(s) => s.as_str(),
-                _ => return None,
+                OscArg::Float(_) | OscArg::Int(_) => return None,
             };
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
             let value = match args.get(1)? {
                 OscArg::Float(f) => *f as f32,
                 OscArg::Int(i) => *i as f32,
-                _ => return None,
+                OscArg::Str(_) => return None,
             };
             Some((label, value))
         }
@@ -236,22 +237,23 @@ fn parse_set_control(event: &pattern_engine::engine::TimedEvent) -> Option<(&str
     }
 }
 
-/// Parse a pattern-engine OSC event into a SetMasterGain value.
+/// Parse a pattern-engine OSC event into a `SetMasterGain` value.
 fn parse_set_gain(event: &pattern_engine::engine::TimedEvent) -> Option<f32> {
     match &event.event.value {
         Value::Osc { address, args } if address == "/audio/gain" =>
         {
-            #[allow(clippy::cast_possible_truncation)]
+            #[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
             match args.first()? {
                 OscArg::Float(f) => Some(*f as f32),
                 OscArg::Int(i) => Some(*i as f32),
-                _ => None,
+                OscArg::Str(_) => None,
             }
         }
         _ => None,
     }
 }
 
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
     let config = EngineConfig {
         sample_rate: device.sample_rate,
@@ -338,11 +340,11 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                         EngineCommand::SetPattern { name, .. }
                         | EngineCommand::SetPatternFromZero { name, .. }
                         | EngineCommand::Hush { name } => {
-                            if let Some(idx) = pattern_engine.slot_idx(name) {
-                                if let Some(ids) = active_curve_ids.remove(&idx) {
-                                    for id in ids {
-                                        audio_engine.controller_mut().clear_automation(id);
-                                    }
+                            if let Some(idx) = pattern_engine.slot_idx(name)
+                                && let Some(ids) = active_curve_ids.remove(&idx)
+                            {
+                                for id in ids {
+                                    audio_engine.controller_mut().clear_automation(id);
                                 }
                             }
                         }
@@ -378,6 +380,17 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                         warn!("{e}");
                     }
                     let _ = ack_tx.send(result);
+                }
+                LoopCommand::Status(reply_tx) => {
+                    let snap = audio_engine.controller_mut().snapshot();
+                    let slot_names = pattern_engine.slot_names();
+                    let response = ipc::build_state_response(
+                        snap,
+                        slot_names,
+                        pattern_engine.bpm(),
+                        BEATS_PER_CYCLE,
+                    );
+                    let _ = reply_tx.send(response);
                 }
             }
         }
@@ -475,21 +488,19 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
         while m < pending_midi.len() {
             if pending_midi[m].fire_at <= now {
                 let ev = pending_midi.swap_remove(m);
-                match &ev.event.value {
-                    Value::Note {
-                        channel, note, dur, ..
-                    } => {
-                        let cycle_dur = BEATS_PER_CYCLE * 60.0 / pattern_engine.bpm();
-                        let dur_secs = (dur * cycle_dur).max(0.0);
-                        if dur_secs.is_finite() {
-                            note_offs.push(Reverse(PendingNoteOff {
-                                fire_at: ev.fire_at + Duration::from_secs_f64(dur_secs),
-                                channel: *channel,
-                                note: *note,
-                            }));
-                        }
+                if let Value::Note {
+                    channel, note, dur, ..
+                } = &ev.event.value
+                {
+                    let cycle_dur = BEATS_PER_CYCLE * 60.0 / pattern_engine.bpm();
+                    let dur_secs = (dur * cycle_dur).max(0.0);
+                    if dur_secs.is_finite() {
+                        note_offs.push(Reverse(PendingNoteOff {
+                            fire_at: ev.fire_at + Duration::from_secs_f64(dur_secs),
+                            channel: *channel,
+                            note: *note,
+                        }));
                     }
-                    _ => {}
                 }
                 if let Err(e) = output::dispatch(&ev, &mut midi_sink, &mut None) {
                     warn!("midi dispatch: {e}");
@@ -530,7 +541,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
         while let Ok((channel, cc, value)) = midi_cc_rx.try_recv() {
             if let Some(mapping) = midi_mappings.get(&(channel, cc)) {
                 #[allow(clippy::cast_precision_loss)]
-                let scaled = mapping.lo + (mapping.hi - mapping.lo) * (value as f32 / 127.0);
+                let scaled = (mapping.hi - mapping.lo).mul_add(f32::from(value) / 127.0, mapping.lo);
                 let msg = ClientMessage::SetControl {
                     label: mapping.label.clone(),
                     value: scaled,
@@ -543,7 +554,7 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
 
         // ⑩ Sleep until next event (capped at 1ms for command responsiveness).
         let midi_deadline = pending_midi.iter().map(|e| e.fire_at).min();
-        let ctrl_deadline = pending.iter().map(|p| p.fire_at()).min();
+        let ctrl_deadline = pending.iter().map(PendingEvent::fire_at).min();
         let deadline = earliest_deadline(
             pattern_engine.next_deadline(),
             note_offs.peek().map(|Reverse(n)| n.fire_at),
@@ -586,7 +597,7 @@ fn drain_note_offs(
 }
 
 /// Try to open a MIDI input port and return a channel receiver for CC messages.
-/// Each message is (channel, cc_number, value).
+/// Each message is (channel, `cc_number`, value).
 fn try_connect_midi_input() -> crossbeam_channel::Receiver<(u8, u8, u8)> {
     let (tx, rx) = crossbeam_channel::unbounded();
     match midir::MidiInput::new("krach-engine-in") {
@@ -597,7 +608,7 @@ fn try_connect_midi_input() -> crossbeam_channel::Receiver<(u8, u8, u8)> {
                 match midi_in.connect(
                     port,
                     "noise-cc",
-                    move |_stamp, msg, _| {
+                    move |_stamp, msg, ()| {
                         // MIDI CC: status byte 0xB0–0xBF
                         if msg.len() >= 3 && (msg[0] & 0xF0) == 0xB0 {
                             let channel = msg[0] & 0x0F;
