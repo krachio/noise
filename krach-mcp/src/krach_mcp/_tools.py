@@ -213,6 +213,7 @@ def register_tools(mcp: FastMCP) -> None:
         from krach.pattern.summary import summarize as _summarize
 
         kr = get_session()
+        kr.pull()
         lines = [f"tempo={kr.tempo} bpm, meter={kr.meter}, master={kr.master:.2f}"]
 
         # Nodes with inline controls

@@ -72,6 +72,11 @@ class Session:
                 self._engine_protocol = info.get("protocol", 0)
         except Exception:
             self._engine_protocol = 0  # pre-handshake engine
+        # Sync transport state from the engine.
+        try:
+            self.pull()
+        except Exception:
+            pass  # Engine may not support Status yet (older protocol).
 
     def disconnect(self) -> None:
         if self._reader is not None:
