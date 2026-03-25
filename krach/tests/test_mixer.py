@@ -3932,11 +3932,14 @@ def test_bus_callable_with_no_audio_inputs_raises() -> None:
     from krach._mixer import Mixer
     from krach._types import DspDef
 
+    from krach.ir.signal import DspGraph
+
     # A generator (0 audio inputs) should not be used as a bus
     source_dsp = DspDef(
         fn=lambda: None,
         source="def f(): pass",
         faust="process = 0;",
+        graph=DspGraph(inputs=(), outputs=(), equations=()),
         controls=("in", "room"),
         num_inputs=0,
     )
@@ -3960,10 +3963,14 @@ def test_node_with_effect_dspdef_routes_to_bus() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         mixer = Mixer(session=session, dsp_dir=Path(tmpdir))
 
+        from krach.ir.signal import DspGraph, Signal, SignalType
+        s0 = Signal(aval=SignalType(), id=0, owner_id=0)
+        s1 = Signal(aval=SignalType(), id=1, owner_id=0)
         effect = DspDef(
             fn=lambda x: x,  # type: ignore[reportUnknownLambdaType]
             source="def f(x): return x",
             faust='import("stdfaust.lib");\nprocess(input0) = input0;',
+            graph=DspGraph(inputs=(s0,), outputs=(s1,), equations=()),
             controls=("room",),
             num_inputs=1,
         )
@@ -4091,13 +4098,14 @@ def test_callable_with_default_none_is_source() -> None:
 
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
 
-    with patch("krach._types._transpile") as mock_transpile:
-        mock_result = MagicMock()
-        mock_result.source = "process = 0;"
-        mock_result.schema.controls = []
-        mock_result.num_inputs = 0
-        mock_transpile.return_value = mock_result
+    from krach.ir.signal import DspGraph
 
+    mock_graph = DspGraph(inputs=(), outputs=(), equations=())
+    with (
+        patch("krach.signal.transpile.make_graph", return_value=mock_graph),
+        patch("krach.backends.faust_codegen.emit_faust", return_value="process = 0;\n"),
+        patch("krach.signal.transpile.collect_controls", return_value=()),
+    ):
         import tempfile
         with tempfile.TemporaryDirectory() as tmpdir:
             mixer = Mixer(session=session, dsp_dir=Path(tmpdir))

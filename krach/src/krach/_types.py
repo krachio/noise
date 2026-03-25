@@ -17,7 +17,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable, Union
 
-from krach.signal.transpile import transpile as _transpile
+from krach.ir.canonicalize import graph_key as _graph_key
+from krach.ir.signal import DspGraph
 
 # Type alias for DSP source parameters: string type_id, DspDef, or callable DSP function.
 # The callable form accepts 0+ Signal args and returns a Signal.
@@ -48,6 +49,7 @@ class DspDef:
     fn: Callable[..., Any]
     source: str
     faust: str
+    graph: DspGraph
     controls: tuple[str, ...]
     num_inputs: int = 0
     control_ranges: dict[str, tuple[float, float]] = field(default_factory=lambda: dict[str, tuple[float, float]]())
@@ -55,8 +57,8 @@ class DspDef:
 
 
 _DSP_CACHE_MAX = 64
-_dsp_cache: dict[str, DspDef] = {}
-_dsp_cache_order: list[str] = []  # LRU order (oldest first)
+_dsp_cache: dict[int, DspDef] = {}
+_dsp_cache_order: list[int] = []  # LRU order (oldest first)
 _dsp_cache_hits = 0
 _dsp_cache_misses = 0
 
@@ -78,21 +80,16 @@ def dsp_cache_info() -> dict[str, int]:
 def dsp(fn: Callable[..., Any], source: str = "") -> DspDef:
     """Transpile a Python DSP function to a DspDef with memoization.
 
-    Always traces + emits (cheap). Cache keyed by hash of the transpiled
-    Faust output — the IR, not Python source. This is sound because:
-    - Same computation → same Faust → cache hit (correct)
-    - Different closures → different Faust → cache miss (correct)
-    - Redefined function → different Faust → cache miss (correct)
-    No false hits possible. Bounded LRU.
+    Cache keyed by graph_key (structural hash of the DspGraph).
+    Same computation → same graph_key → cache hit. Bounded LRU.
     """
     global _dsp_cache_hits, _dsp_cache_misses  # noqa: PLW0603
+    from krach.signal.transpile import make_graph
+    from krach.backends.faust_codegen import emit_faust
 
-    # Always trace + emit (microseconds — just proxy calls + string concat)
-    result = _transpile(fn)  # type: ignore[arg-type]
-    faust = result.source
+    graph = make_graph(fn)  # type: ignore[arg-type]
+    key = _graph_key(graph)
 
-    # Cache by Faust source string (the IR output, not Python source)
-    key = faust
     if key in _dsp_cache:
         _dsp_cache_hits += 1
         if key in _dsp_cache_order:
@@ -100,6 +97,12 @@ def dsp(fn: Callable[..., Any], source: str = "") -> DspDef:
         _dsp_cache_order.append(key)
         return _dsp_cache[key]
     _dsp_cache_misses += 1
+
+    faust = emit_faust(graph)
+
+    # Collect control schema from graph
+    from krach.signal.transpile import collect_controls
+    controls_spec = collect_controls(graph)
 
     # Source text for export/persistence (best-effort, not part of cache key)
     if not source:
@@ -112,10 +115,11 @@ def dsp(fn: Callable[..., Any], source: str = "") -> DspDef:
         fn=fn,
         source=source,
         faust=faust,
-        controls=tuple(c.name for c in result.schema.controls),
-        num_inputs=result.num_inputs,
-        control_ranges={c.name: (c.lo, c.hi) for c in result.schema.controls},
-        control_defaults={c.name: c.init for c in result.schema.controls},
+        graph=graph,
+        controls=tuple(c.name for c in controls_spec),
+        num_inputs=len(graph.inputs),
+        control_ranges={c.name: (c.lo, c.hi) for c in controls_spec},
+        control_defaults={c.name: c.init for c in controls_spec},
     )
 
     _dsp_cache[key] = dsp_def

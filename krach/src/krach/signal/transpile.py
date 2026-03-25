@@ -117,18 +117,18 @@ def make_graph(
 
 
 # ---------------------------------------------------------------------------
-# _collect_controls — scan graph for control_p equations
+# collect_controls — scan graph for control_p equations
 # ---------------------------------------------------------------------------
 
 
-def _collect_controls(graph: DspGraph) -> tuple[ControlSpec, ...]:
+def collect_controls(graph: DspGraph) -> tuple[ControlSpec, ...]:
     """Walk equations and collect all control_p params."""
     specs: list[ControlSpec] = []
-    _collect_controls_recursive(graph, specs)
+    collect_controls_recursive(graph, specs)
     return tuple(specs)
 
 
-def _collect_controls_recursive(graph: DspGraph, specs: list[ControlSpec]) -> None:
+def collect_controls_recursive(graph: DspGraph, specs: list[ControlSpec]) -> None:
     from krach.ir.signal import FeedbackParams
     for eqn in graph.equations:
         if isinstance(eqn.params, ControlParams):
@@ -140,7 +140,7 @@ def _collect_controls_recursive(graph: DspGraph, specs: list[ControlSpec]) -> No
                 step=eqn.params.step,
             ))
         elif isinstance(eqn.params, FeedbackParams):
-            _collect_controls_recursive(eqn.params.body_graph, specs)
+            collect_controls_recursive(eqn.params.body_graph, specs)
 
 
 # ---------------------------------------------------------------------------
@@ -181,7 +181,7 @@ def transpile(
     """
     graph = make_graph(fn, num_inputs=num_inputs, precision=precision)
     source = emit_faust(graph, optimize=optimize)
-    controls = _collect_controls(graph)
+    controls = collect_controls(graph)
     schema = ControlSchema(controls=controls)
 
     return TranspiledDsp(
