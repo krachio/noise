@@ -37,9 +37,11 @@ nav:
     - Effect Routing: effect-routing.md
     - Swing & Warps: swing-and-warps.md
     - Scenes & Persistence: scenes.md
+    - Modules & Persistence: modules.md
     - MIDI & Hardware: midi-hardware.md
   - Developer Guide:
     - Architecture: architecture.md
+    - IR Architecture: ir-architecture.md
     - IPC Protocol: protocol.md
     - Contributing: contributing.md
 

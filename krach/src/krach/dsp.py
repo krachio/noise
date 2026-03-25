@@ -1,4 +1,9 @@
-"""krach.dsp — synthesis primitives. Import as: import krach.dsp as krs"""
+"""krach.dsp — DSP namespace for live coding. Import as: import krach.dsp as krs
+
+Aggregates oscillators, filters, noise, envelopes, effects, math, and
+core DSP primitives (control, delay, feedback, sr) from krach.signal/.
+Also exports Signal type and transpile/control from the tracing layer.
+"""
 
 # Core types
 from krach.ir.signal import Signal as Signal
