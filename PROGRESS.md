@@ -97,6 +97,13 @@ kr.mute("drums")
 
 ## Next
 
+### IR consolidation: 10/10 purity (priority: high)
+
+Unify the two primitive models, make ir/ pure frozen data, fix file
+locations, resolve naming inconsistencies. SignalPrimitive + unified
+RuleRegistry. Extract tracing from ir/signal.py to dsl/trace.py.
+See plan: `~/.claude/plans/ir-consolidation.md`
+
 ### Engine state sync: multi-client support (priority: high)
 
 Add `Status` IPC command so multiple Python clients (REPL + MCP, or two

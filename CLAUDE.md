@@ -39,6 +39,11 @@ bass.play(kr.seq("A2", "D3").swing(0.67))    # pattern
 If a musician-friendly UI is needed, build it in Python on top of the graph API.
 Don't bake DAW concepts (tracks, buses, aux sends) into the core.
 
+## Non-negotiable principles
+
+- **No backward compatibility if it stands in the way of the pure solution.** Delete, rename, break imports. The right design wins over migration comfort. If old code is wrong, remove it — don't wrap it.
+- **No half-baked work.** Either do it right or don't do it. No "fix later" shims, no "good enough for now" compromises. Strive for the correct thing.
+
 ## Code Style
 
 Flat data, obvious flow, no unnecessary abstraction. Every type must map to a domain noun. Every abstraction must prevent a nameable bug.
