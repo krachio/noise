@@ -158,6 +158,24 @@ class Session:
         self._meter = beats
         self.send(SetBeatsPerCycle(beats=beats))
 
+    # ── State sync ────────────────────────────────────────────────────────
+
+    def pull(self) -> dict[str, Any]:
+        """Query full engine state via the Status IPC command.
+
+        Updates local transport (tempo, meter) from the engine response.
+        Returns the raw state dict for Mixer reconciliation.
+        """
+        state = self._send_json({"cmd": "Status"})
+        transport: dict[str, Any] = state.get("transport", {})
+        bpm = transport.get("bpm")
+        meter = transport.get("meter")
+        if isinstance(bpm, (int, float)):
+            self._tempo = float(bpm)
+        if isinstance(meter, (int, float)):
+            self._meter = float(meter)
+        return state
+
     # ── IPC ──────────────────────────────────────────────────────────────
 
     def ping(self) -> None:

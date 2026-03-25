@@ -301,6 +301,94 @@ class Mixer:
         """Read-only snapshot of all set control values."""
         return dict(self._ctrl_values)
 
+    # ── State sync ─────────────────────────────────────────────────
+
+    def pull(self) -> None:
+        """Sync local state from the engine (source of truth).
+
+        Rebuilds _nodes, _sends, _ctrl_values, and transport from the
+        engine snapshot. Preserves local-only state: source_text,
+        control_ranges, patterns, scenes, muted.
+        """
+        state = self._session.pull()
+        nodes_raw: list[dict[str, object]] = state.get("nodes", [])  # type: ignore[assignment]
+        connections: list[dict[str, str]] = state.get("connections", [])  # type: ignore[assignment]
+        ctrl_vals: dict[str, float] = state.get("control_values", {})  # type: ignore[assignment]
+        transport: dict[str, float] = state.get("transport", {})  # type: ignore[assignment]
+
+        # Build lookup: node_id → raw node dict
+        raw_by_id: dict[str, dict[str, object]] = {
+            str(n.get("id", "")): n for n in nodes_raw
+        }
+
+        # Identify helper nodes: gain wrappers ({name}_g) and send gains ({a}_send_{b})
+        real_nodes: dict[str, dict[str, object]] = {}
+        gain_nodes: dict[str, float] = {}  # node_id → gain value
+        send_nodes: dict[str, tuple[str, str, float]] = {}  # node_id → (src, dst, level)
+
+        for nid, raw in raw_by_id.items():
+            type_id = str(raw.get("type_id", ""))
+            controls = raw.get("controls", {})
+            gain_val = float(controls.get("gain", 0.5)) if isinstance(controls, dict) else 0.5  # type: ignore[union-attr]
+
+            if nid == "out" and type_id == "dac":
+                continue  # skip output node
+            if type_id == "gain" and nid.endswith("_g"):
+                gain_nodes[nid] = gain_val
+            elif type_id == "gain" and "_send_" in nid:
+                parts = nid.split("_send_", 1)
+                if len(parts) == 2:
+                    send_nodes[nid] = (parts[0], parts[1], gain_val)
+            else:
+                real_nodes[nid] = raw
+
+        # Reconstruct Node entries for real nodes
+        new_nodes: dict[str, Node] = {}
+        for nid, raw in real_nodes.items():
+            type_id = str(raw.get("type_id", ""))
+            controls_dict: dict[str, float] = (
+                raw.get("controls") if isinstance(raw.get("controls"), dict) else {}  # type: ignore[assignment]
+            )
+            ctrl_names: tuple[str, ...] = tuple(controls_dict.keys())
+            gain = gain_nodes.get(f"{nid}_g", 0.5)
+
+            # Detect num_inputs from connections (any connection TO this node)
+            has_audio_input = any(
+                c.get("to_node") == nid and c.get("to_port", "").startswith("in")
+                and c.get("from_node") not in send_nodes  # exclude send gain → effect
+                for c in connections
+            )
+            # Preserve existing node if we have it (keeps source_text, control_ranges)
+            existing = self._nodes.get(nid)
+            if existing is not None:
+                existing.gain = gain
+                new_nodes[nid] = existing
+            else:
+                new_nodes[nid] = Node(
+                    type_id=type_id,
+                    gain=gain,
+                    controls=ctrl_names,
+                    num_inputs=1 if has_audio_input else 0,
+                )
+
+        self._nodes = new_nodes
+
+        # Reconstruct sends
+        new_sends: dict[tuple[str, str], float] = {}
+        for _, (src, dst, level) in send_nodes.items():
+            if src in new_nodes and dst in new_nodes:
+                new_sends[(src, dst)] = level
+        self._sends = new_sends
+
+        # Sync control values (only for labels we can see)
+        self._ctrl_values.update(ctrl_vals)
+
+        # Sync transport
+        if "master" in transport:
+            self._master_gain = float(transport["master"])
+
+        self._graph_loaded = True
+
     # ── Node lifecycle ────────────────────────────────────────────
 
     def _cleanup_node(self, name: str, direction: Literal["source", "both"] = "source") -> None:
