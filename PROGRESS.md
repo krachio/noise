@@ -23,19 +23,40 @@ Pure `ir/` layer (7 files + __init__): frozen data, zero runtime imports.
 - **Module IR** (`ir/module.py`): `ModuleIr`, `NodeDef(source: DspGraph | str)`, `RouteDef`
 - **Values** (`ir/values.py`): `Note`, `Cc`, `Osc`, `Control`, `Value`
 - **Canonicalize** (`ir/canonicalize.py`): `canonicalize()`, `graph_key()`, `module_key()`
-- **Registry** (`ir/registry.py`): generic `RuleRegistry[P, R]`
+- **Registry** (`ir/registry.py`): generic `RuleRegistry[P, R]` with `check_complete()` import-time guard
 
 Tracing runtime in `signal/trace.py` (TraceContext, bind, coerce_to_signal).
 Rules registered via RuleRegistry: abstract_eval in `signal/primitives.py`, lowering in `backends/faust_lowering.py`.
 DspGraph cached by `graph_key` (structural hash). `NodeDef.source` holds `DspGraph` directly — Faust is derived, not canonical.
+
+### krach surface (post-cleanup)
+
+```
+krach/
+  mixer.py           Mixer + MixerProtocol + NodeHandle (single file, no mixins)
+  node_types.py      Node, DspDef, dsp(), path resolution
+  graph_builder.py   build_graph_ir() pure function
+  module_proxy.py    ModuleProxy recorder
+  export.py          export_session()
+  config.py          Config
+  dsp.py             krs namespace
+  repl/              LiveMixer (REPL sugar), connect(), main(), banner
+  ir/                (unchanged)
+  signal/            (unchanged)
+  pattern/           + mininotation.py, pitch.py (moved from root)
+  backends/          (unchanged)
+```
+
+Library entry: `from krach.mixer import Mixer` — no REPL sugar, no staticmethods.
+REPL entry: `krach.repl.connect()` returns `LiveMixer` with `kr.note()`, `kr.seq()`, etc.
 
 ### Test counts
 - audio-engine: 163 Rust tests
 - audio-faust: 29 Rust tests
 - pattern-engine: 172 Rust tests
 - krach-engine: 25 Rust tests
-- krach: 729 Python tests
-- **Total: 1118 tests**, all green. Pyright strict clean.
+- krach: 731 Python tests
+- **Total: 1120 tests**, all green. Pyright strict clean.
 
 ## Usage
 
