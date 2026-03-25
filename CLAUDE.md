@@ -39,6 +39,12 @@ bass.play(kr.seq("A2", "D3").swing(0.67))    # pattern
 If a musician-friendly UI is needed, build it in Python on top of the graph API.
 Don't bake DAW concepts (tracks, buses, aux sends) into the core.
 
+## Issue tracking
+
+Bugs and feature requests live in GitHub issues. During live sessions, `issues.log` (gitignored)
+is the scratch pad — promote to GitHub issues after the session. Prefix entries with `[bug]`,
+`[feature]`, or `[ux]`.
+
 ## Non-negotiable principles
 
 - **No backward compatibility if it stands in the way of the pure solution.** Delete, rename, break imports. The right design wins over migration comfort. If old code is wrong, remove it — don't wrap it.

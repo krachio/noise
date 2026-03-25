@@ -34,6 +34,7 @@ docs/hello.py
 .bedrock/reviewers.md
 plan.md
 CODING_STYLE.md
+issues.log
 
 # Claude local state
 .claude/settings.local.json
