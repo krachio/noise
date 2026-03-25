@@ -51,12 +51,12 @@ Library entry: `from krach.mixer import Mixer` — no REPL sugar, no staticmetho
 REPL entry: `krach.repl.connect()` returns `LiveMixer` with `kr.note()`, `kr.seq()`, etc.
 
 ### Test counts
-- audio-engine: 163 Rust tests
+- audio-engine: 167 Rust tests
 - audio-faust: 29 Rust tests
-- pattern-engine: 172 Rust tests
-- krach-engine: 25 Rust tests
-- krach: 731 Python tests
-- **Total: 1120 tests**, all green. Pyright strict clean.
+- pattern-engine: 175 Rust tests
+- krach-engine: 27 Rust tests
+- krach: 738 Python tests
+- **Total: 1136 tests**, all green. Pyright strict clean.
 
 ## Usage
 
@@ -119,15 +119,9 @@ kr.mute("drums")
 - **Module system**: `kr.capture()` → ModuleIr, `kr.instantiate(ir)`, `kr.trace()` proxy
 - **ModuleIr serialization**: `to_dict()` / `from_dict()` — JSON round-trip for persistence
 - **Batch rollback**: all 6 state dicts restored on failed `with kr.batch():`
+- **Engine state sync**: `{"cmd":"Status"}` IPC returns full snapshot; `kr.pull()` syncs Python from engine; MCP auto-syncs on status()
 
 ## Next
-
-### Engine state sync: multi-client support (priority: high)
-
-Add `Status` IPC command so multiple Python clients (REPL + MCP, or two
-REPLs) share a single engine and see consistent state. Engine is the source
-of truth; Python syncs on connect via `Mixer.pull()`.
-See plan: `~/.claude/plans/engine-state-sync.md`
 
 ### Template caching (priority: medium)
 
