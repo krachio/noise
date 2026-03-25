@@ -26,12 +26,14 @@ const ACK_TIMEOUT: Duration = Duration::from_secs(5);
 pub struct TransportInfo {
     pub bpm: f64,
     pub meter: f64,
+    pub master: f64,
 }
 
 /// Slot info from pattern engine.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SlotInfo {
     pub name: String,
+    pub playing: bool,
 }
 
 /// Unified IPC response type.
@@ -195,17 +197,21 @@ fn handle_connection(
 /// Build an `IpcResponse::State` from an `EngineSnapshot` and slot/transport info.
 pub fn build_state_response(
     snap: EngineSnapshot,
-    slot_names: Vec<String>,
+    slot_info: Vec<(String, bool)>,
     bpm: f64,
     meter: f64,
+    master: f64,
 ) -> IpcResponse {
     IpcResponse::State {
         nodes: snap.nodes,
         connections: snap.connections,
         exposed_controls: snap.exposed_controls,
         control_values: snap.control_values,
-        slots: slot_names.into_iter().map(|name| SlotInfo { name }).collect(),
-        transport: TransportInfo { bpm, meter },
+        slots: slot_info
+            .into_iter()
+            .map(|(name, playing)| SlotInfo { name, playing })
+            .collect(),
+        transport: TransportInfo { bpm, meter, master },
     }
 }
 
@@ -402,8 +408,8 @@ mod tests {
             connections: vec![],
             exposed_controls: HashMap::new(),
             control_values: HashMap::new(),
-            slots: vec![SlotInfo { name: "kick".into() }],
-            transport: TransportInfo { bpm: 120.0, meter: 4.0 },
+            slots: vec![SlotInfo { name: "kick".into(), playing: true }],
+            transport: TransportInfo { bpm: 120.0, meter: 4.0, master: 0.7 },
         };
         let json = serde_json::to_string(&resp).unwrap();
         assert!(json.contains(r#""status":"State"#));
@@ -433,7 +439,7 @@ mod tests {
                     exposed_controls: std::collections::HashMap::new(),
                     control_values: std::collections::HashMap::new(),
                 };
-                let _ = reply_tx.send(build_state_response(snap, vec!["kick".into()], 128.0, 4.0));
+                let _ = reply_tx.send(build_state_response(snap, vec![("kick".into(), true)], 128.0, 4.0, 0.7));
             } else {
                 panic!("expected Status command");
             }

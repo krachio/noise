@@ -65,6 +65,8 @@ pub struct EngineController {
     /// Pre-built nodes that bypass the factory system. Consumed on next compile.
     /// Used for `AdcNode` which requires an external ring buffer consumer.
     injected_nodes: HashMap<String, Box<dyn crate::graph::node::DspNode>>,
+    /// Shadow copy of the master gain for snapshot queries.
+    master_gain: f32,
 }
 
 /// Audio-thread half of the engine.
@@ -109,6 +111,7 @@ pub fn engine(config: &EngineConfig) -> (EngineController, AudioProcessor) {
         return_consumer,
         cached_graph: None,
         injected_nodes: HashMap::new(),
+        master_gain: 1.0,
     };
 
     let processor = AudioProcessor {
@@ -220,6 +223,7 @@ impl EngineController {
             }
             ClientMessage::SetMasterGain { gain } => {
                 debug!("set_master_gain: {gain}");
+                self.master_gain = gain;
                 self.send_command(Command::SetMasterGain(gain));
             }
             ClientMessage::GraphBatch { commands } => {
@@ -304,6 +308,11 @@ impl EngineController {
     #[must_use]
     pub const fn config(&self) -> &EngineConfig {
         &self.config
+    }
+
+    #[must_use]
+    pub const fn master_gain(&self) -> f32 {
+        self.master_gain
     }
 
     /// Mutable access to the node registry for registering custom node types.

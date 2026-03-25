@@ -344,6 +344,21 @@ impl Engine {
         self.names.keys().cloned().collect()
     }
 
+    /// Slot names with playing state. A slot is "playing" if its root is not Silence.
+    #[must_use]
+    pub fn slot_info(&self) -> Vec<(String, bool)> {
+        self.names
+            .iter()
+            .map(|(name, &idx)| {
+                let playing = !matches!(
+                    self.slots[idx].nodes[self.slots[idx].root],
+                    crate::pattern::PatternNode::Silence
+                );
+                (name.clone(), playing)
+            })
+            .collect()
+    }
+
     /// Number of named slots (including silenced ones).
     #[cfg(test)]
     pub fn slot_count(&self) -> usize {
@@ -926,5 +941,29 @@ mod tests {
         });
         // Hushed slots still exist — they're silenced, not removed.
         assert_eq!(e.slot_names(), vec!["kick"]);
+    }
+
+    #[test]
+    fn slot_info_reports_playing_state() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetPattern {
+            name: "kick".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+        e.apply(EngineCommand::SetPattern {
+            name: "snare".into(),
+            pattern: CompiledPattern::atom(note(38)),
+        });
+
+        let mut info = e.slot_info();
+        info.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(info, vec![("kick".into(), true), ("snare".into(), true)]);
+
+        e.apply(EngineCommand::Hush {
+            name: "kick".into(),
+        });
+        let mut info = e.slot_info();
+        info.sort_by(|a, b| a.0.cmp(&b.0));
+        assert_eq!(info, vec![("kick".into(), false), ("snare".into(), true)]);
     }
 }

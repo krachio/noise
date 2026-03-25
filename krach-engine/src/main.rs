@@ -383,12 +383,13 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                 }
                 LoopCommand::Status(reply_tx) => {
                     let snap = audio_engine.controller_mut().snapshot();
-                    let slot_names = pattern_engine.slot_names();
+                    let slot_info = pattern_engine.slot_info();
                     let response = ipc::build_state_response(
                         snap,
-                        slot_names,
+                        slot_info,
                         pattern_engine.bpm(),
                         BEATS_PER_CYCLE,
+                        f64::from(audio_engine.controller_mut().master_gain()),
                     );
                     let _ = reply_tx.send(response);
                 }
