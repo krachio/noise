@@ -6,7 +6,7 @@ frozen IR without starting audio.
 
 from __future__ import annotations
 
-from krach._module_ir import (
+from krach.ir.module import (
     ControlDef,
     ModuleIr,
     MutedDef,

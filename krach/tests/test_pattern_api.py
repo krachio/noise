@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from krach.ir.pattern import AtomParams, DegradeParams
-from krach.pattern.pattern import note, rest
+from krach.pattern.pattern import midi_note as note, rest
 from krach.ir.values import Control
-from krach._patterns import hit, seq, note as mixer_note, struct, ramp, cat, stack
+from krach.pattern.builders import hit, seq, note as mixer_note, struct, ramp, cat, stack
 
 
 # ── mask() ───────────────────────────────────────────────────────────
@@ -190,20 +190,20 @@ def test_ramp_lo_equals_hi() -> None:
 
 
 def test_mod_sine_returns_pattern() -> None:
-    from krach._patterns import mod_sine
+    from krach.pattern.builders import mod_sine
     pat = mod_sine(0.0, 1.0, steps=8)
     assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 8
 
 
 def test_mod_tri_returns_pattern() -> None:
-    from krach._patterns import mod_tri
+    from krach.pattern.builders import mod_tri
     pat = mod_tri(0.0, 1.0, steps=8)
     assert pat.node.primitive.name == "cat"
 
 
 def test_mod_ramp_down_first_is_hi() -> None:
-    from krach._patterns import mod_ramp_down
+    from krach.pattern.builders import mod_ramp_down
     pat = mod_ramp_down(0.0, 1.0, steps=4)
     # First value should be 1.0 (starts at hi, ramps to lo)
     first = pat.node.children[0]
@@ -213,7 +213,7 @@ def test_mod_ramp_down_first_is_hi() -> None:
 
 
 def test_mod_square_two_levels() -> None:
-    from krach._patterns import mod_square
+    from krach.pattern.builders import mod_square
     pat = mod_square(0.0, 1.0, steps=4)
     from krach.pattern.bind import collect_control_values
     vals = collect_control_values(pat.node)
@@ -223,7 +223,7 @@ def test_mod_square_two_levels() -> None:
 
 
 def test_mod_exp_starts_at_lo() -> None:
-    from krach._patterns import mod_exp
+    from krach.pattern.builders import mod_exp
     pat = mod_exp(0.0, 1.0, steps=4)
     first = pat.node.children[0]
     assert isinstance(first.params, AtomParams)
@@ -232,7 +232,7 @@ def test_mod_exp_starts_at_lo() -> None:
 
 
 def test_rand_values_in_range() -> None:
-    from krach._patterns import rand as rand_pat
+    from krach.pattern.builders import rand as rand_pat
     pat = rand_pat(10.0, 20.0, steps=16)
     from krach.pattern.bind import collect_control_values
     vals = collect_control_values(pat.node)

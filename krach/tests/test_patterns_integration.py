@@ -4,7 +4,7 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from krach.pattern import Session, note, rest, fast, thin
+from krach.pattern import Session, midi_note as note, rest, fast, thin
 
 
 def _stub_ok_response(mock_cls: MagicMock) -> None:
@@ -30,7 +30,7 @@ class TestPublicImports:
             Session,
             SlotState,
             cc,
-            note,
+            midi_note as note,
             rest,
             reverse,
             fast,

@@ -19,12 +19,6 @@ def onepole(sig: SignalLike, cutoff: SignalLike) -> Signal:
     return feedback(lambda fb: s * (1.0 - alpha) + fb * alpha)
 
 
-def highpass1(sig: SignalLike, cutoff: SignalLike) -> Signal:
-    """First-order highpass: sig - onepole(sig, cutoff)."""
-    s = coerce_to_signal(sig)
-    return s - onepole(s, cutoff)
-
-
 def dcblock(sig: SignalLike, coeff: float = 0.995) -> Signal:
     """Remove DC offset from a signal using a first-order highpass."""
     s = coerce_to_signal(sig)

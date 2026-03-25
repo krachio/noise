@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from krach._module_ir import (
+from krach.ir.module import (
     AutomationDef,
     ControlDef,
     ModuleIr,

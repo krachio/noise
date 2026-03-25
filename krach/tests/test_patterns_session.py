@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from krach.pattern.pattern import note
+from krach.pattern.pattern import midi_note as note
 from krach.pattern.session import Session, SlotState
 
 

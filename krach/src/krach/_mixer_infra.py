@@ -1,8 +1,4 @@
-"""Mixer infrastructure — properties, accessors, graph rebuild.
-
-Separated from _mixer.py to keep Mixer under 500 lines.
-These are pure read/delegate operations with no orchestration logic.
-"""
+"""Mixer infrastructure — properties, accessors, graph rebuild."""
 
 from __future__ import annotations
 
@@ -14,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from krach._graph import build_graph_ir, inst_name as _inst_name
 from krach._handle import NodeHandle
-from krach._patterns import (
+from krach.pattern.builders import (
     cat, check_finite as _check_finite, hit, mod_exp, mod_ramp, mod_ramp_down,
     mod_sine, mod_square, mod_tri, note, rand, ramp, saw, seq, sine, stack, struct,
 )
@@ -26,8 +22,6 @@ from krach.pattern.pattern import rest as _rest
 
 if TYPE_CHECKING:
     from krach.pattern import Session
-
-
 class MixerInfra:
     """Infrastructure mixin: properties, accessors, graph rebuild, static API surface."""
 

@@ -13,7 +13,7 @@ from krach.ir.pattern import (
     WarpParams,
 )
 from krach.ir.values import Note
-from krach.pattern.pattern import cc, note, rest
+from krach.pattern.pattern import cc, midi_note as note, rest
 
 
 class TestAtomConstructors:

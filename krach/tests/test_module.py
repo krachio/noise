@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from krach._mixer import Mixer
-from krach._module_ir import (
+from krach.ir.module import (
     ControlDef,
     ModuleIr,
     MutedDef,
@@ -337,7 +337,7 @@ def test_instantiate_applies_mutes() -> None:
 
 def test_capture_includes_patterns() -> None:
     """capture() must record running patterns in the ModuleIr."""
-    from krach._patterns import hit
+    from krach.pattern.builders import hit
 
     mixer = _make_mixer()
     with mixer.batch():
@@ -375,7 +375,7 @@ def test_instantiate_replays_patterns() -> None:
 
 def test_capture_instantiate_round_trip_with_patterns() -> None:
     """Full round-trip: capture with patterns → instantiate restores them."""
-    from krach._patterns import hit
+    from krach.pattern.builders import hit
 
     mixer1 = _make_mixer()
     with mixer1.batch():

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from krach.pattern.pattern import Pattern, rest
 
-from krach._patterns import hit, note
+from krach.pattern.builders import hit, note
 
 
 def p(notation: str, **kwargs: float) -> Pattern:

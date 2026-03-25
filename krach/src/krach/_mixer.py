@@ -14,15 +14,15 @@ from typing import Literal
 
 from krach.pattern.bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach._handle import NodeHandle
-from krach._module_ir import ControlDef, ModuleIr, MutedDef, NodeDef, PatternDef, RouteDef
-from krach._module_proxy import ModuleProxy
+from krach.ir.module import ModuleIr
+from krach._mixer_module import MixerModuleMixin
 from krach._types import (
     ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
     ResolvedSource, UnknownPath, resolve_dsp_source, resolve_path,
 )
 from krach._graph import inst_name as _inst_name
 from krach._mixer_infra import MixerInfra
-from krach._patterns import check_finite as _check_finite
+from krach.pattern.builders import check_finite as _check_finite
 from krach.pattern import Session
 from krach.pattern.pattern import Pattern
 
@@ -30,7 +30,7 @@ from krach.pattern.pattern import Pattern
 # ── Mixer ────────────────────────────────────────────────────────────────
 
 
-class Mixer(MixerInfra):
+class Mixer(MixerModuleMixin, MixerInfra):
     """Manages named audio nodes with stable control labels.
 
     Each node is a FAUST DSP source or effect (string type_id or Python function)
@@ -323,135 +323,6 @@ class Mixer(MixerInfra):
     def scenes(self) -> list[str]:
         """List of saved scene names."""
         return list(self._scenes.keys())
-
-    def trace(self) -> ModuleProxy:
-        """Return a tracing proxy that records calls as ModuleIr.
-
-        Usage::
-
-            proxy = kr.trace()
-            proxy.node("bass", bass_fn, gain=0.3)
-            proxy.send("bass", "verb", level=0.4)
-            ir = proxy.build()
-            kr.instantiate(ir)
-        """
-        return ModuleProxy()
-
-    def module(self, name: str) -> ModuleIr:
-        """Get a saved module/scene by name."""
-        if name not in self._scenes:
-            raise ValueError(f"module '{name}' not found")
-        return self._scenes[name]
-
-    def load(self, path: str) -> None:
-        """Load and execute a Python file with ``kr`` in scope."""
-        from krach._scene import load_file
-        load_file(path, {"kr": self, "mix": self})
-
-    # ── Module capture / instantiate ──────────────────────────────────
-
-    def capture(self) -> ModuleIr:
-        """Snapshot current mixer state as a frozen ModuleIr."""
-        nodes = tuple(
-            NodeDef(
-                name=name,
-                source=node.type_id,
-                gain=self._muted.get(name, node.gain),
-                count=node.count,
-                num_inputs=node.num_inputs,
-                init=node.init,
-                source_text=node.source_text,
-            )
-            for name, node in self._nodes.items()
-        )
-        routing: list[RouteDef] = []
-        for (src, tgt), level in self._sends.items():
-            routing.append(RouteDef(source=src, target=tgt, kind="send", level=level))
-        for (src, tgt), port in self._wires.items():
-            routing.append(RouteDef(source=src, target=tgt, kind="wire", port=port))
-
-        controls = tuple(
-            ControlDef(path=path, value=val)
-            for path, val in self._ctrl_values.items()
-        )
-        muted = tuple(
-            MutedDef(name=name, saved_gain=gain)
-            for name, gain in self._muted.items()
-        )
-        try:
-            tempo = float(self.tempo)
-        except (TypeError, ValueError):
-            tempo = None
-        try:
-            meter = float(self.meter)
-        except (TypeError, ValueError):
-            meter = None
-
-        patterns = tuple(
-            PatternDef(target=target, pattern=pat.node)
-            for target, pat in self._patterns.items()
-        )
-
-        return ModuleIr(
-            nodes=nodes,
-            routing=tuple(routing),
-            patterns=patterns,
-            controls=controls,
-            muted=muted,
-            tempo=tempo,
-            meter=meter,
-            master=self._master_gain,
-        )
-
-    def instantiate(self, ir: ModuleIr) -> None:
-        """Replay a ModuleIr onto this mixer. Batches all nodes into one rebuild."""
-        with self.batch():
-            for nd in ir.nodes:
-                self.voice(nd.name, nd.source, gain=nd.gain, count=nd.count, **dict(nd.init))
-                # Restore metadata that voice() can't infer from type_id alone
-                node = self._nodes[nd.name]
-                if nd.num_inputs:
-                    node.num_inputs = nd.num_inputs
-                if nd.source_text:
-                    node.source_text = nd.source_text
-
-        for rd in ir.routing:
-            if rd.kind == "send":
-                self.send(rd.source, rd.target, level=rd.level)
-            else:
-                self.wire(rd.source, rd.target, port=rd.port)
-
-        if ir.tempo is not None:
-            self.tempo = ir.tempo
-        if ir.meter is not None:
-            self.meter = ir.meter
-        if ir.master is not None:
-            self.master = ir.master
-
-        for cd in ir.controls:
-            self.set(cd.path, cd.value)
-
-        for pd in ir.patterns:
-            self.play(pd.target, Pattern(pd.pattern))
-
-        for md in ir.muted:
-            self.mute(md.name)
-
-    def export(self, path: str) -> None:
-        """Export current session state to a reloadable Python script."""
-        from krach._export import export_session
-        try:
-            tempo = float(self.tempo)
-        except (TypeError, ValueError):
-            tempo = 120.0
-        try:
-            meter = float(self.meter)
-        except (TypeError, ValueError):
-            meter = 4.0
-        export_session(
-            path, self._nodes, self._dsp_dir, self._sends, self._wires,
-            self._patterns, self._ctrl_values, tempo, meter, self._master_gain,
-        )
 
     def play(
         self, target: str, pattern: Pattern, *,

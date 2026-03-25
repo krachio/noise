@@ -5,7 +5,7 @@ import json
 import pytest
 from unittest.mock import MagicMock, patch
 
-from krach.pattern.pattern import note
+from krach.pattern.pattern import midi_note as note
 from krach.pattern.session import KernelError, Session
 
 

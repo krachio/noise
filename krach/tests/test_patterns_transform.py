@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from krach.pattern.pattern import note
+from krach.pattern.pattern import midi_note as note
 from krach.pattern.transform import reverse, fast, thin
 
 

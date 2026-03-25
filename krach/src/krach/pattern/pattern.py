@@ -64,7 +64,7 @@ class Pattern:
     node: PatternNode
 
     def __repr__(self) -> str:
-        from krach._ir_summary import summarize
+        from krach.pattern.summary import summarize
         return f"Pattern({summarize(self.node)})"
 
     # ── Operators ────────────────────────────────────────────────────────
@@ -154,7 +154,7 @@ class Pattern:
 # ── Atom constructors ────────────────────────────────────────────────────
 
 
-def note(
+def midi_note(
     pitch: int, velocity: int = 100, channel: int = 0, duration: float = 1.0
 ) -> Pattern:
     return Pattern(PatternNode(atom_p, (), AtomParams(Note(channel, pitch, velocity, duration))))
