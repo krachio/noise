@@ -147,3 +147,38 @@ def test_muted_def() -> None:
 def test_control_def() -> None:
     cd = ControlDef(path="bass/cutoff", value=1200.0)
     assert cd.value == 1200.0
+
+
+def test_module_ir_roundtrip_with_dsp_graph() -> None:
+    """ModuleIr round-trip preserves embedded DspGraph sources."""
+    from krach.ir.signal import (
+        DspGraph, Equation, NoParams, Signal, SignalType,
+    )
+    from krach.ir.primitive import Primitive
+    from krach.ir.canonicalize import canonicalize
+
+    s0 = Signal(aval=SignalType(), id=0, owner_id=0)
+    s1 = Signal(aval=SignalType(), id=1, owner_id=0)
+    graph = DspGraph(
+        inputs=(s0,),
+        outputs=(s1,),
+        equations=(
+            Equation(
+                primitive=Primitive("mul"),
+                inputs=(s0, s0),
+                outputs=(s1,),
+                params=NoParams(),
+            ),
+        ),
+    )
+    nd = NodeDef(name="bass", source=graph, gain=0.3)
+    assert nd.num_inputs == 1  # derived from DspGraph.inputs
+
+    ir = ModuleIr(nodes=(nd,))
+    d = ir.to_dict()
+    assert isinstance(d["nodes"][0]["source"], dict)
+    assert d["nodes"][0]["source"]["type"] == "dsp_graph"
+
+    restored = ModuleIr.from_dict(d)
+    assert isinstance(restored.nodes[0].source, DspGraph)
+    assert canonicalize(graph) == canonicalize(restored.nodes[0].source)

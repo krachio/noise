@@ -13,8 +13,21 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from krach._types import DspDef
 from krach.ir.pattern import PatternNode
+from krach.ir.primitive import Primitive
+from krach.ir.signal import (
+    ConstParams,
+    ControlParams,
+    DelayParams,
+    DspGraph,
+    Equation,
+    FaustExprParams,
+    FeedbackParams,
+    NoParams,
+    Precision,
+    Signal,
+    SignalType,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,12 +35,16 @@ class NodeDef:
     """Specification of an audio node."""
 
     name: str
-    source: DspDef | str
+    source: DspGraph | str
     gain: float = 0.5
     count: int = 1
     num_inputs: int = 0
     init: tuple[tuple[str, float], ...] = ()
     source_text: str = ""
+
+    def __post_init__(self) -> None:
+        if isinstance(self.source, DspGraph) and self.num_inputs == 0:
+            object.__setattr__(self, "num_inputs", len(self.source.inputs))
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,12 +124,7 @@ class ModuleIr:
 
         d: dict[str, Any] = {}
         if self.nodes:
-            d["nodes"] = [
-                {"name": n.name, "source": n.source if isinstance(n.source, str) else n.source.faust,
-                 "gain": n.gain, "count": n.count, "num_inputs": n.num_inputs,
-                 "init": list(n.init), "source_text": n.source_text}
-                for n in self.nodes
-            ]
+            d["nodes"] = [_node_def_to_dict(n) for n in self.nodes]
         if self.routing:
             d["routing"] = [
                 {"source": r.source, "target": r.target, "kind": r.kind,
@@ -152,15 +164,7 @@ class ModuleIr:
         """Deserialize from a dict (inverse of to_dict)."""
         from krach.pattern.serialize import dict_to_pattern_node
 
-        nodes = tuple(
-            NodeDef(
-                name=n["name"], source=n["source"], gain=n["gain"],
-                count=n["count"], num_inputs=n.get("num_inputs", 0),
-                init=tuple(tuple(x) for x in n["init"]),
-                source_text=n.get("source_text", ""),
-            )
-            for n in d.get("nodes", ())
-        )
+        nodes = tuple(_dict_to_node_def(n) for n in d.get("nodes", ()))
         routing = tuple(
             RouteDef(
                 source=r["source"], target=r["target"], kind=r["kind"],
@@ -201,3 +205,135 @@ class ModuleIr:
             tempo=d.get("tempo"), meter=d.get("meter"), master=d.get("master"),
             sub_modules=sub_modules,
         )
+
+
+# ---------------------------------------------------------------------------
+# DspGraph serialization
+# ---------------------------------------------------------------------------
+
+_PRECISION_MAP = {Precision.FLOAT32: "float", Precision.FLOAT64: "double"}
+_PRECISION_REV = {v: k for k, v in _PRECISION_MAP.items()}
+
+
+def _signal_to_dict(s: Signal) -> dict[str, Any]:
+    return {"id": s.id, "channels": s.aval.channels, "precision": _PRECISION_MAP[s.aval.precision]}
+
+
+def _dict_to_signal(d: dict[str, Any]) -> Signal:
+    return Signal(
+        aval=SignalType(channels=d["channels"], precision=_PRECISION_REV[d["precision"]]),
+        id=d["id"], owner_id=0,
+    )
+
+
+def _params_to_dict(p: NoParams | ConstParams | DelayParams | FeedbackParams | FaustExprParams | ControlParams) -> dict[str, Any]:
+    match p:
+        case NoParams():
+            return {"type": "no"}
+        case ConstParams(value=v):
+            return {"type": "const", "value": v}
+        case DelayParams():
+            return {"type": "delay"}
+        case FaustExprParams(template=t):
+            return {"type": "faust_expr", "template": t}
+        case ControlParams(name=n, init=i, lo=lo, hi=hi, step=s):
+            return {"type": "control", "name": n, "init": i, "lo": lo, "hi": hi, "step": s}
+        case FeedbackParams(body_graph=bg, feedback_input_index=idx, free_var_signals=fvs):
+            return {
+                "type": "feedback",
+                "body_graph": dsp_graph_to_dict(bg),
+                "feedback_input_index": idx,
+                "free_var_signals": [_signal_to_dict(s) for s in fvs],
+            }
+        case _:
+            raise TypeError(f"unhandled params type: {type(p).__name__}")
+
+
+def _dict_to_params(d: dict[str, Any]) -> NoParams | ConstParams | DelayParams | FeedbackParams | FaustExprParams | ControlParams:
+    match d["type"]:
+        case "no":
+            return NoParams()
+        case "const":
+            return ConstParams(value=d["value"])
+        case "delay":
+            return DelayParams()
+        case "faust_expr":
+            return FaustExprParams(template=d["template"])
+        case "control":
+            return ControlParams(name=d["name"], init=d["init"], lo=d["lo"], hi=d["hi"], step=d["step"])
+        case "feedback":
+            return FeedbackParams(
+                body_graph=dict_to_dsp_graph(d["body_graph"]),
+                feedback_input_index=d["feedback_input_index"],
+                free_var_signals=tuple(_dict_to_signal(s) for s in d["free_var_signals"]),
+            )
+        case _:
+            raise ValueError(f"unknown params type: {d['type']!r}")
+
+
+def dsp_graph_to_dict(graph: DspGraph) -> dict[str, Any]:
+    """Serialize a DspGraph to a JSON-friendly dict."""
+    return {
+        "type": "dsp_graph",
+        "inputs": [_signal_to_dict(s) for s in graph.inputs],
+        "outputs": [_signal_to_dict(s) for s in graph.outputs],
+        "equations": [
+            {
+                "primitive": {"name": e.primitive.name, "stateful": e.primitive.stateful},
+                "inputs": [_signal_to_dict(s) for s in e.inputs],
+                "outputs": [_signal_to_dict(s) for s in e.outputs],
+                "params": _params_to_dict(e.params),
+            }
+            for e in graph.equations
+        ],
+        "precision": _PRECISION_MAP[graph.precision],
+    }
+
+
+def dict_to_dsp_graph(d: dict[str, Any]) -> DspGraph:
+    """Deserialize a DspGraph from a dict."""
+    return DspGraph(
+        inputs=tuple(_dict_to_signal(s) for s in d["inputs"]),
+        outputs=tuple(_dict_to_signal(s) for s in d["outputs"]),
+        equations=tuple(
+            Equation(
+                primitive=Primitive(name=e["primitive"]["name"], stateful=e["primitive"]["stateful"]),
+                inputs=tuple(_dict_to_signal(s) for s in e["inputs"]),
+                outputs=tuple(_dict_to_signal(s) for s in e["outputs"]),
+                params=_dict_to_params(e["params"]),
+            )
+            for e in d["equations"]
+        ),
+        precision=_PRECISION_REV[d["precision"]],
+    )
+
+
+# ---------------------------------------------------------------------------
+# NodeDef serialization helpers
+# ---------------------------------------------------------------------------
+
+
+def _node_def_to_dict(n: NodeDef) -> dict[str, Any]:
+    if isinstance(n.source, DspGraph):
+        source: Any = dsp_graph_to_dict(n.source)
+    else:
+        source = n.source
+    return {
+        "name": n.name, "source": source, "gain": n.gain, "count": n.count,
+        "num_inputs": n.num_inputs, "init": list(n.init), "source_text": n.source_text,
+    }
+
+
+def _dict_to_node_def(d: dict[str, Any]) -> NodeDef:
+    raw_source = d["source"]
+    source: DspGraph | str
+    if isinstance(raw_source, dict):
+        source = dict_to_dsp_graph(raw_source)  # type: ignore[arg-type]
+    else:
+        source = str(raw_source)
+    return NodeDef(
+        name=d["name"], source=source, gain=d["gain"],
+        count=d["count"], num_inputs=d.get("num_inputs", 0),
+        init=tuple(tuple(x) for x in d["init"]),
+        source_text=d.get("source_text", ""),
+    )
