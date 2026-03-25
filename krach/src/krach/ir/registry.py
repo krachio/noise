@@ -51,3 +51,12 @@ class RuleRegistry(Generic[P, R]):
 
     def __len__(self) -> int:
         return len(self._rules)
+
+    def check_complete(self, expected: frozenset[P]) -> None:
+        """Assert all expected keys have registered rules. Raises RuntimeError if incomplete."""
+        missing = expected - self._rules.keys()
+        if missing:
+            names = sorted(getattr(k, "name", repr(k)) for k in missing)
+            raise RuntimeError(
+                f"{self._name} rules incomplete — missing: {', '.join(names)}"
+            )

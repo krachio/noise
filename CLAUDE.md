@@ -53,7 +53,7 @@ Flat data, obvious flow, no unnecessary abstraction. Every type must map to a do
 - Structs with public fields, free functions that transform them
 - `Vec`/`std::vector` with `reserve`/`with_capacity` for hot paths
 - Templates/generics for callback inlining
-- Single-file modules up to ~500 lines
+- ~500 lines for multi-concern modules; cohesive single-class files up to ~800. Split on concern boundaries, not line counts
 - Value types, contiguous storage, POD where possible
 - `assert`/`debug_assert!` for contract violations
 - Short names: `count`, `key`, `scratch` — not `eventCounter`, `temporaryScratchBuffer`

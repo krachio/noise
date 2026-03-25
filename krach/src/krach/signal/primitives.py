@@ -276,3 +276,16 @@ def _control_eval(*, params: PrimitiveParams) -> SignalType:
 
 
 abstract_eval.register(control_p, _control_eval)
+
+# ── Completeness set ─────────────────────────────────────────────────────
+
+ALL_SIGNAL_PRIMITIVES: frozenset[Primitive] = frozenset({
+    add_p, sub_p, mul_p, div_p, mod_p, const_p,
+    mem_p, delay_p, feedback_p, sr_p,
+    *UNARY_MATH_PRIMS.values(),
+    *BINARY_MATH_PRIMS.values(),
+    *COMPARISON_PRIMS.values(),
+    select2_p, control_p, faust_expr_p,
+})
+
+abstract_eval.check_complete(ALL_SIGNAL_PRIMITIVES)
