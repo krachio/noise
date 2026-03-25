@@ -26,9 +26,9 @@ def start_session(build: bool = True, bpm: float = 120, master: float = 0.7) -> 
 
 def _connect(build: bool, bpm: float = 120, master: float = 0.7) -> Mixer:
     """Connect to krach-engine. Raises RuntimeError with guidance on failure."""
-    import krach
+    from krach.repl import connect
     try:
-        return krach.connect(bpm=bpm, master=master, build=build)
+        return connect(bpm=bpm, master=master, build=build)
     except (FileNotFoundError, RuntimeError) as e:
         if not build:
             raise RuntimeError(
