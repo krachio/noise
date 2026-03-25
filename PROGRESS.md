@@ -97,18 +97,19 @@ kr.mute("drums")
 
 ## Next
 
-### Module system: composition layer (done)
+### Engine state sync: multi-client support (priority: high)
 
-`kr.capture()` → `ModuleIr` → `kr.instantiate(ir)`. `kr.trace()` returns
-a proxy that records calls without audio. `ModuleIr.to_dict()` / `.from_dict()`
-for JSON persistence. save/recall use ModuleIr under the hood.
+Add `Status` IPC command so multiple Python clients (REPL + MCP, or two
+REPLs) share a single engine and see consistent state. Engine is the source
+of truth; Python syncs on connect via `Mixer.pull()`.
+See plan: `~/.claude/plans/engine-state-sync.md`
 
-### Stage 10: Template caching (priority: medium)
+### Template caching (priority: medium)
 
 XLA-style compilation cache for the pattern compiler. Hash pattern structure
 (excluding seeds/cycle), cache EventTemplates.
 
-### Stage 12: WASM Engine — full krach in the browser (priority: high)
+### WASM Engine — full krach in the browser (priority: high)
 
 Compile the actual Rust engine to WASM instead of reimplementing in JS.
 Same code, different compile target. FAUST JIT in browser via libfaust-wasm.
