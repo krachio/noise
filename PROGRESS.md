@@ -131,28 +131,24 @@ kr.mute("drums")
 
 ## Backlog
 
-### Homebrew formula (priority: high, boring)
-
-Secondary install channel (`brew install krach`). Create krachio/homebrew-tap
-repo with formula that installs PyPI wheel into venv. ~1 hour.
-
-### macOS Intel wheel (priority: medium, blocked)
-
-Requires paid `-large` GitHub Actions runner (macos-13 deprecated).
-Re-enable in release.yml when billing is set up.
-
 ### krach-lib — application library (priority: high, fun)
 
 Separate package (`pip install krach-lib`). DSP recipes + convenience
 wrappers built on the krach public API. NOT core — application code.
-Includes: looper (.dsp + Python wrapper), drum kits, synth presets.
+Includes: looper (FAUST .dsp + Python wrapper), drum kits, synth presets.
+
+### WASM Engine — full krach in the browser (priority: high)
+
+Compile the actual Rust engine to WASM instead of reimplementing in JS.
+Same code, different compile target. FAUST JIT in browser via libfaust-wasm.
+Network sockets (TCP) already done — browser client just needs WebSocket upgrade.
 
 ### Template caching (priority: medium)
 
 XLA-style compilation cache for the pattern compiler. Hash pattern structure
 (excluding seeds/cycle), cache EventTemplates. Rust pattern-engine.
 
-### WASM Engine — full krach in the browser (priority: high)
+### macOS Intel wheel (priority: medium, blocked)
 
-Compile the actual Rust engine to WASM instead of reimplementing in JS.
-Same code, different compile target. FAUST JIT in browser via libfaust-wasm.
+Requires paid `-large` GitHub Actions runner (macos-13 deprecated).
+Re-enable in release.yml when billing is set up.
