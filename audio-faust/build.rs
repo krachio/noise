@@ -106,6 +106,7 @@ fn platform_llvm_default() -> String {
             "/usr/local/opt/llvm/lib".to_string()
         }
     } else {
-        "/usr/lib/llvm/lib".to_string()
+        // Try common versioned paths on Debian/Ubuntu/Fedora
+        "/usr/lib/llvm-18/lib".to_string()
     }
 }

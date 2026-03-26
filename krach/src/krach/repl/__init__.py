@@ -122,7 +122,9 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> LiveMi
     # Point engine at vendored libs if available
     lib_dir = resolve_lib_dir()
     if lib_dir:
-        env["DYLD_LIBRARY_PATH"] = str(lib_dir)
+        import sys
+        lib_path_var = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
+        env[lib_path_var] = str(lib_dir)
 
     stdlib_dir = resolve_faust_stdlib_dir()
     if stdlib_dir:
