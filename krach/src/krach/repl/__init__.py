@@ -193,6 +193,24 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> LiveMi
 
 
 def main() -> None:
+    import sys
+
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print("krach — live coding audio system")
+        print()
+        print("Usage: krach [--help]")
+        print()
+        print("Starts an IPython REPL with kr (Mixer) and krs (DSP) pre-loaded.")
+        print("Requires: krach-engine binary (bundled in wheel or cargo build).")
+        print()
+        print("  kr.node('bass', bass_fn)    create a DSP node")
+        print("  bass >> verb                 route signal")
+        print("  bass @ kr.seq('A2', 'D3')   play a pattern")
+        print("  kr.tempo = 128              set tempo")
+        print()
+        print("https://krach.io")
+        return
+
     from krach.pattern.pitch import NOTES as _NOTES
     import krach.dsp as krs
 

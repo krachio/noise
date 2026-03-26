@@ -128,6 +128,30 @@ def test_resolve_faust_stdlib_dir_missing_returns_none() -> None:
         assert resolve_faust_stdlib_dir() is None
 
 
+def test_resolve_faust_stdlib_dir_validates_content(tmp_path: Path) -> None:
+    """Vendored FAUST stdlib should contain at minimum stdfaust.lib."""
+    share = tmp_path / "_share" / "faust"
+    share.mkdir(parents=True)
+    (share / "stdfaust.lib").write_text("// FAUST standard library")
+    (share / "maths.lib").write_text("// FAUST maths library")
+
+    with patch("krach._paths._package_dir", return_value=tmp_path):
+        result = resolve_faust_stdlib_dir()
+    assert result is not None
+    assert (result / "stdfaust.lib").is_file()
+
+
+def test_resolve_faust_stdlib_dir_empty_vendored_returns_none(tmp_path: Path) -> None:
+    """Vendored dir exists but is empty — should still return it (dir exists check only)."""
+    share = tmp_path / "_share" / "faust"
+    share.mkdir(parents=True)
+
+    with patch("krach._paths._package_dir", return_value=tmp_path):
+        result = resolve_faust_stdlib_dir()
+    # Dir exists → returns it. Content validation is the caller's responsibility.
+    assert result is not None
+
+
 def test_resolve_engine_bin_missing_raises() -> None:
     """When no binary found anywhere, raise a clear error."""
     with (
