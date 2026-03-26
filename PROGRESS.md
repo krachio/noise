@@ -130,30 +130,32 @@ kr.mute("drums")
 
 ## Backlog
 
-### macOS Intel wheel (priority: medium)
-
-Requires paid `-large` GitHub Actions runner (macos-13 deprecated).
-Re-enable `macos-14-large` matrix entry in release.yml when billing is set up.
-
-### Homebrew formula (priority: high)
+### Homebrew formula (priority: high, boring)
 
 Secondary install channel (`brew install krach`). Create krachio/homebrew-tap
-repo with formula that installs PyPI wheel into venv.
+repo with formula that installs PyPI wheel into venv. ~1 hour.
 
-### Looper (priority: high)
-
-Record live audio input into a buffer, play back as a pattern-triggered node.
-`kr.record("loop1", bars=4)` → captures audio → `loop1 @ kr.hit() * 4`.
-
-### Network sockets (priority: high)
+### Network sockets (priority: high, boring)
 
 TCP instead of Unix socket. Enables: remote jam sessions, multi-machine
-setups, web client → engine communication. Prerequisite for browser REPL.
+setups, web client → engine communication. Prerequisite for WASM browser.
+~1-2 days (Rust krach-engine + Python session.py).
+
+### macOS Intel wheel (priority: medium, blocked)
+
+Requires paid `-large` GitHub Actions runner (macos-13 deprecated).
+Re-enable in release.yml when billing is set up.
+
+### krach-lib — application library (priority: high, fun)
+
+Separate package (`pip install krach-lib`). DSP recipes + convenience
+wrappers built on the krach public API. NOT core — application code.
+Includes: looper (.dsp + Python wrapper), drum kits, synth presets.
 
 ### Template caching (priority: medium)
 
 XLA-style compilation cache for the pattern compiler. Hash pattern structure
-(excluding seeds/cycle), cache EventTemplates.
+(excluding seeds/cycle), cache EventTemplates. Rust pattern-engine.
 
 ### WASM Engine — full krach in the browser (priority: high)
 
