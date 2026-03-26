@@ -219,10 +219,65 @@ jobs:
           name: wheel-${{ matrix.target }}
           path: krach/dist/*.whl
 
-  # ── Publish to PyPI ─────────────────────────────────────────────────
+  # ── Clean-install test ───────────────────────────────────────────────
+
+  clean-install:
+    needs: build
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            artifact: wheel-macos-arm64
+          - os: ubuntu-22.04
+            artifact: wheel-linux-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist
+
+      - name: Install wheel in fresh venv
+        run: |
+          uv venv /tmp/clean-venv
+          VIRTUAL_ENV=/tmp/clean-venv uv pip install dist/*.whl
+
+      - name: Verify krach --help
+        run: /tmp/clean-venv/bin/krach --help
+
+      - name: Verify krach --version
+        run: |
+          VERSION=$(/tmp/clean-venv/bin/krach --version)
+          echo "$VERSION"
+          echo "$VERSION" | grep -q "krach 0\."
+
+      - name: Verify vendored paths resolve
+        run: |
+          /tmp/clean-venv/bin/python -c "
+          from krach._paths import resolve_engine_bin, resolve_lib_dir, resolve_faust_stdlib_dir
+          import os, stat
+
+          engine = resolve_engine_bin()
+          assert engine.is_file(), f'engine not found: {engine}'
+          assert os.access(engine, os.X_OK), f'engine not executable: {engine}'
+
+          lib_dir = resolve_lib_dir()
+          assert lib_dir is not None and lib_dir.is_dir(), f'lib_dir not found: {lib_dir}'
+
+          stdlib = resolve_faust_stdlib_dir()
+          assert stdlib is not None and stdlib.is_dir(), f'stdlib not found: {stdlib}'
+
+          print('Clean-install verification passed')
+          "
+
+  # ── Publish to PyPI ──────────────────────────────────────────────────
 
   publish:
-    needs: build
+    needs: [build, clean-install]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -239,3 +294,28 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: dist
+
+  # ── GitHub Release ───────────────────────────────────────────────────
+
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          gh release create "$TAG" dist/*.whl \
+            --title "$TAG" \
+            --generate-notes
