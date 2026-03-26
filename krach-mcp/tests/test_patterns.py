@@ -1,7 +1,7 @@
 """Tests for pattern parsing — mini-notation and builder expressions."""
 
 import pytest
-from krach.patterns.pattern import Pattern
+from krach.pattern.pattern import Pattern
 from krach_mcp._patterns import parse_pattern
 
 
@@ -59,3 +59,24 @@ def test_eval_no_builtins() -> None:
     """Builder eval must not have access to builtins like open(), exec(), etc."""
     with pytest.raises(ValueError, match="cannot parse"):
         parse_pattern("__import__('os').system('echo pwned')")
+
+
+# ── Issue #3: chord() and euclid() in MCP play ────────────────────────────
+
+
+def test_builder_chord() -> None:
+    """chord('D4', 'F4', 'A4') must produce a valid Pattern (Stack of notes)."""
+    pat = parse_pattern("chord('D4', 'F4', 'A4')")
+    assert isinstance(pat, Pattern)
+
+
+def test_builder_euclid() -> None:
+    """euclid(5, 16) must produce a valid Pattern (hit spread over steps)."""
+    pat = parse_pattern("euclid(5, 16)")
+    assert isinstance(pat, Pattern)
+
+
+def test_builder_euclid_with_rotation() -> None:
+    """euclid(3, 8, 2) must accept rotation parameter."""
+    pat = parse_pattern("euclid(3, 8, 2)")
+    assert isinstance(pat, Pattern)

@@ -14,6 +14,17 @@ from krach.pattern.builders import (
 )
 from krach.pattern.pattern import Pattern, rest
 
+
+def chord(*notes: str | int | float) -> Pattern:
+    """Build a chord — simultaneous notes stacked for polyphonic playback."""
+    return note(*notes)
+
+
+def euclid(pulses: int, steps: int, rotation: int = 0) -> Pattern:
+    """Build a Euclidean rhythm — evenly distribute pulses across steps."""
+    return (hit() * steps).spread(pulses, steps, rotation)
+
+
 # Namespace for eval — only safe pattern builders, no I/O, no internal types
 _EVAL_NS: dict[str, object] = {
     "note": note,
@@ -23,6 +34,8 @@ _EVAL_NS: dict[str, object] = {
     "cat": cat,
     "stack": stack,
     "struct": struct,
+    "chord": chord,
+    "euclid": euclid,
     "ramp": ramp,
     "rand": rand,
     "sine": sine,
