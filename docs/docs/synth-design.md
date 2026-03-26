@@ -170,7 +170,7 @@ def simple_reverb(inp: krs.Signal) -> krs.Signal:
     return krs.reverb(inp, room)
 
 kr.node("verb", simple_reverb, gain=0.3)  # auto-detected as effect
-kr.send("bass", "verb", level=0.4)
+kr.connect("bass", "verb", level=0.4)
 ```
 
 !!! warning "Do NOT use `krs.control('in', ...)` for audio input"

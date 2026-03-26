@@ -115,13 +115,11 @@ Write reusable setup scripts by hand:
 
 ```python
 # my_kit.py -- reusable drum kit setup
-@kr.dsp
 def kick() -> krs.Signal:
     gate = krs.control("gate", 0.0, 0.0, 1.0)
     env = krs.adsr(0.001, 0.25, 0.0, 0.05, gate)
     return krs.sine_osc(55.0 + env * 200.0) * env * 0.9
 
-@kr.dsp
 def hat() -> krs.Signal:
     gate = krs.control("gate", 0.0, 0.0, 1.0)
     env = krs.adsr(0.001, 0.04, 0.0, 0.02, gate)

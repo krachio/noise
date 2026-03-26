@@ -71,7 +71,7 @@ from krach.pattern.serialize import dict_to_pattern_node
 with kr.batch():
     kr.node("bass", bass_fn, gain=0.3)
     kr.node("verb", reverb_fn, gain=0.3)
-kr.send("bass", "verb", level=0.4)
+kr.connect("bass", "verb", level=0.4)
 kr.tempo = 128
 # ... patterns, controls, etc.
 ```

@@ -48,7 +48,6 @@ beats themselves.
 ### Swung hi-hat
 
 ```python
-@kr.dsp
 def hat() -> krs.Signal:
     gate = krs.control("gate", 0.0, 0.0, 1.0)
     env = krs.adsr(0.001, 0.04, 0.0, 0.02, gate)

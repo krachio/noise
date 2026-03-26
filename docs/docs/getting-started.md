@@ -61,6 +61,14 @@ b @ ("cutoff", kr.sine(200, 2000).over(4))
 
 ## Install
 
+### Option A: pip (prebuilt wheel — macOS ARM64, macOS x86_64, Linux x86_64)
+
+```bash
+pip install krach
+```
+
+### Option B: from source
+
 ```bash
 git clone https://github.com/krachio/noise.git
 cd noise
@@ -180,6 +188,18 @@ bass >> (reverb, 0.4)    # send at 40% level
 The `>>` operator routes signal between nodes. Use a tuple `(target, level)` for
 gain-controlled sends, or just `bass >> reverb` for unity gain.
 
+## Native automation with `kr.mod()`
+
+For block-rate modulation on the audio thread (no per-event IPC):
+
+```python
+kr.mod("bass/cutoff", "sine", lo=200, hi=2000, bars=4)   # sine LFO
+kr.mod("verb/room", "ramp", lo=0.2, hi=0.9, bars=8)      # linear ramp
+kr.mod("hat/gain", "square", lo=0.0, hi=0.5, bars=2)     # on/off
+```
+
+Shapes: `"sine"`, `"tri"`, `"ramp"`, `"square"`. Runs entirely on the engine — zero Python overhead per cycle.
+
 ## Live performance
 
 ```python
@@ -217,8 +237,21 @@ kr.load("my_session.py")
 
 All operators have explicit equivalents: `kr.connect()`, `kr.play()`, `kr.set()`.
 
+## Error recovery
+
+| Symptom | Fix |
+|---|---|
+| No sound | Check `kr.master` (should be > 0), check node gain, check `kr.tempo` > 0 |
+| `ConnectionError` on `kr.node()` | Engine not running — restart with `./bin/krach` |
+| `"unknown node"` on `kr.play()` | Create the node first with `kr.node()` |
+| `"unknown port"` on `kr.connect()` | Target is a source, not an effect — effects need `inp: krs.Signal` parameter |
+| Clicks / zipper noise | Non-gate controls are auto-smoothed. If using `faust_expr`, apply `si.smoo` manually |
+| Pattern sounds wrong | Check `.over(N)` — without it, the full sequence plays in one cycle |
+| Engine crash | Check `~/.krach/engine.log`. Rebuild with `cargo build --release -p krach-engine` |
+
 ## Next steps
 
 - [Synth Design](synth-design.md) — deep dive into DSP functions and `krs` primitives
 - [Patterns](patterns.md) — pattern algebra, combinators, composition
 - [Effect Routing](effect-routing.md) — node routing, `>>` operator, sends, wires
+- [API Reference](api-reference.md) — complete API for `kr`, `krs`, patterns

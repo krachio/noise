@@ -220,13 +220,11 @@ kr.remove("verb")
 
 ```python
 # Define synths
-@kr.dsp
 def kick() -> krs.Signal:
     gate = krs.control("gate", 0.0, 0.0, 1.0)
     env = krs.adsr(0.001, 0.25, 0.0, 0.05, gate)
     return krs.sine_osc(55.0 + env * 200.0) * env * 0.9
 
-@kr.dsp
 def acid_bass() -> krs.Signal:
     freq = krs.control("freq", 55.0, 20.0, 800.0)
     gate = krs.control("gate", 0.0, 0.0, 1.0)
@@ -234,11 +232,9 @@ def acid_bass() -> krs.Signal:
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
-@kr.dsp
-def reverb_fx() -> krs.Signal:
+def reverb_fx(inp: krs.Signal) -> krs.Signal:
     room = krs.control("room", 0.6, 0.0, 1.0)
-    sig = krs.control("in0", 0.0, -1.0, 1.0)
-    return krs.reverb(sig, room)
+    return krs.reverb(inp, room)
 
 # Set up nodes
 with kr.batch():

@@ -35,7 +35,7 @@ bass["cutoff"] = 1200                               # set control
 ## Quick links
 
 - [Getting Started](getting-started.md) — install, first sound, first sequence
-- [Synth Design](synth-design.md) — `@kr.dsp`, `krs` primitives, hot reload
+- [Synth Design](synth-design.md) — `krs` primitives, DSP functions, hot reload
 - [Patterns](patterns.md) — pattern algebra, combinators, composition
 - [Effect Routing](effect-routing.md) — nodes, routing
 - [Architecture](architecture.md) — how the system works under the hood
