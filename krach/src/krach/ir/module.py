@@ -408,3 +408,48 @@ def prefix_ir(ir: ModuleIr, prefix: str) -> ModuleIr:
         tempo=ir.tempo, meter=ir.meter, master=ir.master,
         inputs=inputs, outputs=outputs, sub_modules=sub_modules,
     )
+
+
+# ---------------------------------------------------------------------------
+# flatten — recursive sub_module resolution
+# ---------------------------------------------------------------------------
+
+
+def flatten(ir: ModuleIr) -> ModuleIr:
+    """Recursively resolve sub_modules into a flat ModuleIr."""
+    nodes = list(ir.nodes)
+    routing = list(ir.routing)
+    patterns = list(ir.patterns)
+    controls = list(ir.controls)
+    automations = list(ir.automations)
+    muted = list(ir.muted)
+
+    for prefix, child in ir.sub_modules:
+        prefixed = prefix_ir(child, prefix)
+        flat_child = flatten(prefixed)
+        nodes.extend(flat_child.nodes)
+        routing.extend(flat_child.routing)
+        patterns.extend(flat_child.patterns)
+        controls.extend(flat_child.controls)
+        automations.extend(flat_child.automations)
+        muted.extend(flat_child.muted)
+
+    result = ModuleIr(
+        nodes=tuple(nodes), routing=tuple(routing), patterns=tuple(patterns),
+        controls=tuple(controls), automations=tuple(automations), muted=tuple(muted),
+        tempo=ir.tempo, meter=ir.meter, master=ir.master,
+        inputs=ir.inputs, outputs=ir.outputs, sub_modules=(),
+    )
+
+    # Validate inputs/outputs reference existing node names
+    node_names = {n.name for n in result.nodes}
+    if result.inputs is not None:
+        for name in result.inputs:
+            if name not in node_names:
+                raise ValueError(f"input {name!r} not found in flattened nodes: {sorted(node_names)}")
+    if result.outputs is not None:
+        for name in result.outputs:
+            if name not in node_names:
+                raise ValueError(f"output {name!r} not found in flattened nodes: {sorted(node_names)}")
+
+    return result
