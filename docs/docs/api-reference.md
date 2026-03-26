@@ -317,13 +317,4 @@ All DSP building blocks. `import krach.dsp as krs`.
 
 ### Signal arithmetic
 
-`krs.Signal` supports `+`, `-`, `*`, `/`, `//`, `%`, `**`, `-` (negation), and comparisons via named functions:
-
-| Function | Description |
-|---|---|
-| `krs.gt(a, b)` | Greater than |
-| `krs.lt(a, b)` | Less than |
-| `krs.ge(a, b)` | Greater or equal |
-| `krs.le(a, b)` | Less or equal |
-| `krs.eq(a, b)` | Equal |
-| `krs.ne(a, b)` | Not equal |
+`krs.Signal` supports `+`, `-`, `*`, `/`, `//`, `%`, `**`, `-` (negation), and comparisons (`>`, `<`, `>=`, `<=`, `==`, `!=`) via operator overloads.

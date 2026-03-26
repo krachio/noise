@@ -2,11 +2,9 @@
 
 ## 5-minute beat
 
-Already installed? Paste this into the REPL and hear a full track:
+Already installed? Start the REPL with `./bin/krach` and paste:
 
 ```python
-import krach.dsp as krs
-
 def kick() -> krs.Signal:
     gate = krs.control("gate", 0.0, 0.0, 1.0)
     env = krs.adsr(0.001, 0.25, 0.0, 0.05, gate)
