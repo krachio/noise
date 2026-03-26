@@ -55,9 +55,9 @@ REPL entry: `krach.repl.connect()` returns `LiveMixer` with `kr.note()`, `kr.seq
 - audio-faust: 29 Rust tests
 - pattern-engine: 175 Rust tests
 - krach-engine: 32 Rust tests
-- krach: 765 Python tests
+- krach: 839 Python tests
 - krach-mcp: 21 Python tests
-- **Total: 1189 tests**, all green. Pyright strict clean.
+- **Total: 1263 tests**, all green. Pyright strict clean.
 
 ## Usage
 
@@ -119,7 +119,8 @@ kr.mute("drums")
 - **MCP server**: 25 tools for Claude Code to drive krach — chord(), euclid(), AST-safe pattern eval
 - **Pattern IR**: PatternNode tree with per-primitive rules, generic fold, structural `__repr__`
 - **DspGraph caching**: `dsp()` LRU keyed by `graph_key` (structural hash of DspGraph)
-- **Module system**: `kr.capture()` → ModuleIr, `kr.load(ir)`, `kr.trace()` proxy
+- **Module composition**: `prefix_ir()`, `flatten()`, `@kr.module` decorator, `ModuleHandle` with `>>`, `@`, `[]` operators
+- **Module system**: `kr.capture()` → ModuleIr, `kr.load(ir)`, `kr.instantiate(ir, prefix)` → ModuleHandle, `kr.trace()` proxy
 - **ModuleIr serialization**: `to_dict()` / `from_dict()` — JSON round-trip for persistence
 - **Batch rollback**: all 6 state dicts restored on failed `with kr.batch():`
 - **Engine state sync**: `{"cmd":"Status"}` IPC returns full snapshot; `kr.pull()` syncs Python from engine; MCP auto-syncs on status()
