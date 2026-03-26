@@ -321,6 +321,34 @@ impl Engine {
         self.clock_source
     }
 
+    /// Flush the heap and reset all cycle counters to 0.
+    /// Used on MIDI Start (0xFA) — "now is beat 1".
+    pub fn flush_and_reset(&mut self) {
+        self.clock = Clock::new(self.clock.bpm(), self.clock.beats_per_cycle());
+        self.heap.clear();
+        self.next_cycle.fill(0);
+        self.phase_offset.fill(0);
+    }
+
+    /// Nudge the clock start by a signed offset (seconds).
+    /// Positive shifts events later (start moves forward), negative shifts earlier.
+    /// Used for gradual phase correction against external clock.
+    pub fn nudge_clock(&mut self, offset_secs: f64) {
+        if offset_secs > 0.0 {
+            self.clock = Clock::with_start(
+                self.clock.bpm(),
+                self.clock.beats_per_cycle(),
+                self.clock.start() + Duration::from_secs_f64(offset_secs),
+            );
+        } else if offset_secs < 0.0 {
+            self.clock = Clock::with_start(
+                self.clock.bpm(),
+                self.clock.beats_per_cycle(),
+                self.clock.start() - Duration::from_secs_f64(offset_secs.abs()),
+            );
+        }
+    }
+
     /// Resolve a slot index to its name. Returns `"?"` for unknown indices.
     #[must_use]
     pub fn slot_name(&self, idx: usize) -> &str {

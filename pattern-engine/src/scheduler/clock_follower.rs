@@ -99,6 +99,16 @@ impl ClockFollower {
             .is_some_and(|last| now.duration_since(last) > timeout)
     }
 
+    /// Current EMA tick interval in seconds, or None if no intervals yet.
+    #[must_use]
+    pub fn expected_interval(&self) -> Option<f64> {
+        if self.ema_interval > 0.0 {
+            Some(self.ema_interval)
+        } else {
+            None
+        }
+    }
+
     /// Current BPM estimate, or None if no ticks received yet.
     #[must_use]
     pub fn bpm(&self) -> Option<f64> {

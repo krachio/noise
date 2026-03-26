@@ -23,11 +23,22 @@ use audio_faust::hot_reload::HotReloadEngine;
 use pattern_engine::engine::{Engine, EngineCommand};
 use pattern_engine::event::{OscArg, Value};
 use pattern_engine::output::{self, OutputSink};
+use pattern_engine::scheduler::clock::ClockSource;
+use pattern_engine::scheduler::clock_follower::ClockFollower;
 
 const DEFAULT_BPM: f64 = 120.0;
 const BEATS_PER_CYCLE: f64 = 4.0;
 const LOOKAHEAD: Duration = Duration::from_millis(100);
 const MAX_SLEEP: Duration = Duration::from_millis(1);
+
+/// Phase correction factor per tick. 10% correction converges in ~10 ticks (~200ms at 120 BPM).
+const PHASE_CORRECTION_RATE: f64 = 0.1;
+
+/// If no MIDI clock tick arrives within this duration, fall back to internal clock.
+const CLOCK_TIMEOUT: Duration = Duration::from_secs(2);
+
+/// Only emit `SetBpm` to the pattern engine when the follower estimate moves more than this threshold.
+const BPM_THRESHOLD: f64 = 0.5;
 
 /// Crossfade = 1/2 beat (one 8th note). Long enough that the pattern engine
 /// triggers each voice at least once during the blend, so both old and new
@@ -346,6 +357,18 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
     // MIDI input — receives CC and clock messages from a connected MIDI controller.
     let midi_input_rx = try_connect_midi_input();
 
+    // MIDI clock follower — derives BPM from external clock ticks.
+    let mut clock_follower = ClockFollower::new();
+    let mut last_emitted_bpm: f64 = DEFAULT_BPM;
+    let mut last_clock_tick: Option<Instant> = None;
+
+    // NOISE_MIDI_SYNC=1 enables external clock input on startup.
+    let midi_sync_enabled = std::env::var("NOISE_MIDI_SYNC").is_ok_and(|v| v == "1");
+    if midi_sync_enabled {
+        pattern_engine.apply(EngineCommand::SetClockSource(ClockSource::External));
+        info!("  midi sync: enabled (external clock)");
+    }
+
     // MIDI CC → exposed control mappings. Key = (channel, cc_number).
     let mut midi_mappings: HashMap<(u8, u8), MidiMapping> = HashMap::new();
 
@@ -595,13 +618,57 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                         }
                     }
                 }
-                MidiInputMsg::ClockTick(_) | MidiInputMsg::ClockStart | MidiInputMsg::ClockStop => {
-                    // Consumed by ClockFollower once main loop integration lands.
+                MidiInputMsg::ClockTick(tick_instant) => {
+                    if pattern_engine.clock_source() == ClockSource::External {
+                        // Phase correction: nudge clock to align with external tick.
+                        if let Some(expected) = clock_follower.expected_interval()
+                            && let Some(prev) = last_clock_tick
+                        {
+                            let actual = tick_instant.duration_since(prev).as_secs_f64();
+                            if actual > 0.0 {
+                                let error = actual - expected;
+                                pattern_engine.nudge_clock(error * PHASE_CORRECTION_RATE);
+                            }
+                        }
+                        last_clock_tick = Some(tick_instant);
+
+                        if let Some(bpm) = clock_follower.on_tick(tick_instant)
+                            && (bpm - last_emitted_bpm).abs() > BPM_THRESHOLD
+                        {
+                            pattern_engine.apply(EngineCommand::SetBpm { bpm });
+                            last_emitted_bpm = bpm;
+                            blocks_per_cycle = compute_blocks_per_cycle(
+                                bpm, BEATS_PER_CYCLE, config.sample_rate, config.block_size,
+                            );
+                        }
+                    }
+                }
+                MidiInputMsg::ClockStart => {
+                    if pattern_engine.clock_source() == ClockSource::External {
+                        clock_follower.on_start(Instant::now());
+                        pattern_engine.flush_and_reset();
+                        info!("midi clock: start received — heap flushed, cycle reset");
+                    }
+                }
+                MidiInputMsg::ClockStop => {
+                    if pattern_engine.clock_source() == ClockSource::External {
+                        clock_follower.on_stop();
+                        info!("midi clock: stop received");
+                    }
                 }
             }
         }
 
-        // ⑩ Sleep until next event (capped at 1ms for command responsiveness).
+        // ⑩ MIDI clock timeout check — fall back to internal if no ticks for 2s.
+        if pattern_engine.clock_source() == ClockSource::External
+            && clock_follower.is_timed_out(Instant::now(), CLOCK_TIMEOUT)
+        {
+            let fallback_bpm = clock_follower.bpm().unwrap_or(DEFAULT_BPM);
+            pattern_engine.apply(EngineCommand::SetClockSource(ClockSource::Internal));
+            warn!("MIDI clock timeout — switched to internal at {fallback_bpm:.1} BPM");
+        }
+
+        // ⑪ Sleep until next event (capped at 1ms for command responsiveness).
         let midi_deadline = pending_midi.iter().map(|e| e.fire_at).min();
         let ctrl_deadline = pending.iter().map(PendingEvent::fire_at).min();
         let deadline = earliest_deadline(
@@ -907,6 +974,83 @@ mod tests {
             // No mapping → no dispatch
             assert!(mappings.get(&(*channel, *cc)).is_none());
         }
+    }
+
+    // ── clock integration ─────────────────────────────────────────────
+
+    #[test]
+    fn clock_follower_via_channel_produces_bpm() {
+        let (tx, rx) = crossbeam_channel::unbounded::<MidiInputMsg>();
+        let mut follower = ClockFollower::new();
+        let start = Instant::now();
+        let interval = Duration::from_secs_f64(60.0 / (120.0 * 24.0));
+
+        // Push 48 synthetic clock ticks at 120 BPM.
+        for i in 0..48 {
+            tx.send(MidiInputMsg::ClockTick(start + interval * i)).unwrap();
+        }
+
+        let mut last_bpm = None;
+        while let Ok(msg) = rx.try_recv() {
+            if let MidiInputMsg::ClockTick(t) = msg {
+                if let Some(bpm) = follower.on_tick(t) {
+                    last_bpm = Some(bpm);
+                }
+            }
+        }
+        let bpm = last_bpm.expect("should derive BPM from channel ticks");
+        assert!((bpm - 120.0).abs() < 0.5, "expected ~120 BPM, got {bpm}");
+    }
+
+    #[test]
+    fn clock_start_via_channel() {
+        let (tx, rx) = crossbeam_channel::unbounded::<MidiInputMsg>();
+        let mut follower = ClockFollower::new();
+
+        tx.send(MidiInputMsg::ClockStart).unwrap();
+        while let Ok(msg) = rx.try_recv() {
+            if let MidiInputMsg::ClockStart = msg {
+                follower.on_start(Instant::now());
+            }
+        }
+        assert!(follower.running());
+    }
+
+    #[test]
+    fn clock_stop_via_channel() {
+        let (tx, rx) = crossbeam_channel::unbounded::<MidiInputMsg>();
+        let mut follower = ClockFollower::new();
+        follower.on_start(Instant::now());
+
+        tx.send(MidiInputMsg::ClockStop).unwrap();
+        while let Ok(msg) = rx.try_recv() {
+            if let MidiInputMsg::ClockStop = msg {
+                follower.on_stop();
+            }
+        }
+        assert!(!follower.running());
+    }
+
+    #[test]
+    fn bpm_threshold_filters_small_changes() {
+        let mut last_emitted: f64 = 120.0;
+        let new_bpm: f64 = 120.3; // below 0.5 threshold
+        assert!((new_bpm - last_emitted).abs() <= BPM_THRESHOLD);
+
+        let new_bpm: f64 = 120.6; // above 0.5 threshold
+        if (new_bpm - last_emitted).abs() > BPM_THRESHOLD {
+            last_emitted = new_bpm;
+        }
+        assert!((last_emitted - 120.6).abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn timeout_triggers_fallback() {
+        let mut follower = ClockFollower::new();
+        let start = Instant::now();
+        follower.on_tick(start);
+        // 3 seconds later — should be timed out.
+        assert!(follower.is_timed_out(start + Duration::from_secs(3), CLOCK_TIMEOUT));
     }
 
     // ── crossfade_samples ───────────────────────────────────────────────
