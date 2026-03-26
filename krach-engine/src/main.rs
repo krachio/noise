@@ -133,6 +133,17 @@ struct MidiMapping {
     hi: f32,
 }
 
+/// Messages received from MIDI input hardware.
+/// Parsed from raw MIDI bytes in the midir callback — pattern-engine never sees raw bytes.
+#[derive(Debug, Clone)]
+#[cfg_attr(not(test), allow(dead_code))]
+enum MidiInputMsg {
+    Cc { channel: u8, cc: u8, value: u8 },
+    ClockTick(Instant),
+    ClockStart,
+    ClockStop,
+}
+
 /// A pending MIDI note-off to fire at a specific wall-clock time.
 #[derive(Debug, Eq, PartialEq)]
 struct PendingNoteOff {
@@ -332,8 +343,8 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
         info!("  midi clock: enabled (24 ppqn)");
     }
 
-    // MIDI CC input — receives CC messages from a connected MIDI controller.
-    let midi_cc_rx = try_connect_midi_input();
+    // MIDI input — receives CC and clock messages from a connected MIDI controller.
+    let midi_input_rx = try_connect_midi_input();
 
     // MIDI CC → exposed control mappings. Key = (channel, cc_number).
     let mut midi_mappings: HashMap<(u8, u8), MidiMapping> = HashMap::new();
@@ -566,17 +577,24 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
             }
         }
 
-        // ⑨ Poll MIDI CC input and dispatch mapped controls.
-        while let Ok((channel, cc, value)) = midi_cc_rx.try_recv() {
-            if let Some(mapping) = midi_mappings.get(&(channel, cc)) {
-                #[allow(clippy::cast_precision_loss)]
-                let scaled = (mapping.hi - mapping.lo).mul_add(f32::from(value) / 127.0, mapping.lo);
-                let msg = ClientMessage::SetControl {
-                    label: mapping.label.clone(),
-                    value: scaled,
-                };
-                if let Err(e) = audio_engine.controller_mut().handle_message(msg) {
-                    warn!("midi_map dispatch: {e}");
+        // ⑨ Poll MIDI input and dispatch mapped controls / clock messages.
+        while let Ok(midi_msg) = midi_input_rx.try_recv() {
+            match midi_msg {
+                MidiInputMsg::Cc { channel, cc, value } => {
+                    if let Some(mapping) = midi_mappings.get(&(channel, cc)) {
+                        #[allow(clippy::cast_precision_loss)]
+                        let scaled = (mapping.hi - mapping.lo).mul_add(f32::from(value) / 127.0, mapping.lo);
+                        let msg = ClientMessage::SetControl {
+                            label: mapping.label.clone(),
+                            value: scaled,
+                        };
+                        if let Err(e) = audio_engine.controller_mut().handle_message(msg) {
+                            warn!("midi_map dispatch: {e}");
+                        }
+                    }
+                }
+                MidiInputMsg::ClockTick(_) | MidiInputMsg::ClockStart | MidiInputMsg::ClockStop => {
+                    // Consumed by ClockFollower once main loop integration lands.
                 }
             }
         }
@@ -625,25 +643,36 @@ fn drain_note_offs(
     }
 }
 
-/// Try to open a MIDI input port and return a channel receiver for CC messages.
-/// Each message is (channel, `cc_number`, value).
-fn try_connect_midi_input() -> crossbeam_channel::Receiver<(u8, u8, u8)> {
+/// Try to open a MIDI input port and return a channel receiver for MIDI messages.
+/// Parses CC (0xB0–0xBF), clock tick (0xF8), start (0xFA), and stop (0xFC).
+fn try_connect_midi_input() -> crossbeam_channel::Receiver<MidiInputMsg> {
     let (tx, rx) = crossbeam_channel::unbounded();
     match midir::MidiInput::new("krach-engine-in") {
-        Ok(midi_in) => {
+        Ok(mut midi_in) => {
+            // Ignore sysex and active sense, but NOT timing — we need clock bytes.
+            midi_in.ignore(midir::Ignore::SysexAndActiveSense);
             let ports = midi_in.ports();
             if let Some(port) = ports.first() {
                 let port_name = midi_in.port_name(port).unwrap_or_default();
                 match midi_in.connect(
                     port,
-                    "noise-cc",
+                    "noise-in",
                     move |_stamp, msg, ()| {
-                        // MIDI CC: status byte 0xB0–0xBF
-                        if msg.len() >= 3 && (msg[0] & 0xF0) == 0xB0 {
-                            let channel = msg[0] & 0x0F;
-                            let cc = msg[1];
-                            let value = msg[2];
-                            let _ = tx.send((channel, cc, value));
+                        let parsed = match msg {
+                            [status, cc, value] if (status & 0xF0) == 0xB0 => {
+                                Some(MidiInputMsg::Cc {
+                                    channel: status & 0x0F,
+                                    cc: *cc,
+                                    value: *value,
+                                })
+                            }
+                            [0xF8] => Some(MidiInputMsg::ClockTick(Instant::now())),
+                            [0xFA] => Some(MidiInputMsg::ClockStart),
+                            [0xFC] => Some(MidiInputMsg::ClockStop),
+                            _ => None,
+                        };
+                        if let Some(msg) = parsed {
+                            let _ = tx.send(msg);
                         }
                     },
                     (),
@@ -810,6 +839,71 @@ mod tests {
                 assert!((value - 1200.0).abs() < f32::EPSILON);
             }
             _ => panic!("expected Control variant"),
+        }
+    }
+
+    // ── MidiInputMsg ──────────────────────────────────────────────────
+
+    #[test]
+    fn midi_input_msg_cc_from_raw_bytes() {
+        // Status 0xB2 = CC on channel 2, cc=74, value=100
+        let status: u8 = 0xB2;
+        let cc: u8 = 74;
+        let value: u8 = 100;
+        let msg = MidiInputMsg::Cc {
+            channel: status & 0x0F,
+            cc,
+            value,
+        };
+        match msg {
+            MidiInputMsg::Cc { channel, cc, value } => {
+                assert_eq!(channel, 2);
+                assert_eq!(cc, 74);
+                assert_eq!(value, 100);
+            }
+            _ => panic!("expected Cc variant"),
+        }
+    }
+
+    #[test]
+    fn midi_input_msg_clock_tick_captures_instant() {
+        let before = Instant::now();
+        let msg = MidiInputMsg::ClockTick(Instant::now());
+        match msg {
+            MidiInputMsg::ClockTick(t) => assert!(t >= before),
+            _ => panic!("expected ClockTick"),
+        }
+    }
+
+    #[test]
+    fn midi_input_msg_clock_start_stop_are_distinct() {
+        let start = MidiInputMsg::ClockStart;
+        let stop = MidiInputMsg::ClockStop;
+        assert!(matches!(start, MidiInputMsg::ClockStart));
+        assert!(matches!(stop, MidiInputMsg::ClockStop));
+    }
+
+    #[test]
+    fn midi_input_channel_receives_all_message_types() {
+        let (tx, rx) = crossbeam_channel::unbounded();
+        tx.send(MidiInputMsg::Cc { channel: 0, cc: 1, value: 64 }).unwrap();
+        tx.send(MidiInputMsg::ClockTick(Instant::now())).unwrap();
+        tx.send(MidiInputMsg::ClockStart).unwrap();
+        tx.send(MidiInputMsg::ClockStop).unwrap();
+
+        assert!(matches!(rx.recv().unwrap(), MidiInputMsg::Cc { .. }));
+        assert!(matches!(rx.recv().unwrap(), MidiInputMsg::ClockTick(_)));
+        assert!(matches!(rx.recv().unwrap(), MidiInputMsg::ClockStart));
+        assert!(matches!(rx.recv().unwrap(), MidiInputMsg::ClockStop));
+    }
+
+    #[test]
+    fn midi_cc_dispatch_ignores_unmapped_channels() {
+        let mappings: HashMap<(u8, u8), MidiMapping> = HashMap::new();
+        let msg = MidiInputMsg::Cc { channel: 5, cc: 74, value: 100 };
+        if let MidiInputMsg::Cc { channel, cc, .. } = &msg {
+            // No mapping → no dispatch
+            assert!(mappings.get(&(*channel, *cc)).is_none());
         }
     }
 
