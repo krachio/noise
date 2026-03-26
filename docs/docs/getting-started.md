@@ -101,7 +101,14 @@ def kick() -> krs.Signal:
     return krs.sine_osc(55.0 + env * 200.0) * env * 0.9
 ```
 
-The `krs.control()` calls define parameters that patterns can drive.
+**Controls** are named parameters that patterns drive automatically:
+
+- `"gate"` — a trigger. 1.0 = note on, 0.0 = note off
+- `"freq"` — pitch in Hz (set by `kr.note()` / `kr.seq()`)
+- Custom controls (`"cutoff"`, `"room"`) — any parameter you want to automate
+- The 4 numbers are: `name, default, min, max`
+
+`krs.adsr(attack, decay, sustain, release, gate)` is an envelope — it shapes volume over time. All times are in seconds. Sustain is a level (0--1), not a time.
 
 ### 2. Create a node and play it
 

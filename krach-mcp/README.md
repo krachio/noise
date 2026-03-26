@@ -95,7 +95,7 @@ Add to your Claude Code MCP config:
 
 - Call `status()` after changes to verify state
 - Use `list_controls(name)` before setting controls — confirms available parameters and ranges
-- Use `capture()` before destructive changes — enables rollback
+- Use `save("backup")` before destructive changes — `recall("backup")` to rollback
 - Pattern strings are Python expressions: `"hit() * 4"`, `"seq('C4', 'E4').over(2)"`, `"mod_sine(200, 2000).over(4)"`
 - Mini-notation also works: `"x . x . x . . x"`, `"C4 E4 G4"`
 - Control paths use `/`: `"bass/cutoff"`, `"drums/kick/gain"`
@@ -146,5 +146,6 @@ Space-separated symbols for quick entry:
 ```
 "x . x . x . . x"     # drum pattern (x = hit, . = rest)
 "C4 E4 G4"             # note sequence
-"C4 E4 ~ G4"           # with tie
+"C4 . G4"              # with rest (., ~, - are all rest tokens)
+"[C4 E4] G4"           # chord then note ([] = simultaneous)
 ```

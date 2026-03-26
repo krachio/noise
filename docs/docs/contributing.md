@@ -39,11 +39,19 @@ uv run pyright    # type checking (strict mode)
 uv run pytest     # unit tests
 ```
 
+### Python — krach-mcp
+
+```bash
+cd krach-mcp
+uv run pytest     # unit tests
+```
+
 ### Quick check before committing
 
 ```bash
 cargo check --workspace && cargo test --workspace
 cd krach && uv run pyright && uv run pytest && cd ..
+cd krach-mcp && uv run pytest && cd ..
 ```
 
 ## Code style
