@@ -399,6 +399,18 @@ class Mixer:
             self._muted.pop(name, None)
             for i in range(old.count):
                 self._muted.pop(_inst_name(name, i, old.count), None)
+            # Clean up ctrl_values for parent and all voice instances
+            prefix = f"{name}/"
+            inst_prefixes = [
+                f"{_inst_name(name, i, old.count)}/"
+                for i in range(old.count) if old.count > 1
+            ]
+            stale = [
+                k for k in self._ctrl_values
+                if k.startswith(prefix) or any(k.startswith(p) for p in inst_prefixes)
+            ]
+            for k in stale:
+                del self._ctrl_values[k]
         def _matches(k: tuple[str, str]) -> bool:
             return k[0] == name or (direction == "both" and k[1] == name)
         for key in [k for k in self._sends if _matches(k)]:

@@ -3624,3 +3624,78 @@ def test_save_recall_preserves_num_inputs() -> None:
     node = mixer.get_node("verb")
     assert node is not None
     assert node.num_inputs > 0  # must survive round-trip
+
+
+# ── Issue #2: poly remove must clean up voice instances ────────────────────
+
+
+def test_remove_poly_then_recreate_graph_ir_has_no_duplicates() -> None:
+    """remove() poly → re-create same poly must produce clean graph IR.
+
+    Regression test for GitHub issue #2: after remove("rhodes") the
+    voice instances (rhodes_v0-v5) must not leak into the next graph.
+    """
+    from unittest.mock import MagicMock
+
+    from krach.mixer import Mixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:rhodes", "dac", "gain"]
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:rhodes": ("freq", "gate"),
+    })
+    mixer.voice("rhodes", "faust:rhodes", count=6, gain=0.35)
+
+    # Capture graph IR after first create
+    first_ir = session.load_graph.call_args[0][0]
+    first_ids = [n.id for n in first_ir.nodes]
+    assert "rhodes_v0" in first_ids
+
+    session.reset_mock()
+    mixer.remove("rhodes")
+
+    # After remove, rebuild sends a graph WITHOUT voice instances
+    remove_ir = session.load_graph.call_args[0][0]
+    remove_ids = [n.id for n in remove_ir.nodes]
+    assert "rhodes_v0" not in remove_ids, "voice instances must be gone after remove"
+
+    session.reset_mock()
+    mixer.voice("rhodes", "faust:rhodes", count=6, gain=0.35)
+
+    # Re-create must produce clean graph — no duplicate node IDs
+    recreate_ir = session.load_graph.call_args[0][0]
+    recreate_ids = [n.id for n in recreate_ir.nodes]
+    assert "rhodes_v0" in recreate_ids
+    # Verify no duplicates
+    assert len(recreate_ids) == len(set(recreate_ids)), (
+        f"duplicate node IDs in re-created graph: {recreate_ids}"
+    )
+
+
+def test_remove_poly_cleans_ctrl_values_for_instances() -> None:
+    """remove() on a poly node must clean up _ctrl_values for voice instances."""
+    from unittest.mock import MagicMock
+
+    from krach.mixer import Mixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:pad": ("freq", "gate"),
+    })
+    mixer.voice("pad", "faust:pad", count=3, gain=0.6)
+
+    # Simulate engine setting control values for voice instances
+    mixer._ctrl_values["pad_v0/freq"] = 440.0
+    mixer._ctrl_values["pad_v1/freq"] = 440.0
+    mixer._ctrl_values["pad_v2/freq"] = 440.0
+    mixer._ctrl_values["pad/freq"] = 440.0
+
+    mixer.remove("pad")
+
+    # Instance-level ctrl_values must be cleaned up
+    assert "pad_v0/freq" not in mixer._ctrl_values, "voice instance ctrl leaked"
+    assert "pad_v1/freq" not in mixer._ctrl_values, "voice instance ctrl leaked"
+    assert "pad_v2/freq" not in mixer._ctrl_values, "voice instance ctrl leaked"
+    # Parent-level ctrl_values should also be cleaned
+    assert "pad/freq" not in mixer._ctrl_values, "parent ctrl leaked"
