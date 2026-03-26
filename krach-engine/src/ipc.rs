@@ -221,24 +221,16 @@ fn run_server(
 }
 
 /// Generate a random 32-byte hex token for TCP auth.
-#[allow(clippy::cast_possible_truncation)]
+///
+/// Reads from `/dev/urandom` for cryptographic randomness.
 pub fn generate_token() -> String {
     use std::fmt::Write;
-    use std::time::{SystemTime, UNIX_EPOCH};
-    let pid = u64::from(std::process::id());
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_nanos() as u64;
-    let stack_addr = &raw const ts as u64;
-    let mut state = pid.wrapping_mul(6_364_136_223_846_793_005)
-        ^ ts.wrapping_mul(1_442_695_040_888_963_407)
-        ^ stack_addr;
+    use std::io::Read;
     let mut buf = [0u8; 32];
-    for byte in &mut buf {
-        state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
-        *byte = (state >> 33) as u8;
-    }
+    std::fs::File::open("/dev/urandom")
+        .expect("/dev/urandom")
+        .read_exact(&mut buf)
+        .expect("read /dev/urandom");
     buf.iter().fold(String::with_capacity(64), |mut s, b| {
         let _ = write!(s, "{b:02x}");
         s
