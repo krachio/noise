@@ -107,11 +107,9 @@ you need explicit port assignment.
 Multiple sources share one reverb:
 
 ```python
-@kr.dsp
-def reverb_fx() -> krs.Signal:
+def reverb_fx(inp: krs.Signal) -> krs.Signal:
     room = krs.control("room", 0.6, 0.0, 1.0)
-    sig = krs.control("in0", 0.0, -1.0, 1.0)
-    return krs.reverb(sig, room)
+    return krs.reverb(inp, room)
 
 verb = kr.node("verb", reverb_fx, gain=0.3)
 

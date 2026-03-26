@@ -11,7 +11,7 @@ noise/
 ├── pattern-engine/    Rust — pattern sequencer (min-heap, rational time, phase-reset, meter)
 ├── krach-engine/      Rust — unified binary (pattern-engine + audio-engine + audio-faust, one socket)
 ├── krach/             Python — live coding REPL (graph API, patterns, DSP transpiler, MCP server)
-└── krach-mcp/         Python — MCP server (22 tools for Claude Code to drive krach)
+└── krach-mcp/         Python — MCP server (25 tools for Claude Code to drive krach)
 ```
 
 ### IR architecture (consolidated)

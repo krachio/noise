@@ -22,7 +22,7 @@ noise/
 
 **krach-engine** links all three into one process. Pattern events that target the audio engine are dispatched directly via function calls — no network hop.
 
-**krach** is the user-facing Python REPL and the IR layer. It contains three typed IRs (Signal, Pattern, Module), a Python-to-FAUST DSP transpiler (`krach.dsl`), pattern builders and transforms, and the graph management API. Starts `krach-engine` as a subprocess, connects over a Unix socket.
+**krach** is the user-facing Python REPL and the IR layer. It contains three typed IRs (Signal, Pattern, Module), a Python-to-FAUST DSP transpiler (`krach.signal` + `krach.backends`), pattern builders and transforms, and the graph management API. Starts `krach-engine` as a subprocess, connects over a Unix socket.
 
 **krach-mcp** is an MCP server that exposes krach operations as tools for Claude Code — node creation, pattern playback, session capture/export, and introspection.
 

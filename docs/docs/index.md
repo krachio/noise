@@ -37,6 +37,6 @@ bass["cutoff"] = 1200                               # set control
 - [Getting Started](getting-started.md) — install, first sound, first sequence
 - [Synth Design](synth-design.md) — `@kr.dsp`, `krs` primitives, hot reload
 - [Patterns](patterns.md) — pattern algebra, combinators, composition
-- [Effect Routing](effect-routing.md) — buses, sends, wires
+- [Effect Routing](effect-routing.md) — nodes, routing
 - [Architecture](architecture.md) — how the system works under the hood
 - [GitHub](https://github.com/krachio/noise) — source code

@@ -97,9 +97,9 @@ with kr.transition(bars=4):
 
 A scene snapshot (both in-memory and file export) captures:
 
-- **Voices** -- all active nodes with their DSP type and gain
-- **Buses** -- all effect buses and their configuration
-- **Sends** -- all send routings and levels
+- **Source nodes** -- all active source nodes with their DSP type and gain
+- **Effect nodes** -- all effect nodes and their configuration
+- **Routes** -- all signal routings and levels
 - **Patterns** -- all active pattern assignments
 - **Tempo** -- current BPM
 - **Master gain** -- `kr.master` level
