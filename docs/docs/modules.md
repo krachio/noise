@@ -94,17 +94,101 @@ kr.load(ir)       # now play it
 
 The proxy records calls as `ModuleIr` without connecting to the engine. Useful for building reusable module templates.
 
-## Sub-modules (composition)
+## `@kr.module` decorator
+
+Define reusable modules as traced functions. The first parameter is a `ModuleProxy` — it records calls without starting audio:
 
 ```python
-drums_ir = kr.capture()   # capture current drum setup
-kr.save("drums")
+@kr.module
+def drums(m, tempo=128):
+    m.node("kick", "faust:kick", gain=0.8)
+    m.node("hat", "faust:hat", gain=0.3)
+    m.send("kick", "hat", level=0.2)
+    m.play("kick", kr.hit() * 4)
+    m.tempo = tempo
+    m.outputs("kick", "hat")
 
-# Later: load drums into a bigger session
-full_ir = ModuleIr(
-    sub_modules=(("drums", drums_ir),),
-    # ... synths, effects, routing
-)
+ir = drums(tempo=140)  # → ModuleIr (no audio)
 ```
 
-Sub-modules use prefix namespacing: a node `"kick"` inside sub-module `"drums"` becomes `"drums/kick"`.
+The decorated function returns a frozen `ModuleIr`. Call it with any extra arguments — the proxy parameter is injected automatically.
+
+## `ModuleHandle`
+
+`kr.instantiate(ir, prefix)` replays a `ModuleIr` with namespaced nodes and returns a `ModuleHandle`:
+
+```python
+d = kr.instantiate(drums_ir, "drums")
+
+# Operator DSL — delegates to first declared input/output
+d >> verb          # route output to verb
+bass >> d          # route bass into input
+d @ pattern        # play on first input
+d["kick/cutoff"] = 1200  # control access
+
+# Properties
+d.input            # → NodeHandle for first declared input
+d.output           # → NodeHandle for first declared output
+d.nodes            # → {"kick": NodeHandle, "hat": NodeHandle}
+d.prefix           # → "drums"
+```
+
+All node names are prefixed: `"kick"` becomes `"drums/kick"`. The existing `/` path addressing works naturally.
+
+## `kr.scene(name)` and `kr.load(ir)`
+
+`kr.scene(name)` retrieves a saved scene by name (returns `ModuleIr`):
+
+```python
+kr.save("verse")
+ir = kr.scene("verse")   # → ModuleIr
+```
+
+`kr.load(ir)` replays a `ModuleIr` onto the mixer (session replay). It flattens any `sub_modules` automatically:
+
+```python
+kr.load(ir)  # creates nodes, routing, patterns, transport
+```
+
+## Module composition with `m.sub()`
+
+Compose modules by nesting them inside a `@kr.module` definition:
+
+```python
+@kr.module
+def kit(m):
+    m.node("kick", "faust:kick", gain=0.8)
+    m.node("hat", "faust:hat", gain=0.3)
+    m.outputs("kick", "hat")
+
+@kr.module
+def full_band(m):
+    m.node("bass", "faust:bass", gain=0.5)
+    drums = m.sub("drums", kit())  # nest kit as "drums/*"
+    m.send(drums.output("kick"), "bass", level=0.3)
+    m.outputs("bass")
+
+ir = full_band()
+band = kr.instantiate(ir, "band")
+# Nodes: band/bass, band/drums/kick, band/drums/hat
+```
+
+`m.sub(prefix, ir)` returns a `SubModuleRef` with `.input(name)` and `.output(name)` for validated path strings. Typos are caught at trace time, not instantiation time.
+
+## `prefix_ir()` and `flatten()` (advanced)
+
+For manual composition without the decorator:
+
+```python
+from krach.ir.module import prefix_ir, flatten
+
+# Namespace all names in an IR
+namespaced = prefix_ir(drums_ir, "drums")
+# "kick" → "drums/kick", controls and routes follow
+
+# Resolve sub_modules into flat nodes
+flat = flatten(parent_ir)
+# Recursively prefixes and merges all sub_module nodes
+```
+
+`prefix_ir(ir, prefix)` rewrites all node names, routes, patterns, controls, and automations with the prefix. `flatten(ir)` recursively resolves `sub_modules` into a single flat IR (parent-wins for transport settings).

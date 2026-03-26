@@ -83,9 +83,11 @@ The `Mixer` class manages the audio graph. In the REPL, `kr` is a `LiveMixer` in
 | Method | Description |
 |---|---|
 | `kr.capture()` | Snapshot session as frozen `ModuleIr` |
-| `kr.load(ir)` | Replay a `ModuleIr` onto the mixer |
+| `kr.load(ir)` | Replay a `ModuleIr` onto the mixer (flattens sub_modules) |
+| `kr.instantiate(ir, prefix)` | Instantiate module with prefix namespace. Returns `ModuleHandle` |
 | `kr.trace()` | Return a `ModuleProxy` that records calls |
-| `kr.scene(name)` | Get a saved scene by name |
+| `kr.scene(name)` | Get a saved scene by name (returns `ModuleIr`) |
+| `@kr.module` | Decorator: traces a function into a frozen `ModuleIr` |
 | `kr.export(path)` | Export session to reloadable Python file |
 | `kr.exec_file(path)` | Load and execute a Python session file |
 
@@ -160,6 +162,48 @@ Returned by `kr.node()`. Wraps a named node with operator DSL.
 | `bass.unmute()` | Unmute |
 | `bass.hush()` | Stop patterns |
 | `bass.name` | Node name |
+
+---
+
+## ModuleHandle
+
+Returned by `kr.instantiate(ir, prefix)`. Wraps a prefixed module with operator DSL delegating to declared inputs/outputs.
+
+### Properties
+
+| Property | Description |
+|---|---|
+| `handle.prefix` | Module prefix string |
+| `handle.nodes` | Dict of relative name → `NodeHandle` |
+| `handle.input` | `NodeHandle` for first declared input |
+| `handle.output` | `NodeHandle` for first declared output |
+| `handle.inputs` | All declared input names (prefixed) |
+| `handle.outputs` | All declared output names (prefixed) |
+
+### Operators
+
+| Operator | Description |
+|---|---|
+| `handle >> verb` | Route module output to target |
+| `bass >> handle` | Route into module input |
+| `handle @ pattern` | Play pattern on first input |
+| `handle["node/param"]` | Get control value |
+| `handle["node/param"] = 1200` | Set control value |
+
+---
+
+## `@kr.module` decorator
+
+Traces a function into a frozen `ModuleIr`. First parameter is a `ModuleProxy`:
+
+```python
+@kr.module
+def synth(m, freq=440):
+    m.node("osc", osc_fn, gain=0.5)
+    m.outputs("osc")
+
+ir = synth(freq=220)  # → ModuleIr
+```
 
 ---
 

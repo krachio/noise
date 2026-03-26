@@ -173,6 +173,72 @@ class ModuleIr:
 
 The `NodeDef.source` field holds a `DspGraph` (the signal computation for that node) or a `str` (reference to a pre-compiled FAUST type like `"faust:kick"`).
 
+### `inputs` and `outputs`
+
+`ModuleIr` has optional port declarations:
+
+```python
+inputs: tuple[str, ...] | None = None   # declared input ports
+outputs: tuple[str, ...] | None = None  # declared output ports
+```
+
+- `None` = undeclared (scene/session capture — no explicit ports)
+- `()` = explicitly no ports
+- `("osc", "bus")` = named ports referencing nodes in the module
+
+Port names are validated by `flatten()` — all declared inputs/outputs must reference existing nodes in the flattened IR.
+
+### `prefix_ir(ir, prefix)` — namespace prefixing
+
+```python
+from krach.ir.module import prefix_ir
+
+namespaced = prefix_ir(drums_ir, "drums")
+```
+
+Rewrites all name fields with the prefix:
+- `NodeDef.name`: `"kick"` → `"drums/kick"`
+- `RouteDef.source`/`target`: prefixed
+- `PatternDef.target`: prefixed
+- `MutedDef.name`: prefixed
+- `ControlDef.path`/`AutomationDef.path`: node portion prefixed (param portion preserved)
+- `inputs`/`outputs`: prefixed
+- `sub_modules` prefixes: recursively prefixed
+- **NOT** prefixed: `RouteDef.port` (DSP input name, not a node name)
+
+### `flatten(ir)` — recursive sub_module resolution
+
+```python
+from krach.ir.module import flatten
+
+flat = flatten(parent_ir)
+```
+
+Recursively resolves `sub_modules`:
+1. For each `(prefix, child_ir)` in `sub_modules`, calls `prefix_ir(child_ir, prefix)`
+2. Recursively flattens the prefixed child
+3. Merges child nodes, routing, patterns, controls, automations into the parent
+4. Parent-wins for transport: child `tempo`/`meter`/`master` are ignored
+5. Validates that all declared `inputs`/`outputs` reference existing nodes
+6. Returns a flat `ModuleIr` with empty `sub_modules`
+
+### Module composition pattern
+
+Modules compose through `sub_modules` + `inputs`/`outputs`:
+
+```
+@kr.module "full_band"
+├── node: "bass"
+├── sub_modules:
+│   └── ("drums", drums_ir)
+│       ├── node: "kick"   → flattened to "drums/kick"
+│       └── node: "hat"    → flattened to "drums/hat"
+├── inputs: None
+└── outputs: ("bass",)
+```
+
+After `flatten()`, all sub_module nodes are merged into the parent with prefixed names. The hierarchical `/` separator works with krach's `resolve_path` — `kr.remove("drums")` removes all `drums/*` nodes.
+
 ## Shared infrastructure
 
 ### Primitive
