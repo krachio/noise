@@ -62,7 +62,8 @@ REPL entry: `krach.repl.connect()` returns `LiveMixer` with `kr.note()`, `kr.seq
 ## Usage
 
 ```bash
-./bin/krach
+pip install krach
+krach
 ```
 
 ```python
@@ -124,14 +125,15 @@ kr.mute("drums")
 - **Vendored wheel packaging**: `pip install krach` on macOS ARM64, macOS x86_64, Linux x86_64
 - **Cross-platform build.rs**: env vars (FAUST_LIB_DIR, LLVM_LIB_DIR) → pkg-config → platform defaults
 - **FAUST stdlib override**: `FAUST_STDLIB_DIR` env var → `-I` flag to JIT compiler, enabling vendored stdlib
-- **CI release matrix**: 3-platform wheel build (macos-14, macos-13, ubuntu-22.04) + PyPI trusted publishing
+- **CI release matrix**: 3-platform wheel build (macos-14, macos-13, ubuntu-22.04) + PyPI trusted publishing + clean-install test + GitHub Release
+- **PyPI release**: full metadata, `krach --version`, THIRD_PARTY_LICENSES (GPL for libfaust, Apache for LLVM)
 
 ## Backlog
 
-### PyPI publish + Homebrew formula (priority: high)
+### Homebrew formula (priority: high)
 
-Tag v0.1.0 to trigger CI release workflow → PyPI. Homebrew formula as
-secondary install channel (`brew install krach`).
+Secondary install channel (`brew install krach`). Create krachio/homebrew-tap
+repo with formula that installs PyPI wheel into venv.
 
 ### Looper (priority: high)
 
