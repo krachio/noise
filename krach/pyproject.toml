@@ -1,6 +1,6 @@
 [project]
 name = "krach"
-version = "0.1.0"
+version = "0.1.0rc1"
 description = "Live coding audio system — define synths in Python, sequence with composable patterns, hear instantly"
 readme = "README.md"
 license = "MIT"
