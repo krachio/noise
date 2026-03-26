@@ -126,7 +126,22 @@ kr.mute("drums")
 - **FAUST stdlib override**: `FAUST_STDLIB_DIR` env var → `-I` flag to JIT compiler, enabling vendored stdlib
 - **CI release matrix**: 3-platform wheel build (macos-14, macos-13, ubuntu-22.04) + PyPI trusted publishing
 
-## Next
+## Backlog
+
+### PyPI publish + Homebrew formula (priority: high)
+
+Tag v0.1.0 to trigger CI release workflow → PyPI. Homebrew formula as
+secondary install channel (`brew install krach`).
+
+### Looper (priority: high)
+
+Record live audio input into a buffer, play back as a pattern-triggered node.
+`kr.record("loop1", bars=4)` → captures audio → `loop1 @ kr.hit() * 4`.
+
+### Network sockets (priority: high)
+
+TCP instead of Unix socket. Enables: remote jam sessions, multi-machine
+setups, web client → engine communication. Prerequisite for browser REPL.
 
 ### Template caching (priority: medium)
 
