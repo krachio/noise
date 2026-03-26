@@ -120,8 +120,17 @@ kr.mute("drums")
 - **ModuleIr serialization**: `to_dict()` / `from_dict()` — JSON round-trip for persistence
 - **Batch rollback**: all 6 state dicts restored on failed `with kr.batch():`
 - **Engine state sync**: `{"cmd":"Status"}` IPC returns full snapshot; `kr.pull()` syncs Python from engine; MCP auto-syncs on status()
+- **Vendored wheel packaging**: `pip install krach` on macOS ARM64 — binary, libfaust, libLLVM, FAUST stdlib all bundled (~51MB wheel)
+- **Cross-platform build.rs**: env vars (FAUST_LIB_DIR, LLVM_LIB_DIR) → pkg-config → platform defaults
+- **FAUST stdlib override**: `FAUST_STDLIB_DIR` env var → `-I` flag to JIT compiler, enabling vendored stdlib
 
 ## Next
+
+### Deployment simplification Phase 2 (priority: high)
+
+Expand wheel matrix: Linux x86_64 (manylinux), macOS x86_64.
+Linux: download FAUST release tarball, patchelf --set-rpath.
+Publish to PyPI via release-triggered workflow.
 
 ### Template caching (priority: medium)
 
