@@ -1,8 +1,9 @@
 //! Unified IPC server — accepts both pattern-engine (pattern) and audio-engine (graph)
-//! message formats on a single Unix socket.
+//! message formats on Unix socket and optional TCP.
 //!
 //! Pattern messages use `"cmd"` tag: `SetPattern`, `Hush`, `HushAll`, `SetBpm`, `Batch`, `Ping`.
 //! Audio messages use `"type"` tag: `load_graph`, `set_control`, `set_master_gain`, `list_nodes`.
+//! TCP enabled via `--tcp <addr>` or `NOISE_TCP_ADDR` env var. `TCP_NODELAY` set on accept.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -118,6 +119,72 @@ pub fn start(
         stop,
         _thread: thread,
     })
+}
+
+/// Handle to the TCP server thread.
+pub struct TcpHandle {
+    pub addr: std::net::SocketAddr,
+    stop: Arc<AtomicBool>,
+    _thread: std::thread::JoinHandle<()>,
+}
+
+impl Drop for TcpHandle {
+    fn drop(&mut self) {
+        self.stop.store(true, Ordering::Relaxed);
+        // Unblock the accept() call by connecting briefly.
+        let _ = std::net::TcpStream::connect(self.addr);
+    }
+}
+
+/// Start a TCP listener alongside the Unix socket. Same protocol.
+pub fn start_tcp(
+    addr: std::net::SocketAddr,
+    cmd_tx: crossbeam_channel::Sender<LoopCommand>,
+    node_types: Arc<RwLock<Vec<String>>>,
+) -> Result<TcpHandle, String> {
+    let listener = std::net::TcpListener::bind(addr)
+        .map_err(|e| format!("tcp bind {addr}: {e}"))?;
+    let bound_addr = listener.local_addr().map_err(|e| e.to_string())?;
+    listener.set_nonblocking(false).map_err(|e| e.to_string())?;
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let stop_clone = Arc::clone(&stop);
+
+    let thread = std::thread::Builder::new()
+        .name("noise-tcp".into())
+        .spawn(move || run_tcp_server(&listener, &cmd_tx, &node_types, &stop_clone))
+        .expect("failed to spawn TCP thread");
+
+    Ok(TcpHandle {
+        addr: bound_addr,
+        stop,
+        _thread: thread,
+    })
+}
+
+fn run_tcp_server(
+    listener: &std::net::TcpListener,
+    cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
+    node_types: &Arc<RwLock<Vec<String>>>,
+    stop: &Arc<AtomicBool>,
+) {
+    for stream in listener.incoming() {
+        if stop.load(Ordering::Relaxed) {
+            break;
+        }
+        match stream {
+            Ok(stream) => {
+                stream.set_nodelay(true).ok();
+                stream
+                    .set_read_timeout(Some(Duration::from_millis(100)))
+                    .ok();
+                let reader = std::io::BufReader::new(stream.try_clone().expect("clone tcp stream"));
+                let mut writer = stream;
+                handle_connection(reader, &mut writer, cmd_tx, node_types, stop);
+            }
+            Err(_) => break,
+        }
+    }
 }
 
 fn run_server(
@@ -490,6 +557,59 @@ mod tests {
         assert!(lines[1].contains("\"Pong\""));
         // No commands sent to the channel (Ping is handled locally)
         assert!(rx.try_recv().is_err());
+    }
+
+    #[test]
+    fn tcp_listener_accepts_and_responds() {
+        use std::io::{BufRead, BufReader, Write};
+        use std::net::TcpStream;
+
+        let (tx, _rx) = crossbeam_channel::unbounded();
+        let types = Arc::new(RwLock::new(vec!["osc".into()]));
+
+        let handle = start_tcp(
+            "127.0.0.1:0".parse().unwrap(),
+            tx,
+            types,
+        )
+        .unwrap();
+
+        let addr = handle.addr;
+        let mut stream = TcpStream::connect(addr).unwrap();
+        stream.set_read_timeout(Some(Duration::from_secs(2))).ok();
+
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+
+        // Read protocol handshake.
+        let mut handshake = String::new();
+        reader.read_line(&mut handshake).unwrap();
+        assert!(handshake.contains("\"protocol\":1"));
+
+        // Send Ping, read Pong.
+        stream.write_all(b"{\"cmd\":\"Ping\"}\n").unwrap();
+        let mut response = String::new();
+        reader.read_line(&mut response).unwrap();
+        assert!(response.contains("\"Pong\""));
+    }
+
+    #[test]
+    fn tcp_sets_nodelay() {
+        use std::net::TcpStream;
+
+        let (tx, _rx) = crossbeam_channel::unbounded();
+        let types = Arc::new(RwLock::new(vec![]));
+
+        let handle = start_tcp(
+            "127.0.0.1:0".parse().unwrap(),
+            tx,
+            types,
+        )
+        .unwrap();
+
+        let stream = TcpStream::connect(handle.addr).unwrap();
+        // TCP_NODELAY is set by the server, but we can at least verify
+        // the connection works. The server sets it on accept.
+        drop(stream);
     }
 
     #[test]

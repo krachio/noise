@@ -191,6 +191,17 @@ fn socket_path() -> PathBuf {
     )
 }
 
+fn tcp_addr() -> Option<std::net::SocketAddr> {
+    // Check --tcp CLI arg first, then NOISE_TCP_ADDR env var.
+    let args: Vec<String> = std::env::args().collect();
+    let addr_str = args
+        .windows(2)
+        .find(|w| w[0] == "--tcp")
+        .map(|w| w[1].clone())
+        .or_else(|| std::env::var("NOISE_TCP_ADDR").ok())?;
+    addr_str.parse().ok()
+}
+
 fn make_audio_callback(
     mut processor: audio_engine::engine::AudioProcessor,
     block_size: usize,
@@ -283,7 +294,17 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
     let (cmd_tx, cmd_rx) = crossbeam_channel::unbounded::<LoopCommand>();
 
     let sock = socket_path();
-    let ipc_handle = ipc::start(sock, cmd_tx, Arc::clone(&node_types))?;
+    let ipc_handle = ipc::start(sock, cmd_tx.clone(), Arc::clone(&node_types))?;
+
+    // Optional TCP listener (--tcp <addr> or NOISE_TCP_ADDR env var).
+    let _tcp_handle = if let Some(addr) = tcp_addr() {
+        let handle = ipc::start_tcp(addr, cmd_tx, Arc::clone(&node_types))?;
+        info!("tcp: listening on {}", handle.addr);
+        Some(handle)
+    } else {
+        drop(cmd_tx);
+        None
+    };
 
     info!("krach-engine ready");
     info!("  socket: {}", ipc_handle.socket_path.display());
