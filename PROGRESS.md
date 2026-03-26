@@ -53,11 +53,11 @@ REPL entry: `krach.repl.connect()` returns `LiveMixer` with `kr.note()`, `kr.seq
 ### Test counts
 - audio-engine: 167 Rust tests
 - audio-faust: 29 Rust tests
-- pattern-engine: 175 Rust tests
-- krach-engine: 32 Rust tests
-- krach: 839 Python tests
+- pattern-engine: 192 Rust tests
+- krach-engine: 42 Rust tests
+- krach: 849 Python tests
 - krach-mcp: 21 Python tests
-- **Total: 1263 tests**, all green. Pyright strict clean.
+- **Total: 1300 tests**, all green. Pyright strict clean.
 
 ## Usage
 
@@ -129,53 +129,23 @@ kr.mute("drums")
 - **FAUST stdlib override**: `FAUST_STDLIB_DIR` env var → `-I` flag to JIT compiler, enabling vendored stdlib
 - **CI release matrix**: 2-platform wheel build (macos-14, ubuntu-22.04) + PyPI trusted publishing + clean-install test + GitHub Release
 - **PyPI v0.1.0 published**: full metadata, `krach --version`, THIRD_PARTY_LICENSES (GPL for libfaust, Apache for LLVM)
+- **MIDI clock input**: external clock sync for jam sessions — ClockFollower (EMA + jitter gate), `kr.sync = "midi"`, `NOISE_MIDI_SYNC=1`, `--midi-sync` CLI flag, 2s timeout fallback, phase correction
 
 ## Backlog
 
-### krach-lib — application library (priority: high, fun)
+Issues tracked at https://github.com/krachio/noise/issues
 
-Separate package (`pip install krach-lib`). DSP recipes + convenience
-wrappers built on the krach public API. NOT core — application code.
-Includes: looper (FAUST .dsp + Python wrapper), drum kits, synth presets.
+### Next up
 
-### WASM Engine — full krach in the browser (priority: high)
+- **Pattern shape cleanup** (#7) — kill `mod_*` aliases, 7 clean shapes
+- **Warp cleanup** (#8) — delete speculative docs, document swing honestly
 
-Compile the actual Rust engine to WASM instead of reimplementing in JS.
-Same code, different compile target. FAUST JIT in browser via libfaust-wasm.
-Network sockets (TCP) already done — browser client just needs WebSocket upgrade.
+### Later
 
-### Pattern shape cleanup (priority: medium)
-
-Kill `mod_*` aliases and `saw` (= `ramp`). Seven shape functions, zero aliases:
-`sine`, `tri`, `ramp`, `ramp_down`, `square`, `exp`, `rand`. Remove redundant
-"continuous patterns" section from builders.py and docs.
-
-### Warp cleanup (priority: medium)
-
-`.swing()` is the only warp. Remove speculative "designed for future transforms"
-doc language. Document swing as what it is. When humanize/groove/accel are
-implemented, document them then — not before.
-
-### Template caching (priority: medium)
-
-XLA-style compilation cache for the pattern compiler. Hash pattern structure
-(excluding seeds/cycle), cache EventTemplates. Rust pattern-engine.
-
-### MIDI clock input — external sync (priority: medium)
-
-Receive MIDI clock ticks, derive BPM, slave pattern engine transport.
-Transport mode: master (internal tempo) vs slave (follow external clock).
-Enables jam sessions with hardware gear (drum machines, sequencers, synths).
-Rust: MIDI input via midir, clock follower in pattern-engine.
-Python: `kr.sync = "midi"` or `--midi-sync` flag.
-
-### Docs: ASCII diagrams → Mermaid (priority: low)
-
-Replace ASCII art diagrams in mkdocs pages with Mermaid fenced blocks.
-mkdocs-material supports Mermaid natively. ASCII stays in PROGRESS.md
-and code comments — web docs get proper rendered diagrams.
-
-### macOS Intel wheel (priority: medium, blocked)
-
-Requires paid `-large` GitHub Actions runner (macos-13 deprecated).
-Re-enable in release.yml when billing is set up.
+- **krach-stdlib** — composable ModuleIr building blocks (looper, drum machine,
+  polysynth). Module infrastructure is done; stdlib builds on top.
+- **WASM engine** — Rust → WASM, browser client
+- **Template caching** — XLA-style pattern compilation cache (Rust)
+- **graph_key determinism** (#6) — replace hash() with SHA-256
+- **Mermaid diagrams** (#10) — replace ASCII art in mkdocs
+- **macOS Intel wheel** — blocked on paid CI runner
