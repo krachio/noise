@@ -253,10 +253,12 @@ def main() -> None:
     if "--help" in sys.argv or "-h" in sys.argv:
         print("krach — live coding audio system")
         print()
-        print("Usage: krach [--help] [--version]")
+        print("Usage: krach [--help] [--version] [--midi-sync]")
         print()
         print("Starts an IPython REPL with kr (Mixer) and krs (DSP) pre-loaded.")
         print("Requires: krach-engine binary (bundled in wheel or cargo build).")
+        print()
+        print("  --midi-sync                  start with external MIDI clock sync")
         print()
         print("  kr.node('bass', bass_fn)    create a DSP node")
         print("  bass >> verb                 route signal")
@@ -270,6 +272,9 @@ def main() -> None:
     import krach.dsp as krs
 
     kr = connect()
+
+    if "--midi-sync" in sys.argv:
+        kr.sync = "midi"
 
     print()
     print("  ██╗  ██╗██████╗ █████╗  ██████╗██╗  ██╗")
