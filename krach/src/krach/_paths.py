@@ -36,8 +36,10 @@ def resolve_engine_bin() -> Path:
                 return candidate
 
     raise FileNotFoundError(
-        "krach-engine binary not found. "
-        "Set KRACH_ENGINE_BIN or install krach with vendored binaries."
+        "krach-engine binary not found.\n"
+        "  Install pre-built: pip install krach (from a platform wheel)\n"
+        "  Build from source: cargo build --bin krach-engine (in the noise repo)\n"
+        "  Or set KRACH_ENGINE_BIN=/path/to/krach-engine"
     )
 
 
