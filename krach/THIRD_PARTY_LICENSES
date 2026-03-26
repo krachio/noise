@@ -1,0 +1,30 @@
+Third-Party Licenses
+====================
+
+This wheel bundles native binaries that link against the following libraries.
+The krach Python code itself is MIT-licensed (see LICENSE).
+
+The combined wheel distribution includes GPL-licensed components. Users who
+redistribute the wheel must comply with the GPL terms for those components.
+
+
+FAUST (libfaust)
+----------------
+License: GPL-2.0-or-later
+Source:  https://github.com/grame-cncm/faust
+Copyright: (c) GRAME - Centre National de Creation Musicale
+
+The FAUST compiler library is distributed under the GNU General Public License
+version 2 or later. A copy of the GPL-2.0 text is available at:
+https://www.gnu.org/licenses/old-licenses/gpl-2.0.html
+
+
+LLVM
+----
+License: Apache-2.0 WITH LLVM-exception
+Source:  https://github.com/llvm/llvm-project
+Copyright: (c) The LLVM Project contributors
+
+LLVM is distributed under the Apache License v2.0 with LLVM Exceptions.
+A copy of the license is available at:
+https://llvm.org/LICENSE.txt

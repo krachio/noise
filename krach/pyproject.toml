@@ -1,11 +1,34 @@
 [project]
 name = "krach"
 version = "0.1.0"
+description = "Live coding audio system — define synths in Python, sequence with composable patterns, hear instantly"
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.12"
-dependencies = []
+authors = [
+    { name = "Jonas Koehler" },
+    { name = "Anyere Bendrien" },
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: MacOS",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Multimedia :: Sound/Audio",
+    "Topic :: Multimedia :: Sound/Audio :: Sound Synthesis",
+]
+dependencies = [
+    "ipython>=8",
+]
 
-[project.optional-dependencies]
-repl = ["ipython>=8"]
+[project.urls]
+Homepage = "https://krach.io"
+Repository = "https://github.com/krachio/noise"
+Issues = "https://github.com/krachio/noise/issues"
 
 [project.scripts]
 krach = "krach.repl:main"

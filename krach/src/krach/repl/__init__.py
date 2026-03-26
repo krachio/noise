@@ -195,10 +195,15 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> LiveMi
 def main() -> None:
     import sys
 
+    if "--version" in sys.argv or "-V" in sys.argv:
+        from krach import __version__
+        print(f"krach {__version__}")
+        return
+
     if "--help" in sys.argv or "-h" in sys.argv:
         print("krach — live coding audio system")
         print()
-        print("Usage: krach [--help]")
+        print("Usage: krach [--help] [--version]")
         print()
         print("Starts an IPython REPL with kr (Mixer) and krs (DSP) pre-loaded.")
         print("Requires: krach-engine binary (bundled in wheel or cargo build).")
@@ -228,7 +233,7 @@ def main() -> None:
     print("  krs   krach.dsp — krs.Signal, krs.control(), krs.saw(), krs.lowpass(), ...")
     print()
 
-    import IPython  # type: ignore[import-not-found]  # optional dep (repl extra)
+    import IPython  # type: ignore[import-not-found]
 
     user_ns: dict[str, object] = {
         "kr": kr,
