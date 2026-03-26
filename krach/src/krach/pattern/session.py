@@ -33,6 +33,7 @@ class SlotState:
 
 def _default_socket_path() -> str:
     from krach.config import load_config
+
     return str(load_config().socket)
 
 
@@ -48,19 +49,29 @@ def _parse_response(line: bytes) -> dict[str, Any]:
 @dataclass
 class Session:
     socket_path: str = field(default_factory=_default_socket_path)
+    address: tuple[str, int] | None = field(default=None)
+    token: str | None = field(default=None)
     _sock: socket.socket | None = field(default=None, init=False, repr=False)
     _reader: IO[bytes] | None = field(default=None, init=False, repr=False)
-    _slots: dict[str, SlotState] = field(
-        default_factory=lambda: dict[str, SlotState](), init=False, repr=False
-    )
+    _address: tuple[str, int] | None = field(default=None, init=False, repr=False)
+    _slots: dict[str, SlotState] = field(default_factory=lambda: dict[str, SlotState](), init=False, repr=False)
     _tempo: float = field(default=120.0, init=False, repr=False)
     _meter: float = field(default=4.0, init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        self._address = self.address
 
     # ── Connection ──────────────────────────────────────────────────────
 
     def connect(self) -> None:
-        self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self._sock.connect(self.socket_path)
+        if self._address is not None:
+            host, port = self._address
+            self._sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self._sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self._sock.connect((host, port))
+        else:
+            self._sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self._sock.connect(self.socket_path)
         self._sock.settimeout(5.0)
         self._reader = self._sock.makefile("rb")
         # Read engine's protocol version handshake.
@@ -71,6 +82,17 @@ class Session:
                 self._engine_protocol: int = info.get("protocol", 0)
         except (json.JSONDecodeError, KeyError, TypeError, ValueError):
             self._engine_protocol = 0
+        # TCP token auth (after handshake, before commands).
+        if self._address is not None and self.token is not None:
+            auth_msg = json.dumps({"auth": self.token}) + "\n"
+            self._sock.sendall(auth_msg.encode())
+            resp_line = self._reader.readline()
+            if not resp_line:
+                raise ConnectionError("engine closed connection during auth")
+            resp = json.loads(resp_line)
+            if resp.get("status") == "Error":
+                self.disconnect()
+                raise ConnectionError(resp.get("msg", "auth failed"))
         # Sync transport state from the engine.
         try:
             self.pull()
@@ -120,10 +142,7 @@ class Session:
         self.send(Hush(slot=slot))
 
     def stop(self) -> None:
-        self._slots = {
-            name: SlotState(pattern=state.pattern, playing=False)
-            for name, state in self._slots.items()
-        }
+        self._slots = {name: SlotState(pattern=state.pattern, playing=False) for name, state in self._slots.items()}
         self.send(HushAll())
 
     def launch(self, patterns: dict[str, Pattern]) -> None:
@@ -241,8 +260,12 @@ class Session:
             {"type": "connect", "from_node": f"{name}_g", "from_port": "out", "to_node": "out", "to_port": "in"},
         ]
         for param in controls:
-            commands.append({"type": "expose_control", "label": f"{name}/{param}", "node_id": name, "control_name": param})
-        commands.append({"type": "expose_control", "label": f"{name}/gain", "node_id": f"{name}_g", "control_name": "gain"})
+            commands.append(
+                {"type": "expose_control", "label": f"{name}/{param}", "node_id": name, "control_name": param}
+            )
+        commands.append(
+            {"type": "expose_control", "label": f"{name}/gain", "node_id": f"{name}_g", "control_name": "gain"}
+        )
         self._send_json({"type": "graph_batch", "commands": commands})
 
     def set_ctrl(self, label: str, value: float) -> None:
@@ -272,16 +295,18 @@ class Session:
         The engine resolves ``label`` via ``exposed_controls`` to find the
         target node + param, then drives it with the given shape.
         """
-        self._send_json({
-            "type": "set_automation",
-            "id": label,
-            "label": label,
-            "shape": shape,
-            "lo": lo,
-            "hi": hi,
-            "period_secs": period_secs,
-            "one_shot": one_shot,
-        })
+        self._send_json(
+            {
+                "type": "set_automation",
+                "id": label,
+                "label": label,
+                "shape": shape,
+                "lo": lo,
+                "hi": hi,
+                "period_secs": period_secs,
+                "one_shot": one_shot,
+            }
+        )
 
     def clear_automation(self, id: str) -> None:
         """Remove a parameter automation by id."""
@@ -307,14 +332,16 @@ class Session:
         Incoming CC values (0-127) are scaled to ``[lo, hi]`` and dispatched
         as ``set_control`` messages to the audio engine.
         """
-        self._send_json({
-            "type": "midi_map",
-            "channel": channel,
-            "cc": cc,
-            "label": label,
-            "lo": lo,
-            "hi": hi,
-        })
+        self._send_json(
+            {
+                "type": "midi_map",
+                "channel": channel,
+                "cc": cc,
+                "label": label,
+                "lo": lo,
+                "hi": hi,
+            }
+        )
 
     def shutdown(self) -> None:
         """Shut down the unified binary."""

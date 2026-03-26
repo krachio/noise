@@ -28,6 +28,7 @@ class Config:
     session_dir: Path = field(default_factory=lambda: _WORKSPACE / "sessions")
     log_file: Path = field(default_factory=lambda: _WORKSPACE / "engine.log")
     socket: Path = field(default_factory=_default_socket)
+    tcp_port: int | None = None
     build: bool = True
     profile: str = "debug"
 
@@ -60,10 +61,14 @@ def load_config(config_file: Path | None = None) -> Config:
     log_file = Path(toml_paths.get("log_file", str(workspace / "engine.log")))
     socket = Path(os.environ.get("NOISE_SOCKET", toml_paths.get("socket", str(_default_socket()))))
 
+    tcp_port_str = os.environ.get("NOISE_TCP_PORT", toml_paths.get("tcp_port"))
+    tcp_port = int(tcp_port_str) if tcp_port_str is not None else None
+
     return Config(
         workspace=workspace,
         dsp_dir=dsp_dir,
         session_dir=session_dir,
         log_file=log_file,
         socket=socket,
+        tcp_port=tcp_port,
     )

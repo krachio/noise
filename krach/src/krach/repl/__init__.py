@@ -21,8 +21,22 @@ from krach.pattern.pitch import ftom as _ftom, mtof as _mtof, parse_note as _par
 from krach.node_types import dsp, parse_dsp_controls
 from krach.mixer import Mixer
 from krach.pattern.builders import (
-    cat, hit, mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square,
-    mod_tri, note, rand, ramp, saw, seq, sine, stack, struct,
+    cat,
+    hit,
+    mod_exp,
+    mod_ramp,
+    mod_ramp_down,
+    mod_sine,
+    mod_square,
+    mod_tri,
+    note,
+    rand,
+    ramp,
+    saw,
+    seq,
+    sine,
+    stack,
+    struct,
 )
 from krach.pattern.pattern import rest as _rest
 
@@ -59,15 +73,11 @@ class LiveMixer(Mixer):
     _PUBLIC_SETTERS = frozenset({"master", "tempo", "meter"})
 
     def __setattr__(self, name: str, value: object) -> None:
-        if (name.startswith("_")
-            or name in self._PUBLIC_SETTERS
-            or hasattr(type(self), name)
-            or callable(value)):
+        if name.startswith("_") or name in self._PUBLIC_SETTERS or hasattr(type(self), name) or callable(value):
             super(Mixer, self).__setattr__(name, value)
         else:
             raise AttributeError(
-                f"kr has no property {name!r}. "
-                f"Settable properties: {', '.join(sorted(self._PUBLIC_SETTERS))}"
+                f"kr has no property {name!r}. Settable properties: {', '.join(sorted(self._PUBLIC_SETTERS))}"
             )
 
 
@@ -86,6 +96,46 @@ def _wait_for_socket(path: Path, timeout: float = 5.0) -> bool:
             return True
         time.sleep(0.1)
     return False
+
+
+def connect_remote(
+    host: str,
+    port: int,
+    token: str | None = None,
+    bpm: float = 120,
+    master: float = 0.7,
+) -> LiveMixer:
+    """Connect to a remote krach-engine over TCP. Skips engine spawn.
+
+    Usage::
+
+        kr = connect_remote("192.168.1.42", 9090, token="abc123")
+    """
+    from krach.pattern import Session
+
+    cfg = load_config()
+    cfg.ensure_dirs()
+
+    # Read token from ~/.krach/token if not provided.
+    if token is None:
+        token_path = cfg.workspace / "token"
+        if token_path.exists():
+            token = token_path.read_text().strip()
+
+    mm = Session(address=(host, port), token=token)
+    mm.connect()
+
+    node_controls: dict[str, tuple[str, ...]] = {}
+    for dsp_file in cfg.dsp_dir.rglob("*.dsp"):
+        controls = parse_dsp_controls(dsp_file.read_text())
+        if controls:
+            _rel = dsp_file.relative_to(cfg.dsp_dir).with_suffix("")
+            node_controls[f"faust:{_rel}"] = controls
+
+    kr = LiveMixer(session=mm, dsp_dir=cfg.dsp_dir, node_controls=node_controls)
+    kr.tempo = bpm
+    kr.master = master
+    return kr
 
 
 def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> LiveMixer:
@@ -123,6 +173,7 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> LiveMi
     lib_dir = resolve_lib_dir()
     if lib_dir:
         import sys
+
         lib_path_var = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
         env[lib_path_var] = str(lib_dir)
 
@@ -181,9 +232,7 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> LiveMi
             time.sleep(0.1)
     else:
         raise RuntimeError(
-            f"krach-engine not responding after 10s.\n"
-            f"  Check engine log: {cfg.log_file}\n"
-            f"  Socket: {cfg.socket}"
+            f"krach-engine not responding after 10s.\n  Check engine log: {cfg.log_file}\n  Socket: {cfg.socket}"
         )
 
     return kr
@@ -197,6 +246,7 @@ def main() -> None:
 
     if "--version" in sys.argv or "-V" in sys.argv:
         from krach import __version__
+
         print(f"krach {__version__}")
         return
 
