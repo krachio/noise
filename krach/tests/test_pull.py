@@ -1,5 +1,4 @@
 """Tests for Session.pull() and Mixer.pull() — engine state sync."""
-
 from __future__ import annotations
 
 from pathlib import Path

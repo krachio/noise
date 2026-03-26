@@ -24,6 +24,7 @@ pythonVersion = "3.13"
 typeCheckingMode = "strict"
 venvPath = "."
 venv = ".venv"
+reportPrivateUsage = "warning"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
