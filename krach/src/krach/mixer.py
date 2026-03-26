@@ -18,6 +18,8 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal, Protocol
 
+from dataclasses import dataclass
+
 from krach.graph_builder import build_graph_ir, inst_name as _inst_name
 from krach.pattern.mininotation import p as _p
 from krach.module_proxy import ModuleProxy
@@ -73,17 +75,23 @@ class NodeHandle:
 
     # ── Operator DSL ────────────────────────────────────────────────
 
-    def __rshift__(self, other: NodeHandle | tuple[NodeHandle, float]) -> NodeHandle:
-        """Route signal: ``bass >> verb`` or ``bass >> (verb, 0.4)``."""
+    def __rshift__(self, other: NodeHandle | ModuleHandle | tuple[NodeHandle | ModuleHandle, float]) -> NodeHandle | ModuleHandle:
+        """Route signal: ``bass >> verb`` or ``bass >> (verb, 0.4)`` or ``bass >> module``."""
         if isinstance(other, tuple):
             target, level = other
+            if isinstance(target, ModuleHandle):
+                self._mixer.connect(self._name, target.input._name, level=level)
+                return target
             self._mixer.connect(self._name, target._name, level=level)
             return target
+        if isinstance(other, ModuleHandle):
+            self._mixer.connect(self._name, other.input._name)
+            return other
         if isinstance(other, NodeHandle):  # pyright: ignore[reportUnnecessaryIsInstance]
             self._mixer.connect(self._name, other._name)
             return other
         raise TypeError(
-            f"{self._name} >> {type(other).__name__} — expected NodeHandle or (NodeHandle, float).\n"
+            f"{self._name} >> {type(other).__name__} — expected NodeHandle, ModuleHandle, or tuple.\n"
             f"  Try: {self._name} >> verb           — route to verb\n"
             f"       {self._name} >> (verb, 0.4)    — route at 40% level"
         )
@@ -169,6 +177,67 @@ class NodeHandle:
         return f"Node('{self._name}', removed)"
 
 
+# ── ModuleHandle ────────────────────────────────────────────────────────
+
+
+@dataclass(frozen=True, slots=True)
+class ModuleHandle:
+    """Thin operator proxy for an instantiated module."""
+
+    prefix: str
+    nodes: dict[str, NodeHandle]
+    inputs: tuple[str, ...] | None
+    outputs: tuple[str, ...] | None
+
+    def _strip_prefix(self, name: str) -> str:
+        """Strip prefix from a fully-qualified name to get relative name."""
+        pfx = self.prefix + "/"
+        return name[len(pfx):] if name.startswith(pfx) else name
+
+    @property
+    def input(self) -> NodeHandle:
+        """First declared input as NodeHandle."""
+        if not self.inputs:
+            raise ValueError(f"module {self.prefix!r} has no declared inputs")
+        return self.nodes[self._strip_prefix(self.inputs[0])]
+
+    @property
+    def output(self) -> NodeHandle:
+        """First declared output as NodeHandle."""
+        if not self.outputs:
+            raise ValueError(f"module {self.prefix!r} has no declared outputs")
+        return self.nodes[self._strip_prefix(self.outputs[0])]
+
+    def __rshift__(self, other: NodeHandle | ModuleHandle | tuple[NodeHandle | ModuleHandle, float]) -> NodeHandle | ModuleHandle:
+        """Route module output to target."""
+        return self.output >> other  # type: ignore[operator, return-value]
+
+    def __rrshift__(self, other: NodeHandle) -> ModuleHandle:
+        """Allow node >> module_handle."""
+        _ = other >> self.input
+        return self
+
+    def __matmul__(self, pattern: object) -> ModuleHandle:
+        """Play pattern on first input."""
+        _ = self.input @ pattern  # type: ignore[operator]
+        return self
+
+    def __getitem__(self, path: str) -> float:
+        """Get control: handle['node/param']."""
+        return self.nodes[path.split("/")[0]]["/".join(path.split("/")[1:])]  # type: ignore[return-value]
+
+    def __setitem__(self, path: str, value: float) -> None:
+        """Set control: handle['node/param'] = value."""
+        full_path = f"{self.prefix}/{path}"
+        first_node = next(iter(self.nodes.values()))
+        first_node._mixer.set(full_path, value)  # pyright: ignore[reportPrivateUsage]
+
+    def __repr__(self) -> str:
+        inputs = list(self.inputs) if self.inputs else []
+        outputs = list(self.outputs) if self.outputs else []
+        return f"ModuleHandle({self.prefix!r}, inputs={inputs}, outputs={outputs})"
+
+
 # ── Mixer ────────────────────────────────────────────────────────────────
 
 
@@ -201,6 +270,7 @@ class Mixer:
         self._patterns: dict[str, Pattern] = {}
         self._scenes: dict[str, ModuleIr] = {}
         self._batching: bool = False
+        self._shadow_sub_modules: list[tuple[str, ModuleIr]] = []
 
         self._graph_sent: bool = False
         self._master_gain: float = 0.7
@@ -550,6 +620,10 @@ class Mixer:
                 self._rebuild()
             case _:
                 return
+        # Clean shadow sub_modules matching this prefix
+        self._shadow_sub_modules = [
+            (p, ir) for p, ir in self._shadow_sub_modules if p != name
+        ]
 
     def input(self, name: str = "mic", channel: int = 0, gain: float = 0.5) -> NodeHandle:
         """Add an audio input node (ADC)."""
@@ -1051,7 +1125,7 @@ class Mixer:
         self._ctrl_values.clear()
         self._muted.clear()
         self._patterns.clear()
-        self.instantiate(self._scenes[name])
+        self.load(self._scenes[name])
 
     @property
     def scenes(self) -> list[str]:
@@ -1070,7 +1144,7 @@ class Mixer:
             raise ValueError(f"scene '{name}' not found")
         return self._scenes[name]
 
-    def load(self, path: str) -> None:
+    def exec_file(self, path: str) -> None:
         """Load and execute a Python file with ``kr`` in scope."""
         p = Path(path)
         if not p.exists():
@@ -1132,9 +1206,10 @@ class Mixer:
             tempo=tempo,
             meter=meter,
             master=self._master_gain,
+            sub_modules=tuple(self._shadow_sub_modules),
         )
 
-    def instantiate(self, ir: ModuleIr) -> None:
+    def load(self, ir: ModuleIr) -> None:
         """Replay a ModuleIr onto this mixer. Batches all nodes into one rebuild."""
         with self.batch():
             for nd in ir.nodes:
@@ -1173,6 +1248,34 @@ class Mixer:
 
         for md in ir.muted:
             self.mute(md.name)
+
+    def instantiate(self, ir: ModuleIr, prefix: str) -> ModuleHandle:
+        """Instantiate a module with prefix namespace. Returns a ModuleHandle."""
+        from krach.ir.module import prefix_ir, flatten
+
+        flat = flatten(prefix_ir(ir, prefix))
+        self.load(flat)
+
+        # Build node handles for all prefixed nodes
+        nodes: dict[str, NodeHandle] = {}
+        for nd in flat.nodes:
+            # Strip prefix to get relative name
+            rel = nd.name[len(prefix) + 1:] if nd.name.startswith(prefix + "/") else nd.name
+            nodes[rel] = NodeHandle(self, nd.name)
+
+        # Resolve inputs/outputs to prefixed names
+        flat_inputs = flat.inputs
+        flat_outputs = flat.outputs
+
+        # Record shadow
+        self._shadow_sub_modules.append((prefix, ir))
+
+        return ModuleHandle(
+            prefix=prefix,
+            nodes=nodes,
+            inputs=flat_inputs,
+            outputs=flat_outputs,
+        )
 
     def export(self, path: str) -> None:
         """Export current session state to a reloadable Python script."""

@@ -433,7 +433,7 @@ def register_tools(mcp: FastMCP) -> None:
         kr = get_session()
         resolved = os.path.expanduser(path)
         try:
-            kr.load(resolved)
+            kr.exec_file(resolved)
             return f"Loaded {resolved}"
         except (FileNotFoundError, RuntimeError) as e:
             return f"Error: {e}"
@@ -517,7 +517,7 @@ def register_tools(mcp: FastMCP) -> None:
             with open(resolved) as f:
                 d = json.load(f)
             ir = ModuleIr.from_dict(d)
-            kr.instantiate(ir)
+            kr.load(ir)
             return f"Loaded and instantiated module from {resolved}"
         except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
             return f"Error: {e}"

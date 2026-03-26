@@ -2414,12 +2414,12 @@ def test_load_executes_file(tmp_path: Path) -> None:
     scene_file = tmp_path / "my_scene.py"
     scene_file.write_text("mix.master = 0.42\n")
 
-    mixer.load(str(scene_file))
+    mixer.exec_file(str(scene_file))
     assert mixer.master == 0.42
 
 
-def test_load_missing_file_raises() -> None:
-    """load() raises FileNotFoundError for missing path."""
+def test_exec_file_missing_raises() -> None:
+    """exec_file() raises FileNotFoundError for missing path."""
     import pytest
     from unittest.mock import MagicMock
 
@@ -2430,7 +2430,7 @@ def test_load_missing_file_raises() -> None:
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     with pytest.raises(FileNotFoundError, match="scene file not found"):
-        mixer.load("/nonexistent/nope.py")
+        mixer.exec_file("/nonexistent/nope.py")
 
 
 # ── Control IR value ─────────────────────────────────────────────────────────

@@ -16,12 +16,12 @@ kr.tempo = 128
 ir = kr.capture()
 
 # Later: replay on a fresh mixer
-kr.instantiate(ir)
+kr.load(ir)
 ```
 
 `capture()` returns a `ModuleIr` — a frozen, serializable snapshot of everything: nodes (with their DspGraph IR), routing, patterns, controls, transport, and mute state.
 
-`instantiate(ir)` replays it: creates nodes, connects routing, plays patterns, sets controls.
+`load(ir)` replays it: creates nodes, connects routing, plays patterns, sets controls.
 
 ## Save & recall (in-memory scenes)
 
@@ -49,7 +49,7 @@ json.dump(data, open("session.json", "w"))
 from krach.ir.module import ModuleIr
 data = json.load(open("session.json"))
 ir = ModuleIr.from_dict(data)
-kr.instantiate(ir)
+kr.load(ir)
 ```
 
 The serialized format embeds DspGraphs inline — the full signal computation IR for each node. When you load and instantiate, the DSP is re-transpiled to FAUST and JIT-compiled. Nodes with identical DspGraphs (same `graph_key`) share compiled binaries.
@@ -89,7 +89,7 @@ proxy.play("kick", kr.hit() * 4)
 proxy.tempo = 128
 
 ir = proxy.build()       # → ModuleIr (no audio started)
-kr.instantiate(ir)       # now play it
+kr.load(ir)       # now play it
 ```
 
 The proxy records calls as `ModuleIr` without connecting to the engine. Useful for building reusable module templates.

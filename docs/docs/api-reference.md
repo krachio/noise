@@ -83,11 +83,11 @@ The `Mixer` class manages the audio graph. In the REPL, `kr` is a `LiveMixer` in
 | Method | Description |
 |---|---|
 | `kr.capture()` | Snapshot session as frozen `ModuleIr` |
-| `kr.instantiate(ir)` | Replay a `ModuleIr` onto the mixer |
+| `kr.load(ir)` | Replay a `ModuleIr` onto the mixer |
 | `kr.trace()` | Return a `ModuleProxy` that records calls |
 | `kr.scene(name)` | Get a saved scene by name |
 | `kr.export(path)` | Export session to reloadable Python file |
-| `kr.load(path)` | Load and execute a Python session file |
+| `kr.exec_file(path)` | Load and execute a Python session file |
 
 ### State
 

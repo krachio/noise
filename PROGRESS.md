@@ -119,7 +119,7 @@ kr.mute("drums")
 - **MCP server**: 25 tools for Claude Code to drive krach — chord(), euclid(), AST-safe pattern eval
 - **Pattern IR**: PatternNode tree with per-primitive rules, generic fold, structural `__repr__`
 - **DspGraph caching**: `dsp()` LRU keyed by `graph_key` (structural hash of DspGraph)
-- **Module system**: `kr.capture()` → ModuleIr, `kr.instantiate(ir)`, `kr.trace()` proxy
+- **Module system**: `kr.capture()` → ModuleIr, `kr.load(ir)`, `kr.trace()` proxy
 - **ModuleIr serialization**: `to_dict()` / `from_dict()` — JSON round-trip for persistence
 - **Batch rollback**: all 6 state dicts restored on failed `with kr.batch():`
 - **Engine state sync**: `{"cmd":"Status"}` IPC returns full snapshot; `kr.pull()` syncs Python from engine; MCP auto-syncs on status()
