@@ -9,7 +9,7 @@ noise/
 ├── audio-engine/      Rust — audio engine (graph runtime, node reuse, crossfade, gain smoothing)
 ├── audio-faust/       Rust — FAUST LLVM JIT plugin (hot reload, recursive dir watcher)
 ├── pattern-engine/    Rust — pattern sequencer (min-heap, rational time, phase-reset, meter)
-├── krach-engine/      Rust — unified binary (pattern-engine + audio-engine + audio-faust, one socket)
+├── krach-engine/      Rust — unified binary (pattern-engine + audio-engine + audio-faust, Unix + TCP)
 ├── krach/             Python — live coding REPL (graph API, patterns, DSP transpiler, MCP server)
 └── krach-mcp/         Python — MCP server (25 tools for Claude Code to drive krach)
 ```
@@ -54,10 +54,10 @@ REPL entry: `krach.repl.connect()` returns `LiveMixer` with `kr.note()`, `kr.seq
 - audio-engine: 167 Rust tests
 - audio-faust: 29 Rust tests
 - pattern-engine: 175 Rust tests
-- krach-engine: 27 Rust tests
-- krach: 760 Python tests
+- krach-engine: 32 Rust tests
+- krach: 765 Python tests
 - krach-mcp: 21 Python tests
-- **Total: 1181 tests**, all green. Pyright strict clean.
+- **Total: 1189 tests**, all green. Pyright strict clean.
 
 ## Usage
 
@@ -110,6 +110,7 @@ kr.mute("drums")
 - **Unified routing**: `kr.connect()` / `>>` replaces send/wire split — level and port as params
 - **FAUST auto-smoothing**: DSP controls with si.smoo applied automatically, no zipper noise
 - **Protocol hardening**: IPC message validation, length-prefixed framing, reconnect on stale socket
+- **TCP support**: `--tcp <addr>` / `NOISE_TCP_ADDR` enables remote connections with token auth; `connect_remote()` in Python
 - **Native automation lanes**: block-rate modulation on audio thread (AutoShape + GraphSwapper)
 - **Typed Control IR**: `Control(label, value)` replaces OSC string convention
 - **Continuous patterns**: `kr.sine()`, `kr.saw()`, `kr.rand()` — smooth control sweeps
@@ -134,12 +135,6 @@ kr.mute("drums")
 
 Secondary install channel (`brew install krach`). Create krachio/homebrew-tap
 repo with formula that installs PyPI wheel into venv. ~1 hour.
-
-### Network sockets (priority: high, boring)
-
-TCP instead of Unix socket. Enables: remote jam sessions, multi-machine
-setups, web client → engine communication. Prerequisite for WASM browser.
-~1-2 days (Rust krach-engine + Python session.py).
 
 ### macOS Intel wheel (priority: medium, blocked)
 
