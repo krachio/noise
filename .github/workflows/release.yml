@@ -16,7 +16,7 @@ jobs:
           - os: macos-14
             target: macos-arm64
             wheel_tag: macosx_14_0_arm64
-          - os: macos-13
+          - os: macos-14-large
             target: macos-x86_64
             wheel_tag: macosx_13_0_x86_64
           - os: ubuntu-22.04
@@ -77,6 +77,9 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           set -euo pipefail
+          # macOS readlink doesn't support -f; use python for symlink resolution
+          resolve() { python3 -c "import pathlib; print(pathlib.Path('$1').resolve())"; }
+
           BIN_DIR=krach/src/krach/_bin
           LIB_DIR=krach/src/krach/_lib
           SHARE_DIR=krach/src/krach/_share/faust
@@ -86,13 +89,13 @@ jobs:
           cp target/release/krach-engine "$BIN_DIR/"
           chmod +x "$BIN_DIR/krach-engine"
 
-          FAUST_REAL=$(readlink -f "$FAUST_PREFIX/lib/libfaust.2.dylib")
+          FAUST_REAL=$(resolve "$FAUST_PREFIX/lib/libfaust.2.dylib")
           cp "$FAUST_REAL" "$LIB_DIR/libfaust.2.dylib"
           cp "$LLVM_PREFIX/lib/libLLVM.dylib" "$LIB_DIR/libLLVM.dylib"
 
           UNWIND_LIB=$(otool -L target/release/krach-engine | grep libunwind | awk '{print $1}')
           if [ -n "$UNWIND_LIB" ]; then
-            UNWIND_REAL=$(readlink -f "$UNWIND_LIB")
+            UNWIND_REAL=$(resolve "$UNWIND_LIB")
             cp "$UNWIND_REAL" "$LIB_DIR/libunwind.1.dylib"
           fi
 
@@ -182,6 +185,7 @@ jobs:
       - name: Build wheel
         working-directory: krach
         run: |
+          uv venv
           uv pip install hatchling
           uv run python -m hatchling build -t wheel
           ls -lh dist/
@@ -231,7 +235,7 @@ jobs:
         include:
           - os: macos-14
             artifact: wheel-macos-arm64
-          - os: macos-13
+          - os: macos-14-large
             artifact: wheel-macos-x86_64
           - os: ubuntu-22.04
             artifact: wheel-linux-x86_64
