@@ -122,13 +122,18 @@ kr.mute("drums")
 - **ModuleIr serialization**: `to_dict()` / `from_dict()` — JSON round-trip for persistence
 - **Batch rollback**: all 6 state dicts restored on failed `with kr.batch():`
 - **Engine state sync**: `{"cmd":"Status"}` IPC returns full snapshot; `kr.pull()` syncs Python from engine; MCP auto-syncs on status()
-- **Vendored wheel packaging**: `pip install krach` on macOS ARM64, macOS x86_64, Linux x86_64
+- **Vendored wheel packaging**: `pip install krach` on macOS ARM64 + Linux x86_64 (macOS Intel paused — needs paid runner)
 - **Cross-platform build.rs**: env vars (FAUST_LIB_DIR, LLVM_LIB_DIR) → pkg-config → platform defaults
 - **FAUST stdlib override**: `FAUST_STDLIB_DIR` env var → `-I` flag to JIT compiler, enabling vendored stdlib
-- **CI release matrix**: 3-platform wheel build (macos-14, macos-13, ubuntu-22.04) + PyPI trusted publishing + clean-install test + GitHub Release
-- **PyPI release**: full metadata, `krach --version`, THIRD_PARTY_LICENSES (GPL for libfaust, Apache for LLVM)
+- **CI release matrix**: 2-platform wheel build (macos-14, ubuntu-22.04) + PyPI trusted publishing + clean-install test + GitHub Release
+- **PyPI v0.1.0 published**: full metadata, `krach --version`, THIRD_PARTY_LICENSES (GPL for libfaust, Apache for LLVM)
 
 ## Backlog
+
+### macOS Intel wheel (priority: medium)
+
+Requires paid `-large` GitHub Actions runner (macos-13 deprecated).
+Re-enable `macos-14-large` matrix entry in release.yml when billing is set up.
 
 ### Homebrew formula (priority: high)
 
