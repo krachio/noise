@@ -29,10 +29,8 @@ The `Mixer` class manages the audio graph. In the REPL, `kr` is a `LiveMixer` in
 
 | Method | Description |
 |---|---|
-| `kr.connect(source, target, level=1.0, port=None)` | Route audio. Use `level` for gain-controlled sends, `port` for direct port connections |
-| `kr.send(source, target, level=0.5)` | Gain-controlled send (shorthand for `connect` with level) |
-| `kr.wire(source, target, port="in0")` | Direct port connection without gain stage |
-| `kr.unsend(source, target)` | Remove a send or wire between two nodes |
+| `kr.connect(source, target, level=1.0, port=None)` | Route audio. Use `level` for gain-controlled routing, `port` for direct port connections |
+| `kr.unsend(source, target)` | Remove a routing connection between two nodes |
 | `bass >> verb` | Operator shorthand for `kr.connect()` |
 | `bass >> (verb, 0.4)` | Route with send level |
 
