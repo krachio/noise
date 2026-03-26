@@ -39,6 +39,8 @@ nav:
     - Scenes & Persistence: scenes.md
     - Modules & Persistence: modules.md
     - MIDI & Hardware: midi-hardware.md
+  - Reference:
+    - API Reference: api-reference.md
   - Developer Guide:
     - Architecture: architecture.md
     - IR Architecture: ir-architecture.md

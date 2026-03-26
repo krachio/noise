@@ -27,23 +27,34 @@ code (`.dsp`) is saved to `~/.krach/dsp/`.
 
 All DSP building blocks live in the `krs` namespace (`krach.dsp`).
 
+### Controls
+
+| Function | Description |
+|---|---|
+| `krs.control(name, init, lo, hi)` | Exposed parameter (automatable from patterns) |
+
 ### Oscillators
 
 | Function | Description |
 |---|---|
 | `krs.sine_osc(freq)` | Sine oscillator |
-| `krs.saw(freq)` | Sawtooth oscillator |
-| `krs.square(freq)` | Square wave oscillator |
+| `krs.saw(freq)` | Sawtooth oscillator (bipolar) |
+| `krs.square(freq, duty=0.5)` | Square/pulse wave |
 | `krs.phasor(freq)` | 0--1 ramp at `freq` Hz |
+
+### Noise
+
+| Function | Description |
+|---|---|
 | `krs.white_noise()` | White noise generator |
 
 ### Filters
 
 | Function | Description |
 |---|---|
-| `krs.lowpass(sig, cutoff)` | Butterworth lowpass -- signal first, cutoff Hz second |
-| `krs.highpass(sig, cutoff)` | Butterworth highpass -- signal first, cutoff Hz second |
-| `krs.bandpass(sig, cutoff, q)` | Bandpass filter -- signal first |
+| `krs.lowpass(sig, freq, order=2)` | Butterworth lowpass |
+| `krs.highpass(sig, freq, order=2)` | Butterworth highpass |
+| `krs.bandpass(sig, freq, q)` | Bandpass (resonant) |
 
 ### Envelopes
 
@@ -55,13 +66,50 @@ All DSP building blocks live in the `krs` namespace (`krach.dsp`).
 
 | Function | Description |
 |---|---|
-| `krs.reverb(sig, room)` | Freeverb -- signal first, room size 0.0--1.0 |
+| `krs.reverb(sig, room, damping)` | Mono Freeverb |
 
-### Controls
+### DSP primitives
 
 | Function | Description |
 |---|---|
-| `krs.control(name, init, lo, hi)` | Exposed parameter (automatable from patterns) |
+| `krs.sr()` | Sample rate signal |
+| `krs.sample_rate()` | Alias for `sr()` |
+| `krs.delay(sig, n)` | Variable-length delay line |
+| `krs.mem(sig)` | Single-sample delay (z^-1) |
+| `krs.unit_delay(sig)` | Alias for `mem()` |
+| `krs.feedback(body_fn)` | Feedback loop (Faust `~` operator) |
+| `krs.select2(sel, when_zero, when_one)` | Two-way signal router |
+| `krs.faust_expr(template, *inputs)` | Inline Faust expression escape hatch |
+
+### Math -- unary
+
+| Function | Description |
+|---|---|
+| `krs.sin(sig)` | Sine |
+| `krs.cos(sig)` | Cosine |
+| `krs.tan(sig)` | Tangent |
+| `krs.asin(sig)` | Inverse sine |
+| `krs.acos(sig)` | Inverse cosine |
+| `krs.atan(sig)` | Inverse tangent |
+| `krs.exp(sig)` | Exponential |
+| `krs.log(sig)` | Natural logarithm |
+| `krs.log10(sig)` | Base-10 logarithm |
+| `krs.sqrt(sig)` | Square root |
+| `krs.abs_(sig)` | Absolute value |
+| `krs.floor(sig)` | Floor |
+| `krs.ceil(sig)` | Ceiling |
+| `krs.round_(sig)` | Round |
+
+### Math -- binary
+
+| Function | Description |
+|---|---|
+| `krs.min_(a, b)` | Minimum |
+| `krs.max_(a, b)` | Maximum |
+| `krs.pow_(base, exp)` | Power |
+| `krs.fmod(a, b)` | Floating-point modulo |
+| `krs.remainder(a, b)` | IEEE remainder |
+| `krs.atan2(y, x)` | Two-argument arctangent |
 
 ## Controls: `krs.control(name, init, lo, hi)`
 
