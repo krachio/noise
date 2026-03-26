@@ -108,7 +108,7 @@ def _make_mixer(state: dict[str, object]) -> Mixer:
     mixer._patterns = {}
     mixer._scenes = {}
     mixer._batching = False
-    mixer._graph_loaded = False
+
     mixer._master_gain = 0.7
     mixer._transition_bars = 0
     mixer._flush_scheduled = False
@@ -298,7 +298,7 @@ def test_mixer_pull_connection_error_is_silent() -> None:
     mixer._patterns = {}
     mixer._scenes = {}
     mixer._batching = False
-    mixer._graph_loaded = False
+
     mixer._master_gain = 0.7
     mixer._transition_bars = 0
     mixer._flush_scheduled = False

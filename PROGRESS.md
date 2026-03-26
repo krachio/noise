@@ -55,8 +55,9 @@ REPL entry: `krach.repl.connect()` returns `LiveMixer` with `kr.note()`, `kr.seq
 - audio-faust: 29 Rust tests
 - pattern-engine: 175 Rust tests
 - krach-engine: 27 Rust tests
-- krach: 738 Python tests
-- **Total: 1136 tests**, all green. Pyright strict clean.
+- krach: 760 Python tests
+- krach-mcp: 21 Python tests
+- **Total: 1181 tests**, all green. Pyright strict clean.
 
 ## Usage
 
@@ -113,7 +114,7 @@ kr.mute("drums")
 - **Continuous patterns**: `kr.sine()`, `kr.saw()`, `kr.rand()` — smooth control sweeps
 - **Mini-notation**: `kr.p("x . x . x . . x")` for fast pattern entry
 - **Scenes**: `kr.save("verse")` / `kr.recall("chorus")` — snapshot + restore
-- **MCP server**: 25 tools for Claude Code to drive krach (node, play, status, capture, export, etc.)
+- **MCP server**: 25 tools for Claude Code to drive krach — chord(), euclid(), AST-safe pattern eval
 - **Pattern IR**: PatternNode tree with per-primitive rules, generic fold, structural `__repr__`
 - **DspGraph caching**: `dsp()` LRU keyed by `graph_key` (structural hash of DspGraph)
 - **Module system**: `kr.capture()` → ModuleIr, `kr.instantiate(ir)`, `kr.trace()` proxy

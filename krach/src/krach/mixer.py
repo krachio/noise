@@ -201,7 +201,7 @@ class Mixer:
         self._patterns: dict[str, Pattern] = {}
         self._scenes: dict[str, ModuleIr] = {}
         self._batching: bool = False
-        self._graph_loaded: bool = False
+
         self._graph_sent: bool = False
         self._master_gain: float = 0.7
         self._transition_bars: int = 0
@@ -388,7 +388,7 @@ class Mixer:
         if "master" in transport:
             self._master_gain = float(transport["master"])
 
-        self._graph_loaded = True
+
 
     # ── Node lifecycle ────────────────────────────────────────────
 
@@ -978,7 +978,7 @@ class Mixer:
     def _rebuild(self) -> None:
         ir = build_graph_ir(self._nodes, sends=self._sends, wires=self._wires)
         self._session.load_graph(ir)
-        self._graph_loaded = True
+
         self._graph_sent = True
 
     def _wait_for_type(self, type_id: str, timeout: float = 10.0) -> None:

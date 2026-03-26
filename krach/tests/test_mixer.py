@@ -3708,8 +3708,8 @@ def test_node_with_slashed_type_id_uses_rebuild_not_add_voice() -> None:
     """node() with type_id containing '/' must use _rebuild, not add_voice.
 
     Regression test for GitHub issue #1: 'faust:drums/kick' fails because
-    add_voice is used when _graph_loaded was set by pull() before any
-    load_graph was sent. The engine shadow graph has no 'out' node.
+    add_voice was used before any load_graph was sent. The engine shadow
+    graph has no 'out' node. _graph_sent stays False until _rebuild().
     """
     from unittest.mock import MagicMock
 
@@ -3721,8 +3721,7 @@ def test_node_with_slashed_type_id_uses_rebuild_not_add_voice() -> None:
         "faust:drums/kick": ("gate",),
     })
 
-    # Simulate pull() setting _graph_loaded without sending a graph
-    mixer._graph_loaded = True
+    # _graph_sent is False (no _rebuild yet) — voice must use _rebuild
 
     session.reset_mock()
     mixer.voice("kick", "faust:drums/kick", gain=0.8)
