@@ -6,7 +6,11 @@ frozen IR without starting audio.
 
 from __future__ import annotations
 
+import functools
+import inspect
+from collections.abc import Callable
 from dataclasses import dataclass
+from typing import Concatenate, ParamSpec
 
 from krach.ir.module import (
     ControlDef,
@@ -215,3 +219,25 @@ class ModuleProxy:
             outputs=self._outputs,
             sub_modules=tuple(self._sub_modules),
         )
+
+
+# ---------------------------------------------------------------------------
+# @module_decorator — trace imperative code into frozen ModuleIr
+# ---------------------------------------------------------------------------
+
+P = ParamSpec("P")
+
+
+def module_decorator(fn: Callable[Concatenate[ModuleProxy, P], None]) -> Callable[P, ModuleIr]:
+    """Decorator that traces a function into a frozen ModuleIr."""
+    @functools.wraps(fn)
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> ModuleIr:
+        proxy = ModuleProxy()
+        fn(proxy, *args, **kwargs)
+        return proxy.build()
+
+    # Fix signature: strip the first parameter (proxy)
+    sig = inspect.signature(fn)
+    params = list(sig.parameters.values())[1:]  # skip proxy
+    wrapper.__signature__ = sig.replace(parameters=params, return_annotation=ModuleIr)  # type: ignore[attr-defined]
+    return wrapper

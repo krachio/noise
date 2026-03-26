@@ -489,7 +489,7 @@ def register_tools(mcp: FastMCP) -> None:
         import os
         kr = get_session()
         try:
-            ir = kr.module(name)
+            ir = kr.scene(name)
         except ValueError as e:
             return f"Error: {e}"
         resolved = os.path.expanduser(path)

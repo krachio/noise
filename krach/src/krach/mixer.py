@@ -1064,10 +1064,10 @@ class Mixer:
         """Return a tracing proxy that records calls as ModuleIr."""
         return ModuleProxy()
 
-    def module(self, name: str) -> ModuleIr:
-        """Get a saved module/scene by name."""
+    def scene(self, name: str) -> ModuleIr:
+        """Get a saved scene by name."""
         if name not in self._scenes:
-            raise ValueError(f"module '{name}' not found")
+            raise ValueError(f"scene '{name}' not found")
         return self._scenes[name]
 
     def load(self, path: str) -> None:
