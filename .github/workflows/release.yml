@@ -55,6 +55,9 @@ jobs:
           echo "FAUST_VERSION=${FAUST_VERSION}" >> $GITHUB_ENV
           # Install LLVM (needed for linking — libfaust.so has LLVM statically but
           # build.rs still needs LLVM libs for the linker to resolve krach-engine deps)
+          wget -qO- https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+          echo "deb http://apt.llvm.org/jammy/ llvm-toolchain-jammy-18 main" | sudo tee /etc/apt/sources.list.d/llvm-18.list
+          sudo apt-get update
           sudo apt-get install -y llvm-18-dev
           echo "LLVM_LIB_DIR=/usr/lib/llvm-18/lib" >> $GITHUB_ENV
         env:
