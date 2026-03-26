@@ -228,6 +228,8 @@ jobs:
         include:
           - os: macos-14
             artifact: wheel-macos-arm64
+          - os: macos-13
+            artifact: wheel-macos-x86_64
           - os: ubuntu-22.04
             artifact: wheel-linux-x86_64
     runs-on: ${{ matrix.os }}
