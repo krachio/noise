@@ -41,6 +41,7 @@ nav:
     - MIDI & Hardware: midi-hardware.md
   - Reference:
     - API Reference: api-reference.md
+    - Pattern Cheat Sheet: pattern-cheatsheet.md
   - Developer Guide:
     - Architecture: architecture.md
     - IR Architecture: ir-architecture.md
