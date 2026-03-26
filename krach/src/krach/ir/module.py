@@ -349,3 +349,62 @@ def _dict_to_node_def(d: dict[str, Any]) -> NodeDef:
         init=tuple(tuple(x) for x in d["init"]),
         source_text=d.get("source_text", ""),
     )
+
+
+# ---------------------------------------------------------------------------
+# prefix_ir — pure namespace prefixing
+# ---------------------------------------------------------------------------
+
+
+def _prefix_path(path: str, prefix: str) -> str:
+    """Prefix the node portion of a path (before first /)."""
+    return f"{prefix}/{path}"
+
+
+def prefix_ir(ir: ModuleIr, prefix: str) -> ModuleIr:
+    """Prefix all node names and references in a ModuleIr."""
+    nodes = tuple(
+        NodeDef(
+            name=f"{prefix}/{n.name}", source=n.source, gain=n.gain,
+            count=n.count, num_inputs=n.num_inputs, init=n.init,
+            source_text=n.source_text,
+        )
+        for n in ir.nodes
+    )
+    routing = tuple(
+        RouteDef(
+            source=f"{prefix}/{r.source}", target=f"{prefix}/{r.target}",
+            kind=r.kind, level=r.level, port=r.port,
+        )
+        for r in ir.routing
+    )
+    patterns = tuple(
+        PatternDef(target=f"{prefix}/{p.target}", pattern=p.pattern, swing=p.swing)
+        for p in ir.patterns
+    )
+    controls = tuple(
+        ControlDef(path=_prefix_path(c.path, prefix), value=c.value)
+        for c in ir.controls
+    )
+    automations = tuple(
+        AutomationDef(
+            path=_prefix_path(a.path, prefix),
+            shape=a.shape, lo=a.lo, hi=a.hi, bars=a.bars,
+        )
+        for a in ir.automations
+    )
+    muted = tuple(
+        MutedDef(name=f"{prefix}/{m.name}", saved_gain=m.saved_gain)
+        for m in ir.muted
+    )
+    inputs = tuple(f"{prefix}/{i}" for i in ir.inputs) if ir.inputs is not None else None
+    outputs = tuple(f"{prefix}/{o}" for o in ir.outputs) if ir.outputs is not None else None
+    sub_modules = tuple(
+        (f"{prefix}/{sp}", sub) for sp, sub in ir.sub_modules
+    )
+    return ModuleIr(
+        nodes=nodes, routing=routing, patterns=patterns,
+        controls=controls, automations=automations, muted=muted,
+        tempo=ir.tempo, meter=ir.meter, master=ir.master,
+        inputs=inputs, outputs=outputs, sub_modules=sub_modules,
+    )
