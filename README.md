@@ -196,7 +196,35 @@ noise/
 └── krach-mcp/         Python — MCP server (25 tools for Claude Code)
 ```
 
-Single process architecture. Python sends pattern IR over a Unix socket. The Rust engine compiles patterns to block-rate automation curves — no per-event IPC during playback. FAUST DSPs hot-reload from `~/.krach/dsp/`.
+Single process architecture. Python sends pattern IR over a Unix socket (or TCP for remote sessions). The Rust engine compiles patterns to block-rate automation curves — no per-event IPC during playback. FAUST DSPs hot-reload from `~/.krach/dsp/`.
+
+## Remote jam sessions
+
+Connect to a krach-engine running on another machine over TCP.
+
+**1. Start the engine with TCP enabled (host machine):**
+
+```bash
+krach-engine --tcp 0.0.0.0:9090
+# prints: tcp: listening on 0.0.0.0:9090
+# writes token to ~/.krach/token
+```
+
+**2. Copy the token to the remote machine:**
+
+```bash
+cat ~/.krach/token  # on host — copy this value
+```
+
+**3. Connect from Python (remote machine):**
+
+```python
+from krach.repl import connect_remote
+kr = connect_remote("192.168.1.42", 9090, token="<paste token>")
+kr.tempo = 128
+```
+
+TCP uses the same JSON-over-newline protocol as the local Unix socket. Token auth prevents unauthorized connections. `TCP_NODELAY` is set for low latency.
 
 ## DSP primitives (`krs`)
 
