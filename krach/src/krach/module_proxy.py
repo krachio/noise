@@ -6,6 +6,8 @@ frozen IR without starting audio.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from krach.ir.module import (
     ControlDef,
     ModuleIr,
@@ -13,9 +15,39 @@ from krach.ir.module import (
     NodeDef,
     PatternDef,
     RouteDef,
+    prefix_ir,
 )
 from krach.node_types import DspDef, DspSource, dsp
 from krach.pattern.pattern import Pattern
+
+
+@dataclass(frozen=True, slots=True)
+class SubModuleRef:
+    """Reference to a sub-module registered in a ModuleProxy."""
+
+    prefix: str
+    ir: ModuleIr
+
+    def input(self, name: str) -> str:
+        """Return prefixed path for a declared input port."""
+        if self.ir.inputs is None:
+            raise ValueError(f"{self.prefix!r} has no declared inputs")
+        if name not in self.ir.inputs:
+            raise ValueError(f"{name!r} not in {self.prefix!r} inputs: {self.ir.inputs}")
+        return f"{self.prefix}/{name}"
+
+    def output(self, name: str) -> str:
+        """Return prefixed path for a declared output port."""
+        if self.ir.outputs is None:
+            raise ValueError(f"{self.prefix!r} has no declared outputs")
+        if name not in self.ir.outputs:
+            raise ValueError(f"{name!r} not in {self.prefix!r} outputs: {self.ir.outputs}")
+        return f"{self.prefix}/{name}"
+
+    def __repr__(self) -> str:
+        inputs = list(self.ir.inputs) if self.ir.inputs else []
+        outputs = list(self.ir.outputs) if self.ir.outputs else []
+        return f"SubModuleRef({self.prefix!r}, inputs={inputs}, outputs={outputs})"
 
 
 class ModuleProxy:
@@ -27,14 +59,25 @@ class ModuleProxy:
         self._patterns: list[PatternDef] = []
         self._controls: list[ControlDef] = []
         self._muted: list[MutedDef] = []
+        self._sub_modules: list[tuple[str, ModuleIr]] = []
         self._tempo: float | None = None
         self._meter: float | None = None
         self._master: float | None = None
         self._node_names: set[str] = set()
+        self._inputs: tuple[str, ...] | None = None
+        self._outputs: tuple[str, ...] | None = None
+        self._inputs_set: bool = False
+        self._outputs_set: bool = False
+        self._frozen: bool = False
+
+    def _check_frozen(self) -> None:
+        """Raise if proxy is frozen after build()."""
+        if self._frozen:
+            raise RuntimeError("ModuleProxy is frozen after build()")
 
     def node(self, name: str, source: DspSource, *, gain: float = 0.5, count: int = 1, **init: float) -> None:
         """Record a node definition."""
-        # Resolve source to get type_id + metadata
+        self._check_frozen()
         if callable(source) and not isinstance(source, (str, DspDef)):
             dsp_def = dsp(source)
             source_str = dsp_def.faust
@@ -61,10 +104,12 @@ class ModuleProxy:
 
     def send(self, source: str, target: str, *, level: float = 1.0) -> None:
         """Record a send route."""
+        self._check_frozen()
         self._routing.append(RouteDef(source=source, target=target, kind="send", level=level))
 
     def wire(self, source: str, target: str, *, port: str = "in0") -> None:
         """Record a wire route."""
+        self._check_frozen()
         self._routing.append(RouteDef(source=source, target=target, kind="wire", port=port))
 
     def connect(self, source: str, target: str, *, level: float = 1.0) -> None:
@@ -76,21 +121,51 @@ class ModuleProxy:
         from_zero: bool = False, swing: float | None = None,
     ) -> None:
         """Record a pattern assignment."""
+        self._check_frozen()
         self._patterns.append(PatternDef(target=target, pattern=pattern.node, swing=swing))
 
     def set(self, path: str, value: float) -> None:
         """Record a control value."""
+        self._check_frozen()
         self._controls.append(ControlDef(path=path, value=value))
 
     def mute(self, name: str) -> None:
         """Record a mute."""
-        # Find the node's gain to save
+        self._check_frozen()
         gain = 0.5
         for nd in self._nodes:
             if nd.name == name:
                 gain = nd.gain
                 break
         self._muted.append(MutedDef(name=name, saved_gain=gain))
+
+    def inputs(self, *names: str) -> None:
+        """Declare input ports. Single call only."""
+        self._check_frozen()
+        if self._inputs_set:
+            raise RuntimeError("inputs() already called")
+        self._inputs = names
+        self._inputs_set = True
+
+    def outputs(self, *names: str) -> None:
+        """Declare output ports. Single call only."""
+        self._check_frozen()
+        if self._outputs_set:
+            raise RuntimeError("outputs() already called")
+        self._outputs = names
+        self._outputs_set = True
+
+    def sub(self, prefix: str, ir: ModuleIr) -> SubModuleRef:
+        """Register a sub-module and return a reference for routing."""
+        self._check_frozen()
+        self._sub_modules.append((prefix, ir))
+        # Add prefixed node names for route validation
+        prefixed = prefix_ir(ir, prefix)
+        from krach.ir.module import flatten
+        flat = flatten(prefixed)
+        for nd in flat.nodes:
+            self._node_names.add(nd.name)
+        return SubModuleRef(prefix=prefix, ir=ir)
 
     @property
     def tempo(self) -> float:
@@ -118,6 +193,15 @@ class ModuleProxy:
 
     def build(self) -> ModuleIr:
         """Finalize and return the recorded ModuleIr."""
+        # Validate route targets
+        for route in self._routing:
+            if route.target not in self._node_names:
+                raise ValueError(
+                    f"route target {route.target!r} not found in "
+                    f"local nodes or sub_module nodes: {sorted(self._node_names)}"
+                )
+
+        self._frozen = True
         return ModuleIr(
             nodes=tuple(self._nodes),
             routing=tuple(self._routing),
@@ -127,4 +211,7 @@ class ModuleProxy:
             tempo=self._tempo,
             meter=self._meter,
             master=self._master,
+            inputs=self._inputs,
+            outputs=self._outputs,
+            sub_modules=tuple(self._sub_modules),
         )
