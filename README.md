@@ -214,4 +214,4 @@ cd krach && uv run pyright && uv run pytest  # Python tests (includes DSP transp
 
 ## License
 
-MIT
+GPL-2.0-or-later

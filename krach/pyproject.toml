@@ -3,7 +3,7 @@ name = "krach"
 version = "0.1.0"
 description = "Live coding audio system — define synths in Python, sequence with composable patterns, hear instantly"
 readme = "README.md"
-license = "MIT"
+license = "GPL-2.0-or-later"
 requires-python = ">=3.12"
 authors = [
     { name = "Jonas Koehler" },
@@ -12,7 +12,7 @@ authors = [
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
+    "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
     "Programming Language :: Python :: 3",
