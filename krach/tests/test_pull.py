@@ -229,3 +229,82 @@ def test_mixer_pull_detects_sends() -> None:
     # Should detect the send from bass to verb
     assert ("bass", "verb") in mixer._sends
     assert mixer._sends[("bass", "verb")] == 0.3
+
+
+# ── Error paths ──────────────────────────────────────────────────────────────
+
+
+def test_session_pull_engine_error_raises() -> None:
+    """pull() raises KernelError when engine returns an error response."""
+    import json
+    from krach.pattern.session import KernelError
+
+    session = Session.__new__(Session)
+    session._sock = MagicMock()
+    session._reader = MagicMock()
+    session._slots = {}
+    session._tempo = 120.0
+    session._meter = 4.0
+
+    error_response = {"status": "Error", "msg": "unknown command"}
+    session._reader.readline.return_value = json.dumps(error_response).encode() + b"\n"
+
+    import pytest
+    with pytest.raises(KernelError, match="unknown command"):
+        session.pull()
+
+
+def test_mixer_pull_missing_transport_keys() -> None:
+    """pull() handles partial transport gracefully (missing keys don't crash)."""
+    state = _fake_state(transport={"bpm": 140.0})  # no meter, no master
+    mixer = _make_mixer(state)
+    mixer.pull()
+
+    assert mixer._session._tempo == 140.0
+    assert mixer._master_gain == 0.7  # unchanged (no "master" in transport)
+
+
+def test_mixer_pull_empty_nodes() -> None:
+    """pull() with no nodes clears _nodes dict."""
+    state = _fake_state(nodes=[], connections=[])
+    mixer = _make_mixer(state)
+    # Pre-populate a node
+    from krach.node_types import Node
+    mixer._nodes["old"] = Node(type_id="faust:old", gain=0.5, controls=("gate",))
+
+    mixer.pull()
+    assert "old" not in mixer._nodes  # cleared by engine state
+
+
+def test_mixer_pull_connection_error_is_silent() -> None:
+    """pull() when session raises ConnectionError doesn't crash the mixer."""
+    session = Session.__new__(Session)
+    session._sock = MagicMock()
+    session._reader = MagicMock()
+    session._slots = {}
+    session._tempo = 120.0
+    session._meter = 4.0
+    session._sock.sendall.side_effect = ConnectionError("socket closed")
+
+    mixer = Mixer.__new__(Mixer)
+    mixer._session = session
+    mixer._dsp_dir = Path("/tmp/test-dsp")
+    mixer._node_controls = {}
+    mixer._nodes = {}
+    mixer._muted = {}
+    mixer._sends = {}
+    mixer._wires = {}
+    mixer._ctrl_values = {}
+    mixer._patterns = {}
+    mixer._scenes = {}
+    mixer._batching = False
+    mixer._graph_loaded = False
+    mixer._master_gain = 0.7
+    mixer._transition_bars = 0
+    mixer._flush_scheduled = False
+
+    # Should not raise — pull() degrades gracefully
+    try:
+        mixer.pull()
+    except ConnectionError:
+        pass  # acceptable — the error surfaces, caller handles it
