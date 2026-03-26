@@ -34,7 +34,28 @@ bass @ ("cutoff", kr.sine(200, 2000).over(4))      # modulate control
 
 ## Install
 
-Requires: macOS (CoreAudio), Rust toolchain, Python 3.13+, [uv](https://docs.astral.sh/uv/), FAUST + LLVM.
+```bash
+pip install krach
+krach
+```
+
+**Supported platforms**: macOS 13+ (Intel), macOS 14+ (Apple Silicon), Linux x86_64 (glibc 2.35+). No Windows support yet.
+
+The wheel bundles the Rust audio engine, FAUST JIT compiler, and LLVM — no system dependencies needed.
+
+### macOS Gatekeeper
+
+On first run, macOS may block the bundled engine binary. Allow it in **System Settings → Privacy & Security → Security** (scroll down to the "Allow" prompt), then run `krach` again.
+
+Alternatively, remove the quarantine attribute:
+
+```bash
+xattr -d com.apple.quarantine "$(python -c 'from krach._paths import resolve_engine_bin; print(resolve_engine_bin())')"
+```
+
+### From source
+
+Requires: Rust toolchain, Python 3.12+, [uv](https://docs.astral.sh/uv/), FAUST + LLVM.
 
 ```bash
 git clone https://github.com/krachio/noise.git
