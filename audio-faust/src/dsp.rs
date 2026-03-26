@@ -3,6 +3,7 @@
 #![allow(clippy::module_name_repetitions)]
 
 use std::collections::HashMap;
+use std::env;
 use std::ffi::{CStr, CString};
 use std::os::raw::{c_char, c_int, c_void};
 use std::ptr;
@@ -77,6 +78,15 @@ impl FaustDsp {
         let c_target = CString::new("").map_err(|e| e.to_string())?;
         let mut error_buf = vec![0u8; 4096];
 
+        // Build argv for FAUST compiler — pass -I <stdlib_dir> if set
+        let stdlib_args = faust_stdlib_args();
+        let c_args: Result<Vec<CString>, _> = stdlib_args
+            .iter()
+            .map(|s| CString::new(s.as_str()))
+            .collect();
+        let c_args = c_args.map_err(|e| e.to_string())?;
+        let argv: Vec<*const c_char> = c_args.iter().map(|s| s.as_ptr()).collect();
+
         // FAUST LLVM factory creation is not thread-safe — serialize it.
         let guard = COMPILE_LOCK.lock().map_err(|e| e.to_string())?;
 
@@ -85,8 +95,12 @@ impl FaustDsp {
             ffi::createCDSPFactoryFromString(
                 c_name.as_ptr(),
                 c_code.as_ptr(),
-                0,
-                ptr::null(),
+                c_int::try_from(argv.len()).unwrap_or(0),
+                if argv.is_empty() {
+                    ptr::null()
+                } else {
+                    argv.as_ptr()
+                },
                 c_target.as_ptr(),
                 error_buf.as_mut_ptr().cast::<c_char>(),
                 -1, // max optimization
@@ -260,6 +274,15 @@ impl std::fmt::Debug for FaustDsp {
             .field("num_outputs", &self.num_outputs)
             .field("params", &self.params.keys().collect::<Vec<_>>())
             .finish_non_exhaustive()
+    }
+}
+
+/// Build FAUST compiler args from `FAUST_STDLIB_DIR` env var.
+/// Returns `["-I", "<dir>"]` if set, empty vec otherwise.
+fn faust_stdlib_args() -> Vec<String> {
+    match env::var("FAUST_STDLIB_DIR") {
+        Ok(dir) if !dir.is_empty() => vec!["-I".into(), dir],
+        _ => vec![],
     }
 }
 

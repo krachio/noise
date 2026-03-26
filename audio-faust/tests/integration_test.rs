@@ -255,6 +255,37 @@ fn stereo_passthrough_copies_input_to_output() {
 }
 
 #[test]
+fn faust_stdlib_dir_env_overrides_import_path() {
+    // When FAUST_STDLIB_DIR points to a valid faust share dir,
+    // import("stdfaust.lib") should still resolve correctly.
+    let stdlib = std::env::var("FAUST_STDLIB_DIR")
+        .unwrap_or_else(|_| "/opt/homebrew/share/faust".into());
+    if !std::path::Path::new(&stdlib).join("stdfaust.lib").exists() {
+        eprintln!("skipping: {stdlib}/stdfaust.lib not found");
+        return;
+    }
+
+    // Set the env var explicitly and compile a DSP that uses stdfaust.lib
+    unsafe { std::env::set_var("FAUST_STDLIB_DIR", &stdlib) };
+    let result = audio_faust::dsp::FaustDsp::from_code("env_sine", SINE_DSP, 48000, 256);
+    unsafe { std::env::remove_var("FAUST_STDLIB_DIR") };
+
+    let dsp = result.expect("should compile with FAUST_STDLIB_DIR set");
+    assert_eq!(dsp.num_outputs(), 1);
+}
+
+#[test]
+fn faust_stdlib_dir_bad_path_still_compiles_without_imports() {
+    // A DSP that doesn't use imports should still compile even with a bad stdlib path
+    unsafe { std::env::set_var("FAUST_STDLIB_DIR", "/nonexistent/path") };
+    let result = audio_faust::dsp::FaustDsp::from_code("gain_nolib", GAIN_DSP, 48000, 256);
+    unsafe { std::env::remove_var("FAUST_STDLIB_DIR") };
+
+    let dsp = result.expect("simple DSP without imports should compile regardless of stdlib path");
+    assert_eq!(dsp.num_inputs(), 1);
+}
+
+#[test]
 fn stereo_factory_probe_has_two_ports() {
     let factory = audio_faust::factory::FaustFactory::new("stereo", STEREO_DSP);
     let decl = factory.probe_type_decl("faust:stereo").unwrap();
