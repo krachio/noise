@@ -3699,3 +3699,38 @@ def test_remove_poly_cleans_ctrl_values_for_instances() -> None:
     assert "pad_v2/freq" not in mixer._ctrl_values, "voice instance ctrl leaked"
     # Parent-level ctrl_values should also be cleaned
     assert "pad/freq" not in mixer._ctrl_values, "parent ctrl leaked"
+
+
+# ── Issue #1: namespaced type IDs must work ────────────────────────────────
+
+
+def test_node_with_slashed_type_id_uses_rebuild_not_add_voice() -> None:
+    """node() with type_id containing '/' must use _rebuild, not add_voice.
+
+    Regression test for GitHub issue #1: 'faust:drums/kick' fails because
+    add_voice is used when _graph_loaded was set by pull() before any
+    load_graph was sent. The engine shadow graph has no 'out' node.
+    """
+    from unittest.mock import MagicMock
+
+    from krach.mixer import Mixer
+
+    session = MagicMock()
+    session.list_nodes.return_value = ["faust:drums/kick", "dac", "gain"]
+    mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
+        "faust:drums/kick": ("gate",),
+    })
+
+    # Simulate pull() setting _graph_loaded without sending a graph
+    mixer._graph_loaded = True
+
+    session.reset_mock()
+    mixer.voice("kick", "faust:drums/kick", gain=0.8)
+
+    # Must use load_graph (full rebuild), NOT add_voice
+    assert session.load_graph.called, (
+        "first node after pull() must use load_graph, not add_voice"
+    )
+    assert not session.add_voice.called, (
+        "add_voice must not be used before a full graph has been sent"
+    )

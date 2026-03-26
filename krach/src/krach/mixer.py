@@ -202,6 +202,7 @@ class Mixer:
         self._scenes: dict[str, ModuleIr] = {}
         self._batching: bool = False
         self._graph_loaded: bool = False
+        self._graph_sent: bool = False
         self._master_gain: float = 0.7
         self._transition_bars: int = 0
         self._flush_scheduled: bool = False
@@ -497,7 +498,7 @@ class Mixer:
         for ctrl, default in resolved.control_defaults.items():
             self._ctrl_values.setdefault(f"{name}/{ctrl}", default)
         if not self._batching:
-            if is_new and self._graph_loaded and count == 1:
+            if is_new and self._graph_sent and count == 1:
                 self._session.add_voice(name, resolved.type_id, resolved.controls, gain)
             else:
                 self._rebuild()
@@ -978,6 +979,7 @@ class Mixer:
         ir = build_graph_ir(self._nodes, sends=self._sends, wires=self._wires)
         self._session.load_graph(ir)
         self._graph_loaded = True
+        self._graph_sent = True
 
     def _wait_for_type(self, type_id: str, timeout: float = 10.0) -> None:
         """Poll until the engine has loaded the given FAUST type."""

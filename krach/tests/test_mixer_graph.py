@@ -124,6 +124,31 @@ def test_build_graph_ir_poly_sum_node() -> None:
     assert ("pad_sum", "pad_send_verb") in conns
 
 
+def test_build_graph_ir_namespaced_type_id_with_slash() -> None:
+    """type_id with '/' (e.g. faust:drums/kick) must be treated as opaque.
+
+    Regression test for GitHub issue #1: the slash in the type_id must
+    not be confused with the control path separator.
+    """
+    nodes = {
+        "kick": Node("faust:drums/kick", 0.8, ("gate",)),
+    }
+    ir = build_graph_ir(nodes)
+
+    node_ids = {n.id for n in ir.nodes}
+    assert "kick" in node_ids
+    assert "kick_g" in node_ids
+    assert "out" in node_ids
+
+    # type_id preserved verbatim
+    kick_node = next(n for n in ir.nodes if n.id == "kick")
+    assert kick_node.type_id == "faust:drums/kick"
+
+    # Control exposed correctly: kick/gate, not drums/kick/gate
+    assert ir.exposed_controls["kick/gate"] == ("kick", "gate")
+    assert ir.exposed_controls["kick/gain"] == ("kick_g", "gain")
+
+
 def test_build_graph_ir_mono_no_sum_node() -> None:
     """Mono voice with sends does NOT get a sum node."""
     nodes = {
