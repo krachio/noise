@@ -106,7 +106,7 @@ See the [architecture documentation](architecture.md) for detailed data flow and
 | Change | Location |
 |--------|----------|
 | New DSP node type | `audio-faust/` (FAUST .dsp) or `audio-engine/src/nodes/` (Rust) |
-| Pattern combinator | `pattern-engine/src/ir.rs` + `pattern-engine/src/pattern.rs` |
+| Pattern combinator | `pattern-engine/src/ir/mod.rs` + `pattern-engine/src/pattern/mod.rs` |
 | Python pattern API | `krach/src/krach/pattern/` |
 | IPC protocol | `krach-engine/src/ipc.rs` + `audio-engine/src/protocol.rs` + `pattern-engine/src/ipc/` |
 | DSP transpiler | `krach/src/krach/signal/` + `krach/src/krach/backends/` + `krach/src/krach/ir/signal.py` |
@@ -114,8 +114,8 @@ See the [architecture documentation](architecture.md) for detailed data flow and
 
 ### Adding a new pattern combinator
 
-1. Add the variant to `IrNode` in `pattern-engine/src/ir.rs`
-2. Add compile logic in `pattern-engine/src/pattern.rs`
+1. Add the variant to `IrNode` in `pattern-engine/src/ir/mod.rs`
+2. Add compile logic in `pattern-engine/src/pattern/mod.rs`
 3. Add a `PatternPrimitive` + `*Params` in `krach/src/krach/ir/pattern.py`
 4. Register it in `krach/src/krach/pattern/primitives.py`
 5. Add a serialize rule in `krach/src/krach/pattern/serialize.py`

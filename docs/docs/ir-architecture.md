@@ -38,8 +38,8 @@ When krach traces this function, it produces:
 
 ```
 { lambda ;  . let
-    s0 = control  [ControlParams(name='freq', init=55.0, lo=20.0, hi=800.0)]
-    s1 = control  [ControlParams(name='gate', init=0.0, lo=0.0, hi=1.0)]
+    s0 = control  [ControlParams(name='freq', init=55.0, lo=20.0, hi=800.0, step=0.001)]
+    s1 = control  [ControlParams(name='gate', init=0.0, lo=0.0, hi=1.0, step=0.001)]
     s2 = const    [ConstParams(value=0.005)]
     s3 = const    [ConstParams(value=0.15)]
     s4 = const    [ConstParams(value=0.3)]
@@ -83,17 +83,19 @@ The key insight: **the function runs once, against abstract values, to produce a
 
 ```python
 # ir/signal.py — pure frozen data
-@dataclass(frozen=True, slots=True)
+@dataclass(frozen=True, slots=True, eq=False)
 class Signal:
     aval: SignalType    # abstract value (channels, precision)
     id: int             # unique identifier
     owner_id: int       # which TraceContext created this
+    # eq=False: identity comparison by id only (custom __eq__/__hash__)
 
 @dataclass(frozen=True, slots=True)
 class DspGraph:
+    inputs: tuple[Signal, ...]     # function parameters (audio inputs)
+    outputs: tuple[Signal, ...]    # function return values
     equations: tuple[Equation, ...]
-    inputs: tuple[Signal, ...]   # function parameters (audio inputs)
-    outputs: tuple[Signal, ...]  # function return values
+    precision: Precision = Precision.FLOAT32
 ```
 
 ### Canonicalization and caching
@@ -162,6 +164,7 @@ class ModuleIr:
     patterns: tuple[PatternDef, ...]  # each has pattern: PatternNode
     controls: tuple[ControlDef, ...]
     muted: tuple[MutedDef, ...]
+    automations: tuple[AutomationDef, ...] = ()
     tempo: float | None
     meter: float | None
     master: float | None

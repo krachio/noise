@@ -19,6 +19,8 @@ The `Mixer` class manages the audio graph. In the REPL, `kr` is a `LiveMixer` in
 | Method | Description |
 |---|---|
 | `kr.node(name, source, gain=0.5, count=1, **init)` | Create or replace a node. Auto-detects source vs effect from DSP signature. Returns `NodeHandle` |
+| `kr.voice(name, source, gain=0.5, count=1, **init)` | Add or replace a source node explicitly |
+| `kr.bus(name, source, gain=0.5)` | Add or replace an effect bus explicitly |
 | `kr.remove(name)` | Remove a node or group and all its routing |
 | `kr.input(name="mic", channel=0, gain=0.5)` | Add an audio input node (ADC) |
 | `kr.dsp(fn)` | Pre-transpile a DSP function. Returns `DspDef` for reuse |
@@ -27,7 +29,10 @@ The `Mixer` class manages the audio graph. In the REPL, `kr` is a `LiveMixer` in
 
 | Method | Description |
 |---|---|
-| `kr.connect(source, target, level=1.0, port=None)` | Route audio. Use `level` for gain-controlled sends, `port` for direct wires |
+| `kr.connect(source, target, level=1.0, port=None)` | Route audio. Use `level` for gain-controlled sends, `port` for direct port connections |
+| `kr.send(source, target, level=0.5)` | Gain-controlled send (shorthand for `connect` with level) |
+| `kr.wire(source, target, port="in0")` | Direct port connection without gain stage |
+| `kr.unsend(source, target)` | Remove a send or wire between two nodes |
 | `bass >> verb` | Operator shorthand for `kr.connect()` |
 | `bass >> (verb, 0.4)` | Route with send level |
 
@@ -95,11 +100,27 @@ The `Mixer` class manages the audio graph. In the REPL, `kr` is a `LiveMixer` in
 | `kr.effects` | Effect nodes only |
 | `kr.routing` | Routing snapshot: `[(source, target, kind, level_or_port)]` |
 | `kr.slots` | Session slot states |
+| `kr.node_data` | All nodes as raw `Node` structs |
+| `kr.node_controls` | Known node type controls |
 | `kr.ctrl_values` | All set control values |
 | `kr.pull()` | Sync local state from engine |
 | `kr.get_node(name)` | Look up a `Node` by name |
 | `kr.get_ctrl(node, param)` | Get last-set control value |
 | `kr.is_muted(name)` | Check mute state |
+
+### Indexing
+
+| Operator | Description |
+|---|---|
+| `kr["bass"]` | Returns `NodeHandle` for the node |
+| `kr["bass/cutoff"]` | Returns current control value |
+| `kr["bass/cutoff"] = 1200` | Sets a control value |
+
+### MIDI
+
+| Method | Description |
+|---|---|
+| `kr.midi_map(cc, path, lo=0.0, hi=1.0, channel=0)` | Map a MIDI CC to a control path |
 
 ### Context managers
 
@@ -183,6 +204,16 @@ Composable pattern objects. Created via builders, combined with operators.
 | `kr.stack(*patterns)` | Layer simultaneously |
 | `kr.struct(rhythm, melody)` | Impose rhythm onto melody |
 | `kr.p("x . x . x . . x")` | Mini-notation |
+
+### Atom constructors
+
+| Builder | Description |
+|---|---|
+| `midi_note(pitch, vel=100, channel=0, duration=1.0)` | Raw MIDI note atom |
+| `cc(controller, value, channel=0)` | MIDI CC atom |
+| `osc(address, *args)` | OSC message atom |
+| `ctrl(label, value)` | Control value atom |
+| `freeze(pat)` | Freeze a pattern (hold values across cycles) |
 
 ### Continuous patterns
 
