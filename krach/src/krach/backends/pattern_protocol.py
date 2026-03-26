@@ -48,11 +48,16 @@ class SetBeatsPerCycle:
 
 
 @dataclass(frozen=True)
+class SetClockSource:
+    source: str  # "internal" or "midi"
+
+
+@dataclass(frozen=True)
 class Ping:
     pass
 
 
-SimpleCommand = SetPattern | SetPatternFromZero | Hush | HushAll | SetBpm | SetBeatsPerCycle | Ping
+SimpleCommand = SetPattern | SetPatternFromZero | Hush | HushAll | SetBpm | SetBeatsPerCycle | SetClockSource | Ping
 
 
 @dataclass(frozen=True)
@@ -84,6 +89,8 @@ def _command_to_dict(msg: ClientMessage) -> dict[str, Any]:
             return {"cmd": "SetBpm", "bpm": bpm}
         case SetBeatsPerCycle(beats):
             return {"cmd": "SetBeatsPerCycle", "beats": beats}
+        case SetClockSource(source):
+            return {"cmd": "SetClockSource", "source": source}
         case Ping():
             return {"cmd": "Ping"}
         case Batch(commands):

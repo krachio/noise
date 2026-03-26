@@ -43,6 +43,8 @@ pub enum ClientMessage {
     SetBpm { bpm: f64 },
     /// Set beats per cycle (meter).
     SetBeatsPerCycle { beats: f64 },
+    /// Switch clock source: "internal" or "external" (MIDI).
+    SetClockSource { source: String },
     /// Ping / health check.
     Ping,
     /// Atomic batch: all commands apply before the next scheduler tick.
@@ -171,6 +173,19 @@ mod tests {
         match decoded {
             ClientMessage::Batch { commands } => assert_eq!(commands.len(), 3),
             _ => panic!("expected Batch"),
+        }
+    }
+
+    #[test]
+    fn client_message_set_clock_source_roundtrip() {
+        let msg = ClientMessage::SetClockSource { source: "midi".into() };
+        let json = serde_json::to_string(&msg).unwrap();
+        assert!(json.contains(r#""cmd":"SetClockSource"#));
+        assert!(json.contains(r#""source":"midi"#));
+        let decoded: ClientMessage = serde_json::from_str(&json).unwrap();
+        match decoded {
+            ClientMessage::SetClockSource { source } => assert_eq!(source, "midi"),
+            _ => panic!("expected SetClockSource"),
         }
     }
 

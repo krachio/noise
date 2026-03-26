@@ -268,6 +268,39 @@ class TestTempo:
             assert s.tempo == 140.0
 
 
+class TestClockSource:
+    @patch("krach.pattern.session.socket.socket")
+    def test_set_clock_source_sends_message(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.set_clock_source("midi")
+        msgs = _parse_sent(mock_cls.return_value)
+        assert any(m["cmd"] == "SetClockSource" and m["source"] == "midi" for m in msgs)
+
+    @patch("krach.pattern.session.socket.socket")
+    def test_clock_source_readable(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            assert s.clock_source == "internal"
+            s.set_clock_source("midi")
+            assert s.clock_source == "midi"
+
+    @patch("krach.pattern.session.socket.socket")
+    def test_set_clock_source_external_alias(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.set_clock_source("external")
+            assert s.clock_source == "midi"
+
+    @patch("krach.pattern.session.socket.socket")
+    def test_set_clock_source_same_value_noop(self, mock_cls: MagicMock) -> None:
+        _stub_ok_response(mock_cls)
+        with Session() as s:
+            s.set_clock_source("internal")  # already internal — no message sent
+        msgs = _parse_sent(mock_cls.return_value)
+        assert not any(m.get("cmd") == "SetClockSource" for m in msgs)
+
+
 class TestPlayFromZero:
     @patch("krach.pattern.session.socket.socket")
     def test_play_from_zero_sends_correct_command(self, mock_cls: MagicMock) -> None:

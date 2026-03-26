@@ -311,6 +311,15 @@ class Mixer:
     def meter(self, beats: float) -> None:
         self._session.meter = beats
 
+    @property
+    def sync(self) -> str:
+        """Current clock source: "internal" or "midi"."""
+        return self._session.clock_source
+
+    @sync.setter
+    def sync(self, source: str) -> None:
+        self._session.set_clock_source(source)
+
     # ── State accessors ───────────────────────────────────────────
 
     @property

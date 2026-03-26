@@ -13,6 +13,7 @@ from krach.backends.pattern_protocol import (
     Ping,
     SetBeatsPerCycle,
     SetBpm,
+    SetClockSource,
     SetPattern,
     SetPatternFromZero,
     command_to_json,
@@ -57,6 +58,7 @@ class Session:
     _slots: dict[str, SlotState] = field(default_factory=lambda: dict[str, SlotState](), init=False, repr=False)
     _tempo: float = field(default=120.0, init=False, repr=False)
     _meter: float = field(default=4.0, init=False, repr=False)
+    _clock_source: str = field(default="internal", init=False, repr=False)
 
     def __post_init__(self) -> None:
         self._address = self.address
@@ -180,6 +182,19 @@ class Session:
             return
         self._meter = beats
         self.send(SetBeatsPerCycle(beats=beats))
+
+    @property
+    def clock_source(self) -> str:
+        """Current clock source: "internal" or "midi"."""
+        return self._clock_source
+
+    def set_clock_source(self, source: str) -> None:
+        """Switch clock source. "internal" or "midi" (alias: "external")."""
+        normalized = "midi" if source in ("external", "midi") else "internal"
+        if normalized == self._clock_source:
+            return
+        self._clock_source = normalized
+        self.send(SetClockSource(source=normalized))
 
     # ── State sync ────────────────────────────────────────────────────────
 

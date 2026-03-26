@@ -198,6 +198,14 @@ pub fn compile_command(msg: &ClientMessage) -> Result<Option<EngineCommand>, Str
         ClientMessage::SetBeatsPerCycle { beats } => {
             Ok(Some(EngineCommand::SetBeatsPerCycle { beats: *beats }))
         }
+        ClientMessage::SetClockSource { source } => {
+            let cs = match source.as_str() {
+                "internal" => crate::scheduler::clock::ClockSource::Internal,
+                "external" | "midi" => crate::scheduler::clock::ClockSource::External,
+                other => return Err(format!("unknown clock source: {other:?} (expected \"internal\" or \"midi\")")),
+            };
+            Ok(Some(EngineCommand::SetClockSource(cs)))
+        }
         ClientMessage::Ping => Ok(None),
         ClientMessage::Batch { .. } => Err("nested Batch is not allowed".into()),
     }
