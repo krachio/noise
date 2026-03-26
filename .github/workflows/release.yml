@@ -1,0 +1,165 @@
+name: Build & Release Wheel
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-macos-arm64:
+    runs-on: macos-14  # Apple Silicon
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system deps
+        run: |
+          brew install faust llvm
+          echo "FAUST_PREFIX=$(brew --prefix faust)" >> $GITHUB_ENV
+          echo "LLVM_PREFIX=$(brew --prefix llvm)" >> $GITHUB_ENV
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build krach-engine (release)
+        run: cargo build --release --bin krach-engine
+
+      - name: Vendor native files
+        run: |
+          set -euo pipefail
+
+          BIN_DIR=krach/src/krach/_bin
+          LIB_DIR=krach/src/krach/_lib
+          SHARE_DIR=krach/src/krach/_share/faust
+
+          # Clean stubs
+          rm -f "$BIN_DIR/.gitkeep" "$LIB_DIR/.gitkeep" "$SHARE_DIR/.gitkeep"
+
+          # Copy binary
+          cp target/release/krach-engine "$BIN_DIR/"
+          chmod +x "$BIN_DIR/krach-engine"
+
+          # Copy libfaust
+          FAUST_LIB="$FAUST_PREFIX/lib/libfaust.2.dylib"
+          FAUST_REAL=$(readlink -f "$FAUST_LIB")
+          cp "$FAUST_REAL" "$LIB_DIR/libfaust.2.dylib"
+
+          # Copy libLLVM
+          LLVM_LIB="$LLVM_PREFIX/lib/libLLVM.dylib"
+          cp "$LLVM_LIB" "$LIB_DIR/libLLVM.dylib"
+
+          # Copy libunwind (krach-engine links against it)
+          # Find the actual llvm version that provides libunwind
+          UNWIND_LIB=$(otool -L target/release/krach-engine | grep libunwind | awk '{print $1}')
+          if [ -n "$UNWIND_LIB" ]; then
+            UNWIND_REAL=$(readlink -f "$UNWIND_LIB")
+            cp "$UNWIND_REAL" "$LIB_DIR/libunwind.1.dylib"
+          fi
+
+          # Copy FAUST standard library
+          cp "$FAUST_PREFIX/share/faust/"*.lib "$SHARE_DIR/"
+
+          echo "=== Vendored files ==="
+          ls -lh "$BIN_DIR/" "$LIB_DIR/" "$SHARE_DIR/" | head -30
+
+      - name: Fix rpaths
+        run: |
+          set -euo pipefail
+
+          BIN_DIR=krach/src/krach/_bin
+          LIB_DIR=krach/src/krach/_lib
+
+          # Fix krach-engine: point at _lib/ relative to _bin/
+          install_name_tool -change \
+            "$FAUST_PREFIX/lib/libfaust.2.dylib" \
+            "@loader_path/../_lib/libfaust.2.dylib" \
+            "$BIN_DIR/krach-engine"
+
+          # Fix libunwind reference in krach-engine
+          UNWIND_OLD=$(otool -L "$BIN_DIR/krach-engine" | grep libunwind | awk '{print $1}')
+          if [ -n "$UNWIND_OLD" ]; then
+            install_name_tool -change \
+              "$UNWIND_OLD" \
+              "@loader_path/../_lib/libunwind.1.dylib" \
+              "$BIN_DIR/krach-engine"
+          fi
+
+          # Fix libfaust.2.dylib: point at libLLVM in same dir
+          install_name_tool -change \
+            "$LLVM_PREFIX/lib/libLLVM.dylib" \
+            "@loader_path/libLLVM.dylib" \
+            "$LIB_DIR/libfaust.2.dylib"
+
+          # Fix libfaust install name to be rpath-relative
+          install_name_tool -id \
+            "@rpath/libfaust.2.dylib" \
+            "$LIB_DIR/libfaust.2.dylib"
+
+          # Fix libunwind install name
+          if [ -f "$LIB_DIR/libunwind.1.dylib" ]; then
+            install_name_tool -id \
+              "@rpath/libunwind.1.dylib" \
+              "$LIB_DIR/libunwind.1.dylib"
+          fi
+
+          # Re-sign after rpath changes
+          codesign --force --sign - "$BIN_DIR/krach-engine"
+          codesign --force --sign - "$LIB_DIR/libfaust.2.dylib"
+          [ -f "$LIB_DIR/libunwind.1.dylib" ] && codesign --force --sign - "$LIB_DIR/libunwind.1.dylib"
+
+          echo "=== krach-engine deps ==="
+          otool -L "$BIN_DIR/krach-engine"
+          echo "=== libfaust deps ==="
+          otool -L "$LIB_DIR/libfaust.2.dylib"
+
+      - name: Install Python & uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
+
+      - name: Build wheel
+        working-directory: krach
+        run: |
+          uv pip install hatchling
+          uv run python -m hatchling build -t wheel
+          ls -lh dist/
+
+      - name: Rename wheel with platform tag
+        working-directory: krach
+        run: |
+          # Rename from generic to platform-specific
+          for whl in dist/*.whl; do
+            new_name=$(echo "$whl" | sed 's/py3-none-any/py3-none-macosx_14_0_arm64/')
+            mv "$whl" "$new_name"
+          done
+          ls -lh dist/
+
+      - name: Test wheel install
+        working-directory: krach
+        run: |
+          uv venv /tmp/test-venv
+          VIRTUAL_ENV=/tmp/test-venv uv pip install dist/*.whl
+          # Verify the binary and libs are in place
+          /tmp/test-venv/bin/python -c "
+          from krach._paths import resolve_engine_bin, resolve_lib_dir, resolve_faust_stdlib_dir
+          engine = resolve_engine_bin()
+          print(f'engine: {engine}')
+          assert engine.is_file(), f'engine not found: {engine}'
+
+          lib_dir = resolve_lib_dir()
+          print(f'lib_dir: {lib_dir}')
+          assert lib_dir is not None and lib_dir.is_dir(), f'lib_dir not found: {lib_dir}'
+
+          stdlib = resolve_faust_stdlib_dir()
+          print(f'faust_stdlib: {stdlib}')
+          assert stdlib is not None and stdlib.is_dir(), f'stdlib not found: {stdlib}'
+
+          print('All vendored paths resolved successfully')
+          "
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheel-macos-arm64
+          path: krach/dist/*.whl

@@ -18,6 +18,8 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/krach"]
+# _bin/, _lib/, _share/ inside src/krach/ are auto-included by hatchling.
+# CI populates them before wheel build; in dev they contain only .gitkeep.
 
 [tool.pyright]
 pythonVersion = "3.13"

@@ -46,6 +46,14 @@ issues.log
 **/my_session.py
 **/session.py
 
+# Vendored binaries in wheel packaging (populated by CI, empty in dev)
+krach/src/krach/_bin/*
+krach/src/krach/_lib/*
+krach/src/krach/_share/faust/*
+!krach/src/krach/_bin/.gitkeep
+!krach/src/krach/_lib/.gitkeep
+!krach/src/krach/_share/faust/.gitkeep
+
 # OS
 .DS_Store
 *.swp

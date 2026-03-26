@@ -14,6 +14,7 @@ import subprocess
 import time
 from pathlib import Path
 
+from krach._paths import resolve_engine_bin, resolve_faust_stdlib_dir, resolve_lib_dir
 from krach.config import load_config
 from krach.pattern.mininotation import p as _p
 from krach.pattern.pitch import ftom as _ftom, mtof as _mtof, parse_note as _parse_note
@@ -73,14 +74,9 @@ class LiveMixer(Mixer):
 # ── Engine lifecycle ─────────────────────────────────────────────────────
 
 
-def _repo_root() -> Path:
-    """Walk up from this file until we find Cargo.toml (monorepo root)."""
-    p = Path(__file__).resolve().parent
-    for _ in range(10):
-        if (p / "Cargo.toml").exists():
-            return p
-        p = p.parent
-    raise RuntimeError("cannot find monorepo root (no Cargo.toml in ancestors)")
+def _is_dev_layout(engine_bin: Path) -> bool:
+    """True if engine_bin lives inside a cargo target/ directory."""
+    return "target" in engine_bin.parts
 
 
 def _wait_for_socket(path: Path, timeout: float = 5.0) -> bool:
@@ -103,10 +99,11 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> LiveMi
     cfg = load_config()
     cfg.ensure_dirs()
 
-    repo = _repo_root()
-    engine_bin = repo / "target" / cfg.profile / "krach-engine"
+    engine_bin = resolve_engine_bin()
 
-    if build:
+    # In dev mode, optionally build before launching
+    if build and _is_dev_layout(engine_bin):
+        repo = engine_bin.parent.parent.parent  # target/<profile>/krach-engine → repo
         print("building krach-engine...")
         subprocess.run(
             ["cargo", "build", "--bin", "krach-engine", "-q"],
@@ -115,17 +112,27 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> LiveMi
         )
 
     cfg.socket.unlink(missing_ok=True)
-    env = {**os.environ, "RUST_LOG": os.environ.get("RUST_LOG", "info")}
+    env = {
+        **os.environ,
+        "RUST_LOG": os.environ.get("RUST_LOG", "info"),
+        "NOISE_SOCKET": str(cfg.socket),
+        "NOISE_DSP_DIR": str(cfg.dsp_dir),
+    }
+
+    # Point engine at vendored libs if available
+    lib_dir = resolve_lib_dir()
+    if lib_dir:
+        env["DYLD_LIBRARY_PATH"] = str(lib_dir)
+
+    stdlib_dir = resolve_faust_stdlib_dir()
+    if stdlib_dir:
+        env["FAUST_STDLIB_DIR"] = str(stdlib_dir)
 
     _log_file = cfg.log_file.open("w")
 
     engine_proc = subprocess.Popen(
         [str(engine_bin)],
-        env={
-            **env,
-            "NOISE_SOCKET": str(cfg.socket),
-            "NOISE_DSP_DIR": str(cfg.dsp_dir),
-        },
+        env=env,
         stderr=_log_file,
     )
 
