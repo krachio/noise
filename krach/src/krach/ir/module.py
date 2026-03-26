@@ -116,6 +116,8 @@ class ModuleIr:
     tempo: float | None = None
     meter: float | None = None
     master: float | None = None
+    inputs: tuple[str, ...] | None = None
+    outputs: tuple[str, ...] | None = None
     sub_modules: tuple[tuple[str, ModuleIr], ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
@@ -152,6 +154,10 @@ class ModuleIr:
             d["meter"] = self.meter
         if self.master is not None:
             d["master"] = self.master
+        if self.inputs is not None:
+            d["inputs"] = list(self.inputs)
+        if self.outputs is not None:
+            d["outputs"] = list(self.outputs)
         if self.sub_modules:
             d["sub_modules"] = [
                 {"prefix": prefix, "module": sub.to_dict()}
@@ -199,11 +205,17 @@ class ModuleIr:
             (s["prefix"], ModuleIr.from_dict(s["module"]))
             for s in d.get("sub_modules", ())
         )
+        inputs: tuple[str, ...] | None = None
+        if "inputs" in d:
+            inputs = tuple(d["inputs"])
+        outputs: tuple[str, ...] | None = None
+        if "outputs" in d:
+            outputs = tuple(d["outputs"])
         return ModuleIr(
             nodes=nodes, routing=routing, patterns=patterns,
             controls=controls, automations=automations, muted=muted,
             tempo=d.get("tempo"), meter=d.get("meter"), master=d.get("master"),
-            sub_modules=sub_modules,
+            inputs=inputs, outputs=outputs, sub_modules=sub_modules,
         )
 
 

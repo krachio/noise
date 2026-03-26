@@ -149,6 +149,8 @@ def module_key(ir: object) -> int:
         parts.append(("tempo", ir.tempo))
     if ir.meter is not None:
         parts.append(("meter", ir.meter))
+    parts.append(("inputs", ir.inputs))
+    parts.append(("outputs", ir.outputs))
     for prefix, sub in ir.sub_modules:
         parts.append(("sub", prefix, module_key(sub)))
     return hash(tuple(parts))

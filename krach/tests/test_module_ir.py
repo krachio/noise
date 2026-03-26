@@ -182,3 +182,123 @@ def test_module_ir_roundtrip_with_dsp_graph() -> None:
     restored = ModuleIr.from_dict(d)
     assert isinstance(restored.nodes[0].source, DspGraph)
     assert canonicalize(graph) == canonicalize(restored.nodes[0].source)
+
+
+# ── inputs/outputs ──────────────────────────────────────────────────────
+
+
+def test_module_ir_inputs_outputs_default_none() -> None:
+    """Default inputs/outputs is None (undeclared)."""
+    ir = ModuleIr()
+    assert ir.inputs is None
+    assert ir.outputs is None
+
+
+def test_module_ir_inputs_outputs_explicit_empty() -> None:
+    """Explicit empty tuple means 'no ports' (distinct from None)."""
+    ir = ModuleIr(inputs=(), outputs=())
+    assert ir.inputs == ()
+    assert ir.outputs == ()
+
+
+def test_module_ir_inputs_outputs_populated() -> None:
+    """Named ports."""
+    ir = ModuleIr(inputs=("in_l", "in_r"), outputs=("out",))
+    assert ir.inputs == ("in_l", "in_r")
+    assert ir.outputs == ("out",)
+
+
+# ── inputs/outputs serialization ────────────────────────────────────────
+
+
+def test_to_dict_inputs_none_omitted() -> None:
+    """None inputs/outputs should NOT appear in serialized dict."""
+    ir = ModuleIr()
+    d = ir.to_dict()
+    assert "inputs" not in d
+    assert "outputs" not in d
+
+
+def test_to_dict_inputs_empty_tuple() -> None:
+    """Empty tuple serializes as empty list."""
+    ir = ModuleIr(inputs=(), outputs=())
+    d = ir.to_dict()
+    assert d["inputs"] == []
+    assert d["outputs"] == []
+
+
+def test_to_dict_inputs_populated() -> None:
+    """Populated tuple serializes as list of strings."""
+    ir = ModuleIr(inputs=("kick",), outputs=("bus",))
+    d = ir.to_dict()
+    assert d["inputs"] == ["kick"]
+    assert d["outputs"] == ["bus"]
+
+
+def test_roundtrip_inputs_none() -> None:
+    """Round-trip preserves None (undeclared)."""
+    ir = ModuleIr()
+    restored = ModuleIr.from_dict(ir.to_dict())
+    assert restored.inputs is None
+    assert restored.outputs is None
+    assert restored == ir
+
+
+def test_roundtrip_inputs_empty() -> None:
+    """Round-trip preserves empty tuple (explicitly no ports)."""
+    ir = ModuleIr(inputs=(), outputs=())
+    restored = ModuleIr.from_dict(ir.to_dict())
+    assert restored.inputs == ()
+    assert restored.outputs == ()
+    assert restored == ir
+
+
+def test_roundtrip_inputs_populated() -> None:
+    """Round-trip preserves named ports."""
+    ir = ModuleIr(inputs=("in",), outputs=("out_l", "out_r"))
+    restored = ModuleIr.from_dict(ir.to_dict())
+    assert restored.inputs == ("in",)
+    assert restored.outputs == ("out_l", "out_r")
+    assert restored == ir
+
+
+# ── module_key includes inputs/outputs ──────────────────────────────────
+
+
+def test_module_key_differs_with_inputs() -> None:
+    """module_key must distinguish modules with different inputs/outputs."""
+    from krach.ir.canonicalize import module_key
+
+    base = ModuleIr(nodes=(NodeDef(name="a", source="faust:a"),))
+    with_inputs = ModuleIr(
+        nodes=(NodeDef(name="a", source="faust:a"),),
+        inputs=("a",),
+    )
+    with_outputs = ModuleIr(
+        nodes=(NodeDef(name="a", source="faust:a"),),
+        outputs=("a",),
+    )
+    keys = {module_key(base), module_key(with_inputs), module_key(with_outputs)}
+    assert len(keys) == 3, "module_key must differ for different inputs/outputs"
+
+
+def test_module_key_none_vs_empty_inputs() -> None:
+    """module_key distinguishes None from () for inputs/outputs."""
+    from krach.ir.canonicalize import module_key
+
+    none_inputs = ModuleIr()
+    empty_inputs = ModuleIr(inputs=(), outputs=())
+    assert module_key(none_inputs) != module_key(empty_inputs)
+
+
+# ── passthrough DSP function ────────────────────────────────────────────
+
+
+def test_passthrough_traces_valid_graph() -> None:
+    """passthrough is a 1-in-1-out identity DSP function."""
+    from krach.signal.lib.effects import passthrough
+    from krach.signal.transpile import transpile
+
+    result = transpile(passthrough)
+    assert result.num_inputs == 1
+    assert result.num_outputs == 1
