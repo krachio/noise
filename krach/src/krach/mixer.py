@@ -620,9 +620,13 @@ class Mixer:
                 self._rebuild()
             case _:
                 return
-        # Clean shadow sub_modules matching this prefix
+        # Clean shadow sub_modules: remove exact prefix match OR any prefix
+        # whose nodes have been partially/fully removed (partial module = invalid)
         self._shadow_sub_modules = [
-            (p, ir) for p, ir in self._shadow_sub_modules if p != name
+            (p, ir) for p, ir in self._shadow_sub_modules
+            if p != name and all(
+                f"{p}/{nd.name}" in self._nodes for nd in ir.nodes
+            )
         ]
 
     def input(self, name: str = "mic", channel: int = 0, gain: float = 0.5) -> NodeHandle:

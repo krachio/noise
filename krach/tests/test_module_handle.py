@@ -216,6 +216,38 @@ def test_save_recall_roundtrip_preserves_sub_modules() -> None:
     assert captured.sub_modules[0][0] == "synth"
 
 
+def test_remove_partial_node_cleans_shadow_when_empty() -> None:
+    """Regression: removing last node in a module prefix must clean shadow entry."""
+    mixer = _make_mixer()
+    ir = ModuleIr(nodes=(NodeDef(name="kick", source="faust:osc"),))
+    mixer.instantiate(ir, "drums")
+    assert "drums/kick" in mixer._nodes
+    # Remove the individual node, not the group
+    mixer.remove("drums/kick")
+    assert "drums/kick" not in mixer._nodes
+    # Shadow should be cleaned since no nodes with "drums/" prefix remain
+    captured = mixer.capture()
+    assert captured.sub_modules == ()
+
+
+def test_remove_partial_node_cleans_shadow_when_partial() -> None:
+    """Removing one node of a multi-node module must also clean shadow (partial module is invalid)."""
+    mixer = _make_mixer()
+    ir = ModuleIr(
+        nodes=(
+            NodeDef(name="kick", source="faust:osc"),
+            NodeDef(name="snare", source="faust:osc"),
+        ),
+    )
+    mixer.instantiate(ir, "drums")
+    assert "drums/kick" in mixer._nodes
+    assert "drums/snare" in mixer._nodes
+    # Remove one node — module is now partial, shadow should be removed
+    mixer.remove("drums/kick")
+    captured = mixer.capture()
+    assert captured.sub_modules == ()
+
+
 def test_remove_after_instantiate_leaves_empty_capture() -> None:
     """Regression: remove after instantiate leaves empty capture."""
     mixer = _make_mixer()
