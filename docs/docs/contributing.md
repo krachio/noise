@@ -102,7 +102,11 @@ noise/
 ├── pattern-engine/     Rust lib  — pattern sequencer
 ├── krach-engine/       Rust bin  — unified process
 ├── krach/              Python    — live coding REPL, IR layer, DSP transpiler
-└── krach-mcp/          Python    — MCP server for Claude Code
+├── krach-mcp/          Python    — MCP server for Claude Code
+├── bin/                Shell     — launcher scripts (krach)
+├── docs/               MkDocs    — documentation source
+├── examples/           Python    — runnable example sessions
+└── scripts/            Shell     — build/release helpers
 ```
 
 See the [architecture documentation](architecture.md) for detailed data flow and design decisions.

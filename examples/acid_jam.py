@@ -54,7 +54,7 @@ kr.meter = 4
 # -- Verse --
 
 k @ (kr.hit() * 4)
-h @ ((kr.rest() + kr.hit()) * 4, 0.67)  # swing
+h @ ((kr.rest() + kr.hit()) * 4).swing(0.67)
 bass @ kr.seq("A2", "D3", None, "E2").over(2)
 bass @ ("cutoff", kr.sine(400, 2000).over(4))
 

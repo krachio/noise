@@ -119,7 +119,9 @@ kr.node("kick", kick, gain=0.8)
 kr.play("kick", kr.hit() * 4)
 ```
 
-You should hear a four-on-the-floor kick. `kr.hit()` triggers the gate parameter. `* 4` repeats it four times per cycle.
+You should hear a four-on-the-floor kick. `kr.hit()` is a single gate trigger (1.0 = on, then 0.0 = off). `* 4` repeats it four times per cycle (one bar).
+
+To stop: `kr.hush("kick")` stops the pattern, `kr.stop()` stops everything.
 
 ### 3. Change the tempo
 
@@ -143,6 +145,8 @@ def bass() -> krs.Signal:
 
 bass = kr.node("bass", bass, gain=0.3)
 ```
+
+We shadow the function name with the node handle — the engine already compiled the DSP, so the original function is no longer needed.
 
 ### 5. Play a bass line
 

@@ -20,7 +20,7 @@ The `Mixer` class manages the audio graph. In the REPL, `kr` is a `LiveMixer` in
 |---|---|
 | `kr.node(name, source, gain=0.5, count=1, **init)` | Create or replace a node. Auto-detects source vs effect from DSP signature. Returns `NodeHandle` |
 | `kr.voice(name, source, gain=0.5, count=1, **init)` | Add or replace a source node explicitly |
-| `kr.bus(name, source, gain=0.5)` | Add or replace an effect bus explicitly |
+| `kr.bus(name, source, gain=0.5)` | Add or replace an effect node explicitly |
 | `kr.remove(name)` | Remove a node or group and all its routing |
 | `kr.input(name="mic", channel=0, gain=0.5)` | Add an audio input node (ADC) |
 | `kr.dsp(fn)` | Pre-transpile a DSP function. Returns `DspDef` for reuse |
@@ -154,7 +154,7 @@ Returned by `kr.node()`. Wraps a named node with operator DSL.
 | `bass.pattern()` | Get last unbound pattern |
 | `bass.set(param, value)` | Set a control |
 | `bass.fade(param, target, bars=4)` | Fade a control |
-| `bass >> (verb, 0.4)` | Route to a bus with level (equivalent to `kr.connect`) |
+| `bass >> (verb, 0.4)` | Route to a node with level (equivalent to `kr.connect`) |
 | `bass.gain(value)` | Set gain |
 | `bass.mute()` | Mute |
 | `bass.unmute()` | Unmute |
@@ -203,15 +203,15 @@ Composable pattern objects. Created via builders, combined with operators.
 | `kr.struct(rhythm, melody)` | Impose rhythm onto melody |
 | `kr.p("x . x . x . . x")` | Mini-notation |
 
-### Atom constructors (from `krach.pattern`)
+### Atom constructors (import from `krach.pattern`)
 
 | Builder | Description |
 |---|---|
-| `kr.midi_note(pitch, vel=100, channel=0, duration=1.0)` | Raw MIDI note atom |
-| `kr.cc(controller, value, channel=0)` | MIDI CC atom |
-| `kr.osc(address, *args)` | OSC message atom |
-| `kr.ctrl(label, value)` | Control value atom |
-| `kr.freeze(pat)` | Freeze a pattern (hold values across cycles) |
+| `midi_note(pitch, vel=100, channel=0, duration=1.0)` | Raw MIDI note atom |
+| `cc(controller, value, channel=0)` | MIDI CC atom |
+| `osc(address, *args)` | OSC message atom |
+| `ctrl(label, value)` | Control value atom |
+| `freeze(pat)` | Freeze a pattern (hold values across cycles) |
 
 ### Continuous patterns
 
@@ -238,7 +238,7 @@ All DSP building blocks. `import krach.dsp as krs`.
 
 | Function | Description |
 |---|---|
-| `krs.control(name, init, lo, hi)` | Exposed parameter — automatable from patterns |
+| `krs.control(name, init, lo, hi, step=0.001)` | Exposed parameter — automatable from patterns |
 | `krs.sr()` | Sample rate signal |
 | `krs.sample_rate()` | Alias for `sr()` |
 | `krs.delay(sig, n)` | Variable-length delay line |

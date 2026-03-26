@@ -203,24 +203,24 @@ class RuleRegistry(Generic[P, R]):
     def check_complete(self, expected: frozenset[P]) -> None
 ```
 
-Four instances:
+Two `RuleRegistry` instances (defined in `signal/trace.py`, rules registered externally):
 
-| Registry | Location | Purpose |
+| Registry | Rules registered in | Purpose |
 |----------|----------|---------|
 | `abstract_eval` | `signal/primitives.py` | Type inference during tracing |
 | `lowering` | `backends/faust_lowering.py` | Signal IR → FAUST expressions |
-| `serialize` | `pattern/serialize.py` | Pattern IR → dict |
-| `summary` | `pattern/summary.py` | Pattern IR → human string |
 
 `check_complete()` runs at import time — adding a primitive without a rule fails immediately, not at runtime.
+
+Pattern rules use a simpler mechanism: a `dict[str, Rule]` in `pattern/primitives.py` with `def_serialize` / `def_summary` wrappers. Same import-time completeness guarantee, different implementation.
 
 ## Dependency layering
 
 ```
 ir/          → stdlib only (pure frozen data)
-signal/      → ir/ (tracing runtime + DSL)
+signal/      → ir/ + backends/ (tracing runtime + DSL; transpile imports codegen)
 pattern/     → ir/ (building + DSL)
-backends/    → ir/ + signal/ + pattern/ (lowering)
+backends/    → ir/ + signal/ (lowering)
 top-level    → everything (Mixer, REPL)
 ```
 
