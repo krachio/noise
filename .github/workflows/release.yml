@@ -40,7 +40,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev pkg-config
+          sudo apt-get install -y libasound2-dev pkg-config patchelf
           # Download pre-built libfaust (LLVM statically linked)
           FAUST_VERSION=$(gh release view --repo grame-cncm/faust --json tagName -q .tagName)
           gh release download --repo grame-cncm/faust -p "libfaust-ubuntu-x86_64.zip" -D /tmp
