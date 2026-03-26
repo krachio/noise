@@ -1212,6 +1212,14 @@ class Mixer:
 
     def load(self, ir: ModuleIr) -> None:
         """Replay a ModuleIr onto this mixer. Batches all nodes into one rebuild."""
+        from krach.ir.module import flatten
+
+        # Save sub_modules before flatten (flatten resolves them into flat nodes)
+        original_sub_modules = ir.sub_modules
+        ir = flatten(ir)
+        # Restore shadow sub_modules from the original IR
+        for prefix, sub_ir in original_sub_modules:
+            self._shadow_sub_modules.append((prefix, sub_ir))
         with self.batch():
             for nd in ir.nodes:
                 source: DspSource

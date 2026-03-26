@@ -176,6 +176,46 @@ def test_recall_clears_shadow_sub_modules() -> None:
     assert mixer._shadow_sub_modules == []
 
 
+def test_load_flattens_sub_modules() -> None:
+    """Regression: load() must flatten sub_modules so nested nodes are replayed."""
+    mixer = _make_mixer()
+    # Build an IR that has sub_modules (as if captured after instantiate)
+    child_ir = ModuleIr(nodes=(NodeDef(name="osc", source="faust:osc"),))
+    parent_ir = ModuleIr(
+        nodes=(NodeDef(name="bus", source="faust:bus"),),
+        sub_modules=(("child", child_ir),),
+    )
+    mixer.load(parent_ir)
+    # The flattened sub_module node should exist as "child/osc"
+    assert "child/osc" in mixer._nodes
+    assert "bus" in mixer._nodes
+
+
+def test_load_restores_shadow_sub_modules() -> None:
+    """Regression: load() must restore _shadow_sub_modules from ir.sub_modules."""
+    mixer = _make_mixer()
+    child_ir = ModuleIr(nodes=(NodeDef(name="osc", source="faust:osc"),))
+    parent_ir = ModuleIr(
+        nodes=(NodeDef(name="bus", source="faust:bus"),),
+        sub_modules=(("child", child_ir),),
+    )
+    mixer.load(parent_ir)
+    assert len(mixer._shadow_sub_modules) == 1
+    assert mixer._shadow_sub_modules[0][0] == "child"
+
+
+def test_save_recall_roundtrip_preserves_sub_modules() -> None:
+    """Save/recall cycle must preserve module identity via sub_modules."""
+    mixer = _make_mixer()
+    ir = ModuleIr(nodes=(NodeDef(name="osc", source="faust:osc"),))
+    mixer.instantiate(ir, "synth")
+    mixer.save("scene1")
+    mixer.recall("scene1")
+    captured = mixer.capture()
+    assert len(captured.sub_modules) == 1
+    assert captured.sub_modules[0][0] == "synth"
+
+
 def test_remove_after_instantiate_leaves_empty_capture() -> None:
     """Regression: remove after instantiate leaves empty capture."""
     mixer = _make_mixer()
