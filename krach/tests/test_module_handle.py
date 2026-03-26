@@ -162,6 +162,20 @@ def test_remove_cleans_shadow() -> None:
     assert "synth/osc" not in mixer._nodes
 
 
+def test_recall_clears_shadow_sub_modules() -> None:
+    """Regression: recall() must clear _shadow_sub_modules from previous state."""
+    mixer = _make_mixer()
+    ir_a = ModuleIr(nodes=(NodeDef(name="osc", source="faust:osc"),))
+    # Save a clean scene (no modules)
+    mixer.save("clean")
+    # Instantiate a module — adds to _shadow_sub_modules
+    mixer.instantiate(ir_a, "synth")
+    assert len(mixer._shadow_sub_modules) == 1
+    # Recall clean scene — shadow must be cleared
+    mixer.recall("clean")
+    assert mixer._shadow_sub_modules == []
+
+
 def test_remove_after_instantiate_leaves_empty_capture() -> None:
     """Regression: remove after instantiate leaves empty capture."""
     mixer = _make_mixer()

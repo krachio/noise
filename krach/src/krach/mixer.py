@@ -1125,6 +1125,7 @@ class Mixer:
         self._ctrl_values.clear()
         self._muted.clear()
         self._patterns.clear()
+        self._shadow_sub_modules.clear()
         self.load(self._scenes[name])
 
     @property
