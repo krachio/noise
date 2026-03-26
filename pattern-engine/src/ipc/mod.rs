@@ -214,6 +214,7 @@ pub fn compile_command(msg: &ClientMessage) -> Result<Option<EngineCommand>, Str
         EngineCommand::HushAll => "all slots hushed".into(),
         EngineCommand::SetBpm { bpm } => format!("bpm set to {bpm}"),
         EngineCommand::SetBeatsPerCycle { beats } => format!("beats per cycle set to {beats}"),
+        EngineCommand::SetClockSource(source) => format!("clock source set to {source:?}"),
     }
 }
 

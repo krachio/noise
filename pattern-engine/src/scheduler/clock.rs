@@ -80,6 +80,34 @@ impl Clock {
         let secs = self.cycle_to_secs(cycle);
         self.start + std::time::Duration::from_secs_f64(secs)
     }
+
+    /// Duration from clock start to a cycle-time position.
+    #[must_use]
+    pub fn onset_to_duration(&self, cycle: Time) -> std::time::Duration {
+        std::time::Duration::from_secs_f64(self.cycle_to_secs(cycle))
+    }
+
+    /// Epoch-warp: adjust start so that `onset_to_instant(pos) == now`.
+    /// Preserves all heap events' relative timing.
+    /// Formula: `start = now - onset_to_duration(pos)`.
+    pub fn warp_epoch(&mut self, now: Instant, pos: Time) {
+        self.start = now - self.onset_to_duration(pos);
+    }
+
+    /// The clock's start instant.
+    #[must_use]
+    pub fn start(&self) -> Instant {
+        self.start
+    }
+}
+
+/// Whether the engine is driven by its internal clock or an external MIDI clock.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClockSource {
+    /// Engine-owned clock (default).
+    Internal,
+    /// External MIDI clock (24 ppqn). BPM derived by ClockFollower.
+    External,
 }
 
 /// Lock-free shared BPM value, readable from the scheduler thread

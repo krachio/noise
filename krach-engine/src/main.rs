@@ -394,7 +394,9 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
                                 }
                             }
                         }
-                        EngineCommand::SetBpm { .. } | EngineCommand::SetBeatsPerCycle { .. } => {}
+                        EngineCommand::SetBpm { .. }
+                        | EngineCommand::SetBeatsPerCycle { .. }
+                        | EngineCommand::SetClockSource(_) => {}
                     }
                     pattern_engine.apply(c);
                     // Recompute blocks_per_cycle on tempo/meter change.

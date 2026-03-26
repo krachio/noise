@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 
 use crate::event::{Event, Value};
 use crate::pattern::{CompiledPattern, query};
-use crate::scheduler::clock::Clock;
+use crate::scheduler::clock::{Clock, ClockSource};
 use crate::time;
 
 /// A scheduled event with its wall-clock fire time.
@@ -86,6 +86,8 @@ pub enum EngineCommand {
         /// New beats per cycle.
         beats: f64,
     },
+    /// Switch between internal and external (MIDI) clock source.
+    SetClockSource(ClockSource),
 }
 
 /// The pattern engine: pattern state + clock + event heap.
@@ -103,6 +105,7 @@ pub struct Engine {
     clock: Clock,
     heap: BinaryHeap<Reverse<TimedEvent>>,
     lookahead: Duration,
+    clock_source: ClockSource,
 }
 
 impl Engine {
@@ -117,6 +120,7 @@ impl Engine {
             clock: Clock::new(bpm, beats_per_cycle),
             heap: BinaryHeap::new(),
             lookahead,
+            clock_source: ClockSource::Internal,
         }
     }
 
@@ -191,6 +195,17 @@ impl Engine {
                 self.next_cycle.fill(0);
                 self.phase_offset.fill(0);
             }
+            EngineCommand::SetClockSource(source) => {
+                if source == self.clock_source {
+                    return;
+                }
+                let now = Instant::now();
+                // Epoch-warp: preserve cycle position across clock source switch.
+                // Ensures onset_to_instant(current_pos) == now after the switch.
+                let current_pos = self.current_cycle_time(now);
+                self.clock.warp_epoch(now, current_pos);
+                self.clock_source = source;
+            }
         }
     }
 
@@ -221,6 +236,20 @@ impl Engine {
     /// existed — prevents a burst of past-due events on first appearance.
     fn first_future_cycle(&self, now: Instant) -> i64 {
         self.current_cycle(now) + 1
+    }
+
+    /// Current fractional cycle position as a rational Time.
+    fn current_cycle_time(&self, now: Instant) -> time::Time {
+        let start = self.clock.cycle_start_instant(0);
+        if now <= start {
+            return time::Time::zero();
+        }
+        let elapsed = now.duration_since(start).as_secs_f64();
+        let cycles = elapsed / self.clock.cycle_duration_secs();
+        // Approximate as rational with denominator 1000 for sub-ms precision.
+        #[allow(clippy::cast_possible_truncation)]
+        let num = (cycles * 1000.0).round() as i64;
+        time::Time::new(num, 1000)
     }
 
     /// Advance the heap: query all patterns for cycles within `[now, now+lookahead)`.
@@ -284,6 +313,12 @@ impl Engine {
     #[must_use]
     pub fn bpm(&self) -> f64 {
         self.clock.bpm()
+    }
+
+    /// The current clock source.
+    #[must_use]
+    pub fn clock_source(&self) -> ClockSource {
+        self.clock_source
     }
 
     /// Resolve a slot index to its name. Returns `"?"` for unknown indices.
@@ -965,5 +1000,74 @@ mod tests {
         let mut info = e.slot_info();
         info.sort_by(|a, b| a.0.cmp(&b.0));
         assert_eq!(info, vec![("kick".into(), false), ("snare".into(), true)]);
+    }
+
+    // ── clock source ──────────────────────────────────────────────────────
+
+    #[test]
+    fn clock_source_defaults_to_internal() {
+        let e = fast_engine();
+        assert_eq!(e.clock_source(), ClockSource::Internal);
+    }
+
+    #[test]
+    fn set_clock_source_switches_to_external() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetClockSource(ClockSource::External));
+        assert_eq!(e.clock_source(), ClockSource::External);
+    }
+
+    #[test]
+    fn set_clock_source_same_value_is_noop() {
+        let mut e = fast_engine();
+        // Get clock start before.
+        let start_before = e.clock.start();
+        e.apply(EngineCommand::SetClockSource(ClockSource::Internal));
+        // Same source — start should not change.
+        assert_eq!(e.clock.start(), start_before);
+    }
+
+    #[test]
+    fn clock_source_switch_preserves_heap() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetPattern {
+            name: "kick".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+        e.fill(Instant::now());
+        let heap_before = e.heap.len();
+        assert!(heap_before > 0);
+
+        e.apply(EngineCommand::SetClockSource(ClockSource::External));
+        assert_eq!(e.heap.len(), heap_before, "clock source switch should preserve heap");
+    }
+
+    #[test]
+    fn clock_source_epoch_warp_preserves_position() {
+        let mut e = fast_engine();
+        // Let some time pass so we're not at cycle 0.
+        std::thread::sleep(Duration::from_millis(80));
+
+        let now = Instant::now();
+        let cycle_before = e.current_cycle(now);
+        assert!(cycle_before > 0, "should have advanced past cycle 0");
+
+        e.apply(EngineCommand::SetClockSource(ClockSource::External));
+
+        // After epoch-warp, current cycle should be the same.
+        let cycle_after = e.current_cycle(Instant::now());
+        assert!(
+            (cycle_before - cycle_after).abs() <= 1,
+            "epoch-warp should preserve cycle position: before={cycle_before}, after={cycle_after}"
+        );
+    }
+
+    #[test]
+    fn clock_source_switch_back_to_internal() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetClockSource(ClockSource::External));
+        assert_eq!(e.clock_source(), ClockSource::External);
+        e.apply(EngineCommand::SetClockSource(ClockSource::Internal));
+        assert_eq!(e.clock_source(), ClockSource::Internal);
     }
 }
