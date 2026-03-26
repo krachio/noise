@@ -2,10 +2,9 @@ Third-Party Licenses
 ====================
 
 This wheel bundles native binaries that link against the following libraries.
-The krach Python code itself is MIT-licensed (see LICENSE).
+krach is licensed under GPL-2.0-or-later (see LICENSE).
 
-The combined wheel distribution includes GPL-licensed components. Users who
-redistribute the wheel must comply with the GPL terms for those components.
+This wheel bundles the following third-party libraries:
 
 
 FAUST (libfaust)
