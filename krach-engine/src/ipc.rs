@@ -124,6 +124,7 @@ pub fn start(
 /// Handle to the TCP server thread.
 pub struct TcpHandle {
     pub addr: std::net::SocketAddr,
+    pub token: String,
     stop: Arc<AtomicBool>,
     _thread: std::thread::JoinHandle<()>,
 }
@@ -137,6 +138,7 @@ impl Drop for TcpHandle {
 }
 
 /// Start a TCP listener alongside the Unix socket. Same protocol.
+/// Generates a token for auth. Callers should print/persist the token.
 pub fn start_tcp(
     addr: std::net::SocketAddr,
     cmd_tx: crossbeam_channel::Sender<LoopCommand>,
@@ -147,16 +149,22 @@ pub fn start_tcp(
     let bound_addr = listener.local_addr().map_err(|e| e.to_string())?;
     listener.set_nonblocking(false).map_err(|e| e.to_string())?;
 
+    let token = generate_token();
+    let token_for_thread = token.clone();
+
     let stop = Arc::new(AtomicBool::new(false));
     let stop_clone = Arc::clone(&stop);
 
     let thread = std::thread::Builder::new()
         .name("noise-tcp".into())
-        .spawn(move || run_tcp_server(&listener, &cmd_tx, &node_types, &stop_clone))
+        .spawn(move || {
+            run_tcp_server(&listener, &cmd_tx, &node_types, &stop_clone, &token_for_thread);
+        })
         .expect("failed to spawn TCP thread");
 
     Ok(TcpHandle {
         addr: bound_addr,
+        token,
         stop,
         _thread: thread,
     })
@@ -167,6 +175,7 @@ fn run_tcp_server(
     cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
     node_types: &Arc<RwLock<Vec<String>>>,
     stop: &Arc<AtomicBool>,
+    token: &str,
 ) {
     for stream in listener.incoming() {
         if stop.load(Ordering::Relaxed) {
@@ -180,7 +189,7 @@ fn run_tcp_server(
                     .ok();
                 let reader = std::io::BufReader::new(stream.try_clone().expect("clone tcp stream"));
                 let mut writer = stream;
-                handle_connection(reader, &mut writer, cmd_tx, node_types, stop);
+                handle_connection(reader, &mut writer, cmd_tx, node_types, stop, Some(token));
             }
             Err(_) => break,
         }
@@ -204,19 +213,45 @@ fn run_server(
                     .ok();
                 let reader = std::io::BufReader::new(stream.try_clone().expect("clone stream"));
                 let mut writer = stream;
-                handle_connection(reader, &mut writer, cmd_tx, node_types, stop);
+                handle_connection(reader, &mut writer, cmd_tx, node_types, stop, None);
             }
             Err(_) => break,
         }
     }
 }
 
+/// Generate a random 32-byte hex token for TCP auth.
+#[allow(clippy::cast_possible_truncation)]
+pub fn generate_token() -> String {
+    use std::fmt::Write;
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let pid = u64::from(std::process::id());
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as u64;
+    let stack_addr = &raw const ts as u64;
+    let mut state = pid.wrapping_mul(6_364_136_223_846_793_005)
+        ^ ts.wrapping_mul(1_442_695_040_888_963_407)
+        ^ stack_addr;
+    let mut buf = [0u8; 32];
+    for byte in &mut buf {
+        state = state.wrapping_mul(6_364_136_223_846_793_005).wrapping_add(1);
+        *byte = (state >> 33) as u8;
+    }
+    buf.iter().fold(String::with_capacity(64), |mut s, b| {
+        let _ = write!(s, "{b:02x}");
+        s
+    })
+}
+
 fn handle_connection(
-    reader: impl std::io::BufRead,
+    mut reader: impl std::io::BufRead,
     writer: &mut impl std::io::Write,
     cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
     node_types: &Arc<RwLock<Vec<String>>>,
     stop: &AtomicBool,
+    token: Option<&str>,
 ) {
     // Message size limit: 1MB per line.
     const MAX_LINE_BYTES: usize = 1_048_576;
@@ -224,6 +259,34 @@ fn handle_connection(
     // Protocol version handshake: engine announces version on connect.
     let version_line = r#"{"protocol":1,"engine":"krach-engine"}"#;
     let _ = writer.write_all(format!("{version_line}\n").as_bytes());
+
+    // Token auth: if required, read next line and verify.
+    if let Some(expected) = token {
+        let mut auth_line = String::new();
+        match reader.read_line(&mut auth_line) {
+            Ok(0) | Err(_) => return,
+            Ok(_) => {}
+        }
+        let ok = serde_json::from_str::<serde_json::Value>(auth_line.trim())
+            .ok()
+            .and_then(|v| v.get("auth")?.as_str().map(String::from))
+            .is_some_and(|t| t == expected);
+        if !ok {
+            let err = IpcResponse::Error {
+                msg: "auth failed".into(),
+            };
+            let mut json = serde_json::to_string(&err).expect("serialize");
+            json.push('\n');
+            let _ = writer.write_all(json.as_bytes());
+            return;
+        }
+        let ok_resp = IpcResponse::Ok {
+            msg: "authenticated".into(),
+        };
+        let mut json = serde_json::to_string(&ok_resp).expect("serialize");
+        json.push('\n');
+        let _ = writer.write_all(json.as_bytes());
+    }
 
     for line in reader.lines() {
         if stop.load(Ordering::Relaxed) {
@@ -547,7 +610,7 @@ mod tests {
         let reader = BufReader::new(Cursor::new(input.to_vec()));
         let mut output = Vec::new();
 
-        handle_connection(reader, &mut output, &tx, &types, &stop);
+        handle_connection(reader, &mut output, &tx, &types, &stop, None);
 
         let out = String::from_utf8(output).unwrap();
         let lines: Vec<&str> = out.trim().split('\n').collect();
@@ -560,24 +623,18 @@ mod tests {
     }
 
     #[test]
-    fn tcp_listener_accepts_and_responds() {
+    fn tcp_with_valid_token_accepts() {
         use std::io::{BufRead, BufReader, Write};
         use std::net::TcpStream;
 
         let (tx, _rx) = crossbeam_channel::unbounded();
         let types = Arc::new(RwLock::new(vec!["osc".into()]));
 
-        let handle = start_tcp(
-            "127.0.0.1:0".parse().unwrap(),
-            tx,
-            types,
-        )
-        .unwrap();
+        let handle = start_tcp("127.0.0.1:0".parse().unwrap(), tx, types).unwrap();
+        let token = handle.token.clone();
 
-        let addr = handle.addr;
-        let mut stream = TcpStream::connect(addr).unwrap();
+        let mut stream = TcpStream::connect(handle.addr).unwrap();
         stream.set_read_timeout(Some(Duration::from_secs(2))).ok();
-
         let mut reader = BufReader::new(stream.try_clone().unwrap());
 
         // Read protocol handshake.
@@ -585,7 +642,14 @@ mod tests {
         reader.read_line(&mut handshake).unwrap();
         assert!(handshake.contains("\"protocol\":1"));
 
-        // Send Ping, read Pong.
+        // Send auth token.
+        let auth_msg = format!("{{\"auth\":\"{token}\"}}\n");
+        stream.write_all(auth_msg.as_bytes()).unwrap();
+        let mut auth_resp = String::new();
+        reader.read_line(&mut auth_resp).unwrap();
+        assert!(auth_resp.contains("\"authenticated\""));
+
+        // Now commands work.
         stream.write_all(b"{\"cmd\":\"Ping\"}\n").unwrap();
         let mut response = String::new();
         reader.read_line(&mut response).unwrap();
@@ -593,23 +657,60 @@ mod tests {
     }
 
     #[test]
-    fn tcp_sets_nodelay() {
+    fn tcp_with_wrong_token_rejected() {
+        use std::io::{BufRead, BufReader, Write};
         use std::net::TcpStream;
 
         let (tx, _rx) = crossbeam_channel::unbounded();
         let types = Arc::new(RwLock::new(vec![]));
 
-        let handle = start_tcp(
-            "127.0.0.1:0".parse().unwrap(),
-            tx,
-            types,
-        )
-        .unwrap();
+        let handle = start_tcp("127.0.0.1:0".parse().unwrap(), tx, types).unwrap();
 
-        let stream = TcpStream::connect(handle.addr).unwrap();
-        // TCP_NODELAY is set by the server, but we can at least verify
-        // the connection works. The server sets it on accept.
-        drop(stream);
+        let mut stream = TcpStream::connect(handle.addr).unwrap();
+        stream.set_read_timeout(Some(Duration::from_secs(2))).ok();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+
+        // Read handshake.
+        let mut handshake = String::new();
+        reader.read_line(&mut handshake).unwrap();
+
+        // Send wrong token.
+        stream.write_all(b"{\"auth\":\"wrong\"}\n").unwrap();
+        let mut response = String::new();
+        reader.read_line(&mut response).unwrap();
+        assert!(response.contains("auth failed"));
+    }
+
+    #[test]
+    fn tcp_without_token_rejected() {
+        use std::io::{BufRead, BufReader, Write};
+        use std::net::TcpStream;
+
+        let (tx, _rx) = crossbeam_channel::unbounded();
+        let types = Arc::new(RwLock::new(vec![]));
+
+        let handle = start_tcp("127.0.0.1:0".parse().unwrap(), tx, types).unwrap();
+
+        let mut stream = TcpStream::connect(handle.addr).unwrap();
+        stream.set_read_timeout(Some(Duration::from_secs(2))).ok();
+        let mut reader = BufReader::new(stream.try_clone().unwrap());
+
+        // Read handshake.
+        let mut handshake = String::new();
+        reader.read_line(&mut handshake).unwrap();
+
+        // Send a command without auth — should be treated as auth failure.
+        stream.write_all(b"{\"cmd\":\"Ping\"}\n").unwrap();
+        let mut response = String::new();
+        reader.read_line(&mut response).unwrap();
+        assert!(response.contains("auth failed"));
+    }
+
+    #[test]
+    fn generate_token_is_64_hex_chars() {
+        let token = generate_token();
+        assert_eq!(token.len(), 64);
+        assert!(token.chars().all(|c| c.is_ascii_hexdigit()));
     }
 
     #[test]

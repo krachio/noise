@@ -300,6 +300,13 @@ fn run(device: &DeviceConfig, dsp_dir: &PathBuf) -> Result<(), String> {
     let _tcp_handle = if let Some(addr) = tcp_addr() {
         let handle = ipc::start_tcp(addr, cmd_tx, Arc::clone(&node_types))?;
         info!("tcp: listening on {}", handle.addr);
+        // Write token to ~/.krach/token for clients to read.
+        let token_path = std::env::var("HOME").map_or_else(
+            |_| PathBuf::from("/tmp/krach.token"),
+            |h| PathBuf::from(h).join(".krach/token"),
+        );
+        let _ = std::fs::write(&token_path, &handle.token);
+        info!("tcp: token written to {}", token_path.display());
         Some(handle)
     } else {
         drop(cmd_tx);
