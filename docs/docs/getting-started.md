@@ -179,7 +179,7 @@ bass >> (reverb, 0.4)    # send at 40% level
 ```
 
 The `>>` operator routes signal between nodes. Use a tuple `(target, level)` for
-gain-controlled sends, or just `bass >> reverb` for unity gain.
+gain-controlled routing, or just `bass >> reverb` for unity gain.
 
 ## Native automation with `kr.mod()`
 

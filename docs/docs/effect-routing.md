@@ -38,7 +38,7 @@ mic >> filt >> verb           # mic -> filter -> reverb
 # Source (0 audio inputs) -- generates audio
 bass = kr.node("bass", acid_bass, gain=0.3)
 
-# Effect (1+ audio inputs) -- receives audio from sends/routes
+# Effect (1+ audio inputs) -- receives routed audio
 verb = kr.node("verb", reverb_fn, gain=0.3)
 ```
 
@@ -68,7 +68,7 @@ abstractions). Use `>>` for interactive REPL work.
 | **Purpose** | Sound source (synth, sampler) | Processor (reverb, delay, compressor) |
 | **DSP signature** | `def synth() -> Signal` | `def fx(inp: Signal) -> Signal` |
 | **Created with** | `kr.node()` (auto) | `kr.node()` (auto) |
-| **Receives sends** | No | Yes |
+| **Receives routing** | No | Yes |
 
 ## Send levels
 
@@ -87,7 +87,7 @@ bass >> (verb, 0.7)           # change to 70%
 kr.connect("bass", "verb", level=0.7)
 ```
 
-## Direct wires (port assignment)
+## Direct port connections
 
 Wire a node directly to a specific input port. No gain stage -- the signal
 passes through as-is:
@@ -97,8 +97,8 @@ kr.connect("kick", "comp", port="in0")
 kr.connect("snare", "comp", port="in1")
 ```
 
-Use wires for multi-input effects like sidechain compressors or mixers where
-you need explicit port assignment.
+Use port connections for multi-input effects like sidechain compressors or mixers
+where you need explicit port assignment.
 
 ## Common setups
 

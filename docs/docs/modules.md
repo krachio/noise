@@ -21,7 +21,7 @@ kr.instantiate(ir)
 
 `capture()` returns a `ModuleIr` — a frozen, serializable snapshot of everything: nodes (with their DspGraph IR), routing, patterns, controls, transport, and mute state.
 
-`instantiate(ir)` replays it: creates nodes, wires routing, plays patterns, sets controls.
+`instantiate(ir)` replays it: creates nodes, connects routing, plays patterns, sets controls.
 
 ## Save & recall (in-memory scenes)
 

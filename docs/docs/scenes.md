@@ -108,7 +108,7 @@ A scene snapshot (both in-memory and file export) captures:
 ## Music as Python modules
 
 Exported files are plain Python. You can edit them, share them, and version
-them with git. A typical exported file sets up nodes, sends, and
+them with git. A typical exported file sets up nodes, routing, and
 patterns -- everything needed to reproduce the session.
 
 Write reusable setup scripts by hand:
