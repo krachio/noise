@@ -94,15 +94,33 @@ def register_tools(mcp: FastMCP) -> None:
     def play(target: str, pattern: str, swing: float | None = None) -> str:
         """Play a pattern on a node or control path.
 
-        Example: play("kick", "hit() * 4")
-        Example: play("bass", "seq('A2', 'D3', None, 'E2').over(2)")
-        Example: play("bass/cutoff", "mod_sine(200, 2000).over(4)")
-        Example: play("hat", "x . x . x . . x")
+        Pattern grammar — two formats:
+
+        Mini-notation (whitespace-separated tokens):
+          "x . x . x . . x"      — hits and rests
+          "C4 E4 G4 ~"           — notes and rests (~)
+          "[C4 E4] G4"           — group (faster subdivision)
+
+        Builder expressions (Python-like):
+          hit() * 4                         — repeat hit 4 times
+          note('C4', 'E4').over(2)          — two-note sequence over 2 cycles
+          seq('A2', 'D3', None, 'E2')       — sequence with rest (None)
+          chord('D4', 'F4', 'A4')           — simultaneous notes (chord)
+          euclid(5, 16)                     — Euclidean rhythm (5 hits in 16 steps)
+          mod_sine(200, 2000).over(4)       — smooth control sweep
+          hit() * 4 + rest() * 4            — compose patterns with +
+          note('C4') | note('E4')           — stack (simultaneous)
+
+        Modifiers (chain on any pattern):
+          .over(n)       — stretch over n cycles
+          .spread(p, s)  — Euclidean distribution
+          .swing(0.67)   — swing feel
+          .thin(0.5)     — randomly thin events
+          .mask("1 0 1 0") — boolean mask
 
         Args:
             target: Node name ("bass") or control path ("bass/cutoff").
-            pattern: Mini-notation ("x . x .", "C4 E4 G4 ~") or builder
-                     expression ("note('C4', 'E4').over(2) + rest()").
+            pattern: Mini-notation or builder expression (see grammar above).
             swing: Swing amount (0.5=straight, 0.67=standard, 0.75=heavy).
         """
         kr = get_session()
@@ -210,10 +228,19 @@ def register_tools(mcp: FastMCP) -> None:
 
         Call this before making changes to understand the current session.
         """
+        from krach.pattern.session import KernelError
         from krach.pattern.summary import summarize as _summarize
 
         kr = get_session()
-        kr.pull()
+        try:
+            kr.pull()
+        except KernelError as exc:
+            if "unrecognized" in str(exc).lower():
+                return (
+                    "Error: engine does not support Status command. "
+                    "Restart with: start(build=True)"
+                )
+            raise
         lines = [f"tempo={kr.tempo} bpm, meter={kr.meter}, master={kr.master:.2f}"]
 
         # Nodes with inline controls

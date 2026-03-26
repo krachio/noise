@@ -135,9 +135,19 @@ Python expressions using pattern builders (no builtins, safe eval):
 "note('C4') + rest() + note('E4')"      # composed sequence
 ```
 
-Available builders: `note`, `hit`, `seq`, `rest`, `cat`, `stack`, `struct`, `ramp`, `rand`, `sine`, `saw`, `mod_sine`, `mod_tri`, `mod_ramp`, `mod_ramp_down`, `mod_square`, `mod_exp`.
+Available builders: `note`, `hit`, `seq`, `rest`, `cat`, `stack`, `struct`, `chord`, `euclid`, `ramp`, `rand`, `sine`, `saw`, `mod_sine`, `mod_tri`, `mod_ramp`, `mod_ramp_down`, `mod_square`, `mod_exp`.
 
-Operators: `.over(N)` duration, `* N` repeat, `+` concatenate, `|` layer.
+Operators: `* N` repeat, `+` concatenate, `|` layer (simultaneous).
+
+Modifiers: `.over(N)` duration, `.spread(pulses, steps)` Euclidean, `.swing(0.67)` swing, `.thin(0.5)` random thinning, `.mask("1 0 1 0")` boolean mask.
+
+#### Chords and Euclidean rhythms
+
+```python
+"chord('D4', 'F4', 'A4')"           # D minor chord (stacked notes)
+"euclid(5, 16)"                     # 5 hits in 16 steps (Euclidean rhythm)
+"euclid(3, 8, 2)"                   # with rotation offset
+```
 
 ### Mini-notation
 
