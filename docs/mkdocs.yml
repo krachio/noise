@@ -46,7 +46,6 @@ nav:
     - Architecture: architecture.md
     - IR Architecture: ir-architecture.md
     - IPC Protocol: protocol.md
-    - Contributing: contributing.md
 
 markdown_extensions:
   - pymdownx.highlight:

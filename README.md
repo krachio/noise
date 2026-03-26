@@ -2,6 +2,8 @@
 
 Live coding audio system. Define synths in Python, sequence them with composable patterns, hear them instantly.
 
+[Website](https://krach.io) · [Documentation](https://krach.io/docs/) · [PyPI](https://pypi.org/project/krach/)
+
 ```python
 # Define a synth — just a Python function
 def acid_bass() -> krs.Signal:

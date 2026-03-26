@@ -143,10 +143,36 @@ Compile the actual Rust engine to WASM instead of reimplementing in JS.
 Same code, different compile target. FAUST JIT in browser via libfaust-wasm.
 Network sockets (TCP) already done — browser client just needs WebSocket upgrade.
 
+### Pattern shape cleanup (priority: medium)
+
+Kill `mod_*` aliases and `saw` (= `ramp`). Seven shape functions, zero aliases:
+`sine`, `tri`, `ramp`, `ramp_down`, `square`, `exp`, `rand`. Remove redundant
+"continuous patterns" section from builders.py and docs.
+
+### Warp cleanup (priority: medium)
+
+`.swing()` is the only warp. Remove speculative "designed for future transforms"
+doc language. Document swing as what it is. When humanize/groove/accel are
+implemented, document them then — not before.
+
 ### Template caching (priority: medium)
 
 XLA-style compilation cache for the pattern compiler. Hash pattern structure
 (excluding seeds/cycle), cache EventTemplates. Rust pattern-engine.
+
+### MIDI clock input — external sync (priority: medium)
+
+Receive MIDI clock ticks, derive BPM, slave pattern engine transport.
+Transport mode: master (internal tempo) vs slave (follow external clock).
+Enables jam sessions with hardware gear (drum machines, sequencers, synths).
+Rust: MIDI input via midir, clock follower in pattern-engine.
+Python: `kr.sync = "midi"` or `--midi-sync` flag.
+
+### Docs: ASCII diagrams → Mermaid (priority: low)
+
+Replace ASCII art diagrams in mkdocs pages with Mermaid fenced blocks.
+mkdocs-material supports Mermaid natively. ASCII stays in PROGRESS.md
+and code comments — web docs get proper rendered diagrams.
 
 ### macOS Intel wheel (priority: medium, blocked)
 
