@@ -77,7 +77,7 @@ jobs:
       - name: Vendor native files (macOS)
         if: runner.os == 'macOS'
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           BIN_DIR=krach/src/krach/_bin
           LIB_DIR=krach/src/krach/_lib
           SHARE_DIR=krach/src/krach/_share/faust
@@ -103,21 +103,16 @@ jobs:
       - name: Fix rpaths (macOS)
         if: runner.os == 'macOS'
         run: |
-          set -euxo pipefail
+          set -euo pipefail
           BIN_DIR=krach/src/krach/_bin
           LIB_DIR=krach/src/krach/_lib
-
-          echo "=== krach-engine deps before rpath fix ==="
-          otool -L "$BIN_DIR/krach-engine"
-          echo "=== libfaust deps before rpath fix ==="
-          otool -L "$LIB_DIR/libfaust.2.dylib"
 
           install_name_tool -change \
             "$FAUST_PREFIX/lib/libfaust.2.dylib" \
             "@loader_path/../_lib/libfaust.2.dylib" \
             "$BIN_DIR/krach-engine"
 
-          UNWIND_OLD=$(otool -L "$BIN_DIR/krach-engine" | grep libunwind | awk '{print $1}')
+          UNWIND_OLD=$(otool -L "$BIN_DIR/krach-engine" | grep libunwind | awk '{print $1}' || true)
           if [ -n "$UNWIND_OLD" ]; then
             install_name_tool -change \
               "$UNWIND_OLD" \
