@@ -103,9 +103,14 @@ jobs:
       - name: Fix rpaths (macOS)
         if: runner.os == 'macOS'
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           BIN_DIR=krach/src/krach/_bin
           LIB_DIR=krach/src/krach/_lib
+
+          echo "=== krach-engine deps before rpath fix ==="
+          otool -L "$BIN_DIR/krach-engine"
+          echo "=== libfaust deps before rpath fix ==="
+          otool -L "$LIB_DIR/libfaust.2.dylib"
 
           install_name_tool -change \
             "$FAUST_PREFIX/lib/libfaust.2.dylib" \
