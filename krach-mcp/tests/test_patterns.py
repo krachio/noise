@@ -61,6 +61,40 @@ def test_eval_no_builtins() -> None:
         parse_pattern("__import__('os').system('echo pwned')")
 
 
+def test_eval_no_subclass_escape() -> None:
+    """Eval sandbox must block __subclasses__ traversal — the eval must NOT execute."""
+    import os, tempfile
+    marker = os.path.join(tempfile.gettempdir(), "_krach_sandbox_escape_test")
+    # Clean up any previous marker
+    if os.path.exists(marker):
+        os.remove(marker)
+    # Craft a payload that creates a file if the sandbox is escaped
+    payload = (
+        "[c for c in ().__class__.__bases__[0].__subclasses__() "
+        "if 'BuiltinImporter' in c.__name__]"
+        f"[0].load_module('builtins').open('{marker}', 'w').close()"
+    )
+    try:
+        parse_pattern(payload)
+    except (ValueError, Exception):
+        pass
+    assert not os.path.exists(marker), "sandbox escape: eval executed arbitrary code"
+
+
+def test_eval_no_dunder_access() -> None:
+    """Eval sandbox must block all dunder attribute access."""
+    import os, tempfile
+    marker = os.path.join(tempfile.gettempdir(), "_krach_dunder_test")
+    if os.path.exists(marker):
+        os.remove(marker)
+    payload = f"().__class__.__bases__[0].__subclasses__()[0].__init__.__builtins__['open']('{marker}', 'w').close()"
+    try:
+        parse_pattern(payload)
+    except (ValueError, Exception):
+        pass
+    assert not os.path.exists(marker), "sandbox escape: dunder traversal executed code"
+
+
 # ── Issue #3: chord() and euclid() in MCP play ────────────────────────────
 
 

@@ -7,6 +7,9 @@ Supports two formats:
 
 from __future__ import annotations
 
+import ast
+from typing import Any
+
 from krach.pattern.mininotation import p as _mini_p
 from krach.pattern.builders import (
     cat, hit, mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square,
@@ -26,7 +29,7 @@ def euclid(pulses: int, steps: int, rotation: int = 0) -> Pattern:
 
 
 # Namespace for eval — only safe pattern builders, no I/O, no internal types
-_EVAL_NS: dict[str, object] = {
+_EVAL_NS: dict[str, Any] = {
     "note": note,
     "hit": hit,
     "seq": seq,
@@ -46,8 +49,61 @@ _EVAL_NS: dict[str, object] = {
     "mod_ramp_down": mod_ramp_down,
     "mod_square": mod_square,
     "mod_exp": mod_exp,
-    "None": None,
 }
+
+# Methods allowed on Pattern objects (returned by builders)
+_ALLOWED_METHODS: frozenset[str] = frozenset({
+    "over", "fast", "slow", "shift", "reverse", "spread",
+    "thin", "swing", "mask", "every",
+})
+
+
+class _SafeEvalError(Exception):
+    pass
+
+
+def _safe_eval(node: ast.expr) -> Any:
+    """Evaluate an AST node using only allowed names and operations."""
+    match node:
+        case ast.Constant(value=v) if isinstance(v, (int, float, str, type(None))):
+            return v
+        case ast.Name(id=name) if name in _EVAL_NS:
+            return _EVAL_NS[name]
+        case ast.Name(id="None"):
+            return None
+        case ast.Call(func=func, args=args, keywords=kws):
+            fn = _safe_eval(func)
+            evaluated_args = [_safe_eval(a) for a in args]
+            evaluated_kws = {k.arg: _safe_eval(k.value) for k in kws if k.arg is not None}
+            return fn(*evaluated_args, **evaluated_kws)
+        case ast.Attribute(value=val, attr=attr) if attr in _ALLOWED_METHODS:
+            obj = _safe_eval(val)
+            return getattr(obj, attr)
+        case ast.BinOp(left=left, op=ast.Add(), right=right):
+            return _safe_eval(left) + _safe_eval(right)
+        case ast.BinOp(left=left, op=ast.BitOr(), right=right):
+            return _safe_eval(left) | _safe_eval(right)
+        case ast.BinOp(left=left, op=ast.Mult(), right=right):
+            return _safe_eval(left) * _safe_eval(right)
+        case ast.UnaryOp(op=ast.USub(), operand=operand):
+            return -_safe_eval(operand)
+        case _:
+            raise _SafeEvalError(f"disallowed expression: {ast.dump(node)}")
+
+
+def _try_builder_eval(text: str) -> Pattern | None:
+    """Parse and safely evaluate a builder expression. Returns None on failure."""
+    try:
+        tree = ast.parse(text, mode="eval")
+    except SyntaxError:
+        return None
+    try:
+        result = _safe_eval(tree.body)
+    except (_SafeEvalError, TypeError, ValueError, AttributeError, KeyError):
+        return None
+    if isinstance(result, Pattern):
+        return result
+    return None
 
 
 def parse_pattern(text: str) -> Pattern:
@@ -60,15 +116,11 @@ def parse_pattern(text: str) -> Pattern:
     if not text:
         raise ValueError("empty pattern string")
 
-    # Heuristic: if it contains Python syntax (parens, dots after idents,
-    # operators like * + |), try builder eval first
+    # Heuristic: if it contains Python syntax, try builder eval first
     if "(" in text or "*" in text:
-        try:
-            result = eval(text, {"__builtins__": {}}, _EVAL_NS)  # noqa: S307
-            if isinstance(result, Pattern):
-                return result
-        except Exception:
-            pass
+        result = _try_builder_eval(text)
+        if result is not None:
+            return result
 
     # Try mini-notation
     try:
