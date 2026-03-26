@@ -135,7 +135,9 @@ fn run_server(
                 stream
                     .set_read_timeout(Some(Duration::from_millis(100)))
                     .ok();
-                handle_connection(stream, cmd_tx, node_types, stop);
+                let reader = std::io::BufReader::new(stream.try_clone().expect("clone stream"));
+                let mut writer = stream;
+                handle_connection(reader, &mut writer, cmd_tx, node_types, stop);
             }
             Err(_) => break,
         }
@@ -143,18 +145,14 @@ fn run_server(
 }
 
 fn handle_connection(
-    stream: std::os::unix::net::UnixStream,
+    reader: impl std::io::BufRead,
+    writer: &mut impl std::io::Write,
     cmd_tx: &crossbeam_channel::Sender<LoopCommand>,
     node_types: &Arc<RwLock<Vec<String>>>,
     stop: &AtomicBool,
 ) {
-    use std::io::{BufRead, BufReader, Write};
-
     // Message size limit: 1MB per line.
     const MAX_LINE_BYTES: usize = 1_048_576;
-
-    let reader = BufReader::new(stream.try_clone().expect("clone stream"));
-    let mut writer = stream;
 
     // Protocol version handshake: engine announces version on connect.
     let version_line = r#"{"protocol":1,"engine":"krach-engine"}"#;
@@ -467,6 +465,31 @@ mod tests {
         assert!(
             matches!(cmd, LoopCommand::Pattern(EngineCommand::SetPattern { name, .. }) if name == "d1")
         );
+    }
+
+    #[test]
+    fn handle_connection_works_with_in_memory_streams() {
+        use std::io::{BufReader, Cursor};
+
+        let (tx, rx) = crossbeam_channel::unbounded();
+        let types = Arc::new(RwLock::new(vec!["osc".into()]));
+        let stop = std::sync::atomic::AtomicBool::new(false);
+
+        // Client sends a Ping, then EOF.
+        let input = b"{\"cmd\":\"Ping\"}\n";
+        let reader = BufReader::new(Cursor::new(input.to_vec()));
+        let mut output = Vec::new();
+
+        handle_connection(reader, &mut output, &tx, &types, &stop);
+
+        let out = String::from_utf8(output).unwrap();
+        let lines: Vec<&str> = out.trim().split('\n').collect();
+        // First line: protocol handshake
+        assert!(lines[0].contains("\"protocol\":1"));
+        // Second line: Pong response
+        assert!(lines[1].contains("\"Pong\""));
+        // No commands sent to the channel (Ping is handled locally)
+        assert!(rx.try_recv().is_err());
     }
 
     #[test]
