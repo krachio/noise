@@ -58,7 +58,7 @@ Add to your Claude Code MCP config:
 | Tool | Parameters | Description |
 |------|-----------|-------------|
 | `connect` | `source: str, target: str, level?: float` | Route audio from source to target |
-| `disconnect` | `source: str, target: str` | Remove a send/wire between two nodes |
+| `disconnect` | `source: str, target: str` | Remove routing between two nodes |
 
 ### Automation
 

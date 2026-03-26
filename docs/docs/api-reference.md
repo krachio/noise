@@ -154,7 +154,7 @@ Returned by `kr.node()`. Wraps a named node with operator DSL.
 | `bass.pattern()` | Get last unbound pattern |
 | `bass.set(param, value)` | Set a control |
 | `bass.fade(param, target, bars=4)` | Fade a control |
-| `bass.send(bus, level=0.5)` | Send to a bus |
+| `bass >> (verb, 0.4)` | Route to a bus with level (equivalent to `kr.connect`) |
 | `bass.gain(value)` | Set gain |
 | `bass.mute()` | Mute |
 | `bass.unmute()` | Unmute |
@@ -203,15 +203,15 @@ Composable pattern objects. Created via builders, combined with operators.
 | `kr.struct(rhythm, melody)` | Impose rhythm onto melody |
 | `kr.p("x . x . x . . x")` | Mini-notation |
 
-### Atom constructors
+### Atom constructors (from `krach.pattern`)
 
 | Builder | Description |
 |---|---|
-| `midi_note(pitch, vel=100, channel=0, duration=1.0)` | Raw MIDI note atom |
-| `cc(controller, value, channel=0)` | MIDI CC atom |
-| `osc(address, *args)` | OSC message atom |
-| `ctrl(label, value)` | Control value atom |
-| `freeze(pat)` | Freeze a pattern (hold values across cycles) |
+| `kr.midi_note(pitch, vel=100, channel=0, duration=1.0)` | Raw MIDI note atom |
+| `kr.cc(controller, value, channel=0)` | MIDI CC atom |
+| `kr.osc(address, *args)` | OSC message atom |
+| `kr.ctrl(label, value)` | Control value atom |
+| `kr.freeze(pat)` | Freeze a pattern (hold values across cycles) |
 
 ### Continuous patterns
 

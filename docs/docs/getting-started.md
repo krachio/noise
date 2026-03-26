@@ -45,21 +45,11 @@ b @ ("cutoff", kr.sine(200, 2000).over(4))
 
 ---
 
-## Prerequisites
-
-- **macOS** (CoreAudio — Linux/Windows support planned)
-- **Rust** stable toolchain ([rustup.rs](https://rustup.rs))
-- **Python 3.13+**
-- **[uv](https://docs.astral.sh/uv/)** — Python package manager
-- **FAUST** compiler + LLVM development headers
-    ```bash
-    brew install faust llvm
-    export LLVM_SYS_181_PREFIX=$(brew --prefix llvm)
-    ```
-
 ## Install
 
 ### Option A: pip (prebuilt wheel — macOS ARM64, macOS x86_64, Linux x86_64)
+
+Requires **Python 3.13+** only:
 
 ```bash
 pip install krach
@@ -67,7 +57,12 @@ pip install krach
 
 ### Option B: from source
 
+Requires **Python 3.13+**, **Rust** stable ([rustup.rs](https://rustup.rs)), **[uv](https://docs.astral.sh/uv/)**, **FAUST** + **LLVM**:
+
 ```bash
+brew install faust llvm
+export LLVM_SYS_181_PREFIX=$(brew --prefix llvm)
+
 git clone https://github.com/krachio/noise.git
 cd noise
 
@@ -108,7 +103,7 @@ def kick() -> krs.Signal:
 
 The `krs.control()` calls define parameters that patterns can drive.
 
-### 2. Create a voice and play it
+### 2. Create a node and play it
 
 Pass Python DSP functions directly to `kr.node()` — transpilation to FAUST happens automatically:
 
@@ -174,8 +169,8 @@ reverb = kr.node("verb", verb, gain=0.3)
 ```
 
 !!! note
-    `kr.node()` auto-detects whether a DSP has audio inputs. Effects (like reverb)
-    are detected automatically -- effects are detected automatically from audio input parameters.
+    `kr.node()` auto-detects whether a DSP has audio inputs. Functions with an
+    `inp: krs.Signal` parameter become effect nodes automatically.
 
 ### 8. Route the bass to reverb with `>>`
 
@@ -251,5 +246,5 @@ All operators have explicit equivalents: `kr.connect()`, `kr.play()`, `kr.set()`
 
 - [Synth Design](synth-design.md) — deep dive into DSP functions and `krs` primitives
 - [Patterns](patterns.md) — pattern algebra, combinators, composition
-- [Effect Routing](effect-routing.md) — node routing, `>>` operator, sends, wires
+- [Effect Routing](effect-routing.md) — node routing, `>>` operator
 - [API Reference](api-reference.md) — complete API for `kr`, `krs`, patterns
