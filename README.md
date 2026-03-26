@@ -39,7 +39,15 @@ pip install krach
 krach
 ```
 
-**Supported platforms**: macOS 13+ (Intel), macOS 14+ (Apple Silicon), Linux x86_64 (glibc 2.35+). No Windows support yet.
+Or via Homebrew (macOS):
+
+```bash
+brew tap krachio/tap
+brew install krach
+krach
+```
+
+**Supported platforms**: macOS 14+ (Apple Silicon), Linux x86_64 (glibc 2.35+). No Windows support yet.
 
 The wheel bundles the Rust audio engine, FAUST JIT compiler, and LLVM — no system dependencies needed.
 
