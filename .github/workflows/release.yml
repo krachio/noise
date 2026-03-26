@@ -16,9 +16,10 @@ jobs:
           - os: macos-14
             target: macos-arm64
             wheel_tag: macosx_14_0_arm64
-          - os: macos-14-large
-            target: macos-x86_64
-            wheel_tag: macosx_13_0_x86_64
+          # macos-x86_64 requires paid -large runner; re-enable when billing is set up
+          # - os: macos-14-large
+          #   target: macos-x86_64
+          #   wheel_tag: macosx_13_0_x86_64
           - os: ubuntu-22.04
             target: linux-x86_64
             wheel_tag: manylinux_2_35_x86_64
@@ -235,8 +236,6 @@ jobs:
         include:
           - os: macos-14
             artifact: wheel-macos-arm64
-          - os: macos-14-large
-            artifact: wheel-macos-x86_64
           - os: ubuntu-22.04
             artifact: wheel-linux-x86_64
     runs-on: ${{ matrix.os }}
