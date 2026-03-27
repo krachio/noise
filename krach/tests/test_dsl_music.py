@@ -3,10 +3,10 @@
 from __future__ import annotations
 
 from krach.signal.types import Signal
-from krach.signal.music.effects import reverb
-from krach.signal.music.envelopes import adsr
-from krach.signal.music.scales import midi_to_freq
-from krach.signal.music.spatial import pan
+from krach.signal.music import reverb
+from krach.signal.music import adsr
+from krach.signal.music import midi_to_freq
+from krach.signal.music import pan
 from krach.signal.transpile import transpile
 
 

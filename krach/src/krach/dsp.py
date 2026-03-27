@@ -10,7 +10,7 @@ from krach.signal.types import Signal as Signal
 from krach.signal.transpile import control as control, transpile as transpile
 
 # Oscillators
-from krach.signal.lib.oscillators import (
+from krach.signal.lib import (
     sine_osc as sine_osc,
     saw as saw,
     square as square,
@@ -18,18 +18,18 @@ from krach.signal.lib.oscillators import (
 )
 
 # Filters
-from krach.signal.lib.filters import (
+from krach.signal.lib import (
     lowpass as lowpass,
     highpass as highpass,
     bandpass as bandpass,
 )
 
 # Noise
-from krach.signal.lib.noise import white_noise as white_noise
+from krach.signal.lib import white_noise as white_noise
 
 # Envelopes + effects
-from krach.signal.music.envelopes import adsr as adsr
-from krach.signal.music.effects import reverb as reverb
+from krach.signal.music import adsr as adsr
+from krach.signal.music import reverb as reverb
 
 # DSP primitives: delay, memory, feedback, sample rate
 from krach.signal.core import (

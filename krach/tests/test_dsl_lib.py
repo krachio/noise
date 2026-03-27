@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from krach.signal.lib.filters import lowpass
-from krach.signal.lib.noise import white_noise
-from krach.signal.lib.oscillators import phasor, sine_osc
-from krach.signal.lib.utilities import smooth
+from krach.signal.lib import lowpass
+from krach.signal.lib import white_noise
+from krach.signal.lib import phasor, sine_osc
+from krach.signal.lib import smooth
 from krach.signal.transpile import transpile
 from krach.signal.primitives import feedback_p
 

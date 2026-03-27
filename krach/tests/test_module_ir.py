@@ -296,7 +296,7 @@ def test_graph_ir_key_none_vs_empty_inputs() -> None:
 
 def test_passthrough_traces_valid_graph() -> None:
     """passthrough is a 1-in-1-out identity DSP function."""
-    from krach.signal.lib.effects import passthrough
+    from krach.signal.lib import passthrough
     from krach.signal.transpile import transpile
 
     result = transpile(passthrough)

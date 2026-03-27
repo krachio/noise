@@ -154,31 +154,31 @@ def test_dsp_module_exports_control() -> None:
 
 def test_dsp_module_exports_saw() -> None:
     import krach.dsp as krs
-    from krach.signal.lib.oscillators import saw
+    from krach.signal.lib import saw
     assert krs.saw is saw
 
 
 def test_dsp_module_exports_lowpass() -> None:
     import krach.dsp as krs
-    from krach.signal.lib.filters import lowpass
+    from krach.signal.lib import lowpass
     assert krs.lowpass is lowpass
 
 
 def test_dsp_module_exports_adsr() -> None:
     import krach.dsp as krs
-    from krach.signal.music.envelopes import adsr
+    from krach.signal.music import adsr
     assert krs.adsr is adsr
 
 
 def test_dsp_module_exports_reverb() -> None:
     import krach.dsp as krs
-    from krach.signal.music.effects import reverb
+    from krach.signal.music import reverb
     assert krs.reverb is reverb
 
 
 def test_dsp_module_exports_white_noise() -> None:
     import krach.dsp as krs
-    from krach.signal.lib.noise import white_noise
+    from krach.signal.lib import white_noise
     assert krs.white_noise is white_noise
 
 
