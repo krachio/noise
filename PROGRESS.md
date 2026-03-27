@@ -102,9 +102,9 @@ bass["cutoff"] = 1200
 - audio-faust: 29 Rust tests
 - pattern-engine: 192 Rust tests
 - krach-engine: 42 Rust tests
-- krach: 831 Python tests
+- krach: 861 Python tests
 - krach-mcp: 21 Python tests
-- **Total: 1282 tests**, all green. Pyright strict clean.
+- **Total: 1312 tests**, all green. Pyright strict clean.
 
 ## Key features
 
@@ -137,6 +137,7 @@ bass["cutoff"] = 1200
 - **FAUST stdlib override**: `FAUST_STDLIB_DIR` env var → `-I` flag to JIT compiler, enabling vendored stdlib
 - **CI release matrix**: 2-platform wheel build (macos-14, ubuntu-22.04) + PyPI trusted publishing + clean-install test + GitHub Release
 - **PyPI v0.1.0 published**: full metadata, `krach --version`, THIRD_PARTY_LICENSES (GPL for libfaust, Apache for LLVM)
+- **Table primitives**: `krs.rwtable()` (read-write buffer) and `krs.rdtable()` (read-only table) as proper IR primitives — enables loopers, samplers, freeze effects, wavetables. `wavetable()` refactored from faust_expr hack to rdtable_p
 - **MIDI clock input**: external clock sync for jam sessions — ClockFollower (EMA + jitter gate), `kr.sync = "midi"`, `NOISE_MIDI_SYNC=1`, `--midi-sync` CLI flag, 2s timeout fallback, phase correction
 
 ## Backlog

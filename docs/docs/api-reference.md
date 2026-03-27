@@ -288,6 +288,8 @@ All DSP building blocks. `from krach import signal as krs`.
 | `krs.feedback(body_fn)` | Feedback loop (Faust `~` operator) |
 | `krs.select2(sel, when_zero, when_one)` | Two-way signal router |
 | `krs.faust_expr(template, *inputs)` | Inline Faust expression escape hatch |
+| `krs.rwtable(size, init, write_idx, write_val, read_idx)` | Read-write table: fixed-size buffer for loopers, freeze, granular |
+| `krs.rdtable(data, read_idx)` | Read-only table: compile-time wavetable data (`data` is a `tuple[float, ...]`) |
 
 ### Oscillators
 

@@ -80,6 +80,8 @@ All DSP building blocks live in the `krs` namespace (`krach.dsp`).
 | `krs.feedback(body_fn)` | Feedback loop (Faust `~` operator) |
 | `krs.select2(sel, when_zero, when_one)` | Two-way signal router |
 | `krs.faust_expr(template, *inputs)` | Inline Faust expression escape hatch |
+| `krs.rwtable(size, init, write_idx, write_val, read_idx)` | Read-write table (looper, freeze, granular) |
+| `krs.rdtable(data, read_idx)` | Read-only table (wavetables, compile-time data) |
 
 ### Math -- unary
 
@@ -264,6 +266,49 @@ An effect using Freeverb (note the `inp` audio input parameter):
 def simple_reverb(inp: krs.Signal) -> krs.Signal:
     room = krs.control("room", 0.6, 0.0, 1.0)
     return krs.reverb(inp, room)
+```
+
+## Tables: `krs.rwtable()` and `krs.rdtable()`
+
+Tables provide random-access buffers for loopers, samplers, freeze effects,
+and wavetables.
+
+### Read-write table (`rwtable`)
+
+`krs.rwtable(size, init, write_idx, write_val, read_idx)` creates a fixed-size
+buffer. Size is in samples, set at compile time (FAUST limitation). Node reuse
+preserves buffer contents across graph hot-swaps.
+
+```python
+def looper(input: krs.Signal) -> krs.Signal:
+    rec = krs.control("rec", 0.0, 0.0, 1.0)
+    fb = krs.control("fb", 0.8, 0.0, 1.0)
+    length = krs.control("length", 48000.0 * 30, 1.0, 48000.0 * 30)
+
+    phase = krs.feedback(lambda ph: krs.fmod(ph + 1.0, length))
+
+    existing = krs.rwtable(
+        48000 * 30,     # 30 seconds at 48 kHz
+        0.0,            # init
+        phase,          # write index
+        krs.select2(rec, 0.0, krs.dcblock(input)),
+        phase,          # read index
+    )
+    return krs.dcblock(existing)
+```
+
+### Read-only table (`rdtable`)
+
+`krs.rdtable(data, read_idx)` creates a compile-time table from a tuple of
+floats. Used internally by `krs.wavetable()`.
+
+```python
+# Sine wavetable (256 samples)
+import math
+table = tuple(math.sin(2 * math.pi * i / 256) for i in range(256))
+
+def wt_osc(idx: krs.Signal) -> krs.Signal:
+    return krs.rdtable(table, idx)
 ```
 
 ## Pre-transpiling with `kr.dsp()`
