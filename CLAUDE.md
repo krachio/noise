@@ -21,7 +21,7 @@ Individual `cargo test` still works from within any Rust subproject.
 
 krach and krach-mcp each have their own `uv` venv and `pyproject.toml`.
 Run `uv run pytest` from within krach/. Do not use `pip install` — deps managed through `uv`.
-The DSP transpiler (formerly faust-dsl) lives inside krach as `krach.ir.signal`, `krach.dsl.*`, `krach.backends.faust*`.
+The DSP transpiler lives inside krach as `krach.signal.types`, `krach.signal.*`, `krach.backends.faust`.
 
 ## Design Philosophy
 
@@ -33,7 +33,7 @@ everything is a node. Routing uses operators (`>>`), not named methods.
 bass = kr.node("bass", bass_fn, gain=0.3)    # source (0 inputs)
 verb = kr.node("verb", reverb_fn, gain=0.3)  # effect (auto-detected: 1+ inputs)
 bass >> verb                                   # route
-bass.play(kr.seq("A2", "D3").swing(0.67))    # pattern
+bass.play(krp.seq("A2", "D3").swing(0.67))   # pattern
 ```
 
 If a musician-friendly UI is needed, build it in Python on top of the graph API.

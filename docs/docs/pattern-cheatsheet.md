@@ -5,12 +5,12 @@ Quick reference for krach pattern API. See [Patterns](patterns.md) for full docu
 ## Atoms
 
 ```python
-kr.note("C4")                   # melodic trigger (sets freq + gate)
-kr.note("C4", "E4", "G4")      # chord
-kr.hit()                        # gate trigger (drums)
-kr.rest()                       # silence
-kr.seq("A2", "D3", None, "E2") # sequence (None = rest)
-kr.p("x . x . x . . x")       # mini-notation
+krp.note("C4")                   # melodic trigger (sets freq + gate)
+krp.note("C4", "E4", "G4")      # chord
+krp.hit()                        # gate trigger (drums)
+krp.rest()                       # silence
+krp.seq("A2", "D3", None, "E2") # sequence (None = rest)
+krp.p("x . x . x . . x")       # mini-notation
 ```
 
 ## Operators
@@ -44,24 +44,21 @@ p.sometimes(0.3, lambda p: p.reverse())  # 30% chance per cycle
 ## Continuous (for control modulation)
 
 ```python
-kr.sine(200, 2000)              # sine sweep lo..hi
-kr.saw(0, 1)                    # sawtooth ramp
-kr.rand(0, 1)                   # random values
-kr.ramp(0, 1)                   # linear ramp
-kr.mod_sine(200, 2000)          # sine modulation
-kr.mod_tri(200, 2000)           # triangle
-kr.mod_ramp(0, 1)               # ramp up
-kr.mod_ramp_down(1, 0)          # ramp down
-kr.mod_square(0, 1)             # square wave
-kr.mod_exp(0, 1)                # exponential
+krp.sine(200, 2000)             # sine sweep
+krp.tri(200, 2000)              # triangle
+krp.ramp(0, 1)                  # linear ramp
+krp.ramp_down(1, 0)             # ramp down
+krp.square(0, 1)                # square wave
+krp.exp(0, 1)                   # exponential curve
+krp.rand(0, 1)                  # random values
 ```
 
 ## Combinators
 
 ```python
-kr.cat(a, b, c)                 # play each for 1 cycle, loop
-kr.stack(a, b)                  # layer simultaneously
-kr.struct(rhythm, melody)       # impose rhythm onto melody
+krp.cat(a, b, c)                 # play each for 1 cycle, loop
+krp.stack(a, b)                  # layer simultaneously
+krp.struct(rhythm, melody)       # impose rhythm onto melody
 ```
 
 ## Playing patterns
@@ -69,7 +66,7 @@ kr.struct(rhythm, melody)       # impose rhythm onto melody
 ```python
 # On kr
 kr.play("bass", pattern)
-kr.play("bass/cutoff", kr.sine(200, 2000).over(4))
+kr.play("bass/cutoff", krp.sine(200, 2000).over(4))
 
 # On NodeHandle
 bass @ pattern                  # play note pattern
@@ -82,22 +79,22 @@ bass @ "A2 D3 ~ E2"            # mini-notation string
 
 ```python
 # Four on the floor
-kr.hit() * 4
+krp.hit() * 4
 
 # Offbeat hats
-(kr.rest() + kr.hit()) * 4
+(krp.rest() + krp.hit()) * 4
 
 # Swung hats
-((kr.rest() + kr.hit()) * 4).swing(0.67)
+((krp.rest() + krp.hit()) * 4).swing(0.67)
 
 # Bass line with rests
-kr.seq("A2", "D3", None, "E2").over(2)
+krp.seq("A2", "D3", None, "E2").over(2)
 
 # Euclidean kick (5 hits in 8)
-(kr.hit() * 8).spread(5, 8)
+(krp.hit() * 8).spread(5, 8)
 
 # Filter sweep
-bass @ ("cutoff", kr.sine(200, 2000).over(4))
+bass @ ("cutoff", krp.sine(200, 2000).over(4))
 
 # Probabilistic variation
 melody.sometimes(0.2, lambda p: p.reverse())

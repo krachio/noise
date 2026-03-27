@@ -35,6 +35,6 @@ with kr.batch():
 
 # Patterns
 kr.tempo = 128
-kr.play("drums/kick", kr.hit() * 4)
-kr.play("drums/snare", (kr.rest() + kr.hit()) * 2)
-kr.play("drums/hat", (kr.rest() + kr.hit()) * 4, swing=0.67)
+kr.play("drums/kick", krp.hit() * 4)
+kr.play("drums/snare", (krp.rest() + krp.hit()) * 2)
+kr.play("drums/hat", (krp.rest() + krp.hit()) * 4, swing=0.67)

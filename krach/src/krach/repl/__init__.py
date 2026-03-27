@@ -1,9 +1,8 @@
-"""REPL entry point — connect(), main(), LiveMixer with pattern builder sugar.
+"""REPL entry point — connect(), main(), LiveMixer.
 
 Library users import ``from krach.mixer import Mixer`` directly.
-REPL users get ``LiveMixer`` (via ``connect()``) which adds static convenience
-methods (``kr.note()``, ``kr.seq()``, etc.) and a ``__setattr__`` guard
-that catches typos like ``kr.swong = 0.67``.
+REPL users get ``LiveMixer`` (via ``connect()``) with ``__setattr__``
+guard that catches typos like ``kr.swong = 0.67``.
 """
 
 from __future__ import annotations
@@ -213,14 +212,14 @@ def main() -> None:
         print()
         print("Usage: krach [--help] [--version] [--midi-sync]")
         print()
-        print("Starts an IPython REPL with kr (Mixer) and krs (DSP) pre-loaded.")
+        print("Starts an IPython REPL with kr (Mixer), krs (DSP), krp (patterns).")
         print("Requires: krach-engine binary (bundled in wheel or cargo build).")
         print()
         print("  --midi-sync                  start with external MIDI clock sync")
         print()
         print("  kr.node('bass', bass_fn)    create a DSP node")
         print("  bass >> verb                 route signal")
-        print("  bass @ kr.seq('A2', 'D3')   play a pattern")
+        print("  bass @ krp.seq('A2', 'D3')   play a pattern")
         print("  kr.tempo = 128              set tempo")
         print()
         print("https://krach.io")

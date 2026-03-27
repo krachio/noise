@@ -24,13 +24,13 @@ In-memory snapshots are fast but **lost when you exit the REPL**.
 
 ```python
 # Build a verse
-kr.play("kick", kr.hit() * 4)
-kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
+kr.play("kick", krp.hit() * 4)
+kr.play("bass", krp.seq("A2", "D3", None, "E2").over(2))
 kr.save("verse")
 
 # Build a chorus
-kr.play("kick", kr.hit() * 8)
-kr.play("bass", kr.seq("A3", "C3", "E3", "G3"))
+kr.play("kick", krp.hit() * 8)
+kr.play("bass", krp.seq("A3", "C3", "E3", "G3"))
 kr.save("chorus")
 
 # Switch between them
@@ -80,7 +80,7 @@ kr.save("verse")
 
 # Modify into chorus
 bass["gain"] = 0.5
-kr.play("kick", kr.hit() * 8)
+kr.play("kick", krp.hit() * 8)
 kr.save("chorus")
 
 # Smooth recall
@@ -134,8 +134,8 @@ Then load it from the REPL:
 
 ```python
 kr.load("my_kit.py")
-kr.play("drums/kick", kr.hit() * 4)
-kr.play("drums/hat", (kr.rest() + kr.hit()) * 4)
+kr.play("drums/kick", krp.hit() * 4)
+kr.play("drums/hat", (krp.rest() + krp.hit()) * 4)
 ```
 
 ## Workflow: compose, export, iterate
@@ -149,13 +149,13 @@ kr.play("drums/hat", (kr.rest() + kr.hit()) * 4)
 kr.tempo = 128
 kr.node("kick", kick, gain=0.8)
 kr.node("bass", acid_bass, gain=0.3)
-kr.play("kick", kr.hit() * 4)
-kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
+kr.play("kick", krp.hit() * 4)
+kr.play("bass", krp.seq("A2", "D3", None, "E2").over(2))
 kr.export("track_v1.py")
 
 # Session 2: pick up where you left off
 kr.load("track_v1.py")
 kr.node("lead", lead_fn, gain=0.25)
-kr.play("lead", kr.seq("A4", "C5", "E5", "D5").over(2))
+kr.play("lead", krp.seq("A4", "C5", "E5", "D5").over(2))
 kr.export("track_v2.py")
 ```

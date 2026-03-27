@@ -4,7 +4,7 @@ Complete reference for the krach Python API. Two symbols: `kr` (the audio graph)
 
 ## Mixer (`kr`)
 
-The `Mixer` class manages the audio graph. In the REPL, `kr` is a `LiveMixer` instance (a thin wrapper that adds REPL sugar like `kr.note()`, `kr.seq()`, etc.).
+The `Mixer` class manages the audio graph. In the REPL, `kr` is a `LiveMixer` instance (a thin wrapper that adds REPL sugar like `krp.note()`, `krp.seq()`, etc.).
 
 ### Transport
 
@@ -234,18 +234,18 @@ Composable pattern objects. Created via builders, combined with operators.
 | `.mask(mask_str)` | Mask with `"x 0 x ."` notation |
 | `.sometimes(prob, fn, seed=0)` | Probabilistic transform |
 
-### Builders (REPL — on `kr`)
+### Builders (`krp` — `from krach import pattern as krp`)
 
 | Builder | Description |
 |---|---|
-| `kr.note(*pitches, vel=1.0, **params)` | Note trigger |
-| `kr.hit(param="gate", **kwargs)` | Gate trigger |
-| `kr.seq(*notes, vel=1.0, **params)` | Sequence of notes (`None` = rest) |
-| `kr.rest()` | Silence |
-| `kr.cat(*patterns)` | Concatenate: each plays for one cycle |
-| `kr.stack(*patterns)` | Layer simultaneously |
-| `kr.struct(rhythm, melody)` | Impose rhythm onto melody |
-| `kr.p("x . x . x . . x")` | Mini-notation |
+| `krp.note(*pitches, vel=1.0, **params)` | Note trigger |
+| `krp.hit(param="gate", **kwargs)` | Gate trigger |
+| `krp.seq(*notes, vel=1.0, **params)` | Sequence of notes (`None` = rest) |
+| `krp.rest()` | Silence |
+| `krp.cat(*patterns)` | Concatenate: each plays for one cycle |
+| `krp.stack(*patterns)` | Layer simultaneously |
+| `krp.struct(rhythm, melody)` | Impose rhythm onto melody |
+| `krp.p("x . x . x . . x")` | Mini-notation |
 
 ### Atom constructors (import from `krach.pattern`)
 
@@ -261,22 +261,19 @@ Composable pattern objects. Created via builders, combined with operators.
 
 | Builder | Description |
 |---|---|
-| `kr.sine(lo, hi)` | Sine sweep |
-| `kr.saw(lo, hi)` | Sawtooth ramp |
-| `kr.rand(lo, hi)` | Random values |
-| `kr.ramp(start, end)` | Linear ramp |
-| `kr.mod_sine(lo, hi)` | Sine modulation |
-| `kr.mod_tri(lo, hi)` | Triangle modulation |
-| `kr.mod_ramp(lo, hi)` | Ramp up modulation |
-| `kr.mod_ramp_down(lo, hi)` | Ramp down modulation |
-| `kr.mod_square(lo, hi)` | Square wave modulation |
-| `kr.mod_exp(lo, hi)` | Exponential modulation |
+| `krp.sine(lo, hi)` | Sine sweep |
+| `krp.tri(lo, hi)` | Triangle sweep |
+| `krp.ramp(lo, hi)` | Linear ramp |
+| `krp.ramp_down(lo, hi)` | Ramp down |
+| `krp.square(lo, hi)` | Square wave |
+| `krp.exp(lo, hi)` | Exponential curve |
+| `krp.rand(lo, hi)` | Random values |
 
 ---
 
 ## `krs` — DSP primitives
 
-All DSP building blocks. `import krach.dsp as krs`.
+All DSP building blocks. `from krach import signal as krs`.
 
 ### Core
 

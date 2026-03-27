@@ -23,9 +23,9 @@ pattern.swing(amount, grid)
 **grid** -- subdivisions per cycle. Defaults to 8 (8th notes in 4/4).
 
 ```python
-(kr.hit() * 8).swing(0.67)       # swung 8th notes
-(kr.hit() * 8).swing(0.67, 8)    # same, explicit grid
-(kr.hit() * 16).swing(0.6, 16)   # swung 16th notes
+(krp.hit() * 8).swing(0.67)       # swung 8th notes
+(krp.hit() * 8).swing(0.67, 8)    # same, explicit grid
+(krp.hit() * 16).swing(0.6, 16)   # swung 16th notes
 ```
 
 ## How it works
@@ -55,25 +55,25 @@ def hat() -> krs.Signal:
 kr.node("hat", hat, gain=0.5)
 
 # Straight 8ths
-kr.play("hat", kr.hit() * 8)
+kr.play("hat", krp.hit() * 8)
 
 # Standard swing
-kr.play("hat", (kr.hit() * 8).swing(0.67))
+kr.play("hat", (krp.hit() * 8).swing(0.67))
 
 # Heavy shuffle
-kr.play("hat", (kr.hit() * 8).swing(0.75))
+kr.play("hat", (krp.hit() * 8).swing(0.75))
 ```
 
 ### Shuffled bass line
 
 ```python
-kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2).swing(0.67))
+kr.play("bass", krp.seq("A2", "D3", None, "E2").over(2).swing(0.67))
 ```
 
 ### Swung kick pattern
 
 ```python
-kr.play("kick", (kr.hit() * 8).swing(0.67))
+kr.play("kick", (krp.hit() * 8).swing(0.67))
 ```
 
 ## Convenience kwarg on `kr.play()`
@@ -82,8 +82,8 @@ Instead of calling `.swing()` on the pattern, pass `swing=` directly to
 `kr.play()`:
 
 ```python
-kr.play("kick", kr.hit() * 8, swing=0.67)
-kr.play("hat", kr.hit() * 8, swing=0.67)
+kr.play("kick", krp.hit() * 8, swing=0.67)
+kr.play("hat", krp.hit() * 8, swing=0.67)
 ```
 
 Both forms are equivalent.
@@ -94,14 +94,14 @@ Swing composes with all pattern operations:
 
 ```python
 # Swung euclidean rhythm
-kr.play("hat", kr.hit().spread(5, 8).swing(0.67))
+kr.play("hat", krp.hit().spread(5, 8).swing(0.67))
 
 # Swing with periodic reverse
-p = (kr.hit() * 8).swing(0.67)
+p = (krp.hit() * 8).swing(0.67)
 kr.play("kick", p.every(4, lambda p: p.reverse()))
 
 # Swung mini-notation
-kr.play("hat", kr.p("x . x x . x . x").swing(0.67))
+kr.play("hat", krp.p("x . x x . x . x").swing(0.67))
 ```
 
 ## Implementation

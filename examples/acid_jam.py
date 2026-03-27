@@ -53,17 +53,17 @@ kr.meter = 4
 
 # -- Verse --
 
-k @ (kr.hit() * 4)
-h @ ((kr.rest() + kr.hit()) * 4).swing(0.67)
-bass @ kr.seq("A2", "D3", None, "E2").over(2)
-bass @ ("cutoff", kr.sine(400, 2000).over(4))
+k @ (krp.hit() * 4)
+h @ ((krp.rest() + krp.hit()) * 4).swing(0.67)
+bass @ krp.seq("A2", "D3", None, "E2").over(2)
+bass @ ("cutoff", krp.sine(400, 2000).over(4))
 
 kr.save("verse")
 
 # -- Chorus: double-time hats, higher bass line --
 
-h @ (kr.hit() * 8)
-bass @ kr.seq("A3", "C3", "E3", "G3")
+h @ (krp.hit() * 8)
+bass @ krp.seq("A3", "C3", "E3", "G3")
 bass["cutoff"] = 2000
 
 kr.save("chorus")

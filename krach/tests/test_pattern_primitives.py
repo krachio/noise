@@ -125,7 +125,7 @@ def test_missing_serialize_rule_raises() -> None:
 def test_freeze_stack_allocates_separate_voices() -> None:
     """Freeze(Stack([note_A, note_C, note_E])) allocates one voice per note.
 
-    A chord like kr.note("A4", "C5", "E5") produces Freeze(Stack([Freeze(note_A), ...])).
+    A chord like krp.note("A4", "C5", "E5") produces Freeze(Stack([Freeze(note_A), ...])).
     Each inner Freeze gets its own voice instance. The outer Freeze does NOT allocate.
     """
     from krach.pattern.types import (
@@ -138,7 +138,7 @@ def test_freeze_stack_allocates_separate_voices() -> None:
     def _ctrl(label: str, value: float) -> PatternNode:
         return PatternNode(atom_p, (), AtomParams(Control(label, value)))
 
-    # Simulate kr.note("A4", "C5", "E5") → Freeze(Stack([3 inner Freezes]))
+    # Simulate krp.note("A4", "C5", "E5") → Freeze(Stack([3 inner Freezes]))
     note_a = PatternNode(freeze_p, (PatternNode(cat_p, (
         PatternNode(stack_p, (_ctrl("freq", 440.0), _ctrl("gate", 1.0)), StackParams()),
         _ctrl("gate", 0.0),

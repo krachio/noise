@@ -248,9 +248,9 @@ class Mixer:
     with an independent gain stage. Adding/removing nodes rebuilds the audio
     graph transparently. ``gain()`` updates are instant (no rebuild).
 
-    For REPL convenience (``kr.note()``, ``kr.seq()``, etc.) use
-    ``LiveMixer`` from ``krach.repl`` — it adds static builders and a
-    ``__setattr__`` typo guard.
+    For REPL convenience, use ``LiveMixer`` from ``krach.repl`` —
+    it adds ``__setattr__`` typo guard. Pattern builders live in ``krp``
+    (``from krach import pattern as krp``).
     """
 
     def __init__(

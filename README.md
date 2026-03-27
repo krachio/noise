@@ -22,8 +22,8 @@ def reverb(inp: krs.Signal) -> krs.Signal:
 bass = kr.node("bass", acid_bass, gain=0.3)
 verb = kr.node("verb", reverb, gain=0.3)
 bass >> (verb, 0.4)                                # route with send level
-bass @ kr.seq("A2", "D3", None, "E2").over(2)     # play pattern
-bass @ ("cutoff", kr.sine(200, 2000).over(4))      # modulate control
+bass @ krp.seq("A2", "D3", None, "E2").over(2)     # play pattern
+bass @ ("cutoff", krp.sine(200, 2000).over(4))     # modulate control
 ```
 
 ## What it does
@@ -32,7 +32,7 @@ bass @ ("cutoff", kr.sine(200, 2000).over(4))      # modulate control
 - **Sequence with patterns** — TidalCycles-inspired composable patterns with rational time
 - **Hear changes instantly** — hot reload, crossfade on graph swaps, no restart needed
 - **Graph-first API** — everything is a node, `>>` routes signal, `@` plays patterns, `[]` sets controls
-- **Two symbols**: `kr` (the audio graph) and `krs` (DSP primitives)
+- **Three symbols**: `kr` (the audio graph), `krs` (DSP primitives), `krp` (patterns)
 
 ## Install
 
@@ -83,7 +83,7 @@ cd krach && uv sync && cd ..
 
 ## Quick start
 
-The REPL gives you two objects: `kr` (the audio graph) and `krs` (DSP module).
+The REPL gives you three objects: `kr` (audio graph), `krs` (DSP), `krp` (patterns).
 
 ### Define a synth
 
@@ -99,22 +99,22 @@ def kick() -> krs.Signal:
 
 ```python
 k = kr.node("kick", kick, gain=0.8)
-k @ (kr.hit() * 4)                        # 4-on-the-floor
-k @ (kr.hit() * 8).swing(0.67)            # swung 8ths
+k @ (krp.hit() * 4)                       # 4-on-the-floor
+k @ (krp.hit() * 8).swing(0.67)           # swung 8ths
 ```
 
 ### Sequences, chords, modulation
 
 ```python
 bass = kr.node("bass", acid_bass, gain=0.3)
-bass @ kr.seq("A2", "D3", None, "E2").over(2)
+bass @ krp.seq("A2", "D3", None, "E2").over(2)
 
 # Modulate cutoff with a sine LFO
-bass @ ("cutoff", kr.sine(200, 2000).over(4))
+bass @ ("cutoff", krp.sine(200, 2000).over(4))
 
 # Chords need poly nodes (count > 1)
 pad = kr.node("pad", acid_bass, gain=0.2, count=4)
-pad @ (kr.note("A4", "C5", "E5") + kr.rest())
+pad @ (krp.note("A4", "C5", "E5") + krp.rest())
 ```
 
 ### Effect routing with `>>`
@@ -153,10 +153,10 @@ with kr.transition(bars=8):
 ## Pattern algebra
 
 ```python
-# Pattern algebra (a, b, p are patterns — e.g. kr.hit(), kr.note("C4"))
-a = kr.hit()
-b = kr.note("C4")
-p = kr.seq("A2", "D3", "E2")
+# Pattern algebra (a, b, p are patterns — e.g. krp.hit(), krp.note("C4"))
+a = krp.hit()
+b = krp.note("C4")
+p = krp.seq("A2", "D3", "E2")
 
 a + b           # sequence (equal time share)
 a | b           # layer (simultaneous)
@@ -170,20 +170,24 @@ p.thin(0.3)     # randomly drop 30%
 p.swing(0.67)   # swing feel
 p.mask("1 1 0 1")  # suppress events by mask
 p.sometimes(0.3, lambda p: p.reverse())  # probabilistic transform
-kr.p("x . x . x . . x")  # mini-notation
+krp.p("x . x . x . . x")  # mini-notation
 
 # Multi-pattern combinators
-c = kr.rest()
-kr.cat(a, b, c)             # play a, b, c one cycle each, loop
-kr.stack(a, b)              # layer (same as a | b)
-rhythm = kr.p("x . x x")
-melody = kr.seq("A2", "D3")
-kr.struct(rhythm, melody)   # impose rhythm onto melody values
+c = krp.rest()
+krp.cat(a, b, c)            # play a, b, c one cycle each, loop
+krp.stack(a, b)             # layer (same as a | b)
+rhythm = krp.p("x . x x")
+melody = krp.seq("A2", "D3")
+krp.struct(rhythm, melody)  # impose rhythm onto melody values
 
-# Continuous patterns
-kr.sine(200, 2000)          # sine sweep lo..hi
-kr.saw(200, 2000)           # sawtooth ramp lo..hi
-kr.rand(200, 2000)          # random values lo..hi
+# Continuous patterns (7 shapes)
+krp.sine(200, 2000)         # sine sweep
+krp.tri(200, 2000)          # triangle
+krp.ramp(200, 2000)         # linear ramp
+krp.ramp_down(200, 2000)    # ramp down
+krp.square(200, 2000)       # square wave
+krp.exp(200, 2000)          # exponential curve
+krp.rand(200, 2000)         # random values
 ```
 
 ## Architecture

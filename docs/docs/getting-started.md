@@ -37,10 +37,10 @@ b >> (verb, 0.4)
 
 # Play
 kr.tempo = 128
-k @ (kr.hit() * 4)
-h @ ((kr.rest() + kr.hit()) * 4)
-b @ kr.seq("A2", "D3", None, "E2").over(2)
-b @ ("cutoff", kr.sine(200, 2000).over(4))
+k @ (krp.hit() * 4)
+h @ ((krp.rest() + krp.hit()) * 4)
+b @ krp.seq("A2", "D3", None, "E2").over(2)
+b @ ("cutoff", krp.sine(200, 2000).over(4))
 ```
 
 ---
@@ -104,7 +104,7 @@ def kick() -> krs.Signal:
 **Controls** are named parameters that patterns drive automatically:
 
 - `"gate"` — a trigger. 1.0 = note on, 0.0 = note off
-- `"freq"` — pitch in Hz (set by `kr.note()` / `kr.seq()`)
+- `"freq"` — pitch in Hz (set by `krp.note()` / `krp.seq()`)
 - Custom controls (`"cutoff"`, `"room"`) — any parameter you want to automate
 - The 4 numbers are: `name, default, min, max`
 
@@ -116,10 +116,10 @@ Pass Python DSP functions directly to `kr.node()` — transpilation to FAUST hap
 
 ```python
 kr.node("kick", kick, gain=0.8)
-kr.play("kick", kr.hit() * 4)
+kr.play("kick", krp.hit() * 4)
 ```
 
-You should hear a four-on-the-floor kick. `kr.hit()` is a single gate trigger (1.0 = on, then 0.0 = off). `* 4` repeats it four times per cycle (one bar).
+You should hear a four-on-the-floor kick. `krp.hit()` is a single gate trigger (1.0 = on, then 0.0 = off). `* 4` repeats it four times per cycle (one bar).
 
 To stop: `kr.hush("kick")` stops the pattern, `kr.stop()` stops everything.
 
@@ -151,17 +151,17 @@ We shadow the function name with the node handle — the engine already compiled
 ### 5. Play a bass line
 
 ```python
-bass @ kr.seq("A2", "D3", None, "E2").over(2)
+bass @ krp.seq("A2", "D3", None, "E2").over(2)
 ```
 
 The `@` operator plays a pattern on a node. You can also use `kr.play("bass", pattern)` for the explicit form.
 
-`kr.seq()` creates a sequence of notes. `None` is a rest. `.over(2)` stretches the pattern to 2 cycles (8 beats at meter=4).
+`krp.seq()` creates a sequence of notes. `None` is a rest. `.over(2)` stretches the pattern to 2 cycles (8 beats at meter=4).
 
 ### 6. Modulate the filter
 
 ```python
-bass @ ("cutoff", kr.sine(200, 2000).over(4))
+bass @ ("cutoff", krp.sine(200, 2000).over(4))
 ```
 
 The `@` operator also accepts `(param, pattern)` tuples for control modulation.

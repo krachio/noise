@@ -20,7 +20,7 @@ def reverb(inp: krs.Signal) -> krs.Signal:
 bass = kr.node("bass", acid_bass, gain=0.3)
 verb = kr.node("verb", reverb, gain=0.3)
 bass >> verb                                       # route signal
-bass @ kr.seq("A2", "D3", None, "E2").over(2)      # play pattern
+bass @ krp.seq("A2", "D3", None, "E2").over(2)      # play pattern
 bass["cutoff"] = 1200                               # set control
 ```
 

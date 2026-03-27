@@ -9,7 +9,7 @@ krach sessions can be captured, serialized, and replayed. The module system turn
 bass = kr.node("bass", bass_fn, gain=0.3)
 verb = kr.node("verb", reverb_fn, gain=0.3)
 bass >> (verb, 0.4)
-bass @ kr.seq("A2", "D3", None, "E2").over(2)
+bass @ krp.seq("A2", "D3", None, "E2").over(2)
 kr.tempo = 128
 
 # Capture the entire state as frozen IR
@@ -85,7 +85,7 @@ proxy = kr.trace()
 proxy.node("kick", "faust:kick", gain=0.8)
 proxy.node("hat", "faust:hat", gain=0.3)
 proxy.send("kick", "verb", level=0.2)
-proxy.play("kick", kr.hit() * 4)
+proxy.play("kick", krp.hit() * 4)
 proxy.tempo = 128
 
 ir = proxy.build()       # → GraphIr (no audio started)
@@ -104,7 +104,7 @@ def drums(m, tempo=128):
     g.node("kick", "faust:kick", gain=0.8)
     g.node("hat", "faust:hat", gain=0.3)
     g.send("kick", "hat", level=0.2)
-    g.play("kick", kr.hit() * 4)
+    g.play("kick", krp.hit() * 4)
     g.tempo = tempo
     g.outputs("kick", "hat")
 

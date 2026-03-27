@@ -15,5 +15,5 @@ def sine_beep() -> krs.Signal:
 
 
 kr.node("beep", sine_beep, gain=0.5)
-kr.play("beep", kr.seq("C4", "E4", "G4", "C5").over(2))
+kr.play("beep", krp.seq("C4", "E4", "G4", "C5").over(2))
 kr.tempo = 120

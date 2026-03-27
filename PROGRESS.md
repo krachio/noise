@@ -10,67 +10,77 @@ noise/
 ├── audio-faust/       Rust — FAUST LLVM JIT plugin (hot reload, recursive dir watcher)
 ├── pattern-engine/    Rust — pattern sequencer (min-heap, rational time, phase-reset, meter)
 ├── krach-engine/      Rust — unified binary (pattern-engine + audio-engine + audio-faust, Unix + TCP)
-├── krach/             Python — live coding REPL (graph API, patterns, DSP transpiler, MCP server)
+├── krach/             Python — live coding REPL (graph API, patterns, DSP transpiler)
 └── krach-mcp/         Python — MCP server (25 tools for Claude Code to drive krach)
 ```
 
-### IR architecture (consolidated)
-
-Pure `ir/` layer (7 files + __init__): frozen data, zero runtime imports.
-- **Primitive** (`ir/primitive.py`): shared frozen dataclass, both domains
-- **Signal IR** (`ir/signal.py`): `Signal`, `Equation`, `DspGraph`, typed params
-- **Pattern IR** (`ir/pattern.py`): `PatternPrimitive` (= Primitive alias), `PatternNode`
-- **Module IR** (`ir/module.py`): `GraphIr`, `NodeDef(source: DspGraph | str)`, `RouteDef`
-- **Values** (`ir/values.py`): `Note`, `Cc`, `Osc`, `Control`, `Value`
-- **Canonicalize** (`ir/canonicalize.py`): `canonicalize()`, `graph_key()`, `graph_ir_key()`
-- **Registry** (`ir/registry.py`): generic `RuleRegistry[P, R]` with `check_complete()` import-time guard
-
-Tracing runtime in `signal/trace.py` (TraceContext, bind, coerce_to_signal).
-Rules registered via RuleRegistry: abstract_eval in `signal/primitives.py`, lowering in `backends/faust_lowering.py`.
-DspGraph cached by `graph_key` (structural hash). `NodeDef.source` holds `DspGraph` directly — Faust is derived, not canonical.
-
-### krach surface (post-cleanup)
+### Package structure (post-restructure)
 
 ```
-krach/
-  mixer.py           Mixer + MixerProtocol + NodeHandle (single file, no mixins)
-  node_types.py      Node, DspDef, dsp(), path resolution
-  graph_builder.py   build_graph_ir() pure function
-  module_proxy.py    GraphProxy recorder
-  export.py          export_session()
-  config.py          Config
-  dsp.py             krs namespace
-  repl/              LiveMixer (REPL sugar), connect(), main(), banner
-  ir/                (unchanged)
-  signal/            (unchanged)
-  pattern/           + mininotation.py, pitch.py (moved from root)
-  backends/          (unchanged)
+krach/src/krach/
+  __init__.py           Mixer, GraphHandle, NodeHandle, graph decorator
+  mixer.py              Mixer + MixerProtocol + NodeHandle
+  session.py            Engine IPC (Session, KernelError, SlotState)
+  export.py             export_session()
+  config.py             Config
+
+  ir/                   SHARED kernel (5 files)
+    primitive.py        Primitive(name, stateful)
+    values.py           Note, Cc, Osc, Control, Value
+    canonicalize.py     graph_key, graph_ir_key
+    registry.py         RuleRegistry
+    graph.py            GraphIr, NodeDef, RouteDef, prefix_ir, flatten
+
+  signal/               krs: types + impl + user API
+    __init__.py         USER API (__all__): ~60 DSP functions + Signal
+    types.py            Signal, DspGraph, Equation, *Params
+    trace.py            TraceContext, bind, coerce_to_signal
+    primitives.py       Primitive instances + abstract_eval rules
+    transpile.py        make_graph, collect_controls, control()
+    core.py             Core DSP functions (delay, feedback, sr, math)
+    lib.py              Oscillators, filters, noise, effects, utilities
+    music.py            Envelopes, effects, scales, spatial
+    compose.py          Graph composition
+    optimize.py         Graph optimization passes
+    ad.py, ad_rules.py  Automatic differentiation
+
+  pattern/              krp: types + impl + user API
+    __init__.py         USER API (__all__): builders + Pattern + pitch
+    types.py            PatternNode, *Params
+    pattern.py          Pattern wrapper, operators
+    primitives.py       Pattern primitive instances
+    builders.py         note, hit, seq, sine, tri, ramp, etc.
+    bind.py             Voice binding
+    serialize.py        PatternNode ↔ dict
+    summary.py          Pattern summary
+    mininotation.py     Mini-notation parser
+    pitch.py            MIDI/Hz conversion
+    transform.py        every, reverse, fast, shift, spread, thin
+
+  graph/                Graph construction layer
+    __init__.py         Re-exports: Node, GraphProxy, graph, build_graph_ir
+    node.py             Node, DspDef, dsp(), path resolution, build_graph_ir
+    proxy.py            GraphProxy, SubGraphRef, graph decorator
+
+  backends/             Lowering: domain IR → wire format
+    faust.py            DspGraph → FAUST source
+    pattern.py          PatternNode → krach-engine pattern commands
+    graph.py            NodeInstance + ConnectionIr → krach-engine graph payload
+
+  repl/
+    __init__.py         LiveMixer, connect, main
+    paths.py            resolve_engine_bin, resolve_lib_dir
 ```
 
-Library entry: `from krach.mixer import Mixer` — no REPL sugar, no staticmethods.
-REPL entry: `krach.repl.connect()` returns `LiveMixer` with `kr.note()`, `kr.seq()`, etc.
-
-### Test counts
-- audio-engine: 167 Rust tests
-- audio-faust: 29 Rust tests
-- pattern-engine: 192 Rust tests
-- krach-engine: 42 Rust tests
-- krach: 849 Python tests
-- krach-mcp: 21 Python tests
-- **Total: 1300 tests**, all green. Pyright strict clean.
-
-## Usage
-
-```bash
-pip install krach
-krach
-```
+### Three-symbol API
 
 ```python
-# Two symbols: kr (audio graph) and krs (krach.dsp)
-import krach.dsp as krs
+# kr  — audio graph (Mixer)
+# krs — DSP (from krach import signal as krs)
+# krp — patterns (from krach import pattern as krp)
 
-# Define DSP functions — sources have no audio input params
+from krach import signal as krs
+
 def acid_bass() -> krs.Signal:
     freq = krs.control("freq", 55.0, 20.0, 800.0)
     gate = krs.control("gate", 0.0, 0.0, 1.0)
@@ -78,33 +88,31 @@ def acid_bass() -> krs.Signal:
     env = krs.adsr(0.005, 0.15, 0.3, 0.08, gate)
     return krs.lowpass(krs.saw(freq), cutoff) * env * 0.55
 
-# Effects take an audio input parameter — auto-detected by kr.node()
-def reverb_fn(inp: krs.Signal) -> krs.Signal:
-    room = krs.control("room", 0.7, 0.0, 1.0)
-    return krs.reverb(inp, room) * 0.8
-
-# Create nodes
 bass = kr.node("bass", acid_bass, gain=0.3)
 verb = kr.node("verb", reverb_fn, gain=0.3)
 
-# Operator DSL: >> routes, @ plays, [] controls
 bass >> (verb, 0.4)
-bass @ kr.seq("A2", "D3", None, "E2").over(2)
-bass @ ("cutoff", kr.sine(400, 2000).over(4))
+bass @ krp.seq("A2", "D3", None, "E2").over(2)
+bass @ ("cutoff", krp.sine(400, 2000).over(4))
 bass["cutoff"] = 1200
-
-kr.tempo = 128
-kr.meter = 4
-kr.fade("bass/gain", 0.0, bars=4)
-kr.mute("drums")
 ```
+
+### Test counts
+- audio-engine: 167 Rust tests
+- audio-faust: 29 Rust tests
+- pattern-engine: 192 Rust tests
+- krach-engine: 42 Rust tests
+- krach: 831 Python tests
+- krach-mcp: 21 Python tests
+- **Total: 1282 tests**, all green. Pyright strict clean.
 
 ## Key features
 
 - **Graph-first API**: `kr.node()` auto-detects source vs effect — one constructor for everything
 - **Operator DSL**: `>>` routes signal, `@` plays patterns, `[]` gets/sets controls — fast REPL workflow
-- **Two-symbol API**: `kr` (audio graph) + `krs` (krach.dsp) — clean namespace for live coding
-- **Unbound patterns**: `kr.note("C4")`, `kr.hit()`, `kr.seq("A2", "D3")` — bind to node at play time
+- **Three-symbol API**: `kr` (audio graph) + `krs` (signal) + `krp` (patterns) — clean namespace for live coding
+- **Unbound patterns**: `krp.note("C4")`, `krp.hit()`, `krp.seq("A2", "D3")` — bind to node at play time
+- **7 pattern shapes**: `sine`, `tri`, `ramp`, `ramp_down`, `square`, `exp`, `rand` — clean, no aliases
 - **`/` path addressing**: `kr.set("bass/cutoff", 1200)`, `kr.fade("verb/room", 0.8, bars=8)`
 - **Node handles**: `bass = kr.node(...)` returns proxy — `bass @ pattern`, `bass["cutoff"] = 1200`, `bass >> verb`
 - **Unified routing**: `kr.connect()` / `>>` replaces send/wire split — level and port as params
@@ -113,8 +121,8 @@ kr.mute("drums")
 - **TCP support**: `--tcp <addr>` / `NOISE_TCP_ADDR` enables remote connections with token auth; `connect_remote()` in Python
 - **Native automation lanes**: block-rate modulation on audio thread (AutoShape + GraphSwapper)
 - **Typed Control IR**: `Control(label, value)` replaces OSC string convention
-- **Continuous patterns**: `kr.sine()`, `kr.saw()`, `kr.rand()` — smooth control sweeps
-- **Mini-notation**: `kr.p("x . x . x . . x")` for fast pattern entry
+- **Continuous patterns**: `krp.sine()`, `krp.ramp()`, `krp.rand()` — smooth control sweeps
+- **Mini-notation**: `krp.p("x . x . x . . x")` for fast pattern entry
 - **Scenes**: `kr.save("verse")` / `kr.recall("chorus")` — snapshot + restore
 - **MCP server**: 25 tools for Claude Code to drive krach — chord(), euclid(), AST-safe pattern eval
 - **Pattern IR**: PatternNode tree with per-primitive rules, generic fold, structural `__repr__`
@@ -134,11 +142,6 @@ kr.mute("drums")
 ## Backlog
 
 Issues tracked at https://github.com/krachio/noise/issues
-
-### Next up
-
-- **Pattern shape cleanup** (#7) — kill `mod_*` aliases, 7 clean shapes
-- **Warp cleanup** (#8) — delete speculative docs, document swing honestly
 
 ### Later
 

@@ -127,8 +127,8 @@ freq = krs.control("freq", 55.0, 20.0, 800.0)
 
 Two controls are conventional for melodic synths:
 
-- `"freq"` -- pitch in Hz (set by `kr.note()`)
-- `"gate"` -- trigger (set by `kr.note()` and `kr.hit()`)
+- `"freq"` -- pitch in Hz (set by `krp.note()`)
+- `"gate"` -- trigger (set by `krp.note()` and `krp.hit()`)
 
 You can add any number of custom controls:
 
@@ -300,7 +300,7 @@ with kr.batch():
     kr.node("bass", acid_bass, gain=0.3)
 
 kr.tempo = 128
-kr.play("kick", kr.hit() * 4)
-kr.play("bass", kr.seq("A2", "D3", None, "E2").over(2))
-kr.play("bass/cutoff", kr.mod_sine(200, 2000).over(4))
+kr.play("kick", krp.hit() * 4)
+kr.play("bass", krp.seq("A2", "D3", None, "E2").over(2))
+kr.play("bass/cutoff", krp.sine(200, 2000).over(4))
 ```

@@ -119,7 +119,7 @@ graph_key(g1) == graph_key(g2)       # same structural hash → cache hit
 Patterns don't trace — they build trees directly. The Python expression IS the tree:
 
 ```python
-pat = kr.note("C4") + kr.note("E4") + kr.rest()
+pat = krp.note("C4") + krp.note("E4") + krp.rest()
 ```
 
 Produces:

@@ -246,7 +246,7 @@ bass >> (verb, 0.4)
 
 # Play
 kr.tempo = 128
-k @ (kr.hit() * 4)
-bass @ kr.seq("A2", "D3", None, "E2").over(2)
+k @ (krp.hit() * 4)
+bass @ krp.seq("A2", "D3", None, "E2").over(2)
 bass["cutoff"] = 1200
 ```
