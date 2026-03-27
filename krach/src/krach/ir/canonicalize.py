@@ -9,6 +9,8 @@ This is the krach equivalent of JAX's jaxpr canonicalization.
 
 from __future__ import annotations
 
+import hashlib
+
 from typing import Callable
 
 from krach.signal.types import (
@@ -84,10 +86,19 @@ def _canonicalize_params(
             return params
 
 
+def _deterministic_hash(key: tuple[object, ...]) -> int:
+    """SHA-256 based hash that is stable across Python processes."""
+    digest = hashlib.sha256(repr(key).encode()).digest()
+    return int.from_bytes(digest[:8], "little")
+
+
 def graph_key(graph: DspGraph) -> int:
-    """Structural hash of a DspGraph, invariant to Signal ID numbering."""
+    """Deterministic structural hash of a DspGraph, invariant to Signal ID numbering.
+
+    Uses SHA-256 for cross-process stability (Python's hash() is randomized per process).
+    """
     canon = canonicalize(graph)
-    return hash(_structural_key(canon))
+    return _deterministic_hash(_structural_key(canon))
 
 
 def _structural_key(graph: DspGraph) -> tuple[object, ...]:
@@ -153,4 +164,4 @@ def graph_ir_key(ir: object) -> int:
     parts.append(("outputs", ir.outputs))
     for prefix, sub in ir.sub_graphs:
         parts.append(("sub", prefix, graph_ir_key(sub)))
-    return hash(tuple(parts))
+    return _deterministic_hash(tuple(parts))
