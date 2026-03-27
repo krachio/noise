@@ -62,7 +62,7 @@ graph TD
     PY["Python IR (frozen dataclasses)"]
     IR["IrNode (Rust, serde-tagged enum)"]
     CP["CompiledPattern (arena-indexed nodes)"]
-    EV["Vec&lt;Event&lt;Value&gt;&gt;<br/>(timed events with whole/part spans)"]
+    EV["timed events with whole/part spans"]
     MIDI["MIDI note-on/off"]
     AUDIO["audio-engine SetControl / SetAutomation"]
 
