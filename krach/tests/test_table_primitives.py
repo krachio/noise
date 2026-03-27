@@ -9,27 +9,12 @@ from krach.signal.types import (
     RwTableParams,
     Signal,
 )
-from krach.signal.trace import TraceContext, pop_trace, push_trace
 from krach.signal.primitives import rdtable_p, rwtable_p
 from krach.signal.transpile import make_graph
 from krach.signal.core import rwtable, rdtable
 from krach.backends.faust import emit_faust
 from krach.ir.canonicalize import graph_key
 from krach.ir.graph import dsp_graph_to_dict, dict_to_dsp_graph
-
-
-def _make_ctx() -> TraceContext:
-    return TraceContext()
-
-
-def _with_ctx(ctx: TraceContext) -> object:
-    class _CM:
-        def __enter__(self) -> TraceContext:
-            self._token = push_trace(ctx)
-            return ctx
-        def __exit__(self, *args: object) -> None:
-            pop_trace(self._token)
-    return _CM()
 
 
 # ── Param validation ────────────────────────────────────────────────────

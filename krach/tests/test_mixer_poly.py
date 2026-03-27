@@ -43,7 +43,7 @@ def test_remove_poly_node_removes_all_instances() -> None:
 
 def test_remove_poly_node_clears_ctrl_values() -> None:
     """remove('pad') must clean ctrl_values for all voice instances."""
-    session, mixer = _make_mixer()
+    _session, mixer = _make_mixer()
     mixer.voice("pad", "faust:pad", count=3, gain=0.6)
 
     # Simulate control values accumulating.
@@ -53,7 +53,7 @@ def test_remove_poly_node_clears_ctrl_values() -> None:
 
     # No orphaned control values.
     stale = [k for k in mixer.controls if k.startswith("pad")]
-    assert stale == [], f"orphaned ctrl_values after remove: {stale}"
+    assert stale == [], f"orphaned controls after remove: {stale}"
 
 
 def test_connect_poly_to_bus_routes_through_sum() -> None:
