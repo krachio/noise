@@ -10,7 +10,7 @@ from __future__ import annotations
 import math
 import re
 
-from krach.ir.signal import (
+from krach.signal.types import (
     ConstParams,
     ControlParams,
     DelayParams,

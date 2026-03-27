@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from krach.ir.signal import (
+from krach.signal.types import (
     ConstParams,
     DspGraph,
     Equation,

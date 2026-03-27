@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from krach.ir.primitive import Primitive
-from krach.ir.signal import (
+from krach.signal.types import (
     ConstParams,
     ControlParams,
     DelayParams,

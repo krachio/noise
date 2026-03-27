@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 from krach.signal.trace import coerce_to_signal
-from krach.ir.signal import Signal, SignalLike
+from krach.signal.types import Signal, SignalLike
 from krach.signal.core import faust_expr, feedback, fmod, select2, sin, sr
 
 TAU = 2.0 * math.pi

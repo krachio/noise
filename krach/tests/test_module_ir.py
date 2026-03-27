@@ -151,7 +151,7 @@ def test_control_def() -> None:
 
 def test_module_ir_roundtrip_with_dsp_graph() -> None:
     """GraphIr round-trip preserves embedded DspGraph sources."""
-    from krach.ir.signal import (
+    from krach.signal.types import (
         DspGraph, Equation, NoParams, Signal, SignalType,
     )
     from krach.ir.primitive import Primitive

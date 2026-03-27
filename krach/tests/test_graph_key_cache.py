@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import time
 
-from krach.ir.signal import Signal
+from krach.signal.types import Signal
 from krach.ir.canonicalize import graph_key
 from krach.signal.transpile import make_graph
 

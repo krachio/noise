@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from krach.ir.signal import ConstParams, Signal
+from krach.signal.types import ConstParams, Signal
 from krach.signal.optimize import (
     common_subexpression_elimination,
     constant_fold,

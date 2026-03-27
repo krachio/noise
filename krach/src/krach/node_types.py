@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Any, Callable, Union
 
 from krach.ir.canonicalize import graph_key as _graph_key
-from krach.ir.signal import DspGraph
+from krach.signal.types import DspGraph
 
 # Type alias for DSP source parameters: string type_id, DspDef, or callable DSP function.
 # The callable form accepts 0+ Signal args and returns a Signal.

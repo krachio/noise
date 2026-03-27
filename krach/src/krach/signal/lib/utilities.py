@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from krach.signal.trace import coerce_to_signal
-from krach.ir.signal import Signal, SignalLike
+from krach.signal.types import Signal, SignalLike
 from krach.signal.core import exp, faust_expr, feedback, log10, max_, min_, pow_, sr
 
 

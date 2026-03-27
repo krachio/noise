@@ -23,7 +23,7 @@ def test_phasor_uses_feedback() -> None:
 
 
 def test_lowpass_uses_fi_lowpass() -> None:
-    from krach.ir.signal import Signal
+    from krach.signal.types import Signal
 
     def dsp(a: Signal) -> Signal:
         return lowpass(a, 1000.0)
@@ -38,7 +38,7 @@ def test_white_noise_present() -> None:
 
 
 def test_smooth_uses_one_pole() -> None:
-    from krach.ir.signal import Signal
+    from krach.signal.types import Signal
 
     def dsp(a: Signal) -> Signal:
         return smooth(a, 10.0)

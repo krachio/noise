@@ -5,7 +5,7 @@ from __future__ import annotations
 import math
 
 from krach.ir.primitive import Primitive
-from krach.ir.signal import ConstParams, PrimitiveParams, Signal
+from krach.signal.types import ConstParams, PrimitiveParams, Signal
 from krach.signal.trace import bind as _bind
 from krach.signal.ad import (
     Tangent,

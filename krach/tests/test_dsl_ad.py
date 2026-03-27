@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 import pytest
 
-from krach.ir.signal import DspGraph, Signal
+from krach.signal.types import DspGraph, Signal
 from krach.signal.core import (
     abs_,
     ceil,
@@ -19,7 +19,7 @@ from krach.signal.core import (
     sin,
     sqrt,
 )
-from krach.ir.signal import ConstParams, Precision, SignalType
+from krach.signal.types import ConstParams, Precision, SignalType
 from krach.signal.trace import TraceContext, pop_trace, push_trace
 from krach.signal.core import feedback
 from krach.signal.ad import ZeroTangent, is_zero, materialize, tangent_add, tangent_mul, tangent_neg

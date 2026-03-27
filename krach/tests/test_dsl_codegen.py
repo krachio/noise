@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from krach.ir.signal import Signal
+from krach.signal.types import Signal
 from krach.backends.faust import emit_faust
 from krach.signal.core import faust_expr, feedback
 from krach.signal.transpile import make_graph

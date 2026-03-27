@@ -11,7 +11,7 @@ from __future__ import annotations
 
 from typing import Callable
 
-from krach.ir.signal import (
+from krach.signal.types import (
     ConstParams,
     ControlParams,
     DelayParams,

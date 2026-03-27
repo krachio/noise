@@ -102,7 +102,7 @@ def test_hit_usable_with_over() -> None:
 
 
 def test_dsp_decorator_captures_source_and_transpiles() -> None:
-    from krach.ir.signal import Signal
+    from krach.signal.types import Signal
     from krach.signal.transpile import control
     from krach.signal.lib.oscillators import sine_osc
     from krach.signal.music.envelopes import adsr
@@ -3105,7 +3105,7 @@ def test_bus_callable_with_no_audio_inputs_raises() -> None:
     from krach.mixer import Mixer
     from krach.node_types import DspDef
 
-    from krach.ir.signal import DspGraph
+    from krach.signal.types import DspGraph
 
     # A generator (0 audio inputs) should not be used as a bus
     source_dsp = DspDef(
@@ -3136,7 +3136,7 @@ def test_node_with_effect_dspdef_routes_to_bus() -> None:
     with tempfile.TemporaryDirectory() as tmpdir:
         mixer = Mixer(session=session, dsp_dir=Path(tmpdir))
 
-        from krach.ir.signal import DspGraph, Signal, SignalType
+        from krach.signal.types import DspGraph, Signal, SignalType
         s0 = Signal(aval=SignalType(), id=0, owner_id=0)
         s1 = Signal(aval=SignalType(), id=1, owner_id=0)
         effect = DspDef(
@@ -3271,7 +3271,7 @@ def test_callable_with_default_none_is_source() -> None:
 
     session.list_nodes.return_value = ["faust:pad", "dac", "gain"]
 
-    from krach.ir.signal import DspGraph
+    from krach.signal.types import DspGraph
 
     mock_graph = DspGraph(inputs=(), outputs=(), equations=())
     with (

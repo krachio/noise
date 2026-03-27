@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from functools import reduce
 
 from krach.signal.trace import coerce_to_signal
-from krach.ir.signal import Signal
+from krach.signal.types import Signal
 
 # ---------------------------------------------------------------------------
 # DspFunc — callable wrapper with num_inputs metadata

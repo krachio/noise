@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from krach.ir.signal import Signal
+from krach.signal.types import Signal
 from krach.signal.compose import chain, parallel, split
 from krach.signal.transpile import make_graph
 

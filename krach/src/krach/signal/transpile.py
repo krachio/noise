@@ -6,7 +6,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from krach.backends.faust import emit_faust
-from krach.ir.signal import (
+from krach.signal.types import (
     ControlParams,
     DspGraph,
     Precision,
@@ -129,7 +129,7 @@ def collect_controls(graph: DspGraph) -> tuple[ControlSpec, ...]:
 
 
 def collect_controls_recursive(graph: DspGraph, specs: list[ControlSpec]) -> None:
-    from krach.ir.signal import FeedbackParams
+    from krach.signal.types import FeedbackParams
     for eqn in graph.equations:
         if isinstance(eqn.params, ControlParams):
             specs.append(ControlSpec(

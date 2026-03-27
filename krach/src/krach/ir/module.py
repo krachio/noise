@@ -15,7 +15,7 @@ from typing import Any, Literal
 
 from krach.ir.pattern import PatternNode
 from krach.ir.primitive import Primitive
-from krach.ir.signal import (
+from krach.signal.types import (
     ConstParams,
     ControlParams,
     DelayParams,

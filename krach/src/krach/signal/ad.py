@@ -16,7 +16,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 
 from krach.ir.primitive import Primitive
-from krach.ir.signal import (
+from krach.signal.types import (
     ConstParams,
     DspGraph,
     Precision,
@@ -169,7 +169,7 @@ def _process_equation(
     env: dict[int, Signal],
     tang: dict[int, Tangent],
 ) -> None:
-    from krach.ir.signal import Equation
+    from krach.signal.types import Equation
     assert isinstance(eqn, Equation)
     assert len(eqn.outputs) == 1, "JVP requires single-output primitives"
 

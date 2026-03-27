@@ -6,7 +6,7 @@ import math
 import operator
 from collections.abc import Callable
 
-from krach.ir.signal import (
+from krach.signal.types import (
     ConstParams,
     Equation,
     DspGraph,

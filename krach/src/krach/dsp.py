@@ -6,7 +6,7 @@ Also exports Signal type and transpile/control from the tracing layer.
 """
 
 # Core types
-from krach.ir.signal import Signal as Signal
+from krach.signal.types import Signal as Signal
 from krach.signal.transpile import control as control, transpile as transpile
 
 # Oscillators

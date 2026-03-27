@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import overload
 
-from krach.ir.signal import (
+from krach.signal.types import (
     DelayParams,
     Equation,
     FaustExprParams,

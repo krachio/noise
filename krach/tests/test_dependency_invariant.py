@@ -12,6 +12,8 @@ import pathlib
 
 IR_DIR = pathlib.Path(__file__).resolve().parent.parent / "src" / "krach" / "ir"
 BANNED_PREFIXES = ("krach.signal", "krach.pattern", "krach.backends", "krach.dsl")
+# signal.types is pure data (relocated from ir/signal.py) — ir/ may import it
+ALLOWED = {"krach.signal.types"}
 
 
 def _collect_module_level_imports(source: str) -> list[tuple[int, str]]:
@@ -20,6 +22,8 @@ def _collect_module_level_imports(source: str) -> list[tuple[int, str]]:
     violations: list[tuple[int, str]] = []
     for node in ast.iter_child_nodes(tree):
         if isinstance(node, ast.ImportFrom) and node.module:
+            if node.module in ALLOWED:
+                continue
             if any(node.module.startswith(b) for b in BANNED_PREFIXES):
                 violations.append((node.lineno, node.module))
         elif isinstance(node, ast.Import):

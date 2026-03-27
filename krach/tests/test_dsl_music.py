@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from krach.ir.signal import Signal
+from krach.signal.types import Signal
 from krach.signal.music.effects import reverb
 from krach.signal.music.envelopes import adsr
 from krach.signal.music.scales import midi_to_freq

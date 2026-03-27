@@ -1,6 +1,6 @@
 """Tests for Primitive.__eq__ and __hash__ — structural, not identity-based."""
 
-from krach.ir.signal import Primitive
+from krach.signal.types import Primitive
 
 
 def test_same_name_equal() -> None:

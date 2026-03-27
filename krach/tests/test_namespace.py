@@ -142,7 +142,7 @@ def test_voicemixer_p_produces_pattern() -> None:
 
 def test_dsp_module_exports_signal() -> None:
     import krach.dsp as krs
-    from krach.ir.signal import Signal
+    from krach.signal.types import Signal
     assert krs.Signal is Signal
 
 

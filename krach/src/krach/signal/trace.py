@@ -11,7 +11,7 @@ import threading
 
 from krach.ir.primitive import Primitive
 from krach.ir.registry import RuleRegistry
-from krach.ir.signal import (
+from krach.signal.types import (
     ConstParams,
     DspGraph,
     Equation,
