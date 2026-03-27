@@ -178,9 +178,13 @@ impl Engine {
                 if !bpm.is_finite() || bpm <= 0.0 || (bpm - self.clock.bpm()).abs() < f64::EPSILON {
                     return;
                 }
-                self.clock = Clock::new(bpm, self.clock.beats_per_cycle());
+                let now = Instant::now();
+                let pos = self.current_cycle_time(now);
+                self.clock.set_bpm(bpm);
+                self.clock.warp_epoch(now, pos);
                 self.heap.clear();
-                self.next_cycle.fill(0);
+                let current = self.current_cycle(now);
+                self.next_cycle.fill(current);
                 self.phase_offset.fill(0);
             }
             EngineCommand::SetBeatsPerCycle { beats } => {
@@ -190,9 +194,13 @@ impl Engine {
                 {
                     return;
                 }
-                self.clock = Clock::new(self.clock.bpm(), beats);
+                let now = Instant::now();
+                let pos = self.current_cycle_time(now);
+                self.clock = Clock::with_start(self.clock.bpm(), beats, self.clock.start());
+                self.clock.warp_epoch(now, pos);
                 self.heap.clear();
-                self.next_cycle.fill(0);
+                let current = self.current_cycle(now);
+                self.next_cycle.fill(current);
                 self.phase_offset.fill(0);
             }
             EngineCommand::SetClockSource(source) => {
@@ -545,12 +553,10 @@ mod tests {
 
         e.apply(EngineCommand::SetBpm { bpm: 3000.0 });
         assert_eq!(e.heap.len(), 0, "BPM change should clear heap");
-        // next_cycle resets to 0 for a fresh clock (not first_future_cycle,
-        // since the new clock's epoch is now).
-        assert!(
-            e.next_cycle.iter().all(|&c| c == 0),
-            "BPM change should reset cycle counters"
-        );
+        // Cycle counters set to current_cycle (epoch-warped, preserves position).
+        // They may be > 0 if clock has been running.
+        let all_same = e.next_cycle.windows(2).all(|w| w[0] == w[1]);
+        assert!(all_same, "all cycle counters should be reset to the same value");
     }
 
     #[test]
@@ -566,10 +572,8 @@ mod tests {
 
         e.apply(EngineCommand::SetBeatsPerCycle { beats: 3.0 });
         assert_eq!(e.heap.len(), 0, "meter change should clear heap");
-        assert!(
-            e.next_cycle.iter().all(|&c| c == 0),
-            "meter change should reset cycle counters"
-        );
+        let all_same = e.next_cycle.windows(2).all(|w| w[0] == w[1]);
+        assert!(all_same, "all cycle counters should be reset to the same value");
         assert_eq!(e.clock.beats_per_cycle(), 3.0);
     }
 
@@ -1193,7 +1197,6 @@ mod tests {
     // ── tempo transition (bug #28) ───────────────────────────────────────
 
     #[test]
-    #[ignore] // Bug #28: tempo change should preserve cycle position
     fn test_set_bpm_preserves_cycle_position() {
         let mut e = fast_engine();
         e.apply(EngineCommand::SetPattern {
@@ -1219,7 +1222,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Bug #28: tempo change must not produce backward events
     fn test_set_bpm_does_not_produce_backward_events() {
         let mut e = fast_engine();
         e.apply(EngineCommand::SetPattern {
