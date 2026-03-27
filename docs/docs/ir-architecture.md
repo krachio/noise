@@ -7,7 +7,7 @@ krach uses a JAX-inspired tracing model: Python functions become frozen IR graph
 ```
 Python DSP function → trace → DspGraph (Signal IR) → emit_faust → FAUST → LLVM JIT → audio
 Python patterns     → build → PatternNode tree      → serialize  → JSON  → Rust engine
-Python session      → capture → ModuleIr            → to_dict    → JSON  → persistence
+Python session      → capture → GraphIr            → to_dict    → JSON  → persistence
 ```
 
 Three IRs, one for each domain:
@@ -16,7 +16,7 @@ Three IRs, one for each domain:
 |----|-------|-------------|-------------|
 | **DspGraph** | Flat DAG of equations | Signal tracing (`TraceContext`) | Faust codegen |
 | **PatternNode** | Tree | Direct construction (operators) | Engine protocol serialization |
-| **ModuleIr** | Flat record of definitions | `capture()` or `ModuleProxy` | `instantiate()`, JSON persistence |
+| **GraphIr** | Flat record of definitions | `capture()` or `GraphProxy` | `instantiate()`, JSON persistence |
 
 ## Signal tracing: Python → DspGraph
 
@@ -152,13 +152,13 @@ class PatternNode:
 
 Why no tracing? Because patterns are **trees** (no sharing), and Python's expression syntax naturally builds the right shape. Signals need tracing because they're **graphs** (with sharing — the same signal can feed multiple equations).
 
-## ModuleIr: the top-level jaxpr
+## GraphIr: the top-level jaxpr
 
-`ModuleIr` is the session specification — it contains DspGraphs and PatternNodes:
+`GraphIr` is the session specification — it contains DspGraphs and PatternNodes:
 
 ```python
 @dataclass(frozen=True, slots=True)
-class ModuleIr:
+class GraphIr:
     nodes: tuple[NodeDef, ...]       # each has source: DspGraph | str
     routing: tuple[RouteDef, ...]     # connections between nodes
     patterns: tuple[PatternDef, ...]  # each has pattern: PatternNode
@@ -168,14 +168,14 @@ class ModuleIr:
     tempo: float | None
     meter: float | None
     master: float | None
-    sub_modules: tuple[tuple[str, ModuleIr], ...]  # recursion
+    sub_graphs: tuple[tuple[str, GraphIr], ...]  # recursion
 ```
 
 The `NodeDef.source` field holds a `DspGraph` (the signal computation for that node) or a `str` (reference to a pre-compiled FAUST type like `"faust:kick"`).
 
 ### `inputs` and `outputs`
 
-`ModuleIr` has optional port declarations:
+`GraphIr` has optional port declarations:
 
 ```python
 inputs: tuple[str, ...] | None = None   # declared input ports
@@ -203,7 +203,7 @@ Rewrites all name fields with the prefix:
 - `MutedDef.name`: prefixed
 - `ControlDef.path`/`AutomationDef.path`: node portion prefixed (param portion preserved)
 - `inputs`/`outputs`: prefixed
-- `sub_modules` prefixes: recursively prefixed
+- `sub_graphs` prefixes: recursively prefixed
 - **NOT** prefixed: `RouteDef.port` (DSP input name, not a node name)
 
 ### `flatten(ir)` — recursive sub_module resolution
@@ -214,22 +214,22 @@ from krach.ir.module import flatten
 flat = flatten(parent_ir)
 ```
 
-Recursively resolves `sub_modules`:
-1. For each `(prefix, child_ir)` in `sub_modules`, calls `prefix_ir(child_ir, prefix)`
+Recursively resolves `sub_graphs`:
+1. For each `(prefix, child_ir)` in `sub_graphs`, calls `prefix_ir(child_ir, prefix)`
 2. Recursively flattens the prefixed child
 3. Merges child nodes, routing, patterns, controls, automations into the parent
 4. Parent-wins for transport: child `tempo`/`meter`/`master` are ignored
 5. Validates that all declared `inputs`/`outputs` reference existing nodes
-6. Returns a flat `ModuleIr` with empty `sub_modules`
+6. Returns a flat `GraphIr` with empty `sub_graphs`
 
 ### Module composition pattern
 
-Modules compose through `sub_modules` + `inputs`/`outputs`:
+Modules compose through `sub_graphs` + `inputs`/`outputs`:
 
 ```
-@kr.module "full_band"
+@kr.graph "full_band"
 ├── node: "bass"
-├── sub_modules:
+├── sub_graphs:
 │   └── ("drums", drums_ir)
 │       ├── node: "kick"   → flattened to "drums/kick"
 │       └── node: "hat"    → flattened to "drums/hat"

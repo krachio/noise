@@ -6,7 +6,7 @@ import pytest
 
 from krach.ir.module import (
     ControlDef,
-    ModuleIr,
+    GraphIr,
     NodeDef,
     RouteDef,
     flatten,
@@ -17,18 +17,18 @@ from krach.ir.module import (
 
 
 def test_flatten_single_child() -> None:
-    child = ModuleIr(nodes=(NodeDef(name="osc", source="faust:osc"),))
-    parent = ModuleIr(sub_modules=(("synth", child),))
+    child = GraphIr(nodes=(NodeDef(name="osc", source="faust:osc"),))
+    parent = GraphIr(sub_graphs=(("synth", child),))
     flat = flatten(parent)
     assert any(n.name == "synth/osc" for n in flat.nodes)
-    assert flat.sub_modules == ()
+    assert flat.sub_graphs == ()
 
 
 def test_flatten_preserves_parent_nodes() -> None:
-    child = ModuleIr(nodes=(NodeDef(name="osc", source="faust:osc"),))
-    parent = ModuleIr(
+    child = GraphIr(nodes=(NodeDef(name="osc", source="faust:osc"),))
+    parent = GraphIr(
         nodes=(NodeDef(name="bus", source="faust:bus"),),
-        sub_modules=(("synth", child),),
+        sub_graphs=(("synth", child),),
     )
     flat = flatten(parent)
     names = {n.name for n in flat.nodes}
@@ -37,13 +37,13 @@ def test_flatten_preserves_parent_nodes() -> None:
 
 
 def test_flatten_merges_routing() -> None:
-    child = ModuleIr(
+    child = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
         routing=(RouteDef(source="osc", target="osc", kind="send"),),
     )
-    parent = ModuleIr(
+    parent = GraphIr(
         routing=(RouteDef(source="x", target="y", kind="send"),),
-        sub_modules=(("s", child),),
+        sub_graphs=(("s", child),),
     )
     flat = flatten(parent)
     sources = {r.source for r in flat.routing}
@@ -56,31 +56,31 @@ def test_flatten_merges_routing() -> None:
 
 def test_flatten_nested_three_deep() -> None:
     """Three levels: grandchild -> child -> parent."""
-    grandchild = ModuleIr(
+    grandchild = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
         outputs=("osc",),
     )
-    child = ModuleIr(
+    child = GraphIr(
         nodes=(NodeDef(name="mix", source="faust:mix"),),
-        sub_modules=(("inner", grandchild),),
+        sub_graphs=(("inner", grandchild),),
         outputs=("mix",),
     )
-    parent = ModuleIr(sub_modules=(("outer", child),))
+    parent = GraphIr(sub_graphs=(("outer", child),))
     flat = flatten(parent)
     names = {n.name for n in flat.nodes}
     assert "outer/mix" in names
     assert "outer/inner/osc" in names
-    assert flat.sub_modules == ()
+    assert flat.sub_graphs == ()
 
 
 # ── Double prefix ───────────────────────────────────────────────────────
 
 
 def test_flatten_double_prefix() -> None:
-    """Two sub_modules with different prefixes both get flattened."""
-    a = ModuleIr(nodes=(NodeDef(name="n", source="faust:a"),))
-    b = ModuleIr(nodes=(NodeDef(name="n", source="faust:b"),))
-    parent = ModuleIr(sub_modules=(("a", a), ("b", b)))
+    """Two sub_graphs with different prefixes both get flattened."""
+    a = GraphIr(nodes=(NodeDef(name="n", source="faust:a"),))
+    b = GraphIr(nodes=(NodeDef(name="n", source="faust:b"),))
+    parent = GraphIr(sub_graphs=(("a", a), ("b", b)))
     flat = flatten(parent)
     names = {n.name for n in flat.nodes}
     assert "a/n" in names
@@ -92,13 +92,13 @@ def test_flatten_double_prefix() -> None:
 
 def test_flatten_parent_wins_transport() -> None:
     """Child tempo/meter/master are ignored — parent's values win."""
-    child = ModuleIr(
+    child = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
         tempo=90.0, meter=3.0, master=0.5,
     )
-    parent = ModuleIr(
+    parent = GraphIr(
         tempo=128.0, meter=4.0, master=0.7,
-        sub_modules=(("s", child),),
+        sub_graphs=(("s", child),),
     )
     flat = flatten(parent)
     assert flat.tempo == 128.0
@@ -108,11 +108,11 @@ def test_flatten_parent_wins_transport() -> None:
 
 def test_flatten_none_parent_transport_stays_none() -> None:
     """If parent has None transport, child transport still ignored."""
-    child = ModuleIr(
+    child = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
         tempo=90.0,
     )
-    parent = ModuleIr(sub_modules=(("s", child),))
+    parent = GraphIr(sub_graphs=(("s", child),))
     flat = flatten(parent)
     assert flat.tempo is None
 
@@ -122,7 +122,7 @@ def test_flatten_none_parent_transport_stays_none() -> None:
 
 def test_flatten_validates_inputs_exist() -> None:
     """inputs referencing non-existent node names raise ValueError."""
-    ir = ModuleIr(
+    ir = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
         inputs=("missing",),
     )
@@ -132,7 +132,7 @@ def test_flatten_validates_inputs_exist() -> None:
 
 def test_flatten_validates_outputs_exist() -> None:
     """outputs referencing non-existent node names raise ValueError."""
-    ir = ModuleIr(
+    ir = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
         outputs=("missing",),
     )
@@ -142,7 +142,7 @@ def test_flatten_validates_outputs_exist() -> None:
 
 def test_flatten_valid_inputs_outputs() -> None:
     """Valid inputs/outputs pass validation."""
-    ir = ModuleIr(
+    ir = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
         inputs=("osc",), outputs=("osc",),
     )
@@ -155,8 +155,8 @@ def test_flatten_valid_inputs_outputs() -> None:
 
 
 def test_flatten_already_flat() -> None:
-    """Flattening a flat IR (no sub_modules) returns equivalent IR."""
-    ir = ModuleIr(
+    """Flattening a flat IR (no sub_graphs) returns equivalent IR."""
+    ir = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
         routing=(RouteDef(source="osc", target="osc", kind="send"),),
         tempo=120.0,
@@ -171,13 +171,13 @@ def test_flatten_already_flat() -> None:
 
 
 def test_flatten_merges_controls() -> None:
-    child = ModuleIr(
+    child = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
         controls=(ControlDef(path="osc/freq", value=440.0),),
     )
-    parent = ModuleIr(
+    parent = GraphIr(
         controls=(ControlDef(path="bus/gain", value=0.5),),
-        sub_modules=(("s", child),),
+        sub_graphs=(("s", child),),
     )
     flat = flatten(parent)
     paths = {c.path for c in flat.controls}

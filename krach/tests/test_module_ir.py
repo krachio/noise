@@ -7,7 +7,7 @@ import pytest
 from krach.ir.module import (
     AutomationDef,
     ControlDef,
-    ModuleIr,
+    GraphIr,
     MutedDef,
     NodeDef,
     PatternDef,
@@ -32,7 +32,7 @@ def test_route_def_frozen() -> None:
 
 
 def test_module_ir_frozen() -> None:
-    ir = ModuleIr()
+    ir = GraphIr()
     with pytest.raises(AttributeError):
         ir.tempo = 140.0  # type: ignore[misc]
 
@@ -67,7 +67,7 @@ def test_pattern_def_with_pattern_node() -> None:
 
 
 def test_module_ir_empty() -> None:
-    ir = ModuleIr()
+    ir = GraphIr()
     assert ir.nodes == ()
     assert ir.routing == ()
     assert ir.patterns == ()
@@ -76,11 +76,11 @@ def test_module_ir_empty() -> None:
     assert ir.muted == ()
     assert ir.tempo is None
     assert ir.master is None
-    assert ir.sub_modules == ()
+    assert ir.sub_graphs == ()
 
 
 def test_module_ir_with_nodes_and_routing() -> None:
-    ir = ModuleIr(
+    ir = GraphIr(
         nodes=(
             NodeDef(name="bass", source="faust:bass", gain=0.3),
             NodeDef(name="verb", source="faust:verb", gain=0.4),
@@ -97,11 +97,11 @@ def test_module_ir_with_nodes_and_routing() -> None:
 
 
 def test_module_ir_equality() -> None:
-    a = ModuleIr(
+    a = GraphIr(
         nodes=(NodeDef(name="kick", source="faust:kick", gain=0.8),),
         tempo=128.0,
     )
-    b = ModuleIr(
+    b = GraphIr(
         nodes=(NodeDef(name="kick", source="faust:kick", gain=0.8),),
         tempo=128.0,
     )
@@ -109,23 +109,23 @@ def test_module_ir_equality() -> None:
 
 
 def test_module_ir_inequality() -> None:
-    a = ModuleIr(tempo=120.0)
-    b = ModuleIr(tempo=128.0)
+    a = GraphIr(tempo=120.0)
+    b = GraphIr(tempo=128.0)
     assert a != b
 
 
 # ── Sub-modules ──────────────────────────────────────────────────────────
 
 
-def test_sub_modules() -> None:
-    child = ModuleIr(
+def test_sub_graphs() -> None:
+    child = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
     )
-    parent = ModuleIr(
-        sub_modules=(("synth", child),),
+    parent = GraphIr(
+        sub_graphs=(("synth", child),),
     )
-    assert len(parent.sub_modules) == 1
-    prefix, child_ir = parent.sub_modules[0]
+    assert len(parent.sub_graphs) == 1
+    prefix, child_ir = parent.sub_graphs[0]
     assert prefix == "synth"
     assert len(child_ir.nodes) == 1
 
@@ -150,7 +150,7 @@ def test_control_def() -> None:
 
 
 def test_module_ir_roundtrip_with_dsp_graph() -> None:
-    """ModuleIr round-trip preserves embedded DspGraph sources."""
+    """GraphIr round-trip preserves embedded DspGraph sources."""
     from krach.ir.signal import (
         DspGraph, Equation, NoParams, Signal, SignalType,
     )
@@ -174,12 +174,12 @@ def test_module_ir_roundtrip_with_dsp_graph() -> None:
     nd = NodeDef(name="bass", source=graph, gain=0.3)
     assert nd.num_inputs == 1  # derived from DspGraph.inputs
 
-    ir = ModuleIr(nodes=(nd,))
+    ir = GraphIr(nodes=(nd,))
     d = ir.to_dict()
     assert isinstance(d["nodes"][0]["source"], dict)
     assert d["nodes"][0]["source"]["type"] == "dsp_graph"
 
-    restored = ModuleIr.from_dict(d)
+    restored = GraphIr.from_dict(d)
     assert isinstance(restored.nodes[0].source, DspGraph)
     assert canonicalize(graph) == canonicalize(restored.nodes[0].source)
 
@@ -189,21 +189,21 @@ def test_module_ir_roundtrip_with_dsp_graph() -> None:
 
 def test_module_ir_inputs_outputs_default_none() -> None:
     """Default inputs/outputs is None (undeclared)."""
-    ir = ModuleIr()
+    ir = GraphIr()
     assert ir.inputs is None
     assert ir.outputs is None
 
 
 def test_module_ir_inputs_outputs_explicit_empty() -> None:
     """Explicit empty tuple means 'no ports' (distinct from None)."""
-    ir = ModuleIr(inputs=(), outputs=())
+    ir = GraphIr(inputs=(), outputs=())
     assert ir.inputs == ()
     assert ir.outputs == ()
 
 
 def test_module_ir_inputs_outputs_populated() -> None:
     """Named ports."""
-    ir = ModuleIr(inputs=("in_l", "in_r"), outputs=("out",))
+    ir = GraphIr(inputs=("in_l", "in_r"), outputs=("out",))
     assert ir.inputs == ("in_l", "in_r")
     assert ir.outputs == ("out",)
 
@@ -213,7 +213,7 @@ def test_module_ir_inputs_outputs_populated() -> None:
 
 def test_to_dict_inputs_none_omitted() -> None:
     """None inputs/outputs should NOT appear in serialized dict."""
-    ir = ModuleIr()
+    ir = GraphIr()
     d = ir.to_dict()
     assert "inputs" not in d
     assert "outputs" not in d
@@ -221,7 +221,7 @@ def test_to_dict_inputs_none_omitted() -> None:
 
 def test_to_dict_inputs_empty_tuple() -> None:
     """Empty tuple serializes as empty list."""
-    ir = ModuleIr(inputs=(), outputs=())
+    ir = GraphIr(inputs=(), outputs=())
     d = ir.to_dict()
     assert d["inputs"] == []
     assert d["outputs"] == []
@@ -229,7 +229,7 @@ def test_to_dict_inputs_empty_tuple() -> None:
 
 def test_to_dict_inputs_populated() -> None:
     """Populated tuple serializes as list of strings."""
-    ir = ModuleIr(inputs=("kick",), outputs=("bus",))
+    ir = GraphIr(inputs=("kick",), outputs=("bus",))
     d = ir.to_dict()
     assert d["inputs"] == ["kick"]
     assert d["outputs"] == ["bus"]
@@ -237,8 +237,8 @@ def test_to_dict_inputs_populated() -> None:
 
 def test_roundtrip_inputs_none() -> None:
     """Round-trip preserves None (undeclared)."""
-    ir = ModuleIr()
-    restored = ModuleIr.from_dict(ir.to_dict())
+    ir = GraphIr()
+    restored = GraphIr.from_dict(ir.to_dict())
     assert restored.inputs is None
     assert restored.outputs is None
     assert restored == ir
@@ -246,8 +246,8 @@ def test_roundtrip_inputs_none() -> None:
 
 def test_roundtrip_inputs_empty() -> None:
     """Round-trip preserves empty tuple (explicitly no ports)."""
-    ir = ModuleIr(inputs=(), outputs=())
-    restored = ModuleIr.from_dict(ir.to_dict())
+    ir = GraphIr(inputs=(), outputs=())
+    restored = GraphIr.from_dict(ir.to_dict())
     assert restored.inputs == ()
     assert restored.outputs == ()
     assert restored == ir
@@ -255,40 +255,40 @@ def test_roundtrip_inputs_empty() -> None:
 
 def test_roundtrip_inputs_populated() -> None:
     """Round-trip preserves named ports."""
-    ir = ModuleIr(inputs=("in",), outputs=("out_l", "out_r"))
-    restored = ModuleIr.from_dict(ir.to_dict())
+    ir = GraphIr(inputs=("in",), outputs=("out_l", "out_r"))
+    restored = GraphIr.from_dict(ir.to_dict())
     assert restored.inputs == ("in",)
     assert restored.outputs == ("out_l", "out_r")
     assert restored == ir
 
 
-# ── module_key includes inputs/outputs ──────────────────────────────────
+# ── graph_ir_key includes inputs/outputs ──────────────────────────────────
 
 
-def test_module_key_differs_with_inputs() -> None:
-    """module_key must distinguish modules with different inputs/outputs."""
-    from krach.ir.canonicalize import module_key
+def test_graph_ir_key_differs_with_inputs() -> None:
+    """graph_ir_key must distinguish modules with different inputs/outputs."""
+    from krach.ir.canonicalize import graph_ir_key
 
-    base = ModuleIr(nodes=(NodeDef(name="a", source="faust:a"),))
-    with_inputs = ModuleIr(
+    base = GraphIr(nodes=(NodeDef(name="a", source="faust:a"),))
+    with_inputs = GraphIr(
         nodes=(NodeDef(name="a", source="faust:a"),),
         inputs=("a",),
     )
-    with_outputs = ModuleIr(
+    with_outputs = GraphIr(
         nodes=(NodeDef(name="a", source="faust:a"),),
         outputs=("a",),
     )
-    keys = {module_key(base), module_key(with_inputs), module_key(with_outputs)}
-    assert len(keys) == 3, "module_key must differ for different inputs/outputs"
+    keys = {graph_ir_key(base), graph_ir_key(with_inputs), graph_ir_key(with_outputs)}
+    assert len(keys) == 3, "graph_ir_key must differ for different inputs/outputs"
 
 
-def test_module_key_none_vs_empty_inputs() -> None:
-    """module_key distinguishes None from () for inputs/outputs."""
-    from krach.ir.canonicalize import module_key
+def test_graph_ir_key_none_vs_empty_inputs() -> None:
+    """graph_ir_key distinguishes None from () for inputs/outputs."""
+    from krach.ir.canonicalize import graph_ir_key
 
-    none_inputs = ModuleIr()
-    empty_inputs = ModuleIr(inputs=(), outputs=())
-    assert module_key(none_inputs) != module_key(empty_inputs)
+    none_inputs = GraphIr()
+    empty_inputs = GraphIr(inputs=(), outputs=())
+    assert graph_ir_key(none_inputs) != graph_ir_key(empty_inputs)
 
 
 # ── passthrough DSP function ────────────────────────────────────────────

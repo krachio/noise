@@ -1,6 +1,6 @@
 # Modules & Persistence
 
-krach sessions can be captured, serialized, and replayed. The module system turns a live session into a frozen specification (`ModuleIr`) that can be saved, loaded, shared, and composed.
+krach sessions can be captured, serialized, and replayed. The module system turns a live session into a frozen specification (`GraphIr`) that can be saved, loaded, shared, and composed.
 
 ## Capture & instantiate
 
@@ -19,7 +19,7 @@ ir = kr.capture()
 kr.load(ir)
 ```
 
-`capture()` returns a `ModuleIr` — a frozen, serializable snapshot of everything: nodes (with their DspGraph IR), routing, patterns, controls, transport, and mute state.
+`capture()` returns a `GraphIr` — a frozen, serializable snapshot of everything: nodes (with their DspGraph IR), routing, patterns, controls, transport, and mute state.
 
 `load(ir)` replays it: creates nodes, connects routing, plays patterns, sets controls.
 
@@ -46,9 +46,9 @@ data = ir.to_dict()
 json.dump(data, open("session.json", "w"))
 
 # Deserialize
-from krach.ir.module import ModuleIr
+from krach.ir.module import GraphIr
 data = json.load(open("session.json"))
-ir = ModuleIr.from_dict(data)
+ir = GraphIr.from_dict(data)
 kr.load(ir)
 ```
 
@@ -88,34 +88,34 @@ proxy.send("kick", "verb", level=0.2)
 proxy.play("kick", kr.hit() * 4)
 proxy.tempo = 128
 
-ir = proxy.build()       # → ModuleIr (no audio started)
+ir = proxy.build()       # → GraphIr (no audio started)
 kr.load(ir)       # now play it
 ```
 
-The proxy records calls as `ModuleIr` without connecting to the engine. Useful for building reusable module templates.
+The proxy records calls as `GraphIr` without connecting to the engine. Useful for building reusable module templates.
 
-## `@kr.module` decorator
+## `@kr.graph` decorator
 
-Define reusable modules as traced functions. The first parameter is a `ModuleProxy` — it records calls without starting audio:
+Define reusable modules as traced functions. The first parameter is a `GraphProxy` — it records calls without starting audio:
 
 ```python
-@kr.module
+@kr.graph
 def drums(m, tempo=128):
-    m.node("kick", "faust:kick", gain=0.8)
-    m.node("hat", "faust:hat", gain=0.3)
-    m.send("kick", "hat", level=0.2)
-    m.play("kick", kr.hit() * 4)
-    m.tempo = tempo
-    m.outputs("kick", "hat")
+    g.node("kick", "faust:kick", gain=0.8)
+    g.node("hat", "faust:hat", gain=0.3)
+    g.send("kick", "hat", level=0.2)
+    g.play("kick", kr.hit() * 4)
+    g.tempo = tempo
+    g.outputs("kick", "hat")
 
-ir = drums(tempo=140)  # → ModuleIr (no audio)
+ir = drums(tempo=140)  # → GraphIr (no audio)
 ```
 
-The decorated function returns a frozen `ModuleIr`. Call it with any extra arguments — the proxy parameter is injected automatically.
+The decorated function returns a frozen `GraphIr`. Call it with any extra arguments — the proxy parameter is injected automatically.
 
-## `ModuleHandle`
+## `GraphHandle`
 
-`kr.instantiate(ir, prefix)` replays a `ModuleIr` with namespaced nodes and returns a `ModuleHandle`:
+`kr.instantiate(ir, prefix)` replays a `GraphIr` with namespaced nodes and returns a `GraphHandle`:
 
 ```python
 d = kr.instantiate(drums_ir, "drums")
@@ -137,43 +137,43 @@ All node names are prefixed: `"kick"` becomes `"drums/kick"`. The existing `/` p
 
 ## `kr.scene(name)` and `kr.load(ir)`
 
-`kr.scene(name)` retrieves a saved scene by name (returns `ModuleIr`):
+`kr.scene(name)` retrieves a saved scene by name (returns `GraphIr`):
 
 ```python
 kr.save("verse")
-ir = kr.scene("verse")   # → ModuleIr
+ir = kr.scene("verse")   # → GraphIr
 ```
 
-`kr.load(ir)` replays a `ModuleIr` onto the mixer (session replay). It flattens any `sub_modules` automatically:
+`kr.load(ir)` replays a `GraphIr` onto the mixer (session replay). It flattens any `sub_graphs` automatically:
 
 ```python
 kr.load(ir)  # creates nodes, routing, patterns, transport
 ```
 
-## Module composition with `m.sub()`
+## Module composition with `g.sub()`
 
-Compose modules by nesting them inside a `@kr.module` definition:
+Compose modules by nesting them inside a `@kr.graph` definition:
 
 ```python
-@kr.module
-def kit(m):
-    m.node("kick", "faust:kick", gain=0.8)
-    m.node("hat", "faust:hat", gain=0.3)
-    m.outputs("kick", "hat")
+@kr.graph
+def kit(g):
+    g.node("kick", "faust:kick", gain=0.8)
+    g.node("hat", "faust:hat", gain=0.3)
+    g.outputs("kick", "hat")
 
-@kr.module
+@kr.graph
 def full_band(m):
-    m.node("bass", "faust:bass", gain=0.5)
-    drums = m.sub("drums", kit())  # nest kit as "drums/*"
-    m.send(drums.output("kick"), "bass", level=0.3)
-    m.outputs("bass")
+    g.node("bass", "faust:bass", gain=0.5)
+    drums = g.sub("drums", kit())  # nest kit as "drums/*"
+    g.send(drums.output("kick"), "bass", level=0.3)
+    g.outputs("bass")
 
 ir = full_band()
 band = kr.instantiate(ir, "band")
 # Nodes: band/bass, band/drums/kick, band/drums/hat
 ```
 
-`m.sub(prefix, ir)` returns a `SubModuleRef` with `.input(name)` and `.output(name)` for validated path strings. Typos are caught at trace time, not instantiation time.
+`g.sub(prefix, ir)` returns a `SubGraphRef` with `.input(name)` and `.output(name)` for validated path strings. Typos are caught at trace time, not instantiation time.
 
 ## `prefix_ir()` and `flatten()` (advanced)
 
@@ -186,9 +186,9 @@ from krach.ir.module import prefix_ir, flatten
 namespaced = prefix_ir(drums_ir, "drums")
 # "kick" → "drums/kick", controls and routes follow
 
-# Resolve sub_modules into flat nodes
+# Resolve sub_graphs into flat nodes
 flat = flatten(parent_ir)
 # Recursively prefixes and merges all sub_module nodes
 ```
 
-`prefix_ir(ir, prefix)` rewrites all node names, routes, patterns, controls, and automations with the prefix. `flatten(ir)` recursively resolves `sub_modules` into a single flat IR (parent-wins for transport settings).
+`prefix_ir(ir, prefix)` rewrites all node names, routes, patterns, controls, and automations with the prefix. `flatten(ir)` recursively resolves `sub_graphs` into a single flat IR (parent-wins for transport settings).

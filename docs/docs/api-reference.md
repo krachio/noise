@@ -82,12 +82,12 @@ The `Mixer` class manages the audio graph. In the REPL, `kr` is a `LiveMixer` in
 
 | Method | Description |
 |---|---|
-| `kr.capture()` | Snapshot session as frozen `ModuleIr` |
-| `kr.load(ir)` | Replay a `ModuleIr` onto the mixer (flattens sub_modules) |
-| `kr.instantiate(ir, prefix)` | Instantiate module with prefix namespace. Returns `ModuleHandle` |
-| `kr.trace()` | Return a `ModuleProxy` that records calls |
-| `kr.scene(name)` | Get a saved scene by name (returns `ModuleIr`) |
-| `@kr.module` | Decorator: traces a function into a frozen `ModuleIr` |
+| `kr.capture()` | Snapshot session as frozen `GraphIr` |
+| `kr.load(ir)` | Replay a `GraphIr` onto the mixer (flattens sub_graphs) |
+| `kr.instantiate(ir, prefix)` | Instantiate module with prefix namespace. Returns `GraphHandle` |
+| `kr.trace()` | Return a `GraphProxy` that records calls |
+| `kr.scene(name)` | Get a saved scene by name (returns `GraphIr`) |
+| `@kr.graph` | Decorator: traces a function into a frozen `GraphIr` |
 | `kr.export(path)` | Export session to reloadable Python file |
 | `kr.exec_file(path)` | Load and execute a Python session file |
 
@@ -165,7 +165,7 @@ Returned by `kr.node()`. Wraps a named node with operator DSL.
 
 ---
 
-## ModuleHandle
+## GraphHandle
 
 Returned by `kr.instantiate(ir, prefix)`. Wraps a prefixed module with operator DSL delegating to declared inputs/outputs.
 
@@ -192,17 +192,17 @@ Returned by `kr.instantiate(ir, prefix)`. Wraps a prefixed module with operator 
 
 ---
 
-## `@kr.module` decorator
+## `@kr.graph` decorator
 
-Traces a function into a frozen `ModuleIr`. First parameter is a `ModuleProxy`:
+Traces a function into a frozen `GraphIr`. First parameter is a `GraphProxy`:
 
 ```python
-@kr.module
+@kr.graph
 def synth(m, freq=440):
-    m.node("osc", osc_fn, gain=0.5)
-    m.outputs("osc")
+    g.node("osc", osc_fn, gain=0.5)
+    g.outputs("osc")
 
-ir = synth(freq=220)  # → ModuleIr
+ir = synth(freq=220)  # → GraphIr
 ```
 
 ---

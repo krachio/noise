@@ -130,13 +130,13 @@ def _params_key(params: PrimitiveParams) -> tuple[object, ...]:
             raise TypeError(f"unhandled PrimitiveParams in _params_key: {type(params).__name__}")
 
 
-def module_key(ir: object) -> int:
-    """Structural hash of a ModuleIr (including embedded DspGraphs).
+def graph_ir_key(ir: object) -> int:
+    """Structural hash of a GraphIr (including embedded DspGraphs).
 
     Lazy import to avoid circular dependency with ir/module.py.
     """
-    from krach.ir.module import ModuleIr
-    assert isinstance(ir, ModuleIr)
+    from krach.ir.module import GraphIr
+    assert isinstance(ir, GraphIr)
     parts: list[object] = []
     for nd in ir.nodes:
         if isinstance(nd.source, DspGraph):
@@ -151,6 +151,6 @@ def module_key(ir: object) -> int:
         parts.append(("meter", ir.meter))
     parts.append(("inputs", ir.inputs))
     parts.append(("outputs", ir.outputs))
-    for prefix, sub in ir.sub_modules:
-        parts.append(("sub", prefix, module_key(sub)))
+    for prefix, sub in ir.sub_graphs:
+        parts.append(("sub", prefix, graph_ir_key(sub)))
     return hash(tuple(parts))

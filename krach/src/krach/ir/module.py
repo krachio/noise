@@ -1,9 +1,9 @@
-"""Module IR — frozen specification types for the krach audio graph.
+"""Graph IR — frozen specification types for the krach audio graph.
 
-ModuleIr is the canonical representation of a complete audio setup:
+GraphIr is the canonical representation of a complete audio setup:
 nodes, routing, patterns, controls, automations, transport. Three
-construction paths produce the same type: @kr.module (trace),
-kr.capture() (snapshot), ModuleIr.from_dict() (deserialize).
+construction paths produce the same type: @kr.graph (trace),
+kr.capture() (snapshot), GraphIr.from_dict() (deserialize).
 
 If it's not IR, it doesn't exist.
 """
@@ -100,7 +100,7 @@ class MutedDef:
 
 
 @dataclass(frozen=True, slots=True)
-class ModuleIr:
+class GraphIr:
     """Frozen specification of a complete audio setup.
 
     Immutable, serializable, diffable. The canonical representation
@@ -118,7 +118,7 @@ class ModuleIr:
     master: float | None = None
     inputs: tuple[str, ...] | None = None
     outputs: tuple[str, ...] | None = None
-    sub_modules: tuple[tuple[str, ModuleIr], ...] = ()
+    sub_graphs: tuple[tuple[str, GraphIr], ...] = ()
 
     def to_dict(self) -> dict[str, Any]:
         """Serialize to a JSON-friendly dict."""
@@ -158,15 +158,15 @@ class ModuleIr:
             d["inputs"] = list(self.inputs)
         if self.outputs is not None:
             d["outputs"] = list(self.outputs)
-        if self.sub_modules:
-            d["sub_modules"] = [
+        if self.sub_graphs:
+            d["sub_graphs"] = [
                 {"prefix": prefix, "module": sub.to_dict()}
-                for prefix, sub in self.sub_modules
+                for prefix, sub in self.sub_graphs
             ]
         return d
 
     @staticmethod
-    def from_dict(d: dict[str, Any]) -> ModuleIr:
+    def from_dict(d: dict[str, Any]) -> GraphIr:
         """Deserialize from a dict (inverse of to_dict)."""
         from krach.pattern.serialize import dict_to_pattern_node
 
@@ -201,9 +201,9 @@ class ModuleIr:
             MutedDef(name=m["name"], saved_gain=m["saved_gain"])
             for m in d.get("muted", ())
         )
-        sub_modules = tuple(
-            (s["prefix"], ModuleIr.from_dict(s["module"]))
-            for s in d.get("sub_modules", ())
+        sub_graphs = tuple(
+            (s["prefix"], GraphIr.from_dict(s["module"]))
+            for s in d.get("sub_graphs", ())
         )
         inputs: tuple[str, ...] | None = None
         if "inputs" in d:
@@ -211,11 +211,11 @@ class ModuleIr:
         outputs: tuple[str, ...] | None = None
         if "outputs" in d:
             outputs = tuple(d["outputs"])
-        return ModuleIr(
+        return GraphIr(
             nodes=nodes, routing=routing, patterns=patterns,
             controls=controls, automations=automations, muted=muted,
             tempo=d.get("tempo"), meter=d.get("meter"), master=d.get("master"),
-            inputs=inputs, outputs=outputs, sub_modules=sub_modules,
+            inputs=inputs, outputs=outputs, sub_graphs=sub_graphs,
         )
 
 
@@ -361,8 +361,8 @@ def _prefix_path(path: str, prefix: str) -> str:
     return f"{prefix}/{path}"
 
 
-def prefix_ir(ir: ModuleIr, prefix: str) -> ModuleIr:
-    """Prefix all node names and references in a ModuleIr."""
+def prefix_ir(ir: GraphIr, prefix: str) -> GraphIr:
+    """Prefix all node names and references in a GraphIr."""
     nodes = tuple(
         NodeDef(
             name=f"{prefix}/{n.name}", source=n.source, gain=n.gain,
@@ -399,14 +399,14 @@ def prefix_ir(ir: ModuleIr, prefix: str) -> ModuleIr:
     )
     inputs = tuple(f"{prefix}/{i}" for i in ir.inputs) if ir.inputs is not None else None
     outputs = tuple(f"{prefix}/{o}" for o in ir.outputs) if ir.outputs is not None else None
-    sub_modules = tuple(
-        (f"{prefix}/{sp}", sub) for sp, sub in ir.sub_modules
+    sub_graphs = tuple(
+        (f"{prefix}/{sp}", sub) for sp, sub in ir.sub_graphs
     )
-    return ModuleIr(
+    return GraphIr(
         nodes=nodes, routing=routing, patterns=patterns,
         controls=controls, automations=automations, muted=muted,
         tempo=ir.tempo, meter=ir.meter, master=ir.master,
-        inputs=inputs, outputs=outputs, sub_modules=sub_modules,
+        inputs=inputs, outputs=outputs, sub_graphs=sub_graphs,
     )
 
 
@@ -415,8 +415,8 @@ def prefix_ir(ir: ModuleIr, prefix: str) -> ModuleIr:
 # ---------------------------------------------------------------------------
 
 
-def flatten(ir: ModuleIr) -> ModuleIr:
-    """Recursively resolve sub_modules into a flat ModuleIr."""
+def flatten(ir: GraphIr) -> GraphIr:
+    """Recursively resolve sub_graphs into a flat GraphIr."""
     nodes = list(ir.nodes)
     routing = list(ir.routing)
     patterns = list(ir.patterns)
@@ -424,7 +424,7 @@ def flatten(ir: ModuleIr) -> ModuleIr:
     automations = list(ir.automations)
     muted = list(ir.muted)
 
-    for prefix, child in ir.sub_modules:
+    for prefix, child in ir.sub_graphs:
         prefixed = prefix_ir(child, prefix)
         flat_child = flatten(prefixed)
         nodes.extend(flat_child.nodes)
@@ -434,11 +434,11 @@ def flatten(ir: ModuleIr) -> ModuleIr:
         automations.extend(flat_child.automations)
         muted.extend(flat_child.muted)
 
-    result = ModuleIr(
+    result = GraphIr(
         nodes=tuple(nodes), routing=tuple(routing), patterns=tuple(patterns),
         controls=tuple(controls), automations=tuple(automations), muted=tuple(muted),
         tempo=ir.tempo, meter=ir.meter, master=ir.master,
-        inputs=ir.inputs, outputs=ir.outputs, sub_modules=(),
+        inputs=ir.inputs, outputs=ir.outputs, sub_graphs=(),
     )
 
     # Validate inputs/outputs reference existing node names

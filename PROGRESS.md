@@ -20,9 +20,9 @@ Pure `ir/` layer (7 files + __init__): frozen data, zero runtime imports.
 - **Primitive** (`ir/primitive.py`): shared frozen dataclass, both domains
 - **Signal IR** (`ir/signal.py`): `Signal`, `Equation`, `DspGraph`, typed params
 - **Pattern IR** (`ir/pattern.py`): `PatternPrimitive` (= Primitive alias), `PatternNode`
-- **Module IR** (`ir/module.py`): `ModuleIr`, `NodeDef(source: DspGraph | str)`, `RouteDef`
+- **Module IR** (`ir/module.py`): `GraphIr`, `NodeDef(source: DspGraph | str)`, `RouteDef`
 - **Values** (`ir/values.py`): `Note`, `Cc`, `Osc`, `Control`, `Value`
-- **Canonicalize** (`ir/canonicalize.py`): `canonicalize()`, `graph_key()`, `module_key()`
+- **Canonicalize** (`ir/canonicalize.py`): `canonicalize()`, `graph_key()`, `graph_ir_key()`
 - **Registry** (`ir/registry.py`): generic `RuleRegistry[P, R]` with `check_complete()` import-time guard
 
 Tracing runtime in `signal/trace.py` (TraceContext, bind, coerce_to_signal).
@@ -36,7 +36,7 @@ krach/
   mixer.py           Mixer + MixerProtocol + NodeHandle (single file, no mixins)
   node_types.py      Node, DspDef, dsp(), path resolution
   graph_builder.py   build_graph_ir() pure function
-  module_proxy.py    ModuleProxy recorder
+  module_proxy.py    GraphProxy recorder
   export.py          export_session()
   config.py          Config
   dsp.py             krs namespace
@@ -119,9 +119,9 @@ kr.mute("drums")
 - **MCP server**: 25 tools for Claude Code to drive krach — chord(), euclid(), AST-safe pattern eval
 - **Pattern IR**: PatternNode tree with per-primitive rules, generic fold, structural `__repr__`
 - **DspGraph caching**: `dsp()` LRU keyed by `graph_key` (structural hash of DspGraph)
-- **Module composition**: `prefix_ir()`, `flatten()`, `@kr.module` decorator, `ModuleHandle` with `>>`, `@`, `[]` operators
-- **Module system**: `kr.capture()` → ModuleIr, `kr.load(ir)`, `kr.instantiate(ir, prefix)` → ModuleHandle, `kr.trace()` proxy
-- **ModuleIr serialization**: `to_dict()` / `from_dict()` — JSON round-trip for persistence
+- **Module composition**: `prefix_ir()`, `flatten()`, `@kr.graph` decorator, `GraphHandle` with `>>`, `@`, `[]` operators
+- **Module system**: `kr.capture()` → GraphIr, `kr.load(ir)`, `kr.instantiate(ir, prefix)` → GraphHandle, `kr.trace()` proxy
+- **GraphIr serialization**: `to_dict()` / `from_dict()` — JSON round-trip for persistence
 - **Batch rollback**: all 6 state dicts restored on failed `with kr.batch():`
 - **Engine state sync**: `{"cmd":"Status"}` IPC returns full snapshot; `kr.pull()` syncs Python from engine; MCP auto-syncs on status()
 - **Vendored wheel packaging**: `pip install krach` on macOS ARM64 + Linux x86_64 (macOS Intel paused — needs paid runner)
@@ -142,7 +142,7 @@ Issues tracked at https://github.com/krachio/noise/issues
 
 ### Later
 
-- **krach-stdlib** — composable ModuleIr building blocks (looper, drum machine,
+- **krach-stdlib** — composable GraphIr building blocks (looper, drum machine,
   polysynth). Module infrastructure is done; stdlib builds on top.
 - **WASM engine** — Rust → WASM, browser client
 - **Template caching** — XLA-style pattern compilation cache (Rust)

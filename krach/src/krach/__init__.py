@@ -2,9 +2,9 @@
 
 from importlib.metadata import version
 
-from krach.mixer import Mixer, ModuleHandle, NodeHandle
-from krach.module_proxy import SubModuleRef, module_decorator
+from krach.mixer import Mixer, GraphHandle, NodeHandle
+from krach.module_proxy import SubGraphRef, graph
 
 __version__ = version("krach")
 
-__all__ = ["Mixer", "ModuleHandle", "NodeHandle", "SubModuleRef", "module_decorator", "__version__"]
+__all__ = ["Mixer", "GraphHandle", "NodeHandle", "SubGraphRef", "graph", "__version__"]

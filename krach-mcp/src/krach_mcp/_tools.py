@@ -458,7 +458,7 @@ def register_tools(mcp: FastMCP) -> None:
 
     @mcp.tool()
     def capture(name: str | None = None) -> str:
-        """Capture the current session as a frozen ModuleIr.
+        """Capture the current session as a frozen GraphIr.
 
         If name is given, also saves it as a named scene.
         Returns the JSON representation of the captured module.
@@ -510,13 +510,13 @@ def register_tools(mcp: FastMCP) -> None:
         """
         import json
         import os
-        from krach.ir.module import ModuleIr
+        from krach.ir.module import GraphIr
         kr = get_session()
         resolved = os.path.expanduser(path)
         try:
             with open(resolved) as f:
                 d = json.load(f)
-            ir = ModuleIr.from_dict(d)
+            ir = GraphIr.from_dict(d)
             kr.load(ir)
             return f"Loaded and instantiated module from {resolved}"
         except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:

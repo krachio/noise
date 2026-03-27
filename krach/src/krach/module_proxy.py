@@ -1,6 +1,6 @@
-"""Module tracing proxy — records calls as ModuleIr instead of executing.
+"""Graph tracing proxy — records calls as GraphIr instead of executing.
 
-Used by @kr.module and with kr.trace() to capture session setup as
+Used by @kr.graph and with kr.trace() to capture session setup as
 frozen IR without starting audio.
 """
 
@@ -14,7 +14,7 @@ from typing import Concatenate, ParamSpec
 
 from krach.ir.module import (
     ControlDef,
-    ModuleIr,
+    GraphIr,
     MutedDef,
     NodeDef,
     PatternDef,
@@ -26,11 +26,11 @@ from krach.pattern.pattern import Pattern
 
 
 @dataclass(frozen=True, slots=True)
-class SubModuleRef:
-    """Reference to a sub-module registered in a ModuleProxy."""
+class SubGraphRef:
+    """Reference to a sub-module registered in a GraphProxy."""
 
     prefix: str
-    ir: ModuleIr
+    ir: GraphIr
 
     def input(self, name: str) -> str:
         """Return prefixed path for a declared input port."""
@@ -51,11 +51,11 @@ class SubModuleRef:
     def __repr__(self) -> str:
         inputs = list(self.ir.inputs) if self.ir.inputs else []
         outputs = list(self.ir.outputs) if self.ir.outputs else []
-        return f"SubModuleRef({self.prefix!r}, inputs={inputs}, outputs={outputs})"
+        return f"SubGraphRef({self.prefix!r}, inputs={inputs}, outputs={outputs})"
 
 
-class ModuleProxy:
-    """Records mixer calls as ModuleIr defs. Does not produce audio."""
+class GraphProxy:
+    """Records mixer calls as GraphIr defs. Does not produce audio."""
 
     def __init__(self) -> None:
         self._nodes: list[NodeDef] = []
@@ -63,7 +63,7 @@ class ModuleProxy:
         self._patterns: list[PatternDef] = []
         self._controls: list[ControlDef] = []
         self._muted: list[MutedDef] = []
-        self._sub_modules: list[tuple[str, ModuleIr]] = []
+        self._sub_graphs: list[tuple[str, GraphIr]] = []
         self._tempo: float | None = None
         self._meter: float | None = None
         self._master: float | None = None
@@ -77,7 +77,7 @@ class ModuleProxy:
     def _check_frozen(self) -> None:
         """Raise if proxy is frozen after build()."""
         if self._frozen:
-            raise RuntimeError("ModuleProxy is frozen after build()")
+            raise RuntimeError("GraphProxy is frozen after build()")
 
     def node(self, name: str, source: DspSource, *, gain: float = 0.5, count: int = 1, **init: float) -> None:
         """Record a node definition."""
@@ -159,17 +159,17 @@ class ModuleProxy:
         self._outputs = names
         self._outputs_set = True
 
-    def sub(self, prefix: str, ir: ModuleIr) -> SubModuleRef:
+    def sub(self, prefix: str, ir: GraphIr) -> SubGraphRef:
         """Register a sub-module and return a reference for routing."""
         self._check_frozen()
-        self._sub_modules.append((prefix, ir))
+        self._sub_graphs.append((prefix, ir))
         # Add prefixed node names for route validation
         prefixed = prefix_ir(ir, prefix)
         from krach.ir.module import flatten
         flat = flatten(prefixed)
         for nd in flat.nodes:
             self._node_names.add(nd.name)
-        return SubModuleRef(prefix=prefix, ir=ir)
+        return SubGraphRef(prefix=prefix, ir=ir)
 
     @property
     def tempo(self) -> float:
@@ -195,8 +195,8 @@ class ModuleProxy:
     def master(self, value: float) -> None:
         self._master = value
 
-    def build(self) -> ModuleIr:
-        """Finalize and return the recorded ModuleIr."""
+    def build(self) -> GraphIr:
+        """Finalize and return the recorded GraphIr."""
         # Validate route targets
         for route in self._routing:
             if route.target not in self._node_names:
@@ -206,7 +206,7 @@ class ModuleProxy:
                 )
 
         self._frozen = True
-        return ModuleIr(
+        return GraphIr(
             nodes=tuple(self._nodes),
             routing=tuple(self._routing),
             patterns=tuple(self._patterns),
@@ -217,27 +217,27 @@ class ModuleProxy:
             master=self._master,
             inputs=self._inputs,
             outputs=self._outputs,
-            sub_modules=tuple(self._sub_modules),
+            sub_graphs=tuple(self._sub_graphs),
         )
 
 
 # ---------------------------------------------------------------------------
-# @module_decorator — trace imperative code into frozen ModuleIr
+# @graph — trace imperative code into frozen GraphIr
 # ---------------------------------------------------------------------------
 
 P = ParamSpec("P")
 
 
-def module_decorator(fn: Callable[Concatenate[ModuleProxy, P], None]) -> Callable[P, ModuleIr]:
-    """Decorator that traces a function into a frozen ModuleIr."""
+def graph(fn: Callable[Concatenate[GraphProxy, P], None]) -> Callable[P, GraphIr]:
+    """Decorator that traces a function into a frozen GraphIr."""
     @functools.wraps(fn)
-    def wrapper(*args: P.args, **kwargs: P.kwargs) -> ModuleIr:
-        proxy = ModuleProxy()
+    def wrapper(*args: P.args, **kwargs: P.kwargs) -> GraphIr:
+        proxy = GraphProxy()
         fn(proxy, *args, **kwargs)
         return proxy.build()
 
     # Fix signature: strip the first parameter (proxy)
     sig = inspect.signature(fn)
     params = list(sig.parameters.values())[1:]  # skip proxy
-    wrapper.__signature__ = sig.replace(parameters=params, return_annotation=ModuleIr)  # type: ignore[attr-defined]
+    wrapper.__signature__ = sig.replace(parameters=params, return_annotation=GraphIr)  # type: ignore[attr-defined]
     return wrapper

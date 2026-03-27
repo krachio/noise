@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 from krach.mixer import Mixer
 from krach.ir.module import (
     ControlDef,
-    ModuleIr,
+    GraphIr,
     MutedDef,
     NodeDef,
     PatternDef,
@@ -107,7 +107,7 @@ def test_capture_transport() -> None:
 
 def test_instantiate_creates_nodes() -> None:
     mixer = _make_mixer()
-    ir = ModuleIr(
+    ir = GraphIr(
         nodes=(
             NodeDef(name="kick", source="faust:kick", gain=0.8),
         ),
@@ -119,7 +119,7 @@ def test_instantiate_creates_nodes() -> None:
 
 def test_instantiate_creates_routing() -> None:
     mixer = _make_mixer()
-    ir = ModuleIr(
+    ir = GraphIr(
         nodes=(
             NodeDef(name="bass", source="faust:bass", gain=0.3),
             NodeDef(name="verb", source="faust:verb", gain=0.5),
@@ -134,7 +134,7 @@ def test_instantiate_creates_routing() -> None:
 
 def test_instantiate_sets_controls() -> None:
     mixer = _make_mixer()
-    ir = ModuleIr(
+    ir = GraphIr(
         nodes=(
             NodeDef(name="bass", source="faust:bass", gain=0.3),
         ),
@@ -148,7 +148,7 @@ def test_instantiate_sets_controls() -> None:
 
 def test_instantiate_sets_transport() -> None:
     mixer = _make_mixer()
-    ir = ModuleIr(tempo=140, meter=3, master=0.6)
+    ir = GraphIr(tempo=140, meter=3, master=0.6)
     mixer.load(ir)
     # Transport is delegated to session
     mixer._session.tempo  # type: ignore[reportPrivateUsage]  # accessed via property on mock
@@ -183,16 +183,16 @@ def test_capture_instantiate_round_trip() -> None:
 
 
 def test_module_ir_round_trip_empty() -> None:
-    ir = ModuleIr()
+    ir = GraphIr()
     d = ir.to_dict()
     assert d == {}
-    assert ModuleIr.from_dict(d) == ir
+    assert GraphIr.from_dict(d) == ir
 
 
 def test_module_ir_round_trip_full() -> None:
     from krach.pattern.pattern import ctrl, freeze
 
-    ir = ModuleIr(
+    ir = GraphIr(
         nodes=(
             NodeDef(name="bass", source="faust:bass", gain=0.3),
             NodeDef(name="verb", source="faust:verb", gain=0.5),
@@ -214,7 +214,7 @@ def test_module_ir_round_trip_full() -> None:
         master=0.7,
     )
     d = ir.to_dict()
-    restored = ModuleIr.from_dict(d)
+    restored = GraphIr.from_dict(d)
 
     assert len(restored.nodes) == 2
     assert restored.nodes[0].name == "bass"
@@ -228,27 +228,27 @@ def test_module_ir_round_trip_full() -> None:
 
 
 def test_module_ir_json_round_trip() -> None:
-    """to_dict → JSON → from_dict produces equivalent ModuleIr."""
+    """to_dict → JSON → from_dict produces equivalent GraphIr."""
     import json
 
-    ir = ModuleIr(
+    ir = GraphIr(
         nodes=(NodeDef(name="kick", source="faust:kick", gain=0.8),),
         tempo=140.0,
     )
     j = json.dumps(ir.to_dict())
-    restored = ModuleIr.from_dict(json.loads(j))
+    restored = GraphIr.from_dict(json.loads(j))
     assert restored.nodes[0].name == "kick"
     assert restored.nodes[0].gain == 0.8
     assert restored.tempo == 140.0
 
 
-# ── ModuleProxy (trace) ──────────────────────────────────────────
+# ── GraphProxy (trace) ──────────────────────────────────────────
 
 
 def test_proxy_records_nodes() -> None:
-    from krach.module_proxy import ModuleProxy
+    from krach.module_proxy import GraphProxy
 
-    proxy = ModuleProxy()
+    proxy = GraphProxy()
     proxy.node("bass", "faust:bass", gain=0.3)
     proxy.node("verb", "faust:verb", gain=0.5)
 
@@ -259,9 +259,9 @@ def test_proxy_records_nodes() -> None:
 
 
 def test_proxy_records_routing() -> None:
-    from krach.module_proxy import ModuleProxy
+    from krach.module_proxy import GraphProxy
 
-    proxy = ModuleProxy()
+    proxy = GraphProxy()
     proxy.node("bass", "faust:bass")
     proxy.node("verb", "faust:verb")
     proxy.send("bass", "verb", level=0.4)
@@ -272,9 +272,9 @@ def test_proxy_records_routing() -> None:
 
 
 def test_proxy_records_transport() -> None:
-    from krach.module_proxy import ModuleProxy
+    from krach.module_proxy import GraphProxy
 
-    proxy = ModuleProxy()
+    proxy = GraphProxy()
     proxy.tempo = 140
     proxy.meter = 3
     proxy.master = 0.6
@@ -286,10 +286,10 @@ def test_proxy_records_transport() -> None:
 
 
 def test_proxy_records_controls_and_patterns() -> None:
-    from krach.module_proxy import ModuleProxy
+    from krach.module_proxy import GraphProxy
     from krach.pattern.pattern import ctrl, freeze
 
-    proxy = ModuleProxy()
+    proxy = GraphProxy()
     proxy.node("bass", "faust:bass")
     proxy.set("bass/freq", 220.0)
     proxy.play("bass", freeze(ctrl("gate", 1.0) + ctrl("gate", 0.0)))
@@ -302,10 +302,10 @@ def test_proxy_records_controls_and_patterns() -> None:
 
 
 def test_proxy_to_instantiate_round_trip() -> None:
-    """Proxy → ModuleIr → instantiate on a live mixer."""
-    from krach.module_proxy import ModuleProxy
+    """Proxy → GraphIr → instantiate on a live mixer."""
+    from krach.module_proxy import GraphProxy
 
-    proxy = ModuleProxy()
+    proxy = GraphProxy()
     proxy.node("kick", "faust:kick", gain=0.8)
     proxy.tempo = 140
 
@@ -320,7 +320,7 @@ def test_proxy_to_instantiate_round_trip() -> None:
 
 def test_instantiate_applies_mutes() -> None:
     mixer = _make_mixer()
-    ir = ModuleIr(
+    ir = GraphIr(
         nodes=(
             NodeDef(name="bass", source="faust:bass", gain=0.3),
         ),
@@ -336,7 +336,7 @@ def test_instantiate_applies_mutes() -> None:
 
 
 def test_capture_includes_patterns() -> None:
-    """capture() must record running patterns in the ModuleIr."""
+    """capture() must record running patterns in the GraphIr."""
     from krach.pattern.builders import hit
 
     mixer = _make_mixer()
@@ -364,7 +364,7 @@ def test_instantiate_replays_patterns() -> None:
         PatternNode(cat_p, (gate_on, gate_off), CatParams()),
     ), FreezeParams())
 
-    ir = ModuleIr(
+    ir = GraphIr(
         nodes=(NodeDef(name="kick", source="faust:kick", gain=0.8),),
         patterns=(PatternDef(target="kick", pattern=pat_node),),
     )

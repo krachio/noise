@@ -22,12 +22,12 @@ from dataclasses import dataclass
 
 from krach.graph_builder import build_graph_ir, inst_name as _inst_name
 from krach.pattern.mininotation import p as _p
-from krach.module_proxy import ModuleProxy
+from krach.module_proxy import GraphProxy
 from krach.node_types import (
     ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
     ResolvedSource, UnknownPath, resolve_dsp_source, resolve_path,
 )
-from krach.ir.module import ControlDef, ModuleIr, MutedDef, NodeDef, PatternDef, RouteDef
+from krach.ir.module import ControlDef, GraphIr, MutedDef, NodeDef, PatternDef, RouteDef
 from krach.pattern.bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach.pattern.builders import check_finite as _check_finite
 from krach.pattern.pattern import Pattern
@@ -75,23 +75,23 @@ class NodeHandle:
 
     # ── Operator DSL ────────────────────────────────────────────────
 
-    def __rshift__(self, other: NodeHandle | ModuleHandle | tuple[NodeHandle | ModuleHandle, float]) -> NodeHandle | ModuleHandle:
+    def __rshift__(self, other: NodeHandle | GraphHandle | tuple[NodeHandle | GraphHandle, float]) -> NodeHandle | GraphHandle:
         """Route signal: ``bass >> verb`` or ``bass >> (verb, 0.4)`` or ``bass >> module``."""
         if isinstance(other, tuple):
             target, level = other
-            if isinstance(target, ModuleHandle):
+            if isinstance(target, GraphHandle):
                 self._mixer.connect(self._name, target.input._name, level=level)
                 return target
             self._mixer.connect(self._name, target._name, level=level)
             return target
-        if isinstance(other, ModuleHandle):
+        if isinstance(other, GraphHandle):
             self._mixer.connect(self._name, other.input._name)
             return other
         if isinstance(other, NodeHandle):  # pyright: ignore[reportUnnecessaryIsInstance]
             self._mixer.connect(self._name, other._name)
             return other
         raise TypeError(
-            f"{self._name} >> {type(other).__name__} — expected NodeHandle, ModuleHandle, or tuple.\n"
+            f"{self._name} >> {type(other).__name__} — expected NodeHandle, GraphHandle, or tuple.\n"
             f"  Try: {self._name} >> verb           — route to verb\n"
             f"       {self._name} >> (verb, 0.4)    — route at 40% level"
         )
@@ -177,11 +177,11 @@ class NodeHandle:
         return f"Node('{self._name}', removed)"
 
 
-# ── ModuleHandle ────────────────────────────────────────────────────────
+# ── GraphHandle ────────────────────────────────────────────────────────
 
 
 @dataclass(frozen=True, slots=True)
-class ModuleHandle:
+class GraphHandle:
     """Thin operator proxy for an instantiated module."""
 
     prefix: str
@@ -208,16 +208,16 @@ class ModuleHandle:
             raise ValueError(f"module {self.prefix!r} has no declared outputs")
         return self.nodes[self._strip_prefix(self.outputs[0])]
 
-    def __rshift__(self, other: NodeHandle | ModuleHandle | tuple[NodeHandle | ModuleHandle, float]) -> NodeHandle | ModuleHandle:
+    def __rshift__(self, other: NodeHandle | GraphHandle | tuple[NodeHandle | GraphHandle, float]) -> NodeHandle | GraphHandle:
         """Route module output to target."""
         return self.output >> other  # type: ignore[operator, return-value]
 
-    def __rrshift__(self, other: NodeHandle) -> ModuleHandle:
+    def __rrshift__(self, other: NodeHandle) -> GraphHandle:
         """Allow node >> module_handle."""
         _ = other >> self.input
         return self
 
-    def __matmul__(self, pattern: object) -> ModuleHandle:
+    def __matmul__(self, pattern: object) -> GraphHandle:
         """Play pattern on first input."""
         _ = self.input @ pattern  # type: ignore[operator]
         return self
@@ -235,7 +235,7 @@ class ModuleHandle:
     def __repr__(self) -> str:
         inputs = list(self.inputs) if self.inputs else []
         outputs = list(self.outputs) if self.outputs else []
-        return f"ModuleHandle({self.prefix!r}, inputs={inputs}, outputs={outputs})"
+        return f"GraphHandle({self.prefix!r}, inputs={inputs}, outputs={outputs})"
 
 
 # ── Mixer ────────────────────────────────────────────────────────────────
@@ -268,9 +268,9 @@ class Mixer:
         self._wires: dict[tuple[str, str], str] = {}
         self._ctrl_values: dict[str, float] = {}
         self._patterns: dict[str, Pattern] = {}
-        self._scenes: dict[str, ModuleIr] = {}
+        self._scenes: dict[str, GraphIr] = {}
         self._batching: bool = False
-        self._shadow_sub_modules: list[tuple[str, ModuleIr]] = []
+        self._shadow_sub_graphs: list[tuple[str, GraphIr]] = []
 
         self._graph_sent: bool = False
         self._master_gain: float = 0.7
@@ -629,10 +629,10 @@ class Mixer:
                 self._rebuild()
             case _:
                 return
-        # Clean shadow sub_modules: remove exact prefix match OR any prefix
+        # Clean shadow sub_graphs: remove exact prefix match OR any prefix
         # whose nodes have been partially/fully removed (partial module = invalid)
-        self._shadow_sub_modules = [
-            (p, ir) for p, ir in self._shadow_sub_modules
+        self._shadow_sub_graphs = [
+            (p, ir) for p, ir in self._shadow_sub_graphs
             if p != name and all(
                 f"{p}/{nd.name}" in self._nodes for nd in ir.nodes
             )
@@ -1122,11 +1122,11 @@ class Mixer:
     # ── Scenes ─────────────────────────────────────────────────────
 
     def save(self, name: str) -> None:
-        """Save current state as a named scene (via ModuleIr)."""
+        """Save current state as a named scene (via GraphIr)."""
         self._scenes[name] = self.capture()
 
     def recall(self, name: str) -> None:
-        """Recall a saved scene — clears state, then instantiates the saved ModuleIr."""
+        """Recall a saved scene — clears state, then instantiates the saved GraphIr."""
         if name not in self._scenes:
             raise ValueError(f"scene '{name}' not found")
         self.stop()
@@ -1138,7 +1138,7 @@ class Mixer:
         self._ctrl_values.clear()
         self._muted.clear()
         self._patterns.clear()
-        self._shadow_sub_modules.clear()
+        self._shadow_sub_graphs.clear()
         self.load(self._scenes[name])
 
     @property
@@ -1148,11 +1148,11 @@ class Mixer:
 
     # ── Module operations ─────────────────────────────────────────
 
-    def trace(self) -> ModuleProxy:
-        """Return a tracing proxy that records calls as ModuleIr."""
-        return ModuleProxy()
+    def trace(self) -> GraphProxy:
+        """Return a tracing proxy that records calls as GraphIr."""
+        return GraphProxy()
 
-    def scene(self, name: str) -> ModuleIr:
+    def scene(self, name: str) -> GraphIr:
         """Get a saved scene by name."""
         if name not in self._scenes:
             raise ValueError(f"scene '{name}' not found")
@@ -1169,8 +1169,8 @@ class Mixer:
         except Exception as e:
             raise RuntimeError(f"error loading {path}: {e}") from e
 
-    def capture(self) -> ModuleIr:
-        """Snapshot current mixer state as a frozen ModuleIr."""
+    def capture(self) -> GraphIr:
+        """Snapshot current mixer state as a frozen GraphIr."""
         nodes = tuple(
             NodeDef(
                 name=name,
@@ -1211,7 +1211,7 @@ class Mixer:
             for target, pat in self._patterns.items()
         )
 
-        return ModuleIr(
+        return GraphIr(
             nodes=nodes,
             routing=tuple(routing),
             patterns=patterns,
@@ -1220,19 +1220,19 @@ class Mixer:
             tempo=tempo,
             meter=meter,
             master=self._master_gain,
-            sub_modules=tuple(self._shadow_sub_modules),
+            sub_graphs=tuple(self._shadow_sub_graphs),
         )
 
-    def load(self, ir: ModuleIr) -> None:
-        """Replay a ModuleIr onto this mixer. Batches all nodes into one rebuild."""
+    def load(self, ir: GraphIr) -> None:
+        """Replay a GraphIr onto this mixer. Batches all nodes into one rebuild."""
         from krach.ir.module import flatten
 
-        # Save sub_modules before flatten (flatten resolves them into flat nodes)
-        original_sub_modules = ir.sub_modules
+        # Save sub_graphs before flatten (flatten resolves them into flat nodes)
+        original_sub_graphs = ir.sub_graphs
         ir = flatten(ir)
-        # Restore shadow sub_modules from the original IR
-        for prefix, sub_ir in original_sub_modules:
-            self._shadow_sub_modules.append((prefix, sub_ir))
+        # Restore shadow sub_graphs from the original IR
+        for prefix, sub_ir in original_sub_graphs:
+            self._shadow_sub_graphs.append((prefix, sub_ir))
         with self.batch():
             for nd in ir.nodes:
                 source: DspSource
@@ -1271,8 +1271,8 @@ class Mixer:
         for md in ir.muted:
             self.mute(md.name)
 
-    def instantiate(self, ir: ModuleIr, prefix: str) -> ModuleHandle:
-        """Instantiate a module with prefix namespace. Returns a ModuleHandle."""
+    def instantiate(self, ir: GraphIr, prefix: str) -> GraphHandle:
+        """Instantiate a module with prefix namespace. Returns a GraphHandle."""
         from krach.ir.module import prefix_ir, flatten
 
         flat = flatten(prefix_ir(ir, prefix))
@@ -1290,9 +1290,9 @@ class Mixer:
         flat_outputs = flat.outputs
 
         # Record shadow
-        self._shadow_sub_modules.append((prefix, ir))
+        self._shadow_sub_graphs.append((prefix, ir))
 
-        return ModuleHandle(
+        return GraphHandle(
             prefix=prefix,
             nodes=nodes,
             inputs=flat_inputs,

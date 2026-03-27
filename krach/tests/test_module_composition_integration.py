@@ -1,6 +1,6 @@
 """Integration test: full module composition workflow.
 
-End-to-end: @module_decorator define, sub() compose, instantiate with
+End-to-end: @graph define, sub() compose, instantiate with
 prefix, >> route, [] control, remove.
 """
 
@@ -9,9 +9,9 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from krach.ir.module import ModuleIr, NodeDef
+from krach.ir.module import GraphIr, NodeDef
 from krach.mixer import Mixer
-from krach.module_proxy import ModuleProxy, module_decorator
+from krach.module_proxy import GraphProxy, graph
 
 
 def _make_mixer() -> Mixer:
@@ -32,38 +32,38 @@ def _make_mixer() -> Mixer:
 def test_full_composition_workflow() -> None:
     """End-to-end: define, compose, instantiate, route, control, remove."""
     # 1. Define a synth module
-    @module_decorator
-    def synth(m: ModuleProxy, gain: float = 0.5) -> None:
-        m.node("osc", "faust:osc", gain=gain)
-        m.inputs("osc")
-        m.outputs("osc")
+    @graph
+    def synth(g: GraphProxy, gain: float = 0.5) -> None:
+        g.node("osc", "faust:osc", gain=gain)
+        g.inputs("osc")
+        g.outputs("osc")
 
     # 2. Define a drums module
-    @module_decorator
-    def drums(m: ModuleProxy) -> None:
-        m.node("kick", "faust:kick", gain=0.8)
-        m.node("hat", "faust:hat", gain=0.3)
-        m.outputs("kick")
+    @graph
+    def drums(g: GraphProxy) -> None:
+        g.node("kick", "faust:kick", gain=0.8)
+        g.node("hat", "faust:hat", gain=0.3)
+        g.outputs("kick")
 
     # 3. Compose into a scene module
     synth_ir = synth(gain=0.4)
     drums_ir = drums()
 
-    @module_decorator
-    def scene(m: ModuleProxy) -> None:
-        s = m.sub("synth", synth_ir)
-        d = m.sub("drums", drums_ir)
-        m.node("bus", "faust:bus")
-        m.send(s.output("osc"), "bus")
-        m.send(d.output("kick"), "bus")
-        m.outputs("bus")
+    @graph
+    def scene(g: GraphProxy) -> None:
+        s = g.sub("synth", synth_ir)
+        d = g.sub("drums", drums_ir)
+        g.node("bus", "faust:bus")
+        g.send(s.output("osc"), "bus")
+        g.send(d.output("kick"), "bus")
+        g.outputs("bus")
 
     scene_ir = scene()
 
     # Verify IR structure
-    assert len(scene_ir.sub_modules) == 2
-    assert scene_ir.sub_modules[0][0] == "synth"
-    assert scene_ir.sub_modules[1][0] == "drums"
+    assert len(scene_ir.sub_graphs) == 2
+    assert scene_ir.sub_graphs[0][0] == "synth"
+    assert scene_ir.sub_graphs[1][0] == "drums"
     assert scene_ir.outputs == ("bus",)
 
     # 4. Instantiate on mixer
@@ -85,24 +85,24 @@ def test_full_composition_workflow() -> None:
     handle["synth/osc/freq"] = 440.0
     assert mixer._ctrl_values.get("live/synth/osc/freq") == 440.0
 
-    # 7. Capture includes shadow sub_modules
+    # 7. Capture includes shadow sub_graphs
     captured = mixer.capture()
-    assert len(captured.sub_modules) == 1
-    assert captured.sub_modules[0][0] == "live"
+    assert len(captured.sub_graphs) == 1
+    assert captured.sub_graphs[0][0] == "live"
 
     # 8. Remove cleans everything
     mixer.remove("live")
     assert "live/bus" not in mixer._nodes
     assert "live/synth/osc" not in mixer._nodes
     captured2 = mixer.capture()
-    assert captured2.sub_modules == ()
+    assert captured2.sub_graphs == ()
 
 
 def test_instantiate_then_load_round_trip() -> None:
     """instantiate + capture + load round-trip."""
     mixer1 = _make_mixer()
 
-    ir = ModuleIr(
+    ir = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
         outputs=("osc",),
     )
@@ -116,14 +116,14 @@ def test_instantiate_then_load_round_trip() -> None:
 
 
 def test_module_serialization_round_trip() -> None:
-    """@module_decorator → to_dict → from_dict → load."""
-    @module_decorator
-    def my_mod(m: ModuleProxy) -> None:
-        m.node("osc", "faust:osc", gain=0.5)
-        m.outputs("osc")
+    """@graph → to_dict → from_dict → load."""
+    @graph
+    def my_mod(g: GraphProxy) -> None:
+        g.node("osc", "faust:osc", gain=0.5)
+        g.outputs("osc")
 
     ir = my_mod()
     d = ir.to_dict()
-    restored = ModuleIr.from_dict(d)
+    restored = GraphIr.from_dict(d)
     assert restored == ir
     assert restored.outputs == ("osc",)
