@@ -222,7 +222,6 @@ fn end_to_end_graph_ir_from_json() {
 // ─── Graph continuity (bugs #12, #13) ───
 
 #[test]
-#[ignore] // Bug #12: adding a node should not silence existing audio
 fn test_add_node_preserves_existing_audio() {
     let config = EngineConfig {
         block_size: 64,
@@ -273,7 +272,6 @@ fn test_add_node_preserves_existing_audio() {
 }
 
 #[test]
-#[ignore] // Bug #13: crossfade must stay in [-1.1, 1.1] during rapid reloads
 fn test_full_reload_preserves_continuity() {
     let config = EngineConfig {
         block_size: 64,
@@ -309,7 +307,6 @@ fn test_full_reload_preserves_continuity() {
 }
 
 #[test]
-#[ignore] // Bug #13: rapid graph swaps must not panic
 fn test_rapid_graph_swaps_no_panic() {
     let config = EngineConfig {
         block_size: 64,

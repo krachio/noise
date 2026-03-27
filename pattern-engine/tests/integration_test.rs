@@ -284,7 +284,6 @@ fn e2e_osc_loopback() {
 // ─── Cycle boundary + tempo + euclidean E2E (bugs #27, #28) ───
 
 #[test]
-#[ignore] // Bug #28: new pattern should start at cycle boundary
 fn e2e_new_pattern_starts_at_cycle_boundary() {
     let mut tk = TestKernel::start("cycle-boundary");
     let mut conn = tk.connect();
@@ -309,7 +308,6 @@ fn e2e_new_pattern_starts_at_cycle_boundary() {
 }
 
 #[test]
-#[ignore] // Bug #28: tempo change must not produce timing glitch
 fn e2e_set_bpm_no_timing_glitch() {
     let mut tk = TestKernel::start("bpm-glitch");
     let mut conn = tk.connect();
@@ -340,7 +338,6 @@ fn e2e_set_bpm_no_timing_glitch() {
 }
 
 #[test]
-#[ignore] // Bug #27: euclidean event count E2E
 fn e2e_euclid_event_count() {
     let mut tk = TestKernel::start("euclid-e2e");
     let mut conn = tk.connect();
