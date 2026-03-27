@@ -246,7 +246,7 @@ def register_tools(mcp: FastMCP) -> None:
         # Nodes with inline controls
         if kr.node_data:
             lines.append("\nNodes:")
-            ctrl_vals = kr.ctrl_values
+            ctrl_vals = kr.controls
             for name, n in kr.node_data.items():
                 kind = "fx" if n.num_inputs > 0 else "src"
                 parts = f"  {name}: {n.type_id} gain={n.gain:.2f} [{kind}]"
@@ -433,7 +433,7 @@ def register_tools(mcp: FastMCP) -> None:
         kr = get_session()
         resolved = os.path.expanduser(path)
         try:
-            kr.exec_file(resolved)
+            kr.load(resolved)
             return f"Loaded {resolved}"
         except (FileNotFoundError, RuntimeError) as e:
             return f"Error: {e}"
@@ -517,7 +517,7 @@ def register_tools(mcp: FastMCP) -> None:
             with open(resolved) as f:
                 d = json.load(f)
             ir = GraphIr.from_dict(d)
-            kr.load(ir)
+            kr.replay(ir)
             return f"Loaded and instantiated module from {resolved}"
         except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
             return f"Error: {e}"

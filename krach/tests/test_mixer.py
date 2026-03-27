@@ -995,7 +995,7 @@ def test_batch_exception_rolls_back_sends() -> None:
     # Snapshot pre-batch state
     sends_before = list(mixer.routing)
     muted_before = mixer.is_muted("bass")
-    ctrl_before = dict(mixer.ctrl_values)
+    ctrl_before = dict(mixer.controls)
 
     try:
         with mixer.batch():
@@ -1008,7 +1008,7 @@ def test_batch_exception_rolls_back_sends() -> None:
 
     assert list(mixer.routing) == sends_before, "sends not rolled back"
     assert mixer.is_muted("bass") == muted_before, "muted not rolled back"
-    assert dict(mixer.ctrl_values) == ctrl_before, "ctrl_values not rolled back"
+    assert dict(mixer.controls) == ctrl_before, "ctrl_values not rolled back"
 
 
 # ── Sprint 13: MUTED_LEAK ─────────────────────────────────────────────────
@@ -2414,12 +2414,12 @@ def test_load_executes_file(tmp_path: Path) -> None:
     scene_file = tmp_path / "my_scene.py"
     scene_file.write_text("mix.master = 0.42\n")
 
-    mixer.exec_file(str(scene_file))
+    mixer.load(str(scene_file))
     assert mixer.master == 0.42
 
 
-def test_exec_file_missing_raises() -> None:
-    """exec_file() raises FileNotFoundError for missing path."""
+def test_load_missing_raises() -> None:
+    """load() raises FileNotFoundError for missing path."""
     import pytest
     from unittest.mock import MagicMock
 
@@ -2430,7 +2430,7 @@ def test_exec_file_missing_raises() -> None:
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"))
 
     with pytest.raises(FileNotFoundError, match="scene file not found"):
-        mixer.exec_file("/nonexistent/nope.py")
+        mixer.load("/nonexistent/nope.py")
 
 
 # ── Control IR value ─────────────────────────────────────────────────────────
@@ -3393,7 +3393,7 @@ def test_set_no_warning_without_ranges() -> None:
         assert len(range_warnings) == 0
 
 
-# ── Public routing/ctrl_values properties ──────────────────────────────
+# ── Public routing/controls properties ─────────────────────────────────
 
 
 def test_routing_property_returns_sends_and_wires() -> None:
@@ -3439,7 +3439,7 @@ def test_routing_is_snapshot() -> None:
 
 
 def test_ctrl_values_property() -> None:
-    """kr.ctrl_values returns snapshot of set control values."""
+    """kr.controls returns snapshot of set control values."""
     from unittest.mock import MagicMock
     from krach.mixer import Mixer
 
@@ -3450,12 +3450,12 @@ def test_ctrl_values_property() -> None:
     mixer.voice("bass", "faust:bass", gain=0.5)
     mixer.set("bass/cutoff", 1200.0)
 
-    vals = mixer.ctrl_values
+    vals = mixer.controls
     assert vals["bass/cutoff"] == 1200.0
 
     # Mutation doesn't affect internal
     vals["bass/cutoff"] = 9999.0
-    assert mixer.ctrl_values["bass/cutoff"] == 1200.0
+    assert mixer.controls["bass/cutoff"] == 1200.0
 
 
 # ── disconnect ─────────────────────────────────────────────────────────

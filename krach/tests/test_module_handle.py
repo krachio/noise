@@ -110,17 +110,17 @@ def test_module_handle_setitem() -> None:
     assert mixer._ctrl_values.get("loop/osc/freq") == 220.0
 
 
-# ── Mixer.load() (renamed from instantiate) ─────────────────────────────
+# ── Mixer.replay() (renamed from instantiate) ─────────────────────────────
 
 
 def test_load_replays_ir() -> None:
-    """Mixer.load(ir) replays a GraphIr without prefix (session replay)."""
+    """Mixer.replay(ir) replays a GraphIr without prefix (session replay)."""
     mixer = _make_mixer()
     ir = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
         tempo=128.0,
     )
-    mixer.load(ir)
+    mixer.replay(ir)
     assert "osc" in mixer._nodes
     assert mixer.tempo == 128.0
 
@@ -129,7 +129,7 @@ def test_load_returns_none() -> None:
     """load() returns None (not a handle)."""
     mixer = _make_mixer()
     ir = GraphIr(nodes=(NodeDef(name="osc", source="faust:osc"),))
-    result = mixer.load(ir)
+    result = mixer.replay(ir)
     assert result is None
 
 
@@ -185,7 +185,7 @@ def test_load_flattens_sub_graphs() -> None:
         nodes=(NodeDef(name="bus", source="faust:bus"),),
         sub_graphs=(("child", child_ir),),
     )
-    mixer.load(parent_ir)
+    mixer.replay(parent_ir)
     # The flattened sub_module node should exist as "child/osc"
     assert "child/osc" in mixer._nodes
     assert "bus" in mixer._nodes
@@ -199,7 +199,7 @@ def test_load_restores_shadow_sub_graphs() -> None:
         nodes=(NodeDef(name="bus", source="faust:bus"),),
         sub_graphs=(("child", child_ir),),
     )
-    mixer.load(parent_ir)
+    mixer.replay(parent_ir)
     assert len(mixer._shadow_sub_graphs) == 1
     assert mixer._shadow_sub_graphs[0][0] == "child"
 

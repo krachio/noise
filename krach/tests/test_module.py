@@ -112,7 +112,7 @@ def test_instantiate_creates_nodes() -> None:
             NodeDef(name="kick", source="faust:kick", gain=0.8),
         ),
     )
-    mixer.load(ir)
+    mixer.replay(ir)
     assert "kick" in mixer.node_data
     assert mixer.node_data["kick"].gain == 0.8
 
@@ -128,7 +128,7 @@ def test_instantiate_creates_routing() -> None:
             RouteDef(source="bass", target="verb", kind="send", level=0.4),
         ),
     )
-    mixer.load(ir)
+    mixer.replay(ir)
     assert ("bass", "verb", "send", 0.4) in mixer.routing
 
 
@@ -142,14 +142,14 @@ def test_instantiate_sets_controls() -> None:
             ControlDef(path="bass/freq", value=220.0),
         ),
     )
-    mixer.load(ir)
-    assert mixer.ctrl_values.get("bass/freq") == 220.0
+    mixer.replay(ir)
+    assert mixer.controls.get("bass/freq") == 220.0
 
 
 def test_instantiate_sets_transport() -> None:
     mixer = _make_mixer()
     ir = GraphIr(tempo=140, meter=3, master=0.6)
-    mixer.load(ir)
+    mixer.replay(ir)
     # Transport is delegated to session
     mixer._session.tempo  # type: ignore[reportPrivateUsage]  # accessed via property on mock
 
@@ -167,11 +167,11 @@ def test_capture_instantiate_round_trip() -> None:
     ir = mixer1.capture()
 
     mixer2 = _make_mixer()
-    mixer2.load(ir)
+    mixer2.replay(ir)
 
     assert set(mixer2.node_data.keys()) == {"bass", "verb"}
     assert ("bass", "verb", "send", 0.4) in mixer2.routing
-    assert mixer2.ctrl_values.get("bass/freq") == 220.0
+    assert mixer2.controls.get("bass/freq") == 220.0
     assert mixer2.is_muted("bass")
     # Muted bass: saved gain is 0.3 — verify via capture()
     ir2 = mixer2.capture()
@@ -312,7 +312,7 @@ def test_proxy_to_instantiate_round_trip() -> None:
     ir = proxy.build()
 
     mixer = _make_mixer()
-    mixer.load(ir)
+    mixer.replay(ir)
 
     assert "kick" in mixer.node_data
     assert mixer.node_data["kick"].gain == 0.8
@@ -328,7 +328,7 @@ def test_instantiate_applies_mutes() -> None:
             MutedDef(name="bass", saved_gain=0.3),
         ),
     )
-    mixer.load(ir)
+    mixer.replay(ir)
     assert mixer.is_muted("bass")
 
 
@@ -368,7 +368,7 @@ def test_instantiate_replays_patterns() -> None:
         nodes=(NodeDef(name="kick", source="faust:kick", gain=0.8),),
         patterns=(PatternDef(target="kick", pattern=pat_node),),
     )
-    mixer.load(ir)
+    mixer.replay(ir)
     # play() should have been called on the session
     mixer._session.play.assert_called()  # type: ignore[reportPrivateUsage]
 
@@ -386,6 +386,6 @@ def test_capture_instantiate_round_trip_with_patterns() -> None:
     assert len(ir.patterns) >= 1
 
     mixer2 = _make_mixer()
-    mixer2.load(ir)
+    mixer2.replay(ir)
     # Pattern should have been played on the new mixer
     mixer2._session.play.assert_called()  # type: ignore[reportPrivateUsage]

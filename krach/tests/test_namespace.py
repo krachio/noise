@@ -1,18 +1,17 @@
 """Tests for the kr/krs/krp namespace refactor.
 
 Verifies that DSP functions are accessible through krach.signal (krs),
-pattern builders through krach.pattern (krp), and LiveMixer has dsp().
+pattern builders through krach.pattern (krp), and dsp lives in krach.graph.node.
 """
 
 from krach.repl import LiveMixer
-from krach.graph.node import dsp
 
 
-# ── LiveMixer retains dsp() ──────────────────────────────────────────────
+# ── dsp() not on Mixer ───────────────────────────────────────────────────
 
 
-def test_dsp_is_same_function() -> None:
-    assert LiveMixer.dsp is dsp
+def test_dsp_not_on_mixer() -> None:
+    assert not hasattr(LiveMixer, "dsp")
 
 
 # ── krach.signal (krs) ──────────────────────────────────────────────────

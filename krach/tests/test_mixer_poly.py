@@ -52,7 +52,7 @@ def test_remove_poly_node_clears_ctrl_values() -> None:
     mixer.remove("pad")
 
     # No orphaned control values.
-    stale = [k for k in mixer.ctrl_values if k.startswith("pad")]
+    stale = [k for k in mixer.controls if k.startswith("pad")]
     assert stale == [], f"orphaned ctrl_values after remove: {stale}"
 
 

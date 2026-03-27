@@ -16,12 +16,12 @@ kr.tempo = 128
 ir = kr.capture()
 
 # Later: replay on a fresh mixer
-kr.load(ir)
+kr.replay(ir)
 ```
 
 `capture()` returns a `GraphIr` — a frozen, serializable snapshot of everything: nodes (with their DspGraph IR), routing, patterns, controls, transport, and mute state.
 
-`load(ir)` replays it: creates nodes, connects routing, plays patterns, sets controls.
+`replay(ir)` replays it: creates nodes, connects routing, plays patterns, sets controls.
 
 ## Save & recall (in-memory scenes)
 
@@ -49,7 +49,7 @@ json.dump(data, open("session.json", "w"))
 from krach.ir.module import GraphIr
 data = json.load(open("session.json"))
 ir = GraphIr.from_dict(data)
-kr.load(ir)
+kr.replay(ir)
 ```
 
 The serialized format embeds DspGraphs inline — the full signal computation IR for each node. When you load and instantiate, the DSP is re-transpiled to FAUST and JIT-compiled. Nodes with identical DspGraphs (same `graph_key`) share compiled binaries.
@@ -89,7 +89,7 @@ proxy.play("kick", krp.hit() * 4)
 proxy.tempo = 128
 
 ir = proxy.build()       # → GraphIr (no audio started)
-kr.load(ir)       # now play it
+kr.replay(ir)       # now play it
 ```
 
 The proxy records calls as `GraphIr` without connecting to the engine. Useful for building reusable module templates.
@@ -135,7 +135,7 @@ d.prefix           # → "drums"
 
 All node names are prefixed: `"kick"` becomes `"drums/kick"`. The existing `/` path addressing works naturally.
 
-## `kr.scene(name)` and `kr.load(ir)`
+## `kr.scene(name)` and `kr.replay(ir)`
 
 `kr.scene(name)` retrieves a saved scene by name (returns `GraphIr`):
 
@@ -144,10 +144,10 @@ kr.save("verse")
 ir = kr.scene("verse")   # → GraphIr
 ```
 
-`kr.load(ir)` replays a `GraphIr` onto the mixer (session replay). It flattens any `sub_graphs` automatically:
+`kr.replay(ir)` replays a `GraphIr` onto the mixer (session replay). It flattens any `sub_graphs` automatically:
 
 ```python
-kr.load(ir)  # creates nodes, routing, patterns, transport
+kr.replay(ir)  # creates nodes, routing, patterns, transport
 ```
 
 ## Module composition with `g.sub()`

@@ -15,7 +15,7 @@ from pathlib import Path
 
 from krach.repl.paths import resolve_engine_bin, resolve_faust_stdlib_dir, resolve_lib_dir
 from krach.config import load_config
-from krach.graph.node import dsp, parse_dsp_controls
+from krach.graph.node import parse_dsp_controls
 from krach.mixer import Mixer
 
 
@@ -23,9 +23,7 @@ from krach.mixer import Mixer
 
 
 class LiveMixer(Mixer):
-    """REPL-enhanced Mixer with dsp() and typo guard."""
-
-    dsp = staticmethod(dsp)
+    """REPL-enhanced Mixer with typo guard."""
 
     _PUBLIC_SETTERS = frozenset({"master", "tempo", "meter"})
 
@@ -242,7 +240,7 @@ def main() -> None:
     print("  ██║  ██╗██║  ██║██║  ██║╚██████╗██║  ██║")
     print("  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝")
     print()
-    print("  kr    Mixer — kr.node(), kr.play(), kr.dsp(), ...")
+    print("  kr    Mixer — kr.node(), kr.play(), kr.load(), ...")
     print("  krs   krach.signal — krs.saw(), krs.lowpass(), krs.control(), ...")
     print("  krp   krach.pattern — krp.note(), krp.seq(), krp.hit(), ...")
     print()

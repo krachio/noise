@@ -111,7 +111,7 @@ def test_instantiate_then_load_round_trip() -> None:
 
     # Load on fresh mixer (session replay path)
     mixer2 = _make_mixer()
-    mixer2.load(captured)
+    mixer2.replay(captured)
     assert "synth/osc" in mixer2._nodes
 
 

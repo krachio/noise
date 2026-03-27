@@ -377,7 +377,7 @@ class Mixer:
         return result
 
     @property
-    def ctrl_values(self) -> dict[str, float]:
+    def controls(self) -> dict[str, float]:
         """Read-only snapshot of all set control values."""
         return dict(self._ctrl_values)
 
@@ -1145,7 +1145,7 @@ class Mixer:
         self._muted.clear()
         self._patterns.clear()
         self._shadow_sub_graphs.clear()
-        self.load(self._scenes[name])
+        self.replay(self._scenes[name])
 
     @property
     def scenes(self) -> list[str]:
@@ -1164,7 +1164,7 @@ class Mixer:
             raise ValueError(f"scene '{name}' not found")
         return self._scenes[name]
 
-    def exec_file(self, path: str) -> None:
+    def load(self, path: str) -> None:
         """Load and execute a Python file with ``kr`` in scope."""
         p = Path(path)
         if not p.exists():
@@ -1229,7 +1229,7 @@ class Mixer:
             sub_graphs=tuple(self._shadow_sub_graphs),
         )
 
-    def load(self, ir: GraphIr) -> None:
+    def replay(self, ir: GraphIr) -> None:
         """Replay a GraphIr onto this mixer. Batches all nodes into one rebuild."""
         from krach.ir.graph import flatten
 
@@ -1282,7 +1282,7 @@ class Mixer:
         from krach.ir.graph import prefix_ir, flatten
 
         flat = flatten(prefix_ir(ir, prefix))
-        self.load(flat)
+        self.replay(flat)
 
         # Build node handles for all prefixed nodes
         nodes: dict[str, NodeHandle] = {}
