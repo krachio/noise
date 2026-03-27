@@ -98,13 +98,13 @@ bass["cutoff"] = 1200
 ```
 
 ### Test counts
-- audio-engine: 167 Rust tests
+- audio-engine: 176 Rust tests (incl. 3 graph continuity regression tests)
 - audio-faust: 29 Rust tests
-- pattern-engine: 192 Rust tests
+- pattern-engine: 203 Rust tests (incl. 5 cycle/tempo + 6 euclidean + 3 E2E)
 - krach-engine: 42 Rust tests
-- krach: 861 Python tests
+- krach: 869 Python tests (incl. 5 poly lifecycle + 4 multi-client/control UX)
 - krach-mcp: 21 Python tests
-- **Total: 1312 tests**, all green. Pyright strict clean.
+- **Total: 1340 tests**, all green. Zero #[ignore] / zero xfail (except #21 multi-client, architectural). Pyright strict clean. Clippy clean.
 
 ## Key features
 
@@ -139,6 +139,7 @@ bass["cutoff"] = 1200
 - **PyPI v0.1.0 published**: full metadata, `krach --version`, THIRD_PARTY_LICENSES (GPL for libfaust, Apache for LLVM)
 - **Table primitives**: `krs.rwtable()` (read-write buffer) and `krs.rdtable()` (read-only table) as proper IR primitives — enables loopers, samplers, freeze effects, wavetables. `wavetable()` refactored from faust_expr hack to rdtable_p
 - **MIDI clock input**: external clock sync for jam sessions — ClockFollower (EMA + jitter gate), `kr.sync = "midi"`, `NOISE_MIDI_SYNC=1`, `--midi-sync` CLI flag, 2s timeout fallback, phase correction
+- **Bug hunt sprint (2026-03-27)**: fixed SetBpm epoch-warp (#28), true Bjorklund algorithm (#27), control pattern set() warning (#25). Graph continuity (#12, #13), poly lifecycle (#22, #23), and control hush (#26) confirmed working with regression tests
 
 ## Backlog
 
