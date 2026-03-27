@@ -1098,4 +1098,162 @@ mod tests {
         e.apply(EngineCommand::SetClockSource(ClockSource::Internal));
         assert_eq!(e.clock_source(), ClockSource::Internal);
     }
+
+    // ── cycle boundary sync (bug #28) ────────────────────────────────────
+
+    #[test]
+    #[ignore] // Bug #28: new slot should start at next cycle boundary
+    fn test_new_slot_starts_at_next_cycle_boundary() {
+        let mut e = fast_engine();
+        // Let the clock run past the start of a cycle.
+        std::thread::sleep(Duration::from_millis(60));
+
+        let now = Instant::now();
+        let current = e.current_cycle(now);
+        assert!(current >= 1, "should be past cycle 0");
+
+        e.apply(EngineCommand::SetPattern {
+            name: "pad".into(),
+            pattern: CompiledPattern::atom(note(60)),
+        });
+
+        // The new slot's first events should fire no earlier than the next
+        // cycle boundary — never inside the current partial cycle.
+        e.fill(now + Duration::from_millis(200));
+        let events = e.drain(now + Duration::from_millis(200));
+
+        let next_boundary = e.clock.cycle_start_instant(current + 1);
+        for ev in &events {
+            assert!(
+                ev.fire_at >= next_boundary,
+                "new slot event fires at {:?}, before next cycle boundary {:?}",
+                ev.fire_at,
+                next_boundary,
+            );
+        }
+    }
+
+    #[test]
+    #[ignore] // Bug #28: overwrite should start immediately (current cycle)
+    fn test_overwrite_slot_starts_at_current_cycle() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetPattern {
+            name: "kick".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+        // Let some time pass so we're mid-cycle.
+        std::thread::sleep(Duration::from_millis(20));
+
+        let now = Instant::now();
+        let current = e.current_cycle(now);
+
+        // Overwrite: should pick up from current cycle, not wait for next.
+        e.apply(EngineCommand::SetPattern {
+            name: "kick".into(),
+            pattern: CompiledPattern::atom(note(38)),
+        });
+
+        e.fill(now + Duration::from_millis(200));
+        let events = e.drain(now + Duration::from_millis(200));
+
+        // At least one event should fire within the current cycle window.
+        let current_start = e.clock.cycle_start_instant(current);
+        let next_start = e.clock.cycle_start_instant(current + 1);
+        let in_current = events
+            .iter()
+            .any(|ev| ev.fire_at >= current_start && ev.fire_at < next_start);
+        assert!(
+            in_current,
+            "overwrite should produce events in the current cycle"
+        );
+    }
+
+    #[test]
+    #[ignore] // Bug #28: no past-due burst after mid-cycle SetPattern
+    fn test_set_pattern_mid_cycle_no_past_due_burst() {
+        let mut e = fast_engine();
+        // Let several cycles elapse.
+        std::thread::sleep(Duration::from_millis(120));
+
+        let now = Instant::now();
+        e.apply(EngineCommand::SetPattern {
+            name: "bass".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+
+        e.fill(now);
+        let events = e.drain(now);
+
+        // Every event should fire at or after `now` — no stale past-due burst.
+        for ev in &events {
+            assert!(
+                ev.fire_at >= now,
+                "past-due event: fire_at={:?} < now={:?}",
+                ev.fire_at,
+                now,
+            );
+        }
+    }
+
+    // ── tempo transition (bug #28) ───────────────────────────────────────
+
+    #[test]
+    #[ignore] // Bug #28: tempo change should preserve cycle position
+    fn test_set_bpm_preserves_cycle_position() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetPattern {
+            name: "kick".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+
+        // Let some time pass.
+        std::thread::sleep(Duration::from_millis(80));
+
+        let now = Instant::now();
+        let cycle_before = e.current_cycle(now);
+        assert!(cycle_before > 0, "should have advanced past cycle 0");
+
+        // Change tempo — should epoch-warp, not reset to cycle 0.
+        e.apply(EngineCommand::SetBpm { bpm: 3000.0 });
+
+        let cycle_after = e.current_cycle(Instant::now());
+        assert!(
+            cycle_after > 0,
+            "BPM change should not jump back to cycle 0 (was {cycle_before}, now {cycle_after})"
+        );
+    }
+
+    #[test]
+    #[ignore] // Bug #28: tempo change must not produce backward events
+    fn test_set_bpm_does_not_produce_backward_events() {
+        let mut e = fast_engine();
+        e.apply(EngineCommand::SetPattern {
+            name: "kick".into(),
+            pattern: CompiledPattern::atom(note(36)),
+        });
+
+        // Accumulate some events.
+        e.fill(Instant::now());
+        std::thread::sleep(Duration::from_millis(60));
+
+        let pre_change = Instant::now();
+
+        // Change BPM — should not cause events to fire before pre_change.
+        e.apply(EngineCommand::SetBpm { bpm: 3000.0 });
+        e.fill(Instant::now());
+
+        // Wait and drain everything.
+        std::thread::sleep(Duration::from_millis(200));
+        let events = e.drain(Instant::now());
+
+        // All events scheduled after the BPM change must be forward in time.
+        for ev in &events {
+            assert!(
+                ev.fire_at >= pre_change - Duration::from_millis(5),
+                "backward event after BPM change: fire_at={:?} < pre_change={:?}",
+                ev.fire_at,
+                pre_change,
+            );
+        }
+    }
 }
