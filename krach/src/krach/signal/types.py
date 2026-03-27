@@ -217,6 +217,30 @@ class ControlParams:
     step: float
 
 
+@dataclass(frozen=True, slots=True)
+class RwTableParams:
+    """Parameters for rwtable — read-write buffer (looper, freeze, granular)."""
+    size: int
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.size, int):  # type: ignore[reportUnnecessaryIsInstance]
+            raise TypeError(f"rwtable size must be int, got {type(self.size).__name__}")
+        if self.size <= 0:
+            raise ValueError(f"rwtable size must be > 0, got {self.size}")
+        if self.size > 2**24:
+            raise ValueError(f"rwtable size must be <= 2^24 ({2**24}), got {self.size}")
+
+
+@dataclass(frozen=True, slots=True)
+class RdTableParams:
+    """Parameters for rdtable — read-only table (wavetables, compile-time data)."""
+    data: tuple[float, ...]
+
+    def __post_init__(self) -> None:
+        if len(self.data) == 0:
+            raise ValueError("rdtable data must not be empty")
+
+
 type PrimitiveParams = (
     NoParams
     | ConstParams
@@ -224,6 +248,8 @@ type PrimitiveParams = (
     | FeedbackParams
     | FaustExprParams
     | ControlParams
+    | RwTableParams
+    | RdTableParams
 )
 
 

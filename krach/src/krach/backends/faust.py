@@ -18,6 +18,8 @@ from krach.signal.types import (
     Equation,
     FaustExprParams,
     FeedbackParams,
+    RdTableParams,
+    RwTableParams,
     Signal,
 )
 from krach.signal.trace import lowering
@@ -35,6 +37,8 @@ from krach.signal.primitives import (
     mem_p,
     mod_p,
     mul_p,
+    rdtable_p,
+    rwtable_p,
     select2_p,
     sr_p,
     sub_p,
@@ -333,3 +337,38 @@ def _lower_control(_ctx: FaustLoweringContext, eqn: Equation) -> str:
 
 
 lowering.register(control_p, _lower_control)
+
+
+# ---------------------------------------------------------------------------
+# rwtable lowering
+# ---------------------------------------------------------------------------
+
+
+def _lower_rwtable(ctx: FaustLoweringContext, eqn: Equation) -> str:
+    if not isinstance(eqn.params, RwTableParams):
+        raise TypeError(f"Expected RwTableParams, got {type(eqn.params).__name__}")
+    init, w_idx, w_val, r_idx = eqn.inputs
+    return (
+        f"rwtable({eqn.params.size}, {ctx.expr(init)}, "
+        f"int({ctx.expr(w_idx)}), {ctx.expr(w_val)}, int({ctx.expr(r_idx)}))"
+    )
+
+
+lowering.register(rwtable_p, _lower_rwtable)
+
+
+# ---------------------------------------------------------------------------
+# rdtable lowering
+# ---------------------------------------------------------------------------
+
+
+def _lower_rdtable(ctx: FaustLoweringContext, eqn: Equation) -> str:
+    if not isinstance(eqn.params, RdTableParams):
+        raise TypeError(f"Expected RdTableParams, got {type(eqn.params).__name__}")
+    data = eqn.params.data
+    (r_idx,) = eqn.inputs
+    values_str = ", ".join(str(v) for v in data)
+    return f"rdtable({len(data)}, waveform{{{values_str}}}, int({ctx.expr(r_idx)}))"
+
+
+lowering.register(rdtable_p, _lower_rdtable)

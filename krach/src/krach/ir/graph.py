@@ -25,6 +25,8 @@ from krach.signal.types import (
     FeedbackParams,
     NoParams,
     Precision,
+    RdTableParams,
+    RwTableParams,
     Signal,
     SignalType,
 )
@@ -238,7 +240,7 @@ def _dict_to_signal(d: dict[str, Any]) -> Signal:
     )
 
 
-def _params_to_dict(p: NoParams | ConstParams | DelayParams | FeedbackParams | FaustExprParams | ControlParams) -> dict[str, Any]:
+def _params_to_dict(p: NoParams | ConstParams | DelayParams | FeedbackParams | FaustExprParams | ControlParams | RwTableParams | RdTableParams) -> dict[str, Any]:
     match p:
         case NoParams():
             return {"type": "no"}
@@ -257,11 +259,15 @@ def _params_to_dict(p: NoParams | ConstParams | DelayParams | FeedbackParams | F
                 "feedback_input_index": idx,
                 "free_var_signals": [_signal_to_dict(s) for s in fvs],
             }
+        case RwTableParams(size=sz):
+            return {"type": "rwtable", "size": sz}
+        case RdTableParams(data=d):
+            return {"type": "rdtable", "data": list(d)}
         case _:
             raise TypeError(f"unhandled params type: {type(p).__name__}")
 
 
-def _dict_to_params(d: dict[str, Any]) -> NoParams | ConstParams | DelayParams | FeedbackParams | FaustExprParams | ControlParams:
+def _dict_to_params(d: dict[str, Any]) -> NoParams | ConstParams | DelayParams | FeedbackParams | FaustExprParams | ControlParams | RwTableParams | RdTableParams:
     match d["type"]:
         case "no":
             return NoParams()
@@ -279,6 +285,10 @@ def _dict_to_params(d: dict[str, Any]) -> NoParams | ConstParams | DelayParams |
                 feedback_input_index=d["feedback_input_index"],
                 free_var_signals=tuple(_dict_to_signal(s) for s in d["free_var_signals"]),
             )
+        case "rwtable":
+            return RwTableParams(size=d["size"])
+        case "rdtable":
+            return RdTableParams(data=tuple(float(v) for v in d["data"]))
         case _:
             raise ValueError(f"unknown params type: {d['type']!r}")
 

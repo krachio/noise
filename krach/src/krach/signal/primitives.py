@@ -11,6 +11,8 @@ from krach.signal.types import (
     FeedbackParams,
     NoParams,
     PrimitiveParams,
+    RdTableParams,
+    RwTableParams,
     SignalType,
 )
 from krach.signal.trace import abstract_eval, active_precision
@@ -34,6 +36,8 @@ mem_p = Primitive("mem", stateful=True)
 delay_p = Primitive("delay", stateful=True)
 feedback_p = Primitive("feedback", stateful=True)
 sr_p = Primitive("sr")
+rwtable_p = Primitive("rwtable", stateful=True)
+rdtable_p = Primitive("rdtable", stateful=True)
 
 # ---------------------------------------------------------------------------
 # Primitive instances — math intrinsics (unary)
@@ -277,11 +281,33 @@ def _control_eval(*, params: PrimitiveParams) -> SignalType:
 
 abstract_eval.register(control_p, _control_eval)
 
+
+def _rwtable_eval(
+    init: SignalType, w_idx: SignalType, w_val: SignalType, r_idx: SignalType,
+    *, params: PrimitiveParams,
+) -> SignalType:
+    if not isinstance(params, RwTableParams):
+        raise TypeError(f"Expected RwTableParams, got {type(params).__name__}")
+    return SignalType(channels=1, precision=init.precision)
+
+
+abstract_eval.register(rwtable_p, _rwtable_eval)
+
+
+def _rdtable_eval(r_idx: SignalType, *, params: PrimitiveParams) -> SignalType:
+    if not isinstance(params, RdTableParams):
+        raise TypeError(f"Expected RdTableParams, got {type(params).__name__}")
+    return SignalType(channels=1, precision=r_idx.precision)
+
+
+abstract_eval.register(rdtable_p, _rdtable_eval)
+
 # ── Completeness set ─────────────────────────────────────────────────────
 
 ALL_SIGNAL_PRIMITIVES: frozenset[Primitive] = frozenset({
     add_p, sub_p, mul_p, div_p, mod_p, const_p,
     mem_p, delay_p, feedback_p, sr_p,
+    rwtable_p, rdtable_p,
     *UNARY_MATH_PRIMS.values(),
     *BINARY_MATH_PRIMS.values(),
     *COMPARISON_PRIMS.values(),

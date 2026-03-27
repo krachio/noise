@@ -12,6 +12,8 @@ from krach.signal.types import (
     DspGraph,
     FeedbackParams,
     NoParams,
+    RdTableParams,
+    RwTableParams,
     Signal,
     SignalLike,
 )
@@ -48,8 +50,10 @@ from krach.signal.primitives import (
     min_p,
     ne_p,
     pow_p,
+    rdtable_p,
     remainder_p,
     round_p,
+    rwtable_p,
     select2_p,
     sin_p,
     sqrt_p,
@@ -238,6 +242,35 @@ def select2(
 ) -> Signal:
     """Two-way conditional signal router."""
     return bind(select2_p, selector, when_zero, when_one, params=NoParams())
+
+
+# ---------------------------------------------------------------------------
+# rwtable() — read-write table
+# ---------------------------------------------------------------------------
+
+
+def rwtable(
+    size: int,
+    init: SignalLike,
+    write_idx: SignalLike,
+    write_val: SignalLike,
+    read_idx: SignalLike,
+) -> Signal:
+    """Read-write table: fixed-size buffer for loopers, freeze, granular."""
+    return bind(
+        rwtable_p, init, write_idx, write_val, read_idx,
+        params=RwTableParams(size=size),
+    )
+
+
+# ---------------------------------------------------------------------------
+# rdtable() — read-only table
+# ---------------------------------------------------------------------------
+
+
+def rdtable(data: tuple[float, ...], read_idx: SignalLike) -> Signal:
+    """Read-only table: compile-time wavetable data."""
+    return bind(rdtable_p, read_idx, params=RdTableParams(data=data))
 
 
 # ---------------------------------------------------------------------------

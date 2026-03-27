@@ -79,12 +79,14 @@ from krach.signal.music import (
     stereo_width as stereo_width,
 )
 
-# DSP primitives: delay, memory, feedback, sample rate
+# DSP primitives: delay, memory, feedback, tables, sample rate
 from krach.signal.core import (
     delay as delay,
     faust_expr as faust_expr,
     feedback as feedback,
     mem as mem,
+    rdtable as rdtable,
+    rwtable as rwtable,
     sample_rate as sample_rate,
     select2 as select2,
     sr as sr,
@@ -175,6 +177,8 @@ __all__ = [
     "faust_expr",
     "feedback",
     "mem",
+    "rdtable",
+    "rwtable",
     "sample_rate",
     "select2",
     "sr",
