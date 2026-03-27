@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from krach.backends.pattern_protocol import (
+from krach.backends.pattern import (
     Batch,
     Ping,
     SetBpm,

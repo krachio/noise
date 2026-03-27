@@ -31,7 +31,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from krach.backends.faust_lowering import FaustLoweringContext
+    from krach.backends.faust import FaustLoweringContext
 
 type AbstractEvalRule = Callable[..., SignalType]
 type LoweringRule = Callable[[FaustLoweringContext, Equation], str]

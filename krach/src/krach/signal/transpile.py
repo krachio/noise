@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
-from krach.backends.faust_codegen import emit_faust
+from krach.backends.faust import emit_faust
 from krach.ir.signal import (
     ControlParams,
     DspGraph,

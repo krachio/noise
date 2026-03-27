@@ -85,7 +85,7 @@ def dsp(fn: Callable[..., Any], source: str = "") -> DspDef:
     """
     global _dsp_cache_hits, _dsp_cache_misses  # noqa: PLW0603
     from krach.signal.transpile import make_graph
-    from krach.backends.faust_codegen import emit_faust
+    from krach.backends.faust import emit_faust
 
     graph = make_graph(fn)  # type: ignore[arg-type]
     key = _graph_key(graph)

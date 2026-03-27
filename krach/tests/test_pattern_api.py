@@ -164,7 +164,7 @@ def test_end_to_end_mininotation_to_engine_json() -> None:
     assert restored == bound
 
     # Final: command_to_json (what actually goes to the engine)
-    from krach.backends.pattern_protocol import SetPattern, command_to_json
+    from krach.backends.pattern import SetPattern, command_to_json
     cmd_json = command_to_json(SetPattern(slot="lead", pattern=bound))
     parsed = json.loads(cmd_json)
     assert parsed["cmd"] == "SetPattern"

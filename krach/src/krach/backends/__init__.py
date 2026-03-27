@@ -1,1 +1,1 @@
-"""Lowering backends: Faust codegen (Signal IR → .dsp) and pattern protocol (PatternNode → engine JSON)."""
+"""Lowering backends: faust (Signal IR → .dsp), pattern (PatternNode → engine JSON), graph (NodeInstance → engine graph)."""

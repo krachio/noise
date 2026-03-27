@@ -1,4 +1,9 @@
-"""Lowering rules: DspGraph equations -> Faust expression strings."""
+"""Faust backend: DspGraph -> Faust source string.
+
+FaustLoweringContext maps Signals to Faust expression strings.
+emit_faust() walks a DspGraph and produces a complete .dsp source.
+Lowering rules registered via the RuleRegistry at import time.
+"""
 
 from __future__ import annotations
 
@@ -9,6 +14,7 @@ from krach.ir.signal import (
     ConstParams,
     ControlParams,
     DelayParams,
+    DspGraph,
     Equation,
     FaustExprParams,
     FeedbackParams,
@@ -61,6 +67,45 @@ class FaustLoweringContext:
         name = f"body_{self.body_counter}"
         self.body_counter += 1
         return name
+
+
+# ---------------------------------------------------------------------------
+# emit_faust — top-level entry point
+# ---------------------------------------------------------------------------
+
+
+def emit_faust(graph: DspGraph, *, optimize: bool = False) -> str:
+    """Lower a DspGraph to a complete Faust source string."""
+    if optimize:
+        from krach.signal.optimize import optimize_graph
+        graph = optimize_graph(graph)
+
+    ctx = FaustLoweringContext()
+
+    input_names = [f"input{i}" for i in range(len(graph.inputs))]
+    for inp, name in zip(graph.inputs, input_names, strict=True):
+        ctx.bind(inp, name)
+
+    for eqn in graph.equations:
+        rule = lowering.lookup(eqn.primitive)
+        expr = rule(ctx, eqn)
+        ctx.bind(eqn.outputs[0], expr)
+
+    output_expr = ", ".join(ctx.expr(o) for o in graph.outputs)
+    args = ", ".join(input_names)
+
+    lines: list[str] = []
+    lines.append('import("stdfaust.lib");')
+
+    process_lhs = f"process({args})" if args else "process"
+
+    if ctx.with_defs:
+        with_block = "\nwith {\n" + "\n".join(f"    {d}" for d in ctx.with_defs) + "\n}"
+        lines.append(f"{process_lhs} = {output_expr}{with_block};")
+    else:
+        lines.append(f"{process_lhs} = {output_expr};")
+
+    return "\n".join(lines) + "\n"
 
 
 # ---------------------------------------------------------------------------

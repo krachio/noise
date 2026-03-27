@@ -3276,7 +3276,7 @@ def test_callable_with_default_none_is_source() -> None:
     mock_graph = DspGraph(inputs=(), outputs=(), equations=())
     with (
         patch("krach.signal.transpile.make_graph", return_value=mock_graph),
-        patch("krach.backends.faust_codegen.emit_faust", return_value="process = 0;\n"),
+        patch("krach.backends.faust.emit_faust", return_value="process = 0;\n"),
         patch("krach.signal.transpile.collect_controls", return_value=()),
     ):
         import tempfile

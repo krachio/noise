@@ -396,7 +396,7 @@ class TestLoadGraphTimeout:
         Root cause: session.py:160-169 — load_graph uses raw socket ops
         without the timeout-catching wrapper used by send() and _send_json().
         """
-        from krach.pattern.graph import Graph
+        from krach.backends.graph import Graph
 
         _stub_ok_response(mock_cls)
         s = Session()
@@ -414,7 +414,7 @@ class TestLoadGraphTimeout:
     @patch("krach.pattern.session.socket.socket")
     def test_load_graph_readline_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
         """BUG: load_graph() readline does not catch socket.timeout."""
-        from krach.pattern.graph import Graph
+        from krach.backends.graph import Graph
 
         _stub_ok_response(mock_cls)
         s = Session()
