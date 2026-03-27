@@ -123,3 +123,49 @@ def test_setattr_allows_known_properties() -> None:
     mixer.master = 0.5  # should not raise
     mixer.tempo = 140.0
     mixer.meter = 3.0
+
+
+# ── Namespace cleanliness ─────────────────────────────────────────────────
+
+
+def test_krs_dir_has_no_submodules() -> None:
+    """dir(krs) should not leak submodule names like core, lib, music, etc."""
+    from krach import signal as krs
+    submodules = {"ad", "ad_rules", "compose", "core", "lib", "music",
+                  "optimize", "primitives", "trace", "transpile", "types"}
+    leaked = submodules & set(dir(krs))
+    # transpile is a public function, not the submodule
+    leaked.discard("transpile")
+    assert leaked == set(), f"submodules leaked into krs namespace: {leaked}"
+
+
+def test_krp_dir_has_no_internals() -> None:
+    """dir(krp) should not leak internal types like Session, KernelError, etc."""
+    from krach import pattern as krp
+    internals = {"ConnectionIr", "Graph", "GraphIr", "NodeInstance",
+                 "KernelError", "Session", "SlotState", "Transform",
+                 "check_finite", "bind", "builders", "mininotation",
+                 "pattern", "pitch", "primitives", "types", "transform"}
+    leaked = internals & set(dir(krp))
+    assert leaked == set(), f"internals leaked into krp namespace: {leaked}"
+
+
+# ── Mixer API renames ─────────────────────────────────────────────────────
+
+
+def test_mixer_has_replay_not_old_load_ir() -> None:
+    """Mixer.replay(ir) exists, the old load(ir: GraphIr) signature is gone."""
+    from krach.mixer import Mixer
+    assert hasattr(Mixer, "replay")
+    # load() now takes a str path, not GraphIr
+    import inspect
+    sig = inspect.signature(Mixer.load)
+    params = list(sig.parameters.keys())
+    assert "path" in params, f"Mixer.load should take 'path', got {params}"
+
+
+def test_mixer_has_controls_not_ctrl_values() -> None:
+    """Mixer.controls property exists, ctrl_values is gone."""
+    from krach.mixer import Mixer
+    assert hasattr(Mixer, "controls")
+    assert not hasattr(Mixer, "ctrl_values")
