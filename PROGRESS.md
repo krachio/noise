@@ -102,9 +102,9 @@ bass["cutoff"] = 1200
 - audio-faust: 29 Rust tests
 - pattern-engine: 203 Rust tests (incl. 5 cycle/tempo + 6 euclidean + 3 E2E)
 - krach-engine: 42 Rust tests
-- krach: 869 Python tests (incl. 5 poly lifecycle + 4 multi-client/control UX)
+- krach: 873 Python tests (incl. 5 poly lifecycle + 4 multi-client/control UX + 4 namespace/API)
 - krach-mcp: 21 Python tests
-- **Total: 1340 tests**, all green. Zero #[ignore] / zero xfail (except #21 multi-client, architectural). Pyright strict clean. Clippy clean.
+- **Total: 1344 tests**, all green. Zero #[ignore] / zero xfail (except #21 multi-client, architectural). Pyright strict clean. Clippy clean.
 
 ## Key features
 
@@ -140,6 +140,7 @@ bass["cutoff"] = 1200
 - **Table primitives**: `krs.rwtable()` (read-write buffer) and `krs.rdtable()` (read-only table) as proper IR primitives — enables loopers, samplers, freeze effects, wavetables. `wavetable()` refactored from faust_expr hack to rdtable_p
 - **MIDI clock input**: external clock sync for jam sessions — ClockFollower (EMA + jitter gate), `kr.sync = "midi"`, `NOISE_MIDI_SYNC=1`, `--midi-sync` CLI flag, 2s timeout fallback, phase correction
 - **Bug hunt sprint (2026-03-27)**: fixed SetBpm epoch-warp (#28), true Bjorklund algorithm (#27), control pattern set() warning (#25). Graph continuity (#12, #13), poly lifecycle (#22, #23), and control hush (#26) confirmed working with regression tests
+- **API cleanup (2026-03-27)**: clean krs/krp namespaces via `__dir__()`, Mixer API renames (exec_file→load, load→replay, ctrl_values→controls), removed dsp() from LiveMixer
 
 ## Backlog
 
