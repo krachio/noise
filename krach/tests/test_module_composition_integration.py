@@ -78,7 +78,7 @@ def test_full_composition_workflow() -> None:
 
     # 5. Route via >> operator
     verb = mixer.voice("verb", "faust:verb", gain=0.3)
-    handle >> verb
+    _ = handle >> verb
     assert ("live/bus", "verb") in mixer._sends
 
     # 6. Control via [] operator

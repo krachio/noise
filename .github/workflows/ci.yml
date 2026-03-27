@@ -14,7 +14,7 @@ jobs:
     name: Rust (check + test)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@stable
       - run: sudo apt-get update && sudo apt-get install -y libasound2-dev
       # Exclude audio-faust and krach-engine (require libfaust + LLVM, not available in CI)
@@ -29,8 +29,8 @@ jobs:
       run:
         working-directory: krach
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
+      - uses: actions/checkout@v6
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync
       - run: uv run pyright
       - run: uv run pytest -x -q

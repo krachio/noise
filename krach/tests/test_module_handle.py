@@ -86,7 +86,7 @@ def test_module_handle_rrshift() -> None:
         outputs=("osc",),
     )
     loop = mixer.instantiate(ir, "loop")
-    loop >> verb
+    _ = loop >> verb
     assert ("loop/osc", "verb") in mixer._sends
 
 
