@@ -14,7 +14,7 @@ from pathlib import Path
 
 def _package_dir() -> Path:
     """Directory containing this module (krach/)."""
-    return Path(__file__).resolve().parent
+    return Path(__file__).resolve().parent.parent
 
 
 def resolve_engine_bin() -> Path:
