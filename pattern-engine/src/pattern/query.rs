@@ -1277,4 +1277,145 @@ mod tests {
             "fast 2 produces 4 events, warp preserves them"
         );
     }
+
+    // ── Euclidean quality (bug #27) ──────────────────────────────────────
+
+    fn euclid_pat(pulses: u32, steps: u32, rotation: u32) -> (CompiledPattern, usize) {
+        let mut pat = CompiledPattern {
+            nodes: vec![PatternNode::Atom { value: note(60) }],
+            root: 0,
+            is_control: false,
+        };
+        let idx = pat.push(PatternNode::Euclid {
+            pulses,
+            steps,
+            rotation,
+            child: 0,
+        });
+        pat.root = idx;
+        (pat, idx)
+    }
+
+    #[test]
+    #[ignore] // Bug #27: euclidean event count
+    fn test_euclid_5_16_produces_exactly_5_events() {
+        let (pat, _) = euclid_pat(5, 16, 0);
+        let events = query(&pat, pat.root, cycle_0());
+        assert_eq!(events.len(), 5, "euclid(5,16) should produce 5 events");
+    }
+
+    #[test]
+    #[ignore] // Bug #27: euclidean distribution — Bjorklund positions
+    fn test_euclid_5_16_events_are_evenly_distributed() {
+        let (pat, _) = euclid_pat(5, 16, 0);
+        let events = query(&pat, pat.root, cycle_0());
+
+        // Bjorklund(5,16) should produce hits at positions [0, 3, 6, 10, 13]/16.
+        let expected = vec![
+            Time::new(0, 16),
+            Time::new(3, 16),
+            Time::new(6, 16),
+            Time::new(10, 16),
+            Time::new(13, 16),
+        ];
+
+        let onsets: Vec<Time> = events
+            .iter()
+            .filter_map(|e| e.whole.map(|w| w.start))
+            .collect();
+
+        assert_eq!(
+            onsets.len(),
+            expected.len(),
+            "expected {} onsets, got {}",
+            expected.len(),
+            onsets.len()
+        );
+
+        for (got, want) in onsets.iter().zip(expected.iter()) {
+            // Compare as f64 to allow different denominators.
+            let got_f = got.num as f64 / got.den as f64;
+            let want_f = want.num as f64 / want.den as f64;
+            assert!(
+                (got_f - want_f).abs() < 1e-9,
+                "onset mismatch: got {got_f} want {want_f}"
+            );
+        }
+    }
+
+    #[test]
+    #[ignore] // Bug #27: gate durations must not overlap
+    fn test_euclid_5_16_gate_durations_do_not_overlap() {
+        let (pat, _) = euclid_pat(5, 16, 0);
+        let events = query(&pat, pat.root, cycle_0());
+
+        // Sort by onset (should already be sorted).
+        let mut sorted = events.clone();
+        sorted.sort_by(|a, b| {
+            let a_start = a.part.start.num as f64 / a.part.start.den as f64;
+            let b_start = b.part.start.num as f64 / b.part.start.den as f64;
+            a_start.partial_cmp(&b_start).unwrap()
+        });
+
+        for window in sorted.windows(2) {
+            let end_i = window[0].part.end;
+            let start_next = window[1].part.start;
+            let end_f = end_i.num as f64 / end_i.den as f64;
+            let start_f = start_next.num as f64 / start_next.den as f64;
+            assert!(
+                end_f <= start_f + 1e-9,
+                "gate overlap: event[i].end={end_f} > event[i+1].start={start_f}"
+            );
+        }
+    }
+
+    #[test]
+    #[ignore] // Bug #27: rotation parameter
+    fn test_euclid_3_8_rotation() {
+        let (pat_no_rot, idx_no_rot) = euclid_pat(3, 8, 0);
+        let (pat_rot, idx_rot) = euclid_pat(3, 8, 1);
+
+        let ev_no = query(&pat_no_rot, idx_no_rot, cycle_0());
+        let ev_rot = query(&pat_rot, idx_rot, cycle_0());
+
+        assert_eq!(ev_no.len(), 3);
+        assert_eq!(ev_rot.len(), 3);
+
+        // Rotation shifts all hit positions by 1 slot.
+        let onsets_no: Vec<f64> = ev_no
+            .iter()
+            .filter_map(|e| e.whole.map(|w| w.start.num as f64 / w.start.den as f64))
+            .collect();
+        let onsets_rot: Vec<f64> = ev_rot
+            .iter()
+            .filter_map(|e| e.whole.map(|w| w.start.num as f64 / w.start.den as f64))
+            .collect();
+
+        // Each rotated onset should be shifted by 1/8 from its non-rotated pair
+        // (modulo 1.0).
+        let step = 1.0 / 8.0;
+        for (a, b) in onsets_no.iter().zip(onsets_rot.iter()) {
+            let shifted = (a + step) % 1.0;
+            assert!(
+                (shifted - b).abs() < 1e-9,
+                "rotation mismatch: {a} + {step} = {shifted}, got {b}"
+            );
+        }
+    }
+
+    #[test]
+    #[ignore] // Bug #27: edge case — 0 pulses
+    fn test_euclid_0_pulses_produces_silence() {
+        let (pat, _) = euclid_pat(0, 16, 0);
+        let events = query(&pat, pat.root, cycle_0());
+        assert!(events.is_empty(), "euclid(0,16) should produce no events");
+    }
+
+    #[test]
+    #[ignore] // Bug #27: euclid(N,N) fills entire cycle
+    fn test_euclid_steps_equals_pulses_fills_cycle() {
+        let (pat, _) = euclid_pat(8, 8, 0);
+        let events = query(&pat, pat.root, cycle_0());
+        assert_eq!(events.len(), 8, "euclid(8,8) should produce 8 events");
+    }
 }

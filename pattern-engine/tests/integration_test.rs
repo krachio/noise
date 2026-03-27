@@ -280,3 +280,93 @@ fn e2e_osc_loopback() {
 
     tk.stop();
 }
+
+// ─── Cycle boundary + tempo + euclidean E2E (bugs #27, #28) ───
+
+#[test]
+#[ignore] // Bug #28: new pattern should start at cycle boundary
+fn e2e_new_pattern_starts_at_cycle_boundary() {
+    let mut tk = TestKernel::start("cycle-boundary");
+    let mut conn = tk.connect();
+
+    // Let some cycles elapse.
+    std::thread::sleep(Duration::from_millis(80));
+
+    let resp = conn.send(
+        r#"{"cmd":"SetPattern","slot":"pad","pattern":{"op":"Atom","value":{"type":"Note","channel":0,"note":60,"velocity":100,"dur":0.5}}}"#,
+    );
+    assert!(matches!(resp, ServerMessage::Ok { .. }));
+
+    // Collect events — all should fire at cycle boundaries (multiples of 40ms
+    // from the clock start), not mid-cycle.
+    let events = tk.collect_events(Duration::from_millis(200));
+    assert!(
+        !events.is_empty(),
+        "should have events from the new pattern"
+    );
+
+    tk.stop();
+}
+
+#[test]
+#[ignore] // Bug #28: tempo change must not produce timing glitch
+fn e2e_set_bpm_no_timing_glitch() {
+    let mut tk = TestKernel::start("bpm-glitch");
+    let mut conn = tk.connect();
+
+    let resp = conn.send(
+        r#"{"cmd":"SetPattern","slot":"kick","pattern":{"op":"Atom","value":{"type":"Note","channel":0,"note":36,"velocity":100,"dur":0.5}}}"#,
+    );
+    assert!(matches!(resp, ServerMessage::Ok { .. }));
+
+    // Collect some events at original BPM.
+    let before = tk.collect_events(Duration::from_millis(100));
+    assert!(!before.is_empty(), "should have events before BPM change");
+
+    // Change BPM.
+    let resp = conn.send(r#"{"cmd":"SetBpm","bpm":3000.0}"#);
+    assert!(matches!(resp, ServerMessage::Ok { .. }));
+
+    // Events after change should still be monotonically forward.
+    let after = tk.collect_events(Duration::from_millis(200));
+    for window in after.windows(2) {
+        assert!(
+            window[0].fire_at <= window[1].fire_at,
+            "timing glitch: events not monotonic after BPM change"
+        );
+    }
+
+    tk.stop();
+}
+
+#[test]
+#[ignore] // Bug #27: euclidean event count E2E
+fn e2e_euclid_event_count() {
+    let mut tk = TestKernel::start("euclid-e2e");
+    let mut conn = tk.connect();
+
+    // euclid(3, 8) over an atom — should produce 3 events per cycle.
+    let resp = conn.send(
+        r#"{"cmd":"SetPattern","slot":"hat","pattern":{"op":"Euclid","pulses":3,"steps":8,"rotation":0,"child":{"op":"Atom","value":{"type":"Note","channel":0,"note":42,"velocity":100,"dur":0.25}}}}"#,
+    );
+    assert!(matches!(resp, ServerMessage::Ok { .. }));
+
+    // At 6000 BPM, 1 cycle = 40ms. Collect 5 cycles = 200ms → expect ~15 events.
+    let events = tk.collect_events(Duration::from_millis(200));
+    assert!(
+        events.len() >= 3,
+        "euclid(3,8) should produce at least 3 events per cycle, got {}",
+        events.len()
+    );
+
+    // All events should be from the hat slot.
+    for ev in &events {
+        assert_eq!(
+            tk.slot_name(ev.slot_idx),
+            "hat",
+            "all events should be from hat slot"
+        );
+    }
+
+    tk.stop();
+}
