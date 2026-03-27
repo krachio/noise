@@ -28,56 +28,49 @@ noise/
 
 ## Data flow
 
-```
-krach (Python REPL)
-    │
-    │  JSON over Unix socket ($TMPDIR/krach-engine.sock)
-    │
-    ▼
-krach-engine (Rust, single process)
-    │
-    ├─── IPC thread ──── parse JSON ──── route by tag
-    │         │                              │
-    │    "cmd" tag                      "type" tag
-    │         │                              │
-    │         ▼                              ▼
-    │    pattern-engine              audio-engine controller
-    │    (EngineCommand)             (ClientMessage)
-    │         │                              │
-    │    scheduler thread            shadow graph + compiler
-    │    (query patterns,            (compile, swap, crossfade)
-    │     dispatch events)                   │
-    │         │                         rtrb SPSC
-    │         │                              │
-    │         └──── direct fn call ──── AudioProcessor
-    │                                        │
-    │                                   DspGraph::process()
-    │                                        │
-    └─────────────────────────────────── cpal → CoreAudio
+```mermaid
+graph TD
+    REPL["krach (Python REPL)"]
+    ENGINE["krach-engine (Rust, single process)"]
+    IPC["IPC thread — parse JSON, route by tag"]
+    PE["pattern-engine<br/>(EngineCommand)"]
+    AEC["audio-engine controller<br/>(ClientMessage)"]
+    SCHED["scheduler thread<br/>(query patterns, dispatch events)"]
+    SHADOW["shadow graph + compiler<br/>(compile, swap, crossfade)"]
+    AP["AudioProcessor"]
+    DSP["DspGraph::process()"]
+    OUT["cpal → CoreAudio"]
+
+    REPL -->|"JSON over Unix socket<br/>($TMPDIR/krach-engine.sock)"| ENGINE
+    ENGINE --> IPC
+    IPC -->|'"cmd" tag'| PE
+    IPC -->|'"type" tag'| AEC
+    PE --> SCHED
+    AEC --> SHADOW
+    SHADOW -->|"rtrb SPSC"| AP
+    SCHED -->|"direct fn call"| AP
+    AP --> DSP
+    DSP --> OUT
 ```
 
 The IPC thread reads newline-delimited JSON from the socket. Messages with a `"cmd"` tag are pattern commands (SetPattern, Hush, etc.). Messages with a `"type"` tag are audio commands (load_graph, set_control, etc.). Both are sent over a single `crossbeam_channel` as `LoopCommand` variants to the main loop.
 
 ## Pattern compiler pipeline
 
-```
-Python IR (frozen dataclasses)
-    │
-    │  serialize to JSON
-    ▼
-IrNode (Rust, serde-tagged enum)
-    │
-    │  compile: validate, flatten into arena
-    ▼
-CompiledPattern (arena-indexed nodes)
-    │
-    │  query(arc): evaluate over rational time interval
-    ▼
-Vec<Event<Value>> (timed events with whole/part spans)
-    │
-    │  dispatch: match on Value type
-    ▼
-MIDI note-on/off  ──or──  audio-engine SetControl / SetAutomation
+```mermaid
+graph TD
+    PY["Python IR (frozen dataclasses)"]
+    IR["IrNode (Rust, serde-tagged enum)"]
+    CP["CompiledPattern (arena-indexed nodes)"]
+    EV["Vec&lt;Event&lt;Value&gt;&gt;<br/>(timed events with whole/part spans)"]
+    MIDI["MIDI note-on/off"]
+    AUDIO["audio-engine SetControl / SetAutomation"]
+
+    PY -->|"serialize to JSON"| IR
+    IR -->|"compile: validate, flatten into arena"| CP
+    CP -->|"query(arc): evaluate over rational time interval"| EV
+    EV -->|"dispatch: match on Value type"| MIDI
+    EV -->|"dispatch: match on Value type"| AUDIO
 ```
 
 Pattern IR nodes: `Atom`, `Silence`, `Cat`, `Stack`, `Fast`, `Slow`, `Early`, `Late`, `Rev`, `Every`, `Euclid`, `Degrade`, `Freeze`.
@@ -123,23 +116,16 @@ Automation is set via `SetAutomation` commands and cleared via `ClearAutomation`
 
 ## FAUST JIT
 
-```
-~/.krach/dsp/
-├── synth.dsp
-├── filter.dsp
-└── reverb.dsp
-        │
-        │  file watcher (notify crate)
-        ▼
-   FAUST LLVM JIT compiler
-        │
-        │  compile .dsp → machine code
-        ▼
-   DspNode implementation
-        │
-        │  register / re-register in NodeRegistry
-        ▼
-   Available as node type in audio graph
+```mermaid
+graph TD
+    DSP["~/.krach/dsp/<br/>synth.dsp, filter.dsp, reverb.dsp"]
+    JIT["FAUST LLVM JIT compiler"]
+    NODE["DspNode implementation"]
+    REG["Available as node type in audio graph"]
+
+    DSP -->|"file watcher (notify crate)"| JIT
+    JIT -->|"compile .dsp → machine code"| NODE
+    NODE -->|"register / re-register in NodeRegistry"| REG
 ```
 
 `HotReloadEngine` wraps an audio-engine with FAUST file watching. On startup, it scans a directory (default: `~/.krach/dsp/`, override with `NOISE_DSP_DIR`) and registers all `.dsp` files. When a file is saved, it recompiles the FAUST code and calls `reregister()` on the registry, then reloads the current graph to pick up the new node.

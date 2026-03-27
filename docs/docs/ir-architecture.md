@@ -4,10 +4,17 @@ krach uses a JAX-inspired tracing model: Python functions become frozen IR graph
 
 ## The big picture
 
-```
-Python DSP function → trace → DspGraph (Signal IR) → emit_faust → FAUST → LLVM JIT → audio
-Python patterns     → build → PatternNode tree      → serialize  → JSON  → Rust engine
-Python session      → capture → GraphIr            → to_dict    → JSON  → persistence
+```mermaid
+graph LR
+    subgraph Signal
+        DSP_FN["Python DSP function"] --> TRACE["trace"] --> DSPG["DspGraph (Signal IR)"] --> EMIT["emit_faust"] --> FAUST["FAUST"] --> LLVM["LLVM JIT"] --> AUDIO["audio"]
+    end
+    subgraph Pattern
+        PAT_PY["Python patterns"] --> BUILD["build"] --> PTREE["PatternNode tree"] --> SER["serialize"] --> PJSON["JSON"] --> RUSTENG["Rust engine"]
+    end
+    subgraph Session
+        SESS["Python session"] --> CAP["capture"] --> GIR["GraphIr"] --> TODICT["to_dict"] --> SJSON["JSON"] --> PERSIST["persistence"]
+    end
 ```
 
 Three IRs, one for each domain:
@@ -282,12 +289,23 @@ Pattern rules use a simpler mechanism: a `dict[str, Rule]` in `pattern/primitive
 
 ## Dependency layering
 
-```
-ir/          → stdlib only (pure frozen data)
-signal/      → ir/ + backends/ (tracing runtime + DSL; transpile imports codegen)
-pattern/     → ir/ (building + DSL)
-backends/    → ir/ + signal/ (lowering)
-top-level    → everything (Mixer, REPL)
+```mermaid
+graph TD
+    TOP["top-level<br/>(Mixer, REPL)"]
+    SIG["signal/<br/>(tracing runtime + DSL)"]
+    PAT["pattern/<br/>(building + DSL)"]
+    BACK["backends/<br/>(lowering)"]
+    IR["ir/<br/>(pure frozen data, stdlib only)"]
+
+    TOP --> SIG
+    TOP --> PAT
+    TOP --> BACK
+    TOP --> IR
+    SIG --> IR
+    SIG --> BACK
+    PAT --> IR
+    BACK --> IR
+    BACK --> SIG
 ```
 
 `tests/test_dependency_invariant.py` enforces this: no module-level imports from `ir/` to `signal/`, `pattern/`, or `backends/`.
