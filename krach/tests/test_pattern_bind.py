@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from krach.ir.pattern import AtomParams, CatParams, FreezeParams, PatternNode, SilenceParams
+from krach.pattern.types import AtomParams, CatParams, FreezeParams, PatternNode, SilenceParams
 from krach.pattern.bind import (
     bind_ctrl, bind_voice, bind_voice_poly,
     collect_control_labels, collect_control_values,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from krach.ir.pattern import (
+from krach.pattern.types import (
     AtomParams, CatParams, DegradeParams, EarlyParams, EuclidParams,
     EveryParams, FastParams, FreezeParams, LateParams, PatternNode,
     RevParams, SilenceParams, SlowParams, StackParams, WarpParams,

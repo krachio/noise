@@ -1,5 +1,5 @@
 import pytest
-from krach.ir.pattern import AtomParams
+from krach.pattern.types import AtomParams
 from krach.ir.values import Control
 
 from krach.pattern.mininotation import p
@@ -31,7 +31,7 @@ def test_single_note() -> None:
 
 def _collect_labels(node: object) -> set[str]:
     """Recursively collect Control labels from a PatternNode tree."""
-    from krach.ir.pattern import PatternNode, AtomParams
+    from krach.pattern.types import PatternNode, AtomParams
     from krach.ir.values import Control
     labels: set[str] = set()
     if not isinstance(node, PatternNode):
@@ -131,7 +131,7 @@ def test_sharp_note() -> None:
 
 def _find_control_value(node: object, target: str) -> float | None:
     """Find the value of a specific Control label in a PatternNode tree."""
-    from krach.ir.pattern import PatternNode, AtomParams
+    from krach.pattern.types import PatternNode, AtomParams
     from krach.ir.values import Control
     if not isinstance(node, PatternNode):
         return None

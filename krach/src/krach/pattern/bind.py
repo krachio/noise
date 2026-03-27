@@ -5,7 +5,7 @@ Uses generic fold/fold_with_state instead of per-type match arms.
 
 from __future__ import annotations
 
-from krach.ir.pattern import (
+from krach.pattern.types import (
     AtomParams,
     PatternNode,
 )

@@ -1,7 +1,7 @@
 """Tests for pattern summary — human-readable compact output via PatternNode."""
 
 from krach.pattern.summary import summarize
-from krach.ir.pattern import (
+from krach.pattern.types import (
     AtomParams, CatParams, DegradeParams, EuclidParams, FastParams,
     FreezeParams, PatternNode, SilenceParams, SlowParams, StackParams,
     WarpParams,

@@ -13,7 +13,7 @@ import pathlib
 IR_DIR = pathlib.Path(__file__).resolve().parent.parent / "src" / "krach" / "ir"
 BANNED_PREFIXES = ("krach.signal", "krach.pattern", "krach.backends", "krach.dsl")
 # signal.types is pure data (relocated from ir/signal.py) — ir/ may import it
-ALLOWED = {"krach.signal.types"}
+ALLOWED = {"krach.signal.types", "krach.pattern.types"}
 
 
 def _collect_module_level_imports(source: str) -> list[tuple[int, str]]:

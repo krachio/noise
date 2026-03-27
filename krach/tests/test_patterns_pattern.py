@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from krach.ir.pattern import (
+from krach.pattern.types import (
     AtomParams,
     DegradeParams,
     EarlyParams,

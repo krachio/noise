@@ -352,7 +352,7 @@ def test_capture_includes_patterns() -> None:
 
 def test_instantiate_replays_patterns() -> None:
     """instantiate() must call play() for each PatternDef."""
-    from krach.ir.pattern import PatternNode, AtomParams, CatParams, FreezeParams
+    from krach.pattern.types import PatternNode, AtomParams, CatParams, FreezeParams
     from krach.ir.values import Control
     from krach.pattern.primitives import atom_p, cat_p, freeze_p
 

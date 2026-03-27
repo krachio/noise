@@ -7,7 +7,7 @@ from krach.backends.pattern import (
     Ping,
     SetBpm,
 )
-from krach.ir.pattern import (
+from krach.pattern.types import (
     DegradeParams,
     EuclidParams,
     WarpParams,

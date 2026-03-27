@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from krach.ir.pattern import (
+from krach.pattern.types import (
     PatternNode,
     PatternPrimitive,
     AtomParams,

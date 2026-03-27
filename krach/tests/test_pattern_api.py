@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from krach.ir.pattern import AtomParams, DegradeParams
+from krach.pattern.types import AtomParams, DegradeParams
 from krach.pattern.pattern import midi_note as note, rest
 from krach.ir.values import Control
 from krach.pattern.builders import hit, seq, note as mixer_note, struct, ramp, cat, stack

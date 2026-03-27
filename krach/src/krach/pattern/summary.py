@@ -9,7 +9,7 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from krach.pattern.pitch import midi_to_name
-from krach.ir.pattern import (
+from krach.pattern.types import (
     AtomParams,
     DegradeParams,
     EuclidParams,

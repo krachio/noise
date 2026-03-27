@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from krach.ir.pattern import AtomParams, PatternNode
+from krach.pattern.types import AtomParams, PatternNode
 from krach.ir.values import Control, Osc, Value
 from krach.pattern.pattern import Pattern
 from krach.pattern.primitives import atom_p, fold
@@ -1523,7 +1523,7 @@ def test_bind_voice_rewrites_bare_params() -> None:
 
 
 def test_bind_voice_skips_already_bound() -> None:
-    from krach.ir.pattern import AtomParams, PatternNode
+    from krach.pattern.types import AtomParams, PatternNode
     from krach.pattern.bind import bind_voice
     from krach.ir.values import Osc, OscFloat, OscStr
     from krach.pattern.primitives import atom_p

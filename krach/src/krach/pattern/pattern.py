@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from fractions import Fraction
 
-from krach.ir.pattern import (
+from krach.pattern.types import (
     AtomParams,
     CatParams,
     DegradeParams,

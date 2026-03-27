@@ -18,7 +18,7 @@ from krach.ir.values import Note
 
 class TestCommandSerialization:
     def test_set_pattern(self) -> None:
-        from krach.ir.pattern import AtomParams, PatternNode
+        from krach.pattern.types import AtomParams, PatternNode
         from krach.pattern.primitives import atom_p
         pn = PatternNode(atom_p, (), AtomParams(Note(channel=0, note=60, velocity=100, dur=0.5)))
         cmd = SetPattern(slot="drums", pattern=pn)
@@ -28,7 +28,7 @@ class TestCommandSerialization:
         assert parsed["pattern"]["op"] == "Atom"
 
     def test_set_pattern_from_zero(self) -> None:
-        from krach.ir.pattern import AtomParams, PatternNode
+        from krach.pattern.types import AtomParams, PatternNode
         from krach.pattern.primitives import atom_p
         pn = PatternNode(atom_p, (), AtomParams(Note(channel=0, note=60, velocity=100, dur=0.5)))
         cmd = SetPatternFromZero(slot="bass", pattern=pn)
@@ -58,7 +58,7 @@ class TestCommandSerialization:
         assert parsed == {"cmd": "Ping"}
 
     def test_batch(self) -> None:
-        from krach.ir.pattern import AtomParams, PatternNode
+        from krach.pattern.types import AtomParams, PatternNode
         from krach.pattern.primitives import atom_p
         pn = PatternNode(atom_p, (), AtomParams(Note(channel=0, note=36, velocity=100, dur=1.0)))
         cmd = Batch(commands=(

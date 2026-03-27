@@ -13,7 +13,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from krach.ir.pattern import PatternNode
+from krach.pattern.types import PatternNode
 from krach.ir.primitive import Primitive
 from krach.signal.types import (
     ConstParams,

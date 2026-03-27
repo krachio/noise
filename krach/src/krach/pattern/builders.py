@@ -125,7 +125,7 @@ def stack(*patterns: Pattern) -> Pattern:
 
 def struct(rhythm: Pattern, melody: Pattern) -> Pattern:
     """Impose rhythm's onset structure onto melody's values."""
-    from krach.ir.pattern import PatternNode
+    from krach.pattern.types import PatternNode
 
     melody_atoms: list[PatternNode] = []
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from krach.ir.pattern import (
+from krach.pattern.types import (
     AtomParams,
     CatParams,
     DegradeParams,

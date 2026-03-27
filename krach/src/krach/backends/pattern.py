@@ -10,7 +10,7 @@ import json
 from dataclasses import dataclass
 from typing import Any
 
-from krach.ir.pattern import PatternNode
+from krach.pattern.types import PatternNode
 
 # ── Client messages ──────────────────────────────────────────────────────────
 

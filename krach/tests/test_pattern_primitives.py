@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from krach.ir.pattern import (
+from krach.pattern.types import (
     AtomParams,
     CatParams,
     PatternNode,
@@ -128,7 +128,7 @@ def test_freeze_stack_allocates_separate_voices() -> None:
     A chord like kr.note("A4", "C5", "E5") produces Freeze(Stack([Freeze(note_A), ...])).
     Each inner Freeze gets its own voice instance. The outer Freeze does NOT allocate.
     """
-    from krach.ir.pattern import (
+    from krach.pattern.types import (
         AtomParams, CatParams, FreezeParams, PatternNode, StackParams,
     )
     from krach.pattern.bind import bind_voice_poly, collect_control_labels
