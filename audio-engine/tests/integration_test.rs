@@ -218,3 +218,126 @@ fn end_to_end_graph_ir_from_json() {
     let energy: f32 = output.iter().map(|s| s * s).sum();
     assert!(energy > 0.0, "graph loaded from JSON should produce audio");
 }
+
+// ─── Graph continuity (bugs #12, #13) ───
+
+#[test]
+#[ignore] // Bug #12: adding a node should not silence existing audio
+fn test_add_node_preserves_existing_audio() {
+    let config = EngineConfig {
+        block_size: 64,
+        channels: 1,
+        crossfade_ms: 10,
+        ..Default::default()
+    };
+    let (mut ctrl, mut proc) = setup(&config);
+
+    ctrl.handle_message(ClientMessage::LoadGraph(osc_dac_graph(440.0)))
+        .unwrap();
+
+    // Establish steady state — 10 blocks of audio.
+    for _ in 0..10 {
+        let mut buf = vec![0.0_f32; 64];
+        proc.process(&mut buf);
+    }
+
+    // Add a second oscillator via incremental mutation (not LoadGraph).
+    ctrl.handle_message(ClientMessage::AddNode {
+        id: "osc2".into(),
+        type_id: "oscillator".into(),
+        controls: HashMap::from([("freq".into(), 880.0)]),
+    })
+    .unwrap();
+    ctrl.handle_message(ClientMessage::Connect {
+        from_node: "osc2".into(),
+        from_port: "out".into(),
+        to_node: "out".into(),
+        to_port: "in".into(),
+    })
+    .unwrap();
+
+    // Process blocks during the rebuild — existing audio should not drop to silence.
+    let mut had_silence = false;
+    for _ in 0..5 {
+        let mut buf = vec![0.0_f32; 64];
+        proc.process(&mut buf);
+        let energy: f32 = buf.iter().map(|s| s * s).sum();
+        if energy < 1e-6 {
+            had_silence = true;
+        }
+    }
+    assert!(
+        !had_silence,
+        "existing audio was silenced during node addition (bug #12)"
+    );
+}
+
+#[test]
+#[ignore] // Bug #13: crossfade must stay in [-1.1, 1.1] during rapid reloads
+fn test_full_reload_preserves_continuity() {
+    let config = EngineConfig {
+        block_size: 64,
+        channels: 1,
+        crossfade_ms: 10,
+        ..Default::default()
+    };
+    let (mut ctrl, mut proc) = setup(&config);
+
+    ctrl.handle_message(ClientMessage::LoadGraph(osc_dac_graph(440.0)))
+        .unwrap();
+
+    // Establish steady state.
+    for _ in 0..10 {
+        let mut buf = vec![0.0_f32; 64];
+        proc.process(&mut buf);
+    }
+
+    // Full reload — should crossfade smoothly.
+    ctrl.handle_message(ClientMessage::LoadGraph(osc_dac_graph(880.0)))
+        .unwrap();
+
+    for _ in 0..20 {
+        let mut buf = vec![0.0_f32; 64];
+        proc.process(&mut buf);
+        for &s in &buf {
+            assert!(
+                (-1.1..=1.1).contains(&s),
+                "crossfade sample out of bounds: {s} (bug #13)"
+            );
+        }
+    }
+}
+
+#[test]
+#[ignore] // Bug #13: rapid graph swaps must not panic
+fn test_rapid_graph_swaps_no_panic() {
+    let config = EngineConfig {
+        block_size: 64,
+        channels: 1,
+        crossfade_ms: 5,
+        ..Default::default()
+    };
+    let (mut ctrl, mut proc) = setup(&config);
+
+    ctrl.handle_message(ClientMessage::LoadGraph(osc_dac_graph(440.0)))
+        .unwrap();
+
+    // 10 rapid graph swaps without processing between them.
+    for freq in (220..=660).step_by(44) {
+        ctrl.handle_message(ClientMessage::LoadGraph(osc_dac_graph(freq as f32)))
+            .unwrap();
+    }
+
+    // Process several blocks — should not panic or produce NaN.
+    for _ in 0..30 {
+        let mut buf = vec![0.0_f32; 64];
+        proc.process(&mut buf);
+        for &s in &buf {
+            assert!(!s.is_nan(), "NaN produced after rapid graph swaps");
+            assert!(
+                (-2.0..=2.0).contains(&s),
+                "sample out of range after rapid swaps: {s}"
+            );
+        }
+    }
+}
