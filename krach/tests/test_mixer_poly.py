@@ -3,8 +3,6 @@
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import pytest
-
 from krach.graph.node import Node, build_graph_ir
 from krach.mixer import Mixer
 
@@ -21,7 +19,6 @@ def _make_mixer(**extra_controls: tuple[str, ...]) -> tuple[MagicMock, Mixer]:
     return session, mixer
 
 
-@pytest.mark.xfail(reason="bug #23: remove() must clear all poly instances + sum")
 def test_remove_poly_node_removes_all_instances() -> None:
     """remove('pad') on a poly voice (count=4) must remove pad_v0..v3 from
     the graph IR. After remove, the next load_graph call must not contain
@@ -44,7 +41,6 @@ def test_remove_poly_node_removes_all_instances() -> None:
     assert "pad_send_verb" not in node_ids, "send node leaked after remove"
 
 
-@pytest.mark.xfail(reason="bug #23: remove() must clear all orphaned ctrl values")
 def test_remove_poly_node_clears_ctrl_values() -> None:
     """remove('pad') must clean ctrl_values for all voice instances."""
     session, mixer = _make_mixer()
@@ -60,7 +56,6 @@ def test_remove_poly_node_clears_ctrl_values() -> None:
     assert stale == [], f"orphaned ctrl_values after remove: {stale}"
 
 
-@pytest.mark.xfail(reason="bug #22: poly send must route through sum node")
 def test_connect_poly_to_bus_routes_through_sum() -> None:
     """send('pad', 'verb') on a poly voice must create a sum node and route
     pad_v0..vN → pad_sum → pad_send_verb → verb."""
@@ -79,7 +74,6 @@ def test_connect_poly_to_bus_routes_through_sum() -> None:
     assert ("pad_sum", "pad_send_verb") in conns, "pad_sum → send missing"
 
 
-@pytest.mark.xfail(reason="bug #22: mono voice should not create sum node")
 def test_connect_mono_to_bus_no_sum_node() -> None:
     """send('bass', 'verb') on a mono voice (count=1) must NOT create a sum node.
     Routing goes bass → bass_send_verb → verb directly."""
@@ -99,7 +93,6 @@ def test_connect_mono_to_bus_no_sum_node() -> None:
         f"expected direct bass→send connection, got {conns}"
 
 
-@pytest.mark.xfail(reason="bug #22: graph IR poly send must have correct topology")
 def test_build_graph_ir_poly_send_correct_connections() -> None:
     """build_graph_ir with poly source + send must produce:
     pad_v0 → pad_v0_g → out, pad_v1 → pad_v1_g → out,
