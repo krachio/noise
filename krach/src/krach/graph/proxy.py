@@ -21,7 +21,7 @@ from krach.ir.graph import (
     RouteDef,
     prefix_ir,
 )
-from krach.node_types import DspDef, DspSource, dsp
+from krach.graph.node import DspDef, DspSource, dsp
 from krach.pattern.pattern import Pattern
 
 

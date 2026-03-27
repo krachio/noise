@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from krach.node_types import dsp, dsp_cache_clear, dsp_cache_info
+from krach.graph.node import dsp, dsp_cache_clear, dsp_cache_info
 import krach.dsp as krs
 
 

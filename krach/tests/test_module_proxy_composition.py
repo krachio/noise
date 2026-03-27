@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from krach.ir.graph import GraphIr, NodeDef
-from krach.module_proxy import GraphProxy
+from krach.graph.proxy import GraphProxy
 
 
 # ── inputs/outputs ──────────────────────────────────────────────────────

@@ -5,7 +5,7 @@ from krach.ir.values import Control, Osc, Value
 from krach.pattern.pattern import Pattern
 from krach.pattern.primitives import atom_p, fold
 
-from krach.node_types import Node
+from krach.graph.node import Node
 from krach.pattern.builders import build_hit, build_note
 
 
@@ -107,7 +107,7 @@ def test_dsp_decorator_captures_source_and_transpiles() -> None:
     from krach.signal.lib import sine_osc
     from krach.signal.music import adsr
 
-    from krach.node_types import DspDef, dsp
+    from krach.graph.node import DspDef, dsp
 
     @dsp
     def my_synth() -> Signal:
@@ -2522,7 +2522,7 @@ def test_input_default_name_and_channel() -> None:
 
 def test_input_appears_in_graph_ir() -> None:
     """The adc_input node appears in the built graph IR."""
-    from krach.graph_builder import build_graph_ir
+    from krach.graph.node import build_graph_ir
 
     nodes = {
         "mic": Node("adc_input", 0.5, ()),
@@ -2913,7 +2913,7 @@ def test_mute_single_stores_gain_for_any_node() -> None:
 
 def test_resolve_targets_no_duplicates() -> None:
     """Group resolution returns each match once."""
-    from krach.node_types import GroupPath, resolve_path, Node
+    from krach.graph.node import GroupPath, resolve_path, Node
 
     nodes = {
         "drums/kick": Node(type_id="faust:kick", gain=0.5, controls=("gate",)),
@@ -3103,7 +3103,7 @@ def test_bus_callable_with_no_audio_inputs_raises() -> None:
     from unittest.mock import MagicMock
     import pytest
     from krach.mixer import Mixer
-    from krach.node_types import DspDef
+    from krach.graph.node import DspDef
 
     from krach.signal.types import DspGraph
 
@@ -3128,7 +3128,7 @@ def test_node_with_effect_dspdef_routes_to_bus() -> None:
     """node() with a DspDef that has audio inputs creates an effect node."""
     from unittest.mock import MagicMock
     from krach.mixer import Mixer
-    from krach.node_types import DspDef
+    from krach.graph.node import DspDef
     import tempfile
 
     session = MagicMock()

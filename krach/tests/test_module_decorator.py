@@ -5,7 +5,7 @@ from __future__ import annotations
 import inspect
 
 from krach.ir.graph import GraphIr
-from krach.module_proxy import GraphProxy, graph
+from krach.graph.proxy import GraphProxy, graph
 
 
 # ── @graph ───────────────────────────────────────────────────

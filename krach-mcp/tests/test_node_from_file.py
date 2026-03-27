@@ -30,7 +30,7 @@ def test_node_from_file_no_function() -> None:
 def test_node_from_file_valid_dsp() -> None:
     """Loads a valid DSP function and calls kr.node with DspDef."""
     from unittest.mock import MagicMock
-    from krach.node_types import DspDef
+    from krach.graph.node import DspDef
 
     kr = MagicMock()
     kr.node.return_value = "handle"

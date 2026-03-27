@@ -246,7 +246,7 @@ def test_module_ir_json_round_trip() -> None:
 
 
 def test_proxy_records_nodes() -> None:
-    from krach.module_proxy import GraphProxy
+    from krach.graph.proxy import GraphProxy
 
     proxy = GraphProxy()
     proxy.node("bass", "faust:bass", gain=0.3)
@@ -259,7 +259,7 @@ def test_proxy_records_nodes() -> None:
 
 
 def test_proxy_records_routing() -> None:
-    from krach.module_proxy import GraphProxy
+    from krach.graph.proxy import GraphProxy
 
     proxy = GraphProxy()
     proxy.node("bass", "faust:bass")
@@ -272,7 +272,7 @@ def test_proxy_records_routing() -> None:
 
 
 def test_proxy_records_transport() -> None:
-    from krach.module_proxy import GraphProxy
+    from krach.graph.proxy import GraphProxy
 
     proxy = GraphProxy()
     proxy.tempo = 140
@@ -286,7 +286,7 @@ def test_proxy_records_transport() -> None:
 
 
 def test_proxy_records_controls_and_patterns() -> None:
-    from krach.module_proxy import GraphProxy
+    from krach.graph.proxy import GraphProxy
     from krach.pattern.pattern import ctrl, freeze
 
     proxy = GraphProxy()
@@ -303,7 +303,7 @@ def test_proxy_records_controls_and_patterns() -> None:
 
 def test_proxy_to_instantiate_round_trip() -> None:
     """Proxy → GraphIr → instantiate on a live mixer."""
-    from krach.module_proxy import GraphProxy
+    from krach.graph.proxy import GraphProxy
 
     proxy = GraphProxy()
     proxy.node("kick", "faust:kick", gain=0.8)

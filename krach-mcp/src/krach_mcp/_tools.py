@@ -14,7 +14,7 @@ def _node_from_file(
     """Load a DSP function from a .py file and create a node."""
     import os
     import krach.dsp as krs
-    from krach.node_types import dsp as _dsp
+    from krach.graph.node import dsp as _dsp
 
     resolved = os.path.expanduser(path)
     if not os.path.isfile(resolved):

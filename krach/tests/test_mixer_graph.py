@@ -1,5 +1,5 @@
-from krach.node_types import Node
-from krach.graph_builder import build_graph_ir
+from krach.graph.node import Node
+from krach.graph.node import build_graph_ir
 
 
 # ── build_graph_ir ────────────────────────────────────────────────────────────

@@ -18,7 +18,7 @@ from krach._paths import resolve_engine_bin, resolve_faust_stdlib_dir, resolve_l
 from krach.config import load_config
 from krach.pattern.mininotation import p as _p
 from krach.pattern.pitch import ftom as _ftom, mtof as _mtof, parse_note as _parse_note
-from krach.node_types import dsp, parse_dsp_controls
+from krach.graph.node import dsp, parse_dsp_controls
 from krach.mixer import Mixer
 from krach.pattern.builders import (
     cat,

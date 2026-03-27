@@ -11,7 +11,7 @@ from unittest.mock import MagicMock
 
 from krach.ir.graph import GraphIr, NodeDef
 from krach.mixer import Mixer
-from krach.module_proxy import GraphProxy, graph
+from krach.graph.proxy import GraphProxy, graph
 
 
 def _make_mixer() -> Mixer:

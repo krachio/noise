@@ -269,7 +269,7 @@ def test_mixer_pull_empty_nodes() -> None:
     state = _fake_state(nodes=[], connections=[])
     mixer = _make_mixer(state)
     # Pre-populate a node
-    from krach.node_types import Node
+    from krach.graph.node import Node
     mixer._nodes["old"] = Node(type_id="faust:old", gain=0.5, controls=("gate",))
 
     mixer.pull()

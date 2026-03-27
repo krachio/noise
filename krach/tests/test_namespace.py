@@ -8,7 +8,7 @@ Library Mixer is tested separately for core API.
 from krach.repl import LiveMixer
 from krach.pattern.builders import note, hit, seq, ramp, mod_sine, mod_tri
 from krach.pattern.builders import mod_ramp, mod_ramp_down, mod_square, mod_exp
-from krach.node_types import dsp
+from krach.graph.node import dsp
 from krach.pattern.pitch import mtof, ftom, parse_note
 from krach.pattern.pattern import Pattern, rest
 

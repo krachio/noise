@@ -20,10 +20,10 @@ from typing import TYPE_CHECKING, Literal, Protocol
 
 from dataclasses import dataclass
 
-from krach.graph_builder import build_graph_ir, inst_name as _inst_name
+from krach.graph.node import build_graph_ir, inst_name as _inst_name
 from krach.pattern.mininotation import p as _p
-from krach.module_proxy import GraphProxy
-from krach.node_types import (
+from krach.graph.proxy import GraphProxy
+from krach.graph.node import (
     ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
     ResolvedSource, UnknownPath, resolve_dsp_source, resolve_path,
 )
