@@ -9,7 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from krach.ir.module import GraphIr, NodeDef
+from krach.ir.graph import GraphIr, NodeDef
 from krach.mixer import Mixer
 from krach.module_proxy import GraphProxy, graph
 

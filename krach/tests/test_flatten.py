@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from krach.ir.module import (
+from krach.ir.graph import (
     ControlDef,
     GraphIr,
     NodeDef,

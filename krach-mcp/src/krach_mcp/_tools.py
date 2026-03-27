@@ -510,7 +510,7 @@ def register_tools(mcp: FastMCP) -> None:
         """
         import json
         import os
-        from krach.ir.module import GraphIr
+        from krach.ir.graph import GraphIr
         kr = get_session()
         resolved = os.path.expanduser(path)
         try:

@@ -27,7 +27,7 @@ feedback_p = Primitive("feedback", stateful=True)
 
 def test_roundtrip_simple_add() -> None:
     """Two inputs, one add, one output."""
-    from krach.ir.module import dsp_graph_to_dict, dict_to_dsp_graph
+    from krach.ir.graph import dsp_graph_to_dict, dict_to_dsp_graph
 
     s0, s1 = _sig(0), _sig(1)
     s2 = _sig(2)
@@ -45,7 +45,7 @@ def test_roundtrip_simple_add() -> None:
 
 def test_roundtrip_chain() -> None:
     """Serial chain: add → mul."""
-    from krach.ir.module import dsp_graph_to_dict, dict_to_dsp_graph
+    from krach.ir.graph import dsp_graph_to_dict, dict_to_dsp_graph
 
     s0, s1, s2, s3 = _sig(0), _sig(1), _sig(2), _sig(3)
     s4 = _sig(4)
@@ -64,7 +64,7 @@ def test_roundtrip_chain() -> None:
 
 def test_roundtrip_nested_feedback() -> None:
     """DspGraph with FeedbackParams containing body_graph."""
-    from krach.ir.module import dsp_graph_to_dict, dict_to_dsp_graph
+    from krach.ir.graph import dsp_graph_to_dict, dict_to_dsp_graph
 
     # Body graph: fb_in -> fb_in * 0.5
     fb_in = _sig(100)

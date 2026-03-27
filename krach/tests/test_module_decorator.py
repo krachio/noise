@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import inspect
 
-from krach.ir.module import GraphIr
+from krach.ir.graph import GraphIr
 from krach.module_proxy import GraphProxy, graph
 
 
@@ -68,7 +68,7 @@ def test_decorator_with_sub_graphs() -> None:
         nodes=(GraphIr.__dataclass_fields__["nodes"].default,),  # type: ignore[arg-type]
     )
     # Actually construct a real child
-    from krach.ir.module import NodeDef
+    from krach.ir.graph import NodeDef
     child = GraphIr(
         nodes=(NodeDef(name="osc", source="faust:osc"),),
         outputs=("osc",),

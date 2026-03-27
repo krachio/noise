@@ -27,7 +27,7 @@ from krach.node_types import (
     ControlPath, DspDef, DspSource, GroupPath, Node, NodePath,
     ResolvedSource, UnknownPath, resolve_dsp_source, resolve_path,
 )
-from krach.ir.module import ControlDef, GraphIr, MutedDef, NodeDef, PatternDef, RouteDef
+from krach.ir.graph import ControlDef, GraphIr, MutedDef, NodeDef, PatternDef, RouteDef
 from krach.pattern.bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach.pattern.builders import check_finite as _check_finite
 from krach.pattern.pattern import Pattern
@@ -1225,7 +1225,7 @@ class Mixer:
 
     def load(self, ir: GraphIr) -> None:
         """Replay a GraphIr onto this mixer. Batches all nodes into one rebuild."""
-        from krach.ir.module import flatten
+        from krach.ir.graph import flatten
 
         # Save sub_graphs before flatten (flatten resolves them into flat nodes)
         original_sub_graphs = ir.sub_graphs
@@ -1273,7 +1273,7 @@ class Mixer:
 
     def instantiate(self, ir: GraphIr, prefix: str) -> GraphHandle:
         """Instantiate a module with prefix namespace. Returns a GraphHandle."""
-        from krach.ir.module import prefix_ir, flatten
+        from krach.ir.graph import prefix_ir, flatten
 
         flat = flatten(prefix_ir(ir, prefix))
         self.load(flat)

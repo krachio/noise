@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from krach.ir.module import (
+from krach.ir.graph import (
     AutomationDef,
     ControlDef,
     GraphIr,

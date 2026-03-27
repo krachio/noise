@@ -135,7 +135,7 @@ def graph_ir_key(ir: object) -> int:
 
     Lazy import to avoid circular dependency with ir/module.py.
     """
-    from krach.ir.module import GraphIr
+    from krach.ir.graph import GraphIr
     assert isinstance(ir, GraphIr)
     parts: list[object] = []
     for nd in ir.nodes:

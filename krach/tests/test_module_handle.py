@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from krach.ir.module import GraphIr, NodeDef
+from krach.ir.graph import GraphIr, NodeDef
 from krach.mixer import Mixer
 
 

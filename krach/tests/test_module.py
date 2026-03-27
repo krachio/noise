@@ -6,7 +6,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from krach.mixer import Mixer
-from krach.ir.module import (
+from krach.ir.graph import (
     ControlDef,
     GraphIr,
     MutedDef,

@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Concatenate, ParamSpec
 
-from krach.ir.module import (
+from krach.ir.graph import (
     ControlDef,
     GraphIr,
     MutedDef,
@@ -165,7 +165,7 @@ class GraphProxy:
         self._sub_graphs.append((prefix, ir))
         # Add prefixed node names for route validation
         prefixed = prefix_ir(ir, prefix)
-        from krach.ir.module import flatten
+        from krach.ir.graph import flatten
         flat = flatten(prefixed)
         for nd in flat.nodes:
             self._node_names.add(nd.name)
