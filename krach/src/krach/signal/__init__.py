@@ -121,6 +121,10 @@ from krach.signal.core import (
     remainder as remainder,
 )
 
+def __dir__() -> list[str]:
+    return list(__all__)
+
+
 __all__ = [
     # Types
     "Signal",

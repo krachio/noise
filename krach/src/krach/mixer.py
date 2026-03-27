@@ -34,7 +34,7 @@ from krach.pattern.pattern import Pattern
 from krach.session import SlotState
 
 if TYPE_CHECKING:
-    from krach.pattern import Session
+    from krach.session import Session
 
 
 # ── MixerProtocol ────────────────────────────────────────────────────────

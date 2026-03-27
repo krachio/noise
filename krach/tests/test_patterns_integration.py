@@ -4,7 +4,8 @@ import json
 from typing import Any
 from unittest.mock import MagicMock, patch
 
-from krach.pattern import Session, midi_note as note, rest, fast, thin
+from krach.pattern import midi_note as note, rest, fast, thin
+from krach.session import Session
 
 
 def _stub_ok_response(mock_cls: MagicMock) -> None:
@@ -25,10 +26,7 @@ def _parse_sent(mock_sock: MagicMock) -> list[dict[str, Any]]:
 class TestPublicImports:
     def test_all_names_importable(self) -> None:
         from krach.pattern import (
-            KernelError,
             Pattern,
-            Session,
-            SlotState,
             cc,
             midi_note as note,
             rest,
@@ -42,7 +40,7 @@ class TestPublicImports:
         assert all(
             x is not None
             for x in [
-                KernelError, Pattern, Session, SlotState, note, rest, cc,
+                Pattern, note, rest, cc,
                 fast, reverse, shift, spread, thin,
             ]
         )
