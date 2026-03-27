@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 from unittest.mock import patch
 
-from krach._paths import resolve_engine_bin, resolve_lib_dir, resolve_faust_stdlib_dir
+from krach.repl.paths import resolve_engine_bin, resolve_lib_dir, resolve_faust_stdlib_dir
 
 
 def test_resolve_engine_bin_from_env(tmp_path: Path) -> None:
@@ -23,7 +23,7 @@ def test_resolve_engine_bin_vendored(tmp_path: Path) -> None:
     engine = bin_dir / "krach-engine"
     engine.touch(mode=0o755)
 
-    with patch("krach._paths._package_dir", return_value=tmp_path):
+    with patch("krach.repl.paths._package_dir", return_value=tmp_path):
         result = resolve_engine_bin()
     assert result == engine
 
@@ -42,7 +42,7 @@ def test_resolve_engine_bin_dev_fallback(tmp_path: Path) -> None:
     pkg = repo / "krach" / "src" / "krach"
     pkg.mkdir(parents=True)
 
-    with patch("krach._paths._package_dir", return_value=pkg):
+    with patch("krach.repl.paths._package_dir", return_value=pkg):
         result = resolve_engine_bin()
     assert result == engine
 
@@ -57,7 +57,7 @@ def test_resolve_lib_dir_from_env(tmp_path: Path) -> None:
 def test_resolve_lib_dir_vendored(tmp_path: Path) -> None:
     lib_dir = tmp_path / "_lib"
     lib_dir.mkdir()
-    with patch("krach._paths._package_dir", return_value=tmp_path):
+    with patch("krach.repl.paths._package_dir", return_value=tmp_path):
         assert resolve_lib_dir() == lib_dir
 
 
@@ -71,7 +71,7 @@ def test_resolve_faust_stdlib_dir_from_env(tmp_path: Path) -> None:
 def test_resolve_faust_stdlib_dir_vendored(tmp_path: Path) -> None:
     share = tmp_path / "_share" / "faust"
     share.mkdir(parents=True)
-    with patch("krach._paths._package_dir", return_value=tmp_path):
+    with patch("krach.repl.paths._package_dir", return_value=tmp_path):
         assert resolve_faust_stdlib_dir() == share
 
 
@@ -88,7 +88,7 @@ def test_resolve_engine_bin_dev_release_fallback(tmp_path: Path) -> None:
     pkg = repo / "krach" / "src" / "krach"
     pkg.mkdir(parents=True)
 
-    with patch("krach._paths._package_dir", return_value=pkg):
+    with patch("krach.repl.paths._package_dir", return_value=pkg):
         assert resolve_engine_bin() == engine
 
 
@@ -105,7 +105,7 @@ def test_resolve_engine_bin_dev_prefers_debug(tmp_path: Path) -> None:
     pkg = repo / "krach" / "src" / "krach"
     pkg.mkdir(parents=True)
 
-    with patch("krach._paths._package_dir", return_value=pkg):
+    with patch("krach.repl.paths._package_dir", return_value=pkg):
         result = resolve_engine_bin()
     assert result == repo / "target" / "debug" / "krach-engine"
 
@@ -113,7 +113,7 @@ def test_resolve_engine_bin_dev_prefers_debug(tmp_path: Path) -> None:
 def test_resolve_lib_dir_missing_returns_none() -> None:
     with (
         patch.dict(os.environ, {}, clear=True),
-        patch("krach._paths._package_dir", return_value=Path("/nonexistent")),
+        patch("krach.repl.paths._package_dir", return_value=Path("/nonexistent")),
     ):
         os.environ.pop("KRACH_LIB_DIR", None)
         assert resolve_lib_dir() is None
@@ -122,7 +122,7 @@ def test_resolve_lib_dir_missing_returns_none() -> None:
 def test_resolve_faust_stdlib_dir_missing_returns_none() -> None:
     with (
         patch.dict(os.environ, {}, clear=True),
-        patch("krach._paths._package_dir", return_value=Path("/nonexistent")),
+        patch("krach.repl.paths._package_dir", return_value=Path("/nonexistent")),
     ):
         os.environ.pop("FAUST_STDLIB_DIR", None)
         assert resolve_faust_stdlib_dir() is None
@@ -135,7 +135,7 @@ def test_resolve_faust_stdlib_dir_validates_content(tmp_path: Path) -> None:
     (share / "stdfaust.lib").write_text("// FAUST standard library")
     (share / "maths.lib").write_text("// FAUST maths library")
 
-    with patch("krach._paths._package_dir", return_value=tmp_path):
+    with patch("krach.repl.paths._package_dir", return_value=tmp_path):
         result = resolve_faust_stdlib_dir()
     assert result is not None
     assert (result / "stdfaust.lib").is_file()
@@ -146,7 +146,7 @@ def test_resolve_faust_stdlib_dir_empty_vendored_returns_none(tmp_path: Path) ->
     share = tmp_path / "_share" / "faust"
     share.mkdir(parents=True)
 
-    with patch("krach._paths._package_dir", return_value=tmp_path):
+    with patch("krach.repl.paths._package_dir", return_value=tmp_path):
         result = resolve_faust_stdlib_dir()
     # Dir exists → returns it. Content validation is the caller's responsibility.
     assert result is not None
@@ -156,7 +156,7 @@ def test_resolve_engine_bin_missing_raises() -> None:
     """When no binary found anywhere, raise a clear error."""
     with (
         patch.dict(os.environ, {}, clear=True),
-        patch("krach._paths._package_dir", return_value=Path("/nonexistent")),
+        patch("krach.repl.paths._package_dir", return_value=Path("/nonexistent")),
     ):
         os.environ.pop("KRACH_ENGINE_BIN", None)
         try:

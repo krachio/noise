@@ -14,7 +14,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from krach._paths import resolve_engine_bin, resolve_faust_stdlib_dir, resolve_lib_dir
+from krach.repl.paths import resolve_engine_bin, resolve_faust_stdlib_dir, resolve_lib_dir
 from krach.config import load_config
 from krach.graph.node import dsp, parse_dsp_controls
 from krach.mixer import Mixer
