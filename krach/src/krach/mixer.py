@@ -894,6 +894,12 @@ class Mixer:
         """Set a control value by path. Fans out to all instances for poly nodes."""
         _check_finite(value, path)
         self._warn_if_outside_range(path, value)
+        if path in self._patterns:
+            warnings.warn(
+                f"set('{path}', {value}): a pattern is active on this path "
+                f"— the value will be overwritten on the next cycle",
+                stacklevel=2,
+            )
         self._ctrl_values[path] = value
         if self._transition_bars > 0:
             self.fade(path, value, bars=self._transition_bars)

@@ -48,7 +48,6 @@ def test_two_mixers_share_session_clobber_graph() -> None:
     assert "pad" in node_ids, "pad node should be present"
 
 
-@pytest.mark.xfail(reason="bug #21: scenes not visible across clients")
 def test_save_scene_not_visible_in_other_mixer() -> None:
     """Scene saved by mixer_a is not visible in mixer_b."""
     session = MagicMock()
@@ -71,7 +70,6 @@ def test_save_scene_not_visible_in_other_mixer() -> None:
 # ── Control UX (bugs #25, #26) ───────────────────────────────────────────
 
 
-@pytest.mark.xfail(reason="bug #25: set() should warn when control pattern is active")
 def test_set_control_warns_when_pattern_active() -> None:
     """set('bass/cutoff', 1200) should warn if a control pattern is already
     driving bass/cutoff — the set value will be immediately overwritten."""
@@ -95,7 +93,6 @@ def test_set_control_warns_when_pattern_active() -> None:
     )
 
 
-@pytest.mark.xfail(reason="bug #26: hush('bass/cutoff') should stop control pattern")
 def test_hush_by_control_path() -> None:
     """hush('bass/cutoff') should stop the control pattern on that path."""
     session, mixer = _make_mixer()
