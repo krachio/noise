@@ -190,21 +190,21 @@ def test_ramp_lo_equals_hi() -> None:
 
 
 def test_mod_sine_returns_pattern() -> None:
-    from krach.pattern.builders import mod_sine
-    pat = mod_sine(0.0, 1.0, steps=8)
+    from krach.pattern.builders import sine
+    pat = sine(0.0, 1.0, steps=8)
     assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 8
 
 
 def test_mod_tri_returns_pattern() -> None:
-    from krach.pattern.builders import mod_tri
-    pat = mod_tri(0.0, 1.0, steps=8)
+    from krach.pattern.builders import tri
+    pat = tri(0.0, 1.0, steps=8)
     assert pat.node.primitive.name == "cat"
 
 
 def test_mod_ramp_down_first_is_hi() -> None:
-    from krach.pattern.builders import mod_ramp_down
-    pat = mod_ramp_down(0.0, 1.0, steps=4)
+    from krach.pattern.builders import ramp_down
+    pat = ramp_down(0.0, 1.0, steps=4)
     # First value should be 1.0 (starts at hi, ramps to lo)
     first = pat.node.children[0]
     assert isinstance(first.params, AtomParams)
@@ -213,8 +213,8 @@ def test_mod_ramp_down_first_is_hi() -> None:
 
 
 def test_mod_square_two_levels() -> None:
-    from krach.pattern.builders import mod_square
-    pat = mod_square(0.0, 1.0, steps=4)
+    from krach.pattern.builders import square
+    pat = square(0.0, 1.0, steps=4)
     from krach.pattern.bind import collect_control_values
     vals = collect_control_values(pat.node)
     # First half should be hi (1.0), second half lo (0.0)
@@ -223,8 +223,8 @@ def test_mod_square_two_levels() -> None:
 
 
 def test_mod_exp_starts_at_lo() -> None:
-    from krach.pattern.builders import mod_exp
-    pat = mod_exp(0.0, 1.0, steps=4)
+    from krach.pattern.builders import exp
+    pat = exp(0.0, 1.0, steps=4)
     first = pat.node.children[0]
     assert isinstance(first.params, AtomParams)
     assert isinstance(first.params.value, Control)

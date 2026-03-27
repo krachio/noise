@@ -43,7 +43,7 @@ def test_handle_play_control_path() -> None:
     from unittest.mock import MagicMock, patch
 
     from krach.mixer import Mixer
-    from krach.pattern.builders import mod_sine
+    from krach.pattern.builders import sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -51,7 +51,7 @@ def test_handle_play_control_path() -> None:
     })
     h = mixer.voice("bass", "faust:bass", gain=0.3)
 
-    pat = mod_sine(200.0, 800.0)
+    pat = sine(200.0, 800.0)
     with patch.object(mixer, "play") as mock_play:
         h.play("cutoff", pat)
         mock_play.assert_called_once_with("bass/cutoff", pat)

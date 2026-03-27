@@ -12,8 +12,7 @@ from typing import Any
 
 from krach.pattern.mininotation import p as _mini_p
 from krach.pattern.builders import (
-    cat, hit, mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square,
-    mod_tri, note, ramp, rand, saw, seq, sine, stack, struct,
+    cat, exp, hit, note, ramp, ramp_down, rand, seq, sine, square, stack, struct, tri,
 )
 from krach.pattern.pattern import Pattern, rest
 
@@ -40,15 +39,12 @@ _EVAL_NS: dict[str, Any] = {
     "chord": chord,
     "euclid": euclid,
     "ramp": ramp,
+    "ramp_down": ramp_down,
     "rand": rand,
     "sine": sine,
-    "saw": saw,
-    "mod_sine": mod_sine,
-    "mod_tri": mod_tri,
-    "mod_ramp": mod_ramp,
-    "mod_ramp_down": mod_ramp_down,
-    "mod_square": mod_square,
-    "mod_exp": mod_exp,
+    "tri": tri,
+    "square": square,
+    "exp": exp,
 }
 
 # Methods allowed on Pattern objects (returned by builders)

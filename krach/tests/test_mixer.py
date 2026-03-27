@@ -1301,9 +1301,9 @@ def test_voice_over_poly_cleans_instance_muted_entries() -> None:
 
 def test_mod_shapes_range() -> None:
 
-    from krach.pattern.builders import mod_exp, mod_ramp, mod_ramp_down, mod_sine, mod_square, mod_tri
+    from krach.pattern.builders import exp, ramp, ramp_down, sine, square, tri
 
-    shapes = [mod_sine, mod_tri, mod_ramp, mod_ramp_down, mod_square, mod_exp]
+    shapes = [sine, tri, ramp, ramp_down, square, exp]
     for shape in shapes:
         pat = shape(0.0, 1.0, steps=16)
         assert isinstance(pat, Pattern), f"{shape.__name__} must return Pattern"
@@ -1312,9 +1312,9 @@ def test_mod_shapes_range() -> None:
 
 
 def test_mod_sine_values() -> None:
-    from krach.pattern.builders import mod_sine
+    from krach.pattern.builders import sine
 
-    pat = mod_sine(0.0, 1.0, steps=4)
+    pat = sine(0.0, 1.0, steps=4)
     assert isinstance(pat, Pattern)
 
 
@@ -1322,7 +1322,7 @@ def test_mod_plays_pattern() -> None:
     from unittest.mock import MagicMock
 
     from krach.mixer import Mixer
-    from krach.pattern.builders import mod_sine
+    from krach.pattern.builders import sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -1331,7 +1331,7 @@ def test_mod_plays_pattern() -> None:
     mixer.voice("bass", "faust:bass", gain=0.5)
     session.reset_mock()
 
-    mixer.mod("bass/cutoff", mod_sine(200.0, 2000.0), bars=4)
+    mixer.mod("bass/cutoff", sine(200.0, 2000.0), bars=4)
 
     assert session.play_from_zero.call_count == 1
     slot = session.play_from_zero.call_args.args[0]
@@ -1342,14 +1342,14 @@ def test_hush_mod() -> None:
     from unittest.mock import MagicMock
 
     from krach.mixer import Mixer
-    from krach.pattern.builders import mod_sine
+    from krach.pattern.builders import sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
-    mixer.mod("bass/cutoff", mod_sine(200.0, 2000.0), bars=4)
+    mixer.mod("bass/cutoff", sine(200.0, 2000.0), bars=4)
     session.reset_mock()
 
     mixer.hush("bass/cutoff")
@@ -1362,14 +1362,14 @@ def test_remove_voice_hushes_mods() -> None:
     from unittest.mock import MagicMock
 
     from krach.mixer import Mixer
-    from krach.pattern.builders import mod_sine
+    from krach.pattern.builders import sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
         "faust:bass": ("freq", "gate", "cutoff"),
     })
     mixer.voice("bass", "faust:bass", gain=0.5)
-    mixer.mod("bass/cutoff", mod_sine(200.0, 2000.0), bars=4)
+    mixer.mod("bass/cutoff", sine(200.0, 2000.0), bars=4)
     session.reset_mock()
 
     mixer.remove("bass")
@@ -1382,7 +1382,7 @@ def test_mod_send_param_label() -> None:
     from unittest.mock import MagicMock
 
     from krach.mixer import Mixer
-    from krach.pattern.builders import mod_sine
+    from krach.pattern.builders import sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -1394,7 +1394,7 @@ def test_mod_send_param_label() -> None:
     mixer.send("bass", "verb", level=0.4)
     session.reset_mock()
 
-    mixer.mod("bass_send_verb/gain", mod_sine(0.0, 1.0), bars=4)
+    mixer.mod("bass_send_verb/gain", sine(0.0, 1.0), bars=4)
 
     assert session.play_from_zero.call_count == 1
     slot = session.play_from_zero.call_args.args[0]
@@ -1640,7 +1640,7 @@ def test_set_validates_finite() -> None:
         mixer.set("bass/cutoff", float("inf"))
 
 
-# ── Commit 7: Control patterns — ramp(), mod_sine(), etc. ────────────────────
+# ── Commit 7: Control patterns — ramp(), sine(), etc. ────────────────────
 
 
 def test_ramp_pattern_values() -> None:
@@ -1655,19 +1655,19 @@ def test_ramp_pattern_values() -> None:
 
 def test_mod_sine_pattern_length() -> None:
 
-    from krach.pattern.builders import mod_sine
+    from krach.pattern.builders import sine
 
-    pat = mod_sine(0.0, 1.0, steps=32)
+    pat = sine(0.0, 1.0, steps=32)
     assert isinstance(pat, Pattern)
     assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 32
 
 
 def test_mod_patterns_composable() -> None:
-    from krach.pattern.builders import mod_sine, ramp
+    from krach.pattern.builders import sine, ramp
 
     r = ramp(0.0, 1.0)
-    s = mod_sine(200.0, 800.0)
+    s = sine(200.0, 800.0)
     _ = r.over(4)
     _ = s.over(2)
     _ = r + s
@@ -1686,40 +1686,40 @@ def test_ramp_uses_ctrl_placeholder() -> None:
 
 
 def test_mod_tri_returns_pattern() -> None:
-    from krach.pattern.builders import mod_tri
+    from krach.pattern.builders import tri
 
-    pat = mod_tri(0.0, 1.0, steps=16)
+    pat = tri(0.0, 1.0, steps=16)
     assert isinstance(pat, Pattern)
 
 
 def test_mod_ramp_same_as_ramp() -> None:
 
-    from krach.pattern.builders import mod_ramp
+    from krach.pattern.builders import ramp
 
-    pat = mod_ramp(0.0, 1.0, steps=8)
+    pat = ramp(0.0, 1.0, steps=8)
     assert isinstance(pat, Pattern)
     assert pat.node.primitive.name == "cat"
     assert len(pat.node.children) == 8
 
 
 def test_mod_ramp_down_returns_pattern() -> None:
-    from krach.pattern.builders import mod_ramp_down
+    from krach.pattern.builders import ramp_down
 
-    pat = mod_ramp_down(0.0, 1.0, steps=8)
+    pat = ramp_down(0.0, 1.0, steps=8)
     assert isinstance(pat, Pattern)
 
 
 def test_mod_square_returns_pattern() -> None:
-    from krach.pattern.builders import mod_square
+    from krach.pattern.builders import square
 
-    pat = mod_square(0.0, 1.0, steps=8)
+    pat = square(0.0, 1.0, steps=8)
     assert isinstance(pat, Pattern)
 
 
 def test_mod_exp_returns_pattern() -> None:
-    from krach.pattern.builders import mod_exp
+    from krach.pattern.builders import exp
 
-    pat = mod_exp(0.0, 1.0, steps=8)
+    pat = exp(0.0, 1.0, steps=8)
     assert isinstance(pat, Pattern)
 
 
@@ -1991,7 +1991,7 @@ def test_mod_uses_play_from_zero() -> None:
     from unittest.mock import MagicMock
 
     from krach.mixer import Mixer
-    from krach.pattern.builders import mod_sine
+    from krach.pattern.builders import sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -2000,7 +2000,7 @@ def test_mod_uses_play_from_zero() -> None:
     mixer.voice("bass", "faust:bass", gain=0.5)
     session.reset_mock()
 
-    mixer.mod("bass/cutoff", mod_sine(200.0, 2000.0), bars=4)
+    mixer.mod("bass/cutoff", sine(200.0, 2000.0), bars=4)
 
     assert session.play_from_zero.call_count == 1
     assert session.play.call_count == 0
@@ -2220,7 +2220,7 @@ def test_mod_pattern_still_works() -> None:
     from unittest.mock import MagicMock
 
     from krach.mixer import Mixer
-    from krach.pattern.builders import mod_sine
+    from krach.pattern.builders import sine
 
     session = MagicMock()
     session.tempo = 120.0
@@ -2230,7 +2230,7 @@ def test_mod_pattern_still_works() -> None:
     })
     mixer.voice("bass", "faust:bass", gain=0.3)
 
-    pat = mod_sine(200.0, 2000.0)
+    pat = sine(200.0, 2000.0)
     mixer.mod("bass/cutoff", pat, bars=2)
 
     # Should NOT call set_automation (uses play path instead)
@@ -3292,7 +3292,7 @@ def test_play_poly_control_fans_out() -> None:
     """kr.play('pad/cutoff', pattern) must fan out to per-instance control slots."""
     from unittest.mock import MagicMock
     from krach.mixer import Mixer
-    from krach.pattern.builders import mod_sine
+    from krach.pattern.builders import sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -3301,7 +3301,7 @@ def test_play_poly_control_fans_out() -> None:
     mixer.voice("pad", "faust:pad", count=3, gain=0.5)
     session.reset_mock()
 
-    mixer.play("pad/cutoff", mod_sine(100.0, 2000.0))
+    mixer.play("pad/cutoff", sine(100.0, 2000.0))
 
     # Should have called session.play for each instance
     assert session.play.call_count == 3
@@ -3497,11 +3497,11 @@ def test_disconnect_noop_if_not_connected() -> None:
 
 
 def test_play_control_path_warns_mod_outside_range() -> None:
-    """kr.play('bass/freq', mod_sine(0.5, 1.5)) warns when freq range is [20, 2000]."""
+    """kr.play('bass/freq', sine(0.5, 1.5)) warns when freq range is [20, 2000]."""
     import warnings
     from unittest.mock import MagicMock
     from krach.mixer import Mixer
-    from krach.pattern.builders import mod_sine
+    from krach.pattern.builders import sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -3512,7 +3512,7 @@ def test_play_control_path_warns_mod_outside_range() -> None:
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        mixer.play("bass/freq", mod_sine(0.5, 1.5))
+        mixer.play("bass/freq", sine(0.5, 1.5))
         range_warnings = [x for x in w if "outside" in str(x.message).lower()]
         assert len(range_warnings) == 1
         assert "freq" in str(range_warnings[0].message)
@@ -3562,11 +3562,11 @@ def test_play_no_warn_known_controls() -> None:
 
 
 def test_play_control_path_no_warn_when_in_range() -> None:
-    """kr.play('bass/freq', mod_sine(100, 800)) should not warn."""
+    """kr.play('bass/freq', sine(100, 800)) should not warn."""
     import warnings
     from unittest.mock import MagicMock
     from krach.mixer import Mixer
-    from krach.pattern.builders import mod_sine
+    from krach.pattern.builders import sine
 
     session = MagicMock()
     mixer = Mixer(session=session, dsp_dir=Path("/tmp"), node_controls={
@@ -3577,7 +3577,7 @@ def test_play_control_path_no_warn_when_in_range() -> None:
 
     with warnings.catch_warnings(record=True) as w:
         warnings.simplefilter("always")
-        mixer.play("bass/freq", mod_sine(100.0, 800.0))
+        mixer.play("bass/freq", sine(100.0, 800.0))
         range_warnings = [x for x in w if "outside" in str(x.message).lower()]
         assert len(range_warnings) == 0
 

@@ -31,7 +31,7 @@ def test_builder_sequence() -> None:
 
 
 def test_builder_mod_sine() -> None:
-    pat = parse_pattern("mod_sine(200.0, 2000.0).over(4)")
+    pat = parse_pattern("sine(200.0, 2000.0).over(4)")
     assert isinstance(pat, Pattern)
 
 

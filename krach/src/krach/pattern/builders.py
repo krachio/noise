@@ -47,47 +47,29 @@ def ramp(start: float, end: float, steps: int = 64) -> Pattern:
     return _build_mod(lambda t: t, start, end, steps)
 
 
-def mod_sine(lo: float, hi: float, steps: int = 64) -> Pattern:
-    """Sine LFO from lo to hi. Returns a 1-cycle pattern."""
+def sine(lo: float, hi: float, steps: int = 64) -> Pattern:
+    """Sine sweep from lo to hi over one cycle. Use ``.over(N)`` for longer."""
     return _build_mod(lambda t: 0.5 + 0.5 * math.sin(2 * math.pi * t), lo, hi, steps)
 
 
-def mod_tri(lo: float, hi: float, steps: int = 64) -> Pattern:
+def tri(lo: float, hi: float, steps: int = 64) -> Pattern:
     """Triangle shape: lo→hi→lo over one period."""
     return _build_mod(lambda t: 1.0 - abs(2.0 * t - 1.0), lo, hi, steps)
 
 
-def mod_ramp(lo: float, hi: float, steps: int = 64) -> Pattern:
-    """Ramp up: lo→hi."""
-    return ramp(lo, hi, steps)
-
-
-def mod_ramp_down(lo: float, hi: float, steps: int = 64) -> Pattern:
+def ramp_down(lo: float, hi: float, steps: int = 64) -> Pattern:
     """Ramp down: hi→lo."""
     return _build_mod(lambda t: 1.0 - t, lo, hi, steps)
 
 
-def mod_square(lo: float, hi: float, steps: int = 64) -> Pattern:
+def square(lo: float, hi: float, steps: int = 64) -> Pattern:
     """Square wave: hi for first half, lo for second half."""
     return _build_mod(lambda t: 1.0 if t < 0.5 else 0.0, lo, hi, steps)
 
 
-def mod_exp(lo: float, hi: float, steps: int = 64) -> Pattern:
+def exp(lo: float, hi: float, steps: int = 64) -> Pattern:
     """Exponential curve: lo→hi following t^2."""
     return _build_mod(lambda t: t * t, lo, hi, steps)
-
-
-# ── Continuous pattern values ─────────────────────────────────────────────────
-
-
-def sine(lo: float, hi: float, steps: int = 64) -> Pattern:
-    """Sine sweep from lo to hi over one cycle. Use ``.over(N)`` for longer."""
-    return mod_sine(lo, hi, steps)
-
-
-def saw(lo: float, hi: float, steps: int = 64) -> Pattern:
-    """Sawtooth ramp from lo to hi over one cycle."""
-    return ramp(lo, hi, steps)
 
 
 def rand(lo: float, hi: float, steps: int = 64) -> Pattern:

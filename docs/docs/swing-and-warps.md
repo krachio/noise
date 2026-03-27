@@ -1,8 +1,7 @@
-# Swing and Warps
+# Swing
 
 Swing delays every other subdivision to create a shuffled, off-grid feel.
-krach implements swing as a piecewise linear time warp -- a general mechanism
-that can express any groove transformation.
+krach implements swing as a piecewise linear time remap applied at scheduling time.
 
 ## `.swing(amount, grid)`
 
@@ -105,14 +104,8 @@ kr.play("kick", p.every(4, lambda p: p.reverse()))
 kr.play("hat", kr.p("x . x x . x . x").swing(0.67))
 ```
 
-## Warp as a general time transform
+## Implementation
 
-Swing is one instance of a general **time warp** -- a function that remaps
-event positions within a cycle. The same mechanism can express:
-
-- **Humanize** -- small random offsets per event
-- **Groove templates** -- MPC-style per-step timing
-- **Accelerando/ritardando** -- gradual tempo curves within a cycle
-
-Currently, `.swing()` is the built-in warp. The underlying warp system is
-designed to support additional transforms in the future.
+Swing is implemented as a `WarpParams(kind="swing", amount, grid)` node in
+the pattern IR. The engine applies the piecewise linear time remap at
+scheduling time -- no interpolation, no latency.

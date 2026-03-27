@@ -107,7 +107,7 @@ def register_tools(mcp: FastMCP) -> None:
           seq('A2', 'D3', None, 'E2')       — sequence with rest (None)
           chord('D4', 'F4', 'A4')           — simultaneous notes (chord)
           euclid(5, 16)                     — Euclidean rhythm (5 hits in 16 steps)
-          mod_sine(200, 2000).over(4)       — smooth control sweep
+          sine(200, 2000).over(4)       — smooth control sweep
           hit() * 4 + rest() * 4            — compose patterns with +
           note('C4') | note('E4')           — stack (simultaneous)
 
