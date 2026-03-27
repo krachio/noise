@@ -228,7 +228,7 @@ def register_tools(mcp: FastMCP) -> None:
 
         Call this before making changes to understand the current session.
         """
-        from krach.pattern.session import KernelError
+        from krach.session import KernelError
         from krach.pattern.summary import summarize as _summarize
 
         kr = get_session()

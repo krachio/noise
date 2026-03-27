@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 from krach.mixer import Mixer
-from krach.pattern.session import Session
+from krach.session import Session
 
 
 def _fake_state(
@@ -237,7 +237,7 @@ def test_mixer_pull_detects_sends() -> None:
 def test_session_pull_engine_error_raises() -> None:
     """pull() raises KernelError when engine returns an error response."""
     import json
-    from krach.pattern.session import KernelError
+    from krach.session import KernelError
 
     session = Session.__new__(Session)
     session._sock = MagicMock()

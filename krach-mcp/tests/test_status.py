@@ -17,7 +17,7 @@ def _get_status_tool() -> object:
 
 def test_status_catches_unrecognized_message() -> None:
     """status() must return actionable guidance when engine sends 'unrecognized message'."""
-    from krach.pattern.session import KernelError
+    from krach.session import KernelError
 
     status_fn = _get_status_tool()
     mock_session = MagicMock()
@@ -33,7 +33,7 @@ def test_status_catches_unrecognized_message() -> None:
 def test_status_reraises_other_kernel_errors() -> None:
     """status() must re-raise KernelError that isn't about unrecognized messages."""
     import pytest
-    from krach.pattern.session import KernelError
+    from krach.session import KernelError
 
     status_fn = _get_status_tool()
     mock_session = MagicMock()

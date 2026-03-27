@@ -31,7 +31,7 @@ from krach.ir.graph import ControlDef, GraphIr, MutedDef, NodeDef, PatternDef, R
 from krach.pattern.bind import bind_ctrl, bind_voice, bind_voice_poly
 from krach.pattern.builders import check_finite as _check_finite
 from krach.pattern.pattern import Pattern
-from krach.pattern.session import SlotState
+from krach.session import SlotState
 
 if TYPE_CHECKING:
     from krach.pattern import Session

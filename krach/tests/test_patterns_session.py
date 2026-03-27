@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 
 from krach.pattern.pattern import midi_note as note
-from krach.pattern.session import Session, SlotState
+from krach.session import Session, SlotState
 
 
 def _stub_ok_response(mock_cls: MagicMock) -> None:
@@ -27,7 +27,7 @@ def _parse_sent(mock_sock: MagicMock) -> list[dict[str, Any]]:
 
 
 class TestSessionConnection:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_connect_creates_unix_socket(self, mock_cls: MagicMock) -> None:
         s = Session()
         s.connect()
@@ -37,20 +37,20 @@ class TestSessionConnection:
         expected = str(P(tempfile.gettempdir()) / "krach-engine.sock")
         mock_cls.return_value.connect.assert_called_once_with(expected)
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_env_var_override(self, mock_cls: MagicMock) -> None:
         with patch.dict("os.environ", {"NOISE_SOCKET": "/tmp/custom.sock"}):
             s = Session()
         s.connect()
         mock_cls.return_value.connect.assert_called_once_with("/tmp/custom.sock")
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_context_manager(self, mock_cls: MagicMock) -> None:
         with Session() as s:
             assert s is not None
         mock_cls.return_value.close.assert_called_once()
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_disconnect_closes_socket_and_reader(self, mock_cls: MagicMock) -> None:
         s = Session()
         s.connect()
@@ -60,7 +60,7 @@ class TestSessionConnection:
 
 
 class TestPlay:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_play_sends_set_pattern(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -71,7 +71,7 @@ class TestPlay:
         assert pat_msgs[0]["slot"] == "drums"
         assert pat_msgs[0]["pattern"]["op"] == "Atom"
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_play_tracks_slot_state(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         pat = note(36)
@@ -81,7 +81,7 @@ class TestPlay:
             assert state.pattern == pat
             assert state.playing is True
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_play_replaces_existing_pattern(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -89,7 +89,7 @@ class TestPlay:
             s.play("drums", note(38))
             assert s.slots["drums"].pattern == note(38)
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_play_on_hushed_slot_resumes(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -100,7 +100,7 @@ class TestPlay:
 
 
 class TestHush:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_hush_sends_hush_command(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -111,7 +111,7 @@ class TestHush:
         assert len(hush_msgs) == 1
         assert hush_msgs[0]["slot"] == "drums"
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_hush_keeps_pattern_stopped(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         pat = note(36)
@@ -122,7 +122,7 @@ class TestHush:
             assert state.pattern == pat
             assert state.playing is False
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_hush_unknown_slot_no_error(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -132,7 +132,7 @@ class TestHush:
 
 
 class TestResume:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_resume_sends_set_pattern(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -143,7 +143,7 @@ class TestResume:
         pat_msgs = [m for m in msgs if m["cmd"] == "SetPattern"]
         assert len(pat_msgs) == 2  # initial play + resume
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_resume_sets_playing_true(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -152,14 +152,14 @@ class TestResume:
             s.resume("drums")
             assert s.slots["drums"].playing is True
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_resume_unknown_slot_raises(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
             with pytest.raises(KeyError):
                 s.resume("nonexistent")
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_resume_already_playing_is_noop(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -171,7 +171,7 @@ class TestResume:
 
 
 class TestRemove:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_remove_sends_hush(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -180,7 +180,7 @@ class TestRemove:
         msgs = _parse_sent(mock_cls.return_value)
         assert any(m["cmd"] == "Hush" and m["slot"] == "drums" for m in msgs)
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_remove_deletes_from_slots(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -188,7 +188,7 @@ class TestRemove:
             s.remove("drums")
             assert "drums" not in s.slots
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_remove_unknown_slot_no_error(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -196,7 +196,7 @@ class TestRemove:
 
 
 class TestStop:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_stop_sends_hush_all(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -204,7 +204,7 @@ class TestStop:
         msgs = _parse_sent(mock_cls.return_value)
         assert any(m["cmd"] == "HushAll" for m in msgs)
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_stop_marks_all_stopped(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -217,7 +217,7 @@ class TestStop:
 
 
 class TestLaunch:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_launch_sends_batch(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -231,7 +231,7 @@ class TestLaunch:
         assert slots == {"drums", "melody"}
         assert all(c["cmd"] == "SetPattern" for c in cmds)
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_launch_tracks_slot_states(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -241,7 +241,7 @@ class TestLaunch:
             assert s.slots["drums"].pattern == note(36)
             assert s.slots["melody"].pattern == note(60)
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_launch_replaces_existing_slots(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -252,7 +252,7 @@ class TestLaunch:
 
 
 class TestTempo:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_set_tempo_sends_bpm(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -260,7 +260,7 @@ class TestTempo:
         msgs = _parse_sent(mock_cls.return_value)
         assert any(m["cmd"] == "SetBpm" and m["bpm"] == 140.0 for m in msgs)
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_tempo_readable(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -269,7 +269,7 @@ class TestTempo:
 
 
 class TestClockSource:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_set_clock_source_sends_message(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -277,7 +277,7 @@ class TestClockSource:
         msgs = _parse_sent(mock_cls.return_value)
         assert any(m["cmd"] == "SetClockSource" and m["source"] == "midi" for m in msgs)
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_clock_source_readable(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -285,14 +285,14 @@ class TestClockSource:
             s.set_clock_source("midi")
             assert s.clock_source == "midi"
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_set_clock_source_external_alias(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
             s.set_clock_source("external")
             assert s.clock_source == "midi"
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_set_clock_source_same_value_noop(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -302,7 +302,7 @@ class TestClockSource:
 
 
 class TestPlayFromZero:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_play_from_zero_sends_correct_command(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -313,7 +313,7 @@ class TestPlayFromZero:
         assert pat_msgs[0]["slot"] == "mod_slot"
         assert pat_msgs[0]["pattern"]["op"] == "Atom"
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_play_from_zero_tracks_slot_state(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         pat = note(60)
@@ -332,7 +332,7 @@ class TestSlotStateImmutable:
 
 
 class TestSlotsReadOnly:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_slots_returns_copy(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -343,7 +343,7 @@ class TestSlotsReadOnly:
 
 
 class TestSendBeforeConnect:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_play_before_connect_raises(self, mock_cls: MagicMock) -> None:
         s = Session()
         with pytest.raises(RuntimeError):
@@ -351,13 +351,13 @@ class TestSendBeforeConnect:
 
 
 class TestSocketTimeout:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_connect_sets_timeout(self, mock_cls: MagicMock) -> None:
         s = Session()
         s.connect()
         mock_cls.return_value.settimeout.assert_called_once_with(5.0)
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_send_catches_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         s = Session()
@@ -366,7 +366,7 @@ class TestSocketTimeout:
         with pytest.raises(ConnectionError, match="engine"):
             s.ping()
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_readline_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
         s = Session()
         s.connect()
@@ -376,7 +376,7 @@ class TestSocketTimeout:
 
 
 class TestNewlineDelimited:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_messages_end_with_newline(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         with Session() as s:
@@ -386,7 +386,7 @@ class TestNewlineDelimited:
 
 
 class TestLoadGraphTimeout:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_load_graph_sendall_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
         """BUG: load_graph() does not catch socket.timeout.
         send() and _send_json() both catch it, but load_graph() has its own
@@ -411,7 +411,7 @@ class TestLoadGraphTimeout:
         with pytest.raises(ConnectionError, match="engine"):
             s.load_graph(ir)
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_load_graph_readline_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
         """BUG: load_graph() readline does not catch socket.timeout."""
         from krach.backends.graph import Graph
@@ -431,7 +431,7 @@ class TestLoadGraphTimeout:
 
 
 class TestSendJsonTimeout:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_send_json_sendall_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
         """_send_json must catch socket.timeout and raise ConnectionError."""
         _stub_ok_response(mock_cls)
@@ -441,7 +441,7 @@ class TestSendJsonTimeout:
         with pytest.raises(ConnectionError, match="engine"):
             s.set_ctrl("bass_gain", 0.5)
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_send_json_readline_timeout_raises_connection_error(self, mock_cls: MagicMock) -> None:
         """_send_json readline timeout must raise ConnectionError."""
         s = Session()
@@ -452,7 +452,7 @@ class TestSendJsonTimeout:
 
 
 class TestSetAutomation:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_set_automation_sends_json(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         s = Session()
@@ -470,7 +470,7 @@ class TestSetAutomation:
         assert msg["period_secs"] == 2.0
         assert msg["one_shot"] is False
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_set_automation_one_shot(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         s = Session()
@@ -480,7 +480,7 @@ class TestSetAutomation:
         auto_msgs = [m for m in msgs if m.get("type") == "set_automation"]
         assert auto_msgs[0]["one_shot"] is True
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_clear_automation_sends_json(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         s = Session()
@@ -493,7 +493,7 @@ class TestSetAutomation:
 
 
 class TestStartInput:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_start_input_sends_json(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         s = Session()
@@ -504,7 +504,7 @@ class TestStartInput:
         assert len(input_msgs) == 1
         assert input_msgs[0]["channel"] == 1
 
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_start_input_default_channel(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         s = Session()
@@ -517,7 +517,7 @@ class TestStartInput:
 
 
 class TestMidiMap:
-    @patch("krach.pattern.session.socket.socket")
+    @patch("krach.session.socket.socket")
     def test_midi_map_sends_json(self, mock_cls: MagicMock) -> None:
         _stub_ok_response(mock_cls)
         s = Session()

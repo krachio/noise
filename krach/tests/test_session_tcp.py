@@ -6,7 +6,7 @@ import threading
 
 import pytest
 
-from krach.pattern.session import Session
+from krach.session import Session
 
 
 def _make_tcp_server(
