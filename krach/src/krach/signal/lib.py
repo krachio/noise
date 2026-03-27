@@ -16,6 +16,7 @@ from krach.signal.core import (
     mem,
     min_,
     pow_,
+    rdtable,
     select2,
     sin,
     sr,
@@ -72,11 +73,7 @@ def lfo(freq: SignalLike, lo: SignalLike = 0.0, hi: SignalLike = 1.0) -> Signal:
 
 def wavetable(data: list[float], index: SignalLike) -> Signal:
     """Read from a compile-time wavetable by index."""
-    if len(data) == 0:
-        raise ValueError("wavetable data must not be empty")
-    values_str = ", ".join(str(float(v)) for v in data)
-    template = f"rdtable(waveform{{{values_str}}}, int({{0}}))"
-    return faust_expr(template, coerce_to_signal(index))
+    return rdtable(tuple(float(v) for v in data), index)
 
 
 # ── Filters ──────────────────────────────────────────────────────────────
