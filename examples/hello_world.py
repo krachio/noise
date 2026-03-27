@@ -4,7 +4,7 @@ Run from the krach REPL:
     kr.load("examples/hello_world.py")
 """
 
-import krach.dsp as krs
+from krach import signal as krs
 
 
 def sine_beep() -> krs.Signal:

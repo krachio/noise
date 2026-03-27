@@ -31,7 +31,7 @@ def export_session(
         "import json",
         "from krach.pattern.pattern import Pattern",
         "from krach.pattern.serialize import dict_to_pattern_node",
-        "import krach.dsp as krs",
+        "from krach import signal as krs",
         "",
     ]
 

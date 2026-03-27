@@ -4,7 +4,7 @@ Run from the krach REPL:
     kr.load("examples/drum_kit.py")
 """
 
-import krach.dsp as krs
+from krach import signal as krs
 
 
 def kick() -> krs.Signal:

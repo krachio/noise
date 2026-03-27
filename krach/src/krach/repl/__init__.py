@@ -16,59 +16,17 @@ from pathlib import Path
 
 from krach._paths import resolve_engine_bin, resolve_faust_stdlib_dir, resolve_lib_dir
 from krach.config import load_config
-from krach.pattern.mininotation import p as _p
-from krach.pattern.pitch import ftom as _ftom, mtof as _mtof, parse_note as _parse_note
 from krach.graph.node import dsp, parse_dsp_controls
 from krach.mixer import Mixer
-from krach.pattern.builders import (
-    cat,
-    hit,
-    mod_exp,
-    mod_ramp,
-    mod_ramp_down,
-    mod_sine,
-    mod_square,
-    mod_tri,
-    note,
-    rand,
-    ramp,
-    saw,
-    seq,
-    sine,
-    stack,
-    struct,
-)
-from krach.pattern.pattern import rest as _rest
 
 
 # ── LiveMixer ────────────────────────────────────────────────────────────
 
 
 class LiveMixer(Mixer):
-    """REPL-enhanced Mixer with pattern builder sugar and typo guard."""
+    """REPL-enhanced Mixer with dsp() and typo guard."""
 
-    note = staticmethod(note)
-    hit = staticmethod(hit)
-    seq = staticmethod(seq)
-    rest = staticmethod(_rest)
-    ramp = staticmethod(ramp)
-    mod_sine = staticmethod(mod_sine)
-    mod_tri = staticmethod(mod_tri)
-    mod_ramp = staticmethod(mod_ramp)
-    mod_ramp_down = staticmethod(mod_ramp_down)
-    mod_square = staticmethod(mod_square)
-    mod_exp = staticmethod(mod_exp)
     dsp = staticmethod(dsp)
-    sine = staticmethod(sine)
-    saw = staticmethod(saw)
-    rand = staticmethod(rand)
-    cat = staticmethod(cat)
-    stack = staticmethod(stack)
-    struct = staticmethod(struct)
-    mtof = staticmethod(_mtof)
-    ftom = staticmethod(_ftom)
-    parse_note = staticmethod(_parse_note)
-    p = staticmethod(_p)
 
     _PUBLIC_SETTERS = frozenset({"master", "tempo", "meter"})
 
@@ -111,7 +69,7 @@ def connect_remote(
 
         kr = connect_remote("192.168.1.42", 9090, token="abc123")
     """
-    from krach.pattern import Session
+    from krach.session import Session
 
     cfg = load_config()
     cfg.ensure_dirs()
@@ -144,7 +102,7 @@ def connect(bpm: float = 120, master: float = 0.7, build: bool = True) -> LiveMi
     Reads configuration from ``~/.krach/config.toml`` (if present).
     Env vars ``NOISE_SOCKET`` and ``NOISE_DSP_DIR`` override config.
     """
-    from krach.pattern import Session
+    from krach.session import Session
 
     cfg = load_config()
     cfg.ensure_dirs()
@@ -269,7 +227,8 @@ def main() -> None:
         return
 
     from krach.pattern.pitch import NOTES as _NOTES
-    import krach.dsp as krs
+    from krach import signal as krs
+    from krach import pattern as krp
 
     kr = connect()
 
@@ -284,8 +243,9 @@ def main() -> None:
     print("  ██║  ██╗██║  ██║██║  ██║╚██████╗██║  ██║")
     print("  ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝")
     print()
-    print("  kr    Mixer — kr.node(), kr.play(), kr.note(), kr.hit(), ...")
-    print("  krs   krach.dsp — krs.Signal, krs.control(), krs.saw(), krs.lowpass(), ...")
+    print("  kr    Mixer — kr.node(), kr.play(), kr.dsp(), ...")
+    print("  krs   krach.signal — krs.saw(), krs.lowpass(), krs.control(), ...")
+    print("  krp   krach.pattern — krp.note(), krp.seq(), krp.hit(), ...")
     print()
 
     import IPython  # type: ignore[import-not-found]
@@ -293,6 +253,7 @@ def main() -> None:
     user_ns: dict[str, object] = {
         "kr": kr,
         "krs": krs,
+        "krp": krp,
         **_NOTES,
     }
 

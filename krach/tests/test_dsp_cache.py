@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from krach.graph.node import dsp, dsp_cache_clear, dsp_cache_info
-import krach.dsp as krs
+from krach import signal as krs
 
 
 def _make_fn(freq_default: float):

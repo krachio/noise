@@ -4,7 +4,7 @@ Run from the krach REPL:
     kr.load("examples/acid_jam.py")
 """
 
-import krach.dsp as krs
+from krach import signal as krs
 
 
 # -- DSP definitions --
