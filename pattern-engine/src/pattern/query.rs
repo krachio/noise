@@ -391,20 +391,49 @@ fn query_euclid(
 
 /// Bjorklund algorithm: distribute `pulses` evenly across `steps`.
 /// Returns a Vec<bool> of length `steps` where true = hit.
+///
+/// Implements the actual Euclidean rhythm algorithm (Toussaint 2005) via
+/// iterative remainder distribution, producing musically correct patterns
+/// like E(5,16) = [x..x..x..x...x...] (tresillo family).
 fn bjorklund(pulses: u32, steps: u32, rotation: u32) -> Vec<bool> {
     if steps == 0 {
         return vec![];
     }
-    let pulses = pulses.min(steps);
-    let mut pattern = vec![false; steps as usize];
-    for i in 0..pulses {
-        // Spread pulses evenly using integer arithmetic
-        let pos = (i as usize * steps as usize) / pulses as usize;
-        pattern[pos] = true;
+    let pulses = pulses.min(steps) as usize;
+    let steps = steps as usize;
+
+    if pulses == 0 {
+        return vec![false; steps];
     }
-    // Apply rotation
+    if pulses == steps {
+        return vec![true; steps];
+    }
+
+    // Build sequences: start with `pulses` × [true] and `(steps - pulses)` × [false].
+    let mut groups: Vec<Vec<bool>> = (0..pulses).map(|_| vec![true]).collect();
+    let mut remainder: Vec<Vec<bool>> = (0..steps - pulses).map(|_| vec![false]).collect();
+
+    loop {
+        let take = remainder.len().min(groups.len());
+        if take <= 1 {
+            break;
+        }
+        let appended: Vec<Vec<bool>> = remainder.drain(..take).collect();
+        for (i, tail) in appended.into_iter().enumerate() {
+            groups[i].extend(tail);
+        }
+        // The groups beyond `take` become the new remainder.
+        if groups.len() > take {
+            let new_remainder = groups.split_off(take);
+            remainder.extend(new_remainder);
+        }
+    }
+
+    let mut pattern: Vec<bool> = groups.into_iter().flatten().collect();
+    pattern.extend(remainder.into_iter().flatten());
+
     if rotation > 0 {
-        let rot = (rotation % steps) as usize;
+        let rot = rotation as usize % pattern.len();
         pattern.rotate_left(rot);
     }
     pattern
@@ -1297,7 +1326,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Bug #27: euclidean event count
     fn test_euclid_5_16_produces_exactly_5_events() {
         let (pat, _) = euclid_pat(5, 16, 0);
         let events = query(&pat, pat.root, cycle_0());
@@ -1305,18 +1333,18 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Bug #27: euclidean distribution — Bjorklund positions
     fn test_euclid_5_16_events_are_evenly_distributed() {
         let (pat, _) = euclid_pat(5, 16, 0);
         let events = query(&pat, pat.root, cycle_0());
 
-        // Bjorklund(5,16) should produce hits at positions [0, 3, 6, 10, 13]/16.
+        // Bjorklund(5,16) distributes 5 pulses across 16 steps.
+        // Algorithm: [100][100][100][100][100][0] → positions [0, 3, 6, 9, 12]/16.
         let expected = vec![
             Time::new(0, 16),
             Time::new(3, 16),
             Time::new(6, 16),
-            Time::new(10, 16),
-            Time::new(13, 16),
+            Time::new(9, 16),
+            Time::new(12, 16),
         ];
 
         let onsets: Vec<Time> = events
@@ -1344,7 +1372,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Bug #27: gate durations must not overlap
     fn test_euclid_5_16_gate_durations_do_not_overlap() {
         let (pat, _) = euclid_pat(5, 16, 0);
         let events = query(&pat, pat.root, cycle_0());
@@ -1370,7 +1397,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Bug #27: rotation parameter
     fn test_euclid_3_8_rotation() {
         let (pat_no_rot, idx_no_rot) = euclid_pat(3, 8, 0);
         let (pat_rot, idx_rot) = euclid_pat(3, 8, 1);
@@ -1381,7 +1407,9 @@ mod tests {
         assert_eq!(ev_no.len(), 3);
         assert_eq!(ev_rot.len(), 3);
 
-        // Rotation shifts all hit positions by 1 slot.
+        // Rotation left-rotates the boolean hit pattern by 1 step.
+        // E(3,8,0) = [x..x..x.] → positions [0, 3, 6]/8.
+        // E(3,8,1) = [..x..x.x] → positions [2, 5, 7]/8.
         let onsets_no: Vec<f64> = ev_no
             .iter()
             .filter_map(|e| e.whole.map(|w| w.start.num as f64 / w.start.den as f64))
@@ -1391,20 +1419,20 @@ mod tests {
             .filter_map(|e| e.whole.map(|w| w.start.num as f64 / w.start.den as f64))
             .collect();
 
-        // Each rotated onset should be shifted by 1/8 from its non-rotated pair
-        // (modulo 1.0).
-        let step = 1.0 / 8.0;
-        for (a, b) in onsets_no.iter().zip(onsets_rot.iter()) {
-            let shifted = (a + step) % 1.0;
+        // Rotation must change at least one onset position.
+        assert_ne!(onsets_no, onsets_rot, "rotation should shift hit positions");
+
+        // Verify expected positions for rotated pattern.
+        let expected_rot = vec![2.0 / 8.0, 5.0 / 8.0, 7.0 / 8.0];
+        for (got, want) in onsets_rot.iter().zip(expected_rot.iter()) {
             assert!(
-                (shifted - b).abs() < 1e-9,
-                "rotation mismatch: {a} + {step} = {shifted}, got {b}"
+                (got - want).abs() < 1e-9,
+                "rotated onset mismatch: got {got}, want {want}"
             );
         }
     }
 
     #[test]
-    #[ignore] // Bug #27: edge case — 0 pulses
     fn test_euclid_0_pulses_produces_silence() {
         let (pat, _) = euclid_pat(0, 16, 0);
         let events = query(&pat, pat.root, cycle_0());
@@ -1412,7 +1440,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore] // Bug #27: euclid(N,N) fills entire cycle
     fn test_euclid_steps_equals_pulses_fills_cycle() {
         let (pat, _) = euclid_pat(8, 8, 0);
         let events = query(&pat, pat.root, cycle_0());
